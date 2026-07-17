@@ -323,7 +323,26 @@
   <div id="modal-editar" class="modal-overlay hidden">
     <div class="modal-card">
       <h3>Detalhes do lançamento</h3>
-      <p class="sub">Informações complementares — opcionais.</p>
+      <p class="sub">Data, valores e histórico, além das informações complementares.</p>
+
+      <div class="field">
+        <label>Data</label>
+        <input type="date" id="edit-data">
+      </div>
+      <div class="grid-form2">
+        <div class="field">
+          <label>R$ Ent</label>
+          <input inputmode="decimal" id="edit-valor-entrada" placeholder="R$ 0,00">
+        </div>
+        <div class="field">
+          <label>R$ Pagto</label>
+          <input inputmode="decimal" id="edit-valor-saida" placeholder="R$ 0,00">
+        </div>
+      </div>
+      <div class="field">
+        <label>Histórico <span style="color:var(--saida-txt);">*</span></label>
+        <input type="text" id="edit-historico" placeholder="Descrição do lançamento (obrigatório)">
+      </div>
 
       <div class="field">
         <label>Empresa</label>
@@ -537,7 +556,7 @@
       input.value = inteiro + ',' + digits.slice(-2);
     });
   }
-  ['val-entrada','val-saida'].forEach(id => ligarMascaraMoeda($(id)));
+  ['val-entrada','val-saida','edit-valor-entrada','edit-valor-saida'].forEach(id => ligarMascaraMoeda($(id)));
 
   // ---------- dropdown de busca customizado (substitui datalist nativo) ----------
   function escapeHtml(s){
@@ -670,7 +689,7 @@
     $('btn-gravar')
   );
   ligarEnterAvancaCampos(
-    ['edit-empresa','sel-conta','edit-fornecedor','edit-planocontas','edit-evento','edit-setor','edit-veiculo'],
+    ['edit-data','edit-valor-entrada','edit-valor-saida','edit-historico','edit-empresa','sel-conta','edit-fornecedor','edit-planocontas','edit-evento','edit-setor','edit-veiculo'],
     $('btn-salvar-edicao')
   );
 
@@ -1047,17 +1066,27 @@
   // ---------- modal: editar detalhes complementares ----------
   let editandoId = null;
 
+  function numeroParaCampoMoeda(num){
+    if(!num) return '';
+    return Number(num).toLocaleString('pt-BR', { minimumFractionDigits:2, maximumFractionDigits:2 });
+  }
+
   async function abrirEdicao(id){
     editandoId = id;
     $('edit-status').textContent = '';
 
     const { data, error } = await sb
       .from('verba_operacao')
-      .select('empresa_id,pessoa_id,pessoa(nome),plano_contas,evento_id,setor_id,veiculo_id,conta_corrente_id')
+      .select('data_movimento,valor_entrada,valor_saida,historico,empresa_id,pessoa_id,pessoa(nome),plano_contas,evento_id,setor_id,veiculo_id,conta_corrente_id')
       .eq('id', id)
       .maybeSingle();
 
     if(error){ alert('Erro ao carregar lançamento: ' + error.message); return; }
+
+    $('edit-data').value = data?.data_movimento ? String(data.data_movimento).slice(0,10) : '';
+    $('edit-valor-entrada').value = numeroParaCampoMoeda(data?.valor_entrada);
+    $('edit-valor-saida').value = numeroParaCampoMoeda(data?.valor_saida);
+    $('edit-historico').value = data?.historico ?? '';
 
     $('edit-empresa').value = textoParaItem(achaPorId(cache.empresas, data?.empresa_id));
     $('sel-conta').value = textoParaItem(achaPorId(cache.contas, data?.conta_corrente_id));
@@ -1081,6 +1110,13 @@
   $('btn-salvar-edicao').addEventListener('click', async () => {
     if(!editandoId) return;
     $('edit-status').textContent = '';
+
+    const entrada = moedaParaNumero($('edit-valor-entrada').value);
+    const saida = moedaParaNumero($('edit-valor-saida').value);
+    if(entrada === 0 && saida === 0){ $('edit-status').textContent = 'Informe um valor de entrada ou de pagamento.'; return; }
+    if(entrada > 0 && saida > 0){ $('edit-status').textContent = 'Preencha só um dos dois campos de valor.'; return; }
+    if(!$('edit-data').value){ $('edit-status').textContent = 'Informe a data.'; return; }
+    if(!$('edit-historico').value.trim()){ $('edit-status').textContent = 'O histórico (observação) é obrigatório.'; return; }
 
     const nomeFornecedor = $('edit-fornecedor').value.trim();
     let pessoaId = null;
@@ -1113,6 +1149,10 @@
     if(veiculoTexto && veiculoId === null){ $('edit-status').textContent = 'Veículo não encontrado. Confira o nome/código ou escolha da lista.'; return; }
 
     const atualizacao = {
+      data_movimento: $('edit-data').value,
+      valor_entrada: entrada,
+      valor_saida: saida,
+      historico: $('edit-historico').value.trim(),
       empresa_id: empresaId,
       conta_corrente_id: contaId,
       pessoa_id: pessoaId,
