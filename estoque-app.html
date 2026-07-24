@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Controle de Estoque & Projetos</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%23e65100'/%3E%3Cstop offset='1' stop-color='%231565c0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='4' y='4' width='56' height='56' rx='14' fill='url(%23g)'/%3E%3Cpath d='M20 34 L32 20 L48 20 L48 36 L34 50 Z' fill='%23ffffff' fill-opacity='0.95'/%3E%3Ccircle cx='41' cy='27' r='4' fill='url(%23g)'/%3E%3C/svg%3E">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
     * { box-sizing: border-box; }
     body { font-family: Arial, sans-serif; margin: 20px; color: #222; background:#fff; }
@@ -135,6 +139,21 @@
     .badge-atendido.completo { background: #2e7d32; }
     .badge-atendido.excedido { background: #b00020; }
     .input-qtd-pedida { width: 80px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; text-align: right; }
+    .input-tag-evento { width: 100px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
+
+    .linha-ferramentas-relatorio {
+        display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap;
+    }
+    .linha-ferramentas-relatorio select {
+        padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.9em;
+    }
+    .btn-icone {
+        border: 1px solid #ccc; background: #fff; border-radius: 6px;
+        width: 36px; height: 36px; font-size: 1.05em; cursor: pointer;
+        display: inline-flex; align-items: center; justify-content: center;
+    }
+    .btn-icone:hover { background: #f0f0f0; }
+    .modal-caixa.larga { max-width: 780px; }
 
     .linha-atendimento {
         display: flex; justify-content: space-between; align-items: center;
@@ -166,6 +185,7 @@
     <button class="aba-btn ativa" data-aba="estoque">📦 Estoque</button>
     <button class="aba-btn" data-aba="movimentacao">🧾 Requisição de Saída</button>
     <button class="aba-btn" data-aba="projetos">🏗️ Projetos</button>
+    <button class="aba-btn" data-aba="relatorios">📊 Relatórios</button>
 </div>
 
 <!-- ===================== ABA ESTOQUE ===================== -->
@@ -190,7 +210,7 @@
         </div>
         <div style="margin-top:10px;">
             <button class="btn btn-verde" id="btnSalvarProduto">Salvar produto</button>
-            <button class="btn btn-cinza" id="btnCancelarProduto">Cancelar</button>
+            <button class="btn btn-cinza" id="btnCancelarProduto">Sair</button>
         </div>
         <span class="status-msg" id="statusNovoProduto"></span>
     </div>
@@ -216,7 +236,10 @@
         </div>
         <div class="campo" style="margin-top:10px;">
             <label>Evento (o que vai custear a reforma/uso)</label>
-            <input type="text" id="buscaEvento" placeholder="Digite o código ou a descrição do evento...">
+            <div class="linha-busca">
+                <input type="text" id="buscaEvento" placeholder="Digite o código ou a descrição do evento...">
+                <button class="btn btn-verde" id="btnNovoEvento" type="button">+ Novo evento</button>
+            </div>
             <div id="resultadosBuscaEvento"></div>
             <div id="eventoSelecionado" style="margin-top:6px; font-size:0.9em;"></div>
         </div>
@@ -241,6 +264,12 @@
         <div class="vazio" id="vazioItensProjeto" style="display:none;">Nenhum item adicionado ainda. Busque um produto acima.</div>
         <div style="text-align:right; margin-top:10px; font-size:1.1em;">
             Total pedido: <strong id="totalPedidoProjeto">R$ 0,00</strong>
+        </div>
+        <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+            <button class="btn btn-azul" id="btnPdfResumo">📄 PDF Resumido</button>
+            <button class="btn btn-azul" id="btnPdfDetalhado">📄 PDF Detalhado</button>
+            <button class="btn btn-verde" id="btnExcelResumo">📊 Excel Resumido</button>
+            <button class="btn btn-verde" id="btnExcelDetalhado">📊 Excel Detalhado</button>
         </div>
     </div>
 </div>
@@ -270,18 +299,92 @@
     <div class="vazio" id="vazioProjetos" style="display:none;">Nenhum projeto cadastrado ainda.</div>
 </div>
 
+<!-- ===================== ABA RELATÓRIOS ===================== -->
+<div class="conteudo-aba" id="aba-relatorios">
+
+    <div class="caixa">
+        <h4 style="margin-top:0;">📌 Relatório por Evento <span class="subtitulo" style="font-weight:normal;">(detalhado — produto e data de cada retirada)</span></h4>
+        <div class="linha-busca">
+            <input type="text" id="relBuscaEvento" placeholder="Digite o código ou a descrição do evento...">
+            <button class="btn btn-azul" id="relBtnBuscarEvento">Buscar</button>
+        </div>
+        <div id="relResultadosEvento"></div>
+        <div id="relEventoSelecionado" style="margin-top:6px; font-size:0.9em;"></div>
+        <div class="linha-ferramentas-relatorio">
+            <select id="relEventoFormato">
+                <option value="pdf">PDF</option>
+                <option value="xlsx">Excel</option>
+            </select>
+            <button class="btn-icone" id="relEventoVer" title="Visualizar">👁️</button>
+            <button class="btn-icone" id="relEventoCompartilhar" title="Compartilhar">📤</button>
+            <button class="btn-icone" id="relEventoSalvar" title="Salvar">💾</button>
+        </div>
+    </div>
+
+    <div class="caixa">
+        <h4 style="margin-top:0;">🏷️ Relatório por Tag <span class="subtitulo" style="font-weight:normal;">(detalhado — produto e data de cada retirada)</span></h4>
+        <div class="campo">
+            <input type="text" id="relBuscaTag" list="relListaTags" placeholder="Digite a tag...">
+            <datalist id="relListaTags"></datalist>
+        </div>
+        <div class="linha-ferramentas-relatorio">
+            <select id="relTagFormato">
+                <option value="pdf">PDF</option>
+                <option value="xlsx">Excel</option>
+            </select>
+            <button class="btn-icone" id="relTagVer" title="Visualizar">👁️</button>
+            <button class="btn-icone" id="relTagCompartilhar" title="Compartilhar">📤</button>
+            <button class="btn-icone" id="relTagSalvar" title="Salvar">💾</button>
+        </div>
+    </div>
+
+    <div class="caixa">
+        <h4 style="margin-top:0;">🏗️ Relatório por Projeto</h4>
+        <div class="campo">
+            <select id="relProjetoSelect"><option value="">-- selecione um projeto --</option></select>
+        </div>
+        <div class="linha-ferramentas-relatorio">
+            <select id="relProjetoTipo">
+                <option value="resumo">Resumo</option>
+                <option value="detalhado">Detalhado</option>
+            </select>
+            <select id="relProjetoFormato">
+                <option value="pdf">PDF</option>
+                <option value="xlsx">Excel</option>
+            </select>
+            <button class="btn-icone" id="relProjetoVer" title="Visualizar">👁️</button>
+            <button class="btn-icone" id="relProjetoCompartilhar" title="Compartilhar">📤</button>
+            <button class="btn-icone" id="relProjetoSalvar" title="Salvar">💾</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== MODAL / POPUP: Pré-visualização (Excel) ===================== -->
+<div class="modal-overlay" id="modalPreview">
+    <div class="modal-caixa larga">
+        <div id="modalPreviewConteudo"></div>
+        <div style="margin-top:16px; text-align:right;">
+            <button class="btn btn-cinza" id="btnFecharPreview">Sair</button>
+        </div>
+    </div>
+</div>
+
 <!-- ===================== MODAL / POPUP: Atender item ===================== -->
 <div class="modal-overlay" id="modalAtender">
     <div class="modal-caixa">
         <h4 style="margin-top:0;">Registrar atendimento</h4>
         <p class="subtitulo" id="modalAtenderProduto" style="margin-bottom:14px;"></p>
         <div class="grade col2">
+            <div class="campo"><label>Tag</label><input type="text" id="modalAtenderTag"></div>
+            <div class="campo"><label>Evento</label><input type="text" id="modalAtenderEvento"></div>
+        </div>
+        <div class="grade col2" style="margin-top:10px;">
             <div class="campo"><label>Quantidade atendida agora</label><input type="number" step="0.01" id="modalQtdAtendida"></div>
             <div class="campo"><label>Quem retirou (responsável)</label><input type="text" id="modalResponsavelRetirada"></div>
         </div>
         <div class="campo" style="margin-top:10px;"><label>Observação (opcional)</label><input type="text" id="modalObservacaoRetirada"></div>
         <div style="margin-top:16px; text-align:right;">
-            <button class="btn btn-cinza" id="btnCancelarAtender">Cancelar</button>
+            <button class="btn btn-cinza" id="btnCancelarAtender">Sair</button>
             <button class="btn btn-verde" id="btnConfirmarAtender">Confirmar atendimento</button>
         </div>
         <span class="status-msg" id="statusModalAtender"></span>
@@ -293,17 +396,79 @@
     </div>
 </div>
 
+<!-- ===================== MODAL / POPUP: Editar atendimento ===================== -->
+<div class="modal-overlay" id="modalEditarAtendimento" style="z-index:1001;">
+    <div class="modal-caixa">
+        <h4 style="margin-top:0;">Editar atendimento</h4>
+        <div class="grade col2">
+            <div class="campo"><label>Quantidade atendida</label><input type="number" step="0.01" id="editAtendQtd"></div>
+            <div class="campo"><label>Responsável</label><input type="text" id="editAtendResponsavel"></div>
+        </div>
+        <div class="grade col2" style="margin-top:10px;">
+            <div class="campo"><label>Tag</label><input type="text" id="editAtendTag"></div>
+            <div class="campo"><label>Evento</label><input type="text" id="editAtendEvento"></div>
+        </div>
+        <div class="campo" style="margin-top:10px;"><label>Observação</label><input type="text" id="editAtendObservacao"></div>
+        <div style="margin-top:16px; text-align:right;">
+            <button class="btn btn-cinza" id="btnCancelarEditarAtendimento">Sair</button>
+            <button class="btn btn-verde" id="btnSalvarEditarAtendimento">Salvar</button>
+        </div>
+        <span class="status-msg" id="statusEditarAtendimento"></span>
+    </div>
+</div>
+
 <!-- ===================== MODAL / POPUP: Configurações ===================== -->
+<!-- ===================== MODAL / POPUP: Quantidade ao adicionar produto ===================== -->
+<div class="modal-overlay" id="modalQtdInicial">
+    <div class="modal-caixa">
+        <h4 style="margin-top:0;">Quantidade solicitada</h4>
+        <p class="subtitulo" id="modalQtdInicialProduto" style="margin-bottom:14px;"></p>
+        <div class="campo">
+            <label>Quantidade</label>
+            <input type="number" step="0.01" id="modalQtdInicialValor" value="1">
+        </div>
+        <div style="margin-top:16px; text-align:right;">
+            <button class="btn btn-cinza" id="btnCancelarQtdInicial">Sair</button>
+            <button class="btn btn-verde" id="btnConfirmarQtdInicial">Adicionar</button>
+        </div>
+        <span class="status-msg" id="statusModalQtdInicial"></span>
+    </div>
+</div>
+
+<!-- ===================== MODAL / POPUP: Novo evento ===================== -->
+<div class="modal-overlay" id="modalNovoEvento">
+    <div class="modal-caixa">
+        <h4 style="margin-top:0;">Novo evento</h4>
+        <div class="campo">
+            <label>Código do evento</label>
+            <input type="text" id="novoEventoCodigo" placeholder="ex: 2888">
+        </div>
+        <div class="campo" style="margin-top:10px;">
+            <label>Descrição</label>
+            <input type="text" id="novoEventoDescricao" placeholder="ex: Reforma salão principal">
+        </div>
+        <div style="margin-top:16px; text-align:right;">
+            <button class="btn btn-cinza" id="btnCancelarNovoEvento">Sair</button>
+            <button class="btn btn-verde" id="btnSalvarNovoEvento">Salvar</button>
+        </div>
+        <span class="status-msg" id="statusNovoEvento"></span>
+    </div>
+</div>
+
 <div class="modal-overlay" id="modalConfig">
     <div class="modal-caixa">
         <h4 style="margin-top:0;">Configurações</h4>
         <div class="campo">
-            <label>URL do backend (Apps Script / Web App)</label>
-            <input type="text" id="configUrlBackend" placeholder="https://script.google.com/macros/s/SEU_ID/exec">
+            <label>Project URL (Supabase)</label>
+            <input type="text" id="configSupabaseUrl" placeholder="https://xxxxxxxxxxxx.supabase.co">
         </div>
-        <p class="subtitulo" style="margin-top:8px;">Essa URL fica salva neste navegador — não precisa editar o arquivo.</p>
+        <div class="campo" style="margin-top:10px;">
+            <label>Chave anon public (Supabase)</label>
+            <input type="text" id="configSupabaseKey" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
+        </div>
+        <p class="subtitulo" style="margin-top:8px;">Esses dados ficam salvos neste navegador — não precisa editar o arquivo. Encontre em Project Settings → API no painel do Supabase.</p>
         <div style="margin-top:16px; text-align:right;">
-            <button class="btn btn-cinza" id="btnCancelarConfig">Cancelar</button>
+            <button class="btn btn-cinza" id="btnCancelarConfig">Sair</button>
             <button class="btn btn-verde" id="btnSalvarConfig">Salvar</button>
         </div>
         <span class="status-msg" id="statusConfig"></span>
@@ -311,16 +476,15 @@
 </div>
 
 <script>
-/* ===================== URL do backend (Google Apps Script / Web App) ===================== */
+/* ===================== Conexão com o Supabase ===================== */
 /* Fica salva no navegador (localStorage) — configurável pelo ícone de engrenagem no topo. */
-let URL_BACKEND = localStorage.getItem('estoqueapp_url_backend') || "https://script.google.com/macros/s/AKfycbyOQyLPpdM4xTcbXfo2gXc0TA4WrM7oSI_sbllHIZO0NxjkSEwiyhlUbNwLaUs21zYnwQ/exec";
+let SUPABASE_URL = localStorage.getItem('estoqueapp_supabase_url') || "COLE_AQUI_A_URL_DO_SEU_PROJETO_SUPABASE";
+let SUPABASE_ANON_KEY = localStorage.getItem('estoqueapp_supabase_key') || "COLE_AQUI_A_CHAVE_ANON_PUBLIC";
 </script>
 <script>
 /* ============================================================
    Controle de Estoque & Projetos — Contêiner & Esquadria
-   Dados gravados no Google Sheets via Apps Script (Web App)
-   Padrão idêntico ao usado na "Cotação Simples": JSONP para leitura,
-   fetch com mode:no-cors para gravação.
+   Dados gravados no Supabase (Postgres) via supabase-js.
    ============================================================ */
 
 let produtos = [];       // [{id, nome, un, valor, grupo, estoqueInicial, estoque, almox}]
@@ -331,6 +495,7 @@ let eventos = [];        // [{codigo, descricao}]
 let eventoSelecionadoAtual = null;
 let projetoAtualId = null;
 let itemAtualAtendimentoId = null;
+let sb = null; // cliente do Supabase, criado em iniciar()
 
 /* ---------- utilidades ---------- */
 function formatarMoeda(v) {
@@ -348,62 +513,118 @@ function escapeHtml(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-/* ---------- comunicação com o backend (Apps Script) ---------- */
-function buscarViaJSONP(url) {
-    return new Promise((resolve, reject) => {
-        const nomeCallback = "cbEstoque_" + Date.now() + "_" + Math.floor(Math.random() * 10000);
-        const scriptEl = document.createElement("script");
-        let finalizado = false;
-
-        const limpar = () => {
-            delete window[nomeCallback];
-            if (scriptEl.parentNode) scriptEl.parentNode.removeChild(scriptEl);
-            clearTimeout(timeoutId);
-        };
-
-        const timeoutId = setTimeout(() => {
-            if (!finalizado) { finalizado = true; limpar(); reject(new Error("Tempo esgotado ao buscar dados.")); }
-        }, 30000);
-
-        window[nomeCallback] = function (dados) {
-            if (finalizado) return;
-            finalizado = true;
-            limpar();
-            resolve(dados);
-        };
-        scriptEl.onerror = () => {
-            if (finalizado) return;
-            finalizado = true;
-            limpar();
-            reject(new Error("Falha ao carregar dados do backend."));
-        };
-
-        const separador = url.includes("?") ? "&" : "?";
-        scriptEl.src = url + separador + "callback=" + nomeCallback + "&_=" + Date.now();
-        document.body.appendChild(scriptEl);
-    });
-}
-
+/* ---------- comunicação com o backend (Supabase) ---------- */
 async function chamarGet(acao) {
-    const url = `${URL_BACKEND}?acao=${acao}`;
-    const resposta = await buscarViaJSONP(url);
-    return typeof resposta === "string" ? JSON.parse(resposta) : resposta;
+    if (acao === 'listarProdutos') {
+        const { data, error } = await sb.from('fabrica_produtos').select('*');
+        if (error) throw error;
+        return data;
+    }
+    if (acao === 'listarMovimentacoes') {
+        const { data, error } = await sb.from('fabrica_movimentacoes').select('*').order('data', { ascending: false }).limit(300);
+        if (error) throw error;
+        return data;
+    }
+    if (acao === 'listarProjetos') {
+        const { data, error } = await sb.from('fabrica_projetos').select('*, fabrica_itens_projeto(*)');
+        if (error) throw error;
+        return (data || []).map(p => ({ ...p, itens: p.fabrica_itens_projeto || [] }));
+    }
+    if (acao === 'listarEventos') {
+        const { data, error } = await sb.from('fabrica_eventos').select('*');
+        if (error) throw error;
+        return data;
+    }
+    throw new Error('ação GET desconhecida: ' + acao);
 }
 
-async function chamarPost(acao, dadosExtra) {
-    try {
-        await fetch(URL_BACKEND, {
-            method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({ acao, ...dadosExtra })
-        });
-    } catch (err) {
-        console.error('Falha ao enviar para o backend:', acao, err);
-        throw new Error('Não foi possível salvar no Google Sheets. Confira a URL_BACKEND e sua conexão.');
+async function chamarPost(acao, d) {
+    if (acao === 'salvarProduto') {
+        const p = d.produto;
+        const registro = {
+            nome: p.nome, un: p.un, valor: p.valor, grupo: p.grupo,
+            estoque_inicial: p.estoqueInicial, estoque: p.estoque, almox: p.almox || 1
+        };
+        if (p.id) registro.id = p.id;
+        const { error } = await sb.from('fabrica_produtos').upsert(registro);
+        if (error) throw error;
+        return;
     }
-    // modo no-cors não deixa ler a resposta; aguarda o Apps Script processar
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    if (acao === 'registrarMovimentacao') {
+        const m = d.movimentacao;
+        const { error: e1 } = await sb.from('fabrica_movimentacoes').insert({
+            data: m.data, produto_id: m.produtoId, tipo: m.tipo, qtd: m.qtd, valor_unit: m.valorUnit,
+            tag: m.tag || '', evento: m.evento || '', observacao: m.observacao || '', responsavel: m.responsavel || '',
+            projeto_id: m.projetoId || null, item_projeto_id: m.itemProjetoId || null
+        });
+        if (e1) throw e1;
+        const { error: e2 } = await sb.rpc('fabrica_ajustar_estoque', {
+            p_produto_id: m.produtoId, p_delta: m.tipo === 'entrada' ? Number(m.qtd) : -Number(m.qtd)
+        });
+        if (e2) throw e2;
+        return;
+    }
+    if (acao === 'salvarProjeto') {
+        const p = d.projeto;
+        const { error } = await sb.from('fabrica_projetos').insert({ descricao: p.descricao, tipo: p.tipo, data: p.data });
+        if (error) throw error;
+        return;
+    }
+    if (acao === 'adicionarItemProjeto') {
+        const it = d.item;
+        const { error } = await sb.from('fabrica_itens_projeto').insert({
+            projeto_id: it.projetoId, produto_id: it.produtoId, qtd_requisitada: it.qtdRequisitada,
+            responsavel: it.responsavel || '', observacao: it.observacao || '', tag: it.tag || '', evento: it.evento || ''
+        });
+        if (error) throw error;
+        return;
+    }
+    if (acao === 'atualizarQtdItem') {
+        const { error } = await sb.from('fabrica_itens_projeto').update({ qtd_requisitada: d.novaQtd }).eq('id', d.itemId);
+        if (error) throw error;
+        return;
+    }
+    if (acao === 'removerItemProjeto') {
+        const { error } = await sb.from('fabrica_itens_projeto').delete().eq('id', d.itemId);
+        if (error) throw error;
+        return;
+    }
+    if (acao === 'editarMovimentacao') {
+        const { data: antiga, error: eSel } = await sb.from('fabrica_movimentacoes').select('produto_id,tipo,qtd').eq('id', d.movId).single();
+        if (eSel) throw eSel;
+        const sinal = antiga.tipo === 'entrada' ? 1 : -1;
+        await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: -sinal * Number(antiga.qtd) });
+        await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: sinal * Number(d.novaQtd) });
+        const upd = { qtd: d.novaQtd };
+        if (d.responsavel != null) upd.responsavel = d.responsavel;
+        if (d.observacao != null) upd.observacao = d.observacao;
+        if (d.tag != null) upd.tag = d.tag;
+        if (d.evento != null) upd.evento = d.evento;
+        const { error } = await sb.from('fabrica_movimentacoes').update(upd).eq('id', d.movId);
+        if (error) throw error;
+        return;
+    }
+    if (acao === 'removerMovimentacao') {
+        const { data: antiga, error: eSel } = await sb.from('fabrica_movimentacoes').select('produto_id,tipo,qtd').eq('id', d.movId).single();
+        if (eSel) throw eSel;
+        const sinal = antiga.tipo === 'entrada' ? 1 : -1;
+        await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: -sinal * Number(antiga.qtd) });
+        const { error } = await sb.from('fabrica_movimentacoes').delete().eq('id', d.movId);
+        if (error) throw error;
+        return;
+    }
+    if (acao === 'salvarEvento') {
+        const ev = d.evento;
+        const { error } = await sb.from('fabrica_eventos').upsert({ codigo: ev.codigo, descricao: ev.descricao || '' });
+        if (error) throw error;
+        return;
+    }
+    if (acao === 'atualizarTagEventoItem') {
+        const { error } = await sb.from('fabrica_itens_projeto').update({ tag: d.tag || '', evento: d.evento || '' }).eq('id', d.itemId);
+        if (error) throw error;
+        return;
+    }
+    throw new Error('ação desconhecida: ' + acao);
 }
 
 /* ---------- carregamento de dados ---------- */
@@ -415,7 +636,7 @@ async function carregarProdutos() {
         un: String(p.un || 'UN'),
         valor: Number(p.valor) || 0,
         grupo: Number(p.grupo) || 1,
-        estoqueInicial: Number(p.estoqueInicial) || 0,
+        estoqueInicial: Number(p.estoque_inicial) || 0,
         estoque: Number(p.estoque) || 0,
         almox: Number(p.almox) || 1
     }));
@@ -426,16 +647,16 @@ async function carregarMovimentacoes() {
     movimentacoes = (lista || []).map(m => ({
         id: Number(m.id),
         data: formatarData(m.data),
-        produtoId: Number(m.produtoId),
+        produtoId: Number(m.produto_id),
         tipo: m.tipo,
         qtd: Number(m.qtd) || 0,
-        valorUnit: Number(m.valorUnit) || 0,
+        valorUnit: Number(m.valor_unit) || 0,
         tag: m.tag || '',
         evento: m.evento || '',
         observacao: m.observacao || '',
         responsavel: m.responsavel || '',
-        projetoId: m.projetoId || null,
-        itemProjetoId: m.itemProjetoId || null
+        projetoId: m.projeto_id || null,
+        itemProjetoId: m.item_projeto_id || null
     }));
 }
 
@@ -448,9 +669,9 @@ async function carregarProjetos() {
         data: formatarData(p.data),
         itens: (p.itens || []).map(i => ({
             id: Number(i.id),
-            projetoId: Number(i.projetoId),
-            produtoId: Number(i.produtoId),
-            qtdRequisitada: Number(i.qtdRequisitada) || 0,
+            projetoId: Number(i.projeto_id),
+            produtoId: Number(i.produto_id),
+            qtdRequisitada: Number(i.qtd_requisitada) || 0,
             responsavel: i.responsavel || '',
             observacao: i.observacao || '',
             tag: i.tag || '',
@@ -468,12 +689,12 @@ async function carregarEventos() {
 }
 
 async function carregarTudo() {
-    document.getElementById('tagContagem').textContent = 'carregando dados do Google Sheets...';
+    document.getElementById('tagContagem').textContent = 'carregando dados do Supabase...';
     try {
         await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarProjetos(), carregarEventos()]);
     } catch (err) {
         console.error(err);
-        document.getElementById('tagContagem').textContent = '⚠️ Não foi possível carregar os dados. Confira a URL_BACKEND.';
+        document.getElementById('tagContagem').textContent = '⚠️ Não foi possível carregar os dados. Confira a URL/chave do Supabase.';
         return;
     }
     atualizarTagContagem();
@@ -491,8 +712,15 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
         document.querySelectorAll('.conteudo-aba').forEach(c => c.classList.remove('ativa'));
         btn.classList.add('ativa');
         document.getElementById('aba-' + btn.dataset.aba).classList.add('ativa');
+        if (btn.dataset.aba === 'relatorios') popularRelatoriosSelects();
     });
 });
+
+function popularRelatoriosSelects() {
+    popularSelectProjetos(document.getElementById('relProjetoSelect'));
+    const tags = [...new Set(movimentacoes.map(m => m.tag).filter(Boolean))].sort();
+    document.getElementById('relListaTags').innerHTML = tags.map(t => `<option value="${escapeHtml(t)}"></option>`).join('');
+}
 
 /* ============================================================
    ABA ESTOQUE
@@ -645,6 +873,7 @@ function popularSelectProjetos(selectEl) {
    ABA PROJETOS
    ============================================================ */
 document.getElementById('projData').value = hojeISO();
+document.getElementById('cabData').value = hojeISO();
 
 document.getElementById('btnNovoProjeto').addEventListener('click', async () => {
     const statusEl = document.getElementById('statusProjeto');
@@ -709,6 +938,29 @@ function renderizarListaProjetos() {
     });
 }
 
+function ultimoTagEventoDoProjeto(proj) {
+    const itensOrdenados = [...(proj.itens || [])].sort((a, b) => b.id - a.id);
+    const tagItem = itensOrdenados.find(i => i.tag);
+    const eventoItem = itensOrdenados.find(i => i.evento);
+    return {
+        tag: tagItem ? tagItem.tag : '',
+        evento: eventoItem ? eventoItem.evento : ''
+    };
+}
+
+function aplicarPadraoTagEventoSeVazio(proj) {
+    if (!proj) return;
+    const ultimos = ultimoTagEventoDoProjeto(proj);
+    const tagInput = document.getElementById('cabTag');
+    if (!tagInput.value.trim() && ultimos.tag) {
+        tagInput.value = ultimos.tag;
+    }
+    if (!eventoSelecionadoAtual && ultimos.evento) {
+        const ev = eventos.find(e => e.codigo === ultimos.evento) || { codigo: ultimos.evento, descricao: '' };
+        selecionarEvento(ev);
+    }
+}
+
 function abrirRequisicao(id) {
     projetoAtualId = id;
     // reseta o cabeçalho de contexto (tag/evento/data) para cada visita
@@ -728,12 +980,18 @@ function abrirRequisicao(id) {
     const select = document.getElementById('reqProjetoSelect');
     popularSelectProjetos(select);
     select.value = id;
+
+    const proj = projetos.find(p => p.id === id);
+    aplicarPadraoTagEventoSeVazio(proj);
+
     renderizarRequisicao(id);
 }
 
 document.getElementById('reqProjetoSelect').addEventListener('change', () => {
     const valor = document.getElementById('reqProjetoSelect').value;
     projetoAtualId = valor ? Number(valor) : null;
+    const proj = projetos.find(p => p.id === projetoAtualId);
+    aplicarPadraoTagEventoSeVazio(proj);
     renderizarRequisicao(projetoAtualId);
 });
 
@@ -767,8 +1025,8 @@ function renderizarRequisicao(id) {
             tr.innerHTML = `
                 <td>${prod ? prod.id : item.produtoId}</td>
                 <td>${prod ? escapeHtml(prod.nome) : ('#' + item.produtoId)}</td>
-                <td>${escapeHtml(item.tag) || '-'}</td>
-                <td>${escapeHtml(item.evento) || '-'}</td>
+                <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.tag)}" data-tag-item="${item.id}"></td>
+                <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.evento)}" data-evento-item="${item.id}"></td>
                 <td class="num">${formatarMoeda(prod ? prod.valor : 0)}</td>
                 <td class="num"><input type="number" step="0.01" class="input-qtd-pedida" value="${item.qtdRequisitada}" data-qtd-item="${item.id}"></td>
                 <td class="center"><span class="badge-atendido ${classeBadge}" data-atender="${item.id}">${ent}</span></td>
@@ -796,6 +1054,24 @@ function renderizarRequisicao(id) {
                 await carregarProjetos();
                 renderizarRequisicao(id);
                 renderizarListaProjetos();
+            });
+        });
+        corpo.querySelectorAll('[data-tag-item]').forEach(inp => {
+            inp.addEventListener('change', async () => {
+                const itemId = Number(inp.dataset.tagItem);
+                const itemAtual = proj.itens.find(i => i.id === itemId);
+                await chamarPost('atualizarTagEventoItem', { itemId, tag: inp.value.trim(), evento: itemAtual ? itemAtual.evento : '' });
+                await carregarProjetos();
+                renderizarRequisicao(id);
+            });
+        });
+        corpo.querySelectorAll('[data-evento-item]').forEach(inp => {
+            inp.addEventListener('change', async () => {
+                const itemId = Number(inp.dataset.eventoItem);
+                const itemAtual = proj.itens.find(i => i.id === itemId);
+                await chamarPost('atualizarTagEventoItem', { itemId, tag: itemAtual ? itemAtual.tag : '', evento: inp.value.trim() });
+                await carregarProjetos();
+                renderizarRequisicao(id);
             });
         });
     }
@@ -852,6 +1128,46 @@ document.getElementById('buscaEvento').addEventListener('keydown', e => {
     if (e.key === 'Enter') renderizarResultadosEvento(document.getElementById('buscaEvento').value);
 });
 
+/* ---------- popup: novo evento ---------- */
+document.getElementById('btnNovoEvento').addEventListener('click', () => {
+    document.getElementById('novoEventoCodigo').value = document.getElementById('buscaEvento').value.trim();
+    document.getElementById('novoEventoDescricao').value = '';
+    document.getElementById('statusNovoEvento').textContent = '';
+    document.getElementById('modalNovoEvento').classList.add('aberto');
+});
+
+document.getElementById('btnCancelarNovoEvento').addEventListener('click', () => {
+    document.getElementById('modalNovoEvento').classList.remove('aberto');
+});
+
+document.getElementById('btnSalvarNovoEvento').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusNovoEvento');
+    const codigo = document.getElementById('novoEventoCodigo').value.trim();
+    const descricao = document.getElementById('novoEventoDescricao').value.trim();
+    if (!codigo) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Informe o código do evento.';
+        return;
+    }
+    if (eventos.some(e => e.codigo === codigo)) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Já existe um evento com esse código.';
+        return;
+    }
+    statusEl.className = '';
+    statusEl.textContent = 'Salvando...';
+    try {
+        await chamarPost('salvarEvento', { evento: { codigo, descricao } });
+        await carregarEventos();
+        selecionarEvento({ codigo, descricao });
+        document.getElementById('modalNovoEvento').classList.remove('aberto');
+    } catch (err) {
+        console.error(err);
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = '⚠️ ' + err.message;
+    }
+});
+
 document.getElementById('btnBuscarItemProjeto').addEventListener('click', () => {
     renderizarResultadosBusca('resultadosBuscaItemProjeto', document.getElementById('buscaItemProjeto').value, adicionarProdutoAoProjeto);
 });
@@ -864,7 +1180,9 @@ document.getElementById('buscaItemProjeto').addEventListener('input', () => {
     else document.getElementById('resultadosBuscaItemProjeto').classList.remove('aberto');
 });
 
-async function adicionarProdutoAoProjeto(p) {
+let produtoPendenteAdicionar = null;
+
+function adicionarProdutoAoProjeto(p) {
     const statusEl = document.getElementById('statusItemProjeto');
     const proj = projetos.find(x => x.id === projetoAtualId);
     if (!proj) {
@@ -874,29 +1192,59 @@ async function adicionarProdutoAoProjeto(p) {
     }
     const existente = proj.itens.find(i => i.produtoId === p.id);
 
-    document.getElementById('resultadosBuscaItemProjeto').classList.remove('aberto');
+    const resultadosEl = document.getElementById('resultadosBuscaItemProjeto');
+    resultadosEl.classList.remove('aberto');
+    resultadosEl.innerHTML = '';
     document.getElementById('buscaItemProjeto').value = '';
+    statusEl.className = '';
+    statusEl.textContent = '';
 
     if (existente) {
         const confirmar = confirm(
             `O produto "${p.nome}" já está nesta requisição (tag: ${existente.tag || '-'} · evento: ${existente.evento || '-'}).\n\nDeseja adicionar mesmo assim como uma nova linha?`
         );
-        if (!confirmar) {
-            statusEl.className = '';
-            statusEl.textContent = '';
-            return;
-        }
+        if (!confirmar) return;
     }
 
-    statusEl.className = '';
-    statusEl.textContent = 'Salvando...';
+    produtoPendenteAdicionar = p;
+    document.getElementById('modalQtdInicialProduto').textContent = `#${p.id} — ${p.nome}`;
+    document.getElementById('modalQtdInicialValor').value = 1;
+    document.getElementById('statusModalQtdInicial').textContent = '';
+    document.getElementById('modalQtdInicial').classList.add('aberto');
+    document.getElementById('modalQtdInicialValor').focus();
+    document.getElementById('modalQtdInicialValor').select();
+}
+
+document.getElementById('btnCancelarQtdInicial').addEventListener('click', () => {
+    document.getElementById('modalQtdInicial').classList.remove('aberto');
+    produtoPendenteAdicionar = null;
+});
+
+document.getElementById('modalQtdInicialValor').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('btnConfirmarQtdInicial').click();
+});
+
+document.getElementById('btnConfirmarQtdInicial').addEventListener('click', async () => {
+    const statusModalEl = document.getElementById('statusModalQtdInicial');
+    const statusEl = document.getElementById('statusItemProjeto');
+    const p = produtoPendenteAdicionar;
+    if (!p) return;
+    const qtd = parseFloat(document.getElementById('modalQtdInicialValor').value);
+    if (!qtd || qtd <= 0) {
+        statusModalEl.className = 'status-msg erro';
+        statusModalEl.textContent = 'Informe uma quantidade válida.';
+        return;
+    }
+
+    statusModalEl.className = '';
+    statusModalEl.textContent = 'Salvando...';
 
     try {
         await chamarPost('adicionarItemProjeto', {
             item: {
                 projetoId: projetoAtualId,
                 produtoId: p.id,
-                qtdRequisitada: 1,
+                qtdRequisitada: qtd,
                 responsavel: '',
                 observacao: '',
                 tag: document.getElementById('cabTag').value.trim(),
@@ -904,6 +1252,8 @@ async function adicionarProdutoAoProjeto(p) {
             }
         });
         await carregarProjetos();
+        document.getElementById('modalQtdInicial').classList.remove('aberto');
+        produtoPendenteAdicionar = null;
         statusEl.className = 'status-msg sucesso';
         statusEl.textContent = '✅ Produto adicionado à lista.';
         renderizarRequisicao(projetoAtualId);
@@ -911,10 +1261,11 @@ async function adicionarProdutoAoProjeto(p) {
         setTimeout(() => statusEl.textContent = '', 1200);
     } catch (err) {
         console.error('Erro ao adicionar produto à requisição:', err);
-        statusEl.className = 'status-msg erro';
-        statusEl.textContent = '⚠️ ' + err.message;
+        statusModalEl.className = 'status-msg erro';
+        statusModalEl.textContent = '⚠️ ' + err.message;
     }
-}
+});
+
 
 /* ============================================================
    MODAL / POPUP: Atender item do projeto
@@ -931,8 +1282,9 @@ function abrirModalAtender(itemId) {
     itemAtualAtendimentoId = itemId;
     document.getElementById('modalAtenderProduto').innerHTML =
         `<strong>${escapeHtml(prod ? prod.nome : '#' + item.produtoId)}</strong><br>
-         Requisitado: ${item.qtdRequisitada} · já entregue: ${ent} · restante: ${restante}<br>
-         Tag: <strong>${escapeHtml(item.tag) || '-'}</strong> · Evento: <strong>${escapeHtml(item.evento) || '-'}</strong>`;
+         Requisitado: ${item.qtdRequisitada} · já entregue: ${ent} · restante: ${restante}`;
+    document.getElementById('modalAtenderTag').value = item.tag || '';
+    document.getElementById('modalAtenderEvento').value = item.evento || '';
     document.getElementById('modalQtdAtendida').value = restante > 0 ? restante : '';
     document.getElementById('modalResponsavelRetirada').value = '';
     document.getElementById('modalObservacaoRetirada').value = '';
@@ -969,49 +1321,76 @@ function renderizarListaAtendimentosItem(itemId) {
     });
 
     el.querySelectorAll('[data-editar-mov]').forEach(btn => {
-        btn.addEventListener('click', () => editarAtendimento(Number(btn.dataset.editarMov), itemId));
+        btn.addEventListener('click', () => abrirModalEditarAtendimento(Number(btn.dataset.editarMov), itemId));
     });
     el.querySelectorAll('[data-remover-mov]').forEach(btn => {
         btn.addEventListener('click', () => excluirAtendimento(Number(btn.dataset.removerMov), itemId));
     });
 }
 
-async function editarAtendimento(movId, itemId) {
+let movAtualEdicaoId = null;
+let itemAtualEdicaoId = null;
+
+function abrirModalEditarAtendimento(movId, itemId) {
     const mov = movimentacoes.find(m => m.id === movId);
     if (!mov) return;
-    const novaQtdStr = prompt('Nova quantidade atendida:', mov.qtd);
-    if (novaQtdStr === null) return;
-    const novaQtd = parseFloat(String(novaQtdStr).replace(',', '.'));
-    if (!novaQtd || novaQtd <= 0) { alert('Quantidade inválida.'); return; }
-    const novoResponsavel = prompt('Responsável pela retirada:', mov.responsavel);
-    if (novoResponsavel === null) return;
-    const novaObservacao = prompt('Observação:', mov.observacao);
-    if (novaObservacao === null) return;
+    movAtualEdicaoId = movId;
+    itemAtualEdicaoId = itemId;
+    document.getElementById('editAtendQtd').value = mov.qtd;
+    document.getElementById('editAtendResponsavel').value = mov.responsavel;
+    document.getElementById('editAtendTag').value = mov.tag || '';
+    document.getElementById('editAtendEvento').value = mov.evento || '';
+    document.getElementById('editAtendObservacao').value = mov.observacao;
+    document.getElementById('statusEditarAtendimento').textContent = '';
+    document.getElementById('modalEditarAtendimento').classList.add('aberto');
+}
 
-    const statusEl = document.getElementById('statusModalAtender');
+document.getElementById('btnCancelarEditarAtendimento').addEventListener('click', () => {
+    document.getElementById('modalEditarAtendimento').classList.remove('aberto');
+    movAtualEdicaoId = null;
+    itemAtualEdicaoId = null;
+});
+
+document.getElementById('btnSalvarEditarAtendimento').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusEditarAtendimento');
+    const novaQtd = parseFloat(document.getElementById('editAtendQtd').value);
+    if (!novaQtd || novaQtd <= 0) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Quantidade inválida.';
+        return;
+    }
+    const novoResponsavel = document.getElementById('editAtendResponsavel').value.trim().toUpperCase();
+    const novaObservacao = document.getElementById('editAtendObservacao').value.trim();
+    const novaTag = document.getElementById('editAtendTag').value.trim();
+    const novoEvento = document.getElementById('editAtendEvento').value.trim();
+
     statusEl.className = '';
     statusEl.textContent = 'Atualizando...';
     try {
         await chamarPost('editarMovimentacao', {
-            movId,
+            movId: movAtualEdicaoId,
             novaQtd,
-            responsavel: novoResponsavel.trim().toUpperCase(),
-            observacao: novaObservacao.trim()
+            responsavel: novoResponsavel,
+            observacao: novaObservacao,
+            tag: novaTag,
+            evento: novoEvento
         });
         await Promise.all([carregarProdutos(), carregarMovimentacoes()]);
         atualizarTagContagem();
-        statusEl.className = 'status-msg sucesso';
-        statusEl.textContent = '✅ Atendimento atualizado.';
-        renderizarListaAtendimentosItem(itemId);
+        document.getElementById('modalEditarAtendimento').classList.remove('aberto');
+        statusEl.textContent = '';
+        renderizarListaAtendimentosItem(itemAtualEdicaoId);
         renderizarRequisicao(projetoAtualId);
         renderizarListaProjetos();
         renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+        movAtualEdicaoId = null;
+        itemAtualEdicaoId = null;
     } catch (err) {
         console.error(err);
         statusEl.className = 'status-msg erro';
         statusEl.textContent = '⚠️ ' + err.message;
     }
-}
+});
 
 async function excluirAtendimento(movId, itemId) {
     if (!confirm('Excluir este atendimento? O estoque será devolvido automaticamente.')) return;
@@ -1062,14 +1441,17 @@ document.getElementById('btnConfirmarAtender').addEventListener('click', async (
         if (!confirm(`Estoque atual do produto é ${prod.estoque}. Deseja confirmar a retirada de ${qtd} mesmo assim?`)) return;
     }
 
+    const tagAtual = document.getElementById('modalAtenderTag').value.trim();
+    const eventoAtual = document.getElementById('modalAtenderEvento').value.trim();
+
     const mov = {
         data: document.getElementById('cabData').value || hojeISO(),
         produtoId: prod.id,
         qtd,
         valorUnit: prod.valor,
         tipo: 'saida',
-        tag: item.tag || '',
-        evento: item.evento || '',
+        tag: tagAtual,
+        evento: eventoAtual,
         observacao: document.getElementById('modalObservacaoRetirada').value.trim(),
         responsavel,
         projetoId: proj.id,
@@ -1078,8 +1460,11 @@ document.getElementById('btnConfirmarAtender').addEventListener('click', async (
 
     statusEl.className = '';
     statusEl.textContent = 'Registrando...';
+    if (tagAtual !== (item.tag || '') || eventoAtual !== (item.evento || '')) {
+        await chamarPost('atualizarTagEventoItem', { itemId: item.id, tag: tagAtual, evento: eventoAtual });
+    }
     await chamarPost('registrarMovimentacao', { movimentacao: mov });
-    await Promise.all([carregarProdutos(), carregarMovimentacoes()]);
+    await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarProjetos()]);
     atualizarTagContagem();
 
     document.getElementById('modalAtender').classList.remove('aberto');
@@ -1090,14 +1475,16 @@ document.getElementById('btnConfirmarAtender').addEventListener('click', async (
 });
 
 /* ============================================================
-   CONFIGURAÇÕES (URL do backend salva no navegador)
+   CONFIGURAÇÕES (URL + chave do Supabase salvas no navegador)
    ============================================================ */
-function urlBackendValida() {
-    return URL_BACKEND && URL_BACKEND.indexOf('COLE_AQUI') === -1;
+function configValida() {
+    return SUPABASE_URL && SUPABASE_URL.indexOf('COLE_AQUI') === -1 &&
+           SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.indexOf('COLE_AQUI') === -1;
 }
 
 function abrirConfiguracoes() {
-    document.getElementById('configUrlBackend').value = urlBackendValida() ? URL_BACKEND : '';
+    document.getElementById('configSupabaseUrl').value = (SUPABASE_URL && SUPABASE_URL.indexOf('COLE_AQUI') === -1) ? SUPABASE_URL : '';
+    document.getElementById('configSupabaseKey').value = (SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.indexOf('COLE_AQUI') === -1) ? SUPABASE_ANON_KEY : '';
     document.getElementById('statusConfig').textContent = '';
     document.getElementById('modalConfig').classList.add('aberto');
 }
@@ -1110,25 +1497,489 @@ document.getElementById('btnCancelarConfig').addEventListener('click', () => {
 
 document.getElementById('btnSalvarConfig').addEventListener('click', () => {
     const statusEl = document.getElementById('statusConfig');
-    const novaUrl = document.getElementById('configUrlBackend').value.trim();
-    if (!novaUrl) {
+    const novaUrl = document.getElementById('configSupabaseUrl').value.trim();
+    const novaKey = document.getElementById('configSupabaseKey').value.trim();
+    if (!novaUrl || !novaKey) {
         statusEl.className = 'status-msg erro';
-        statusEl.textContent = 'Cole a URL do seu Web App do Apps Script.';
+        statusEl.textContent = 'Preencha a Project URL e a chave anon public do Supabase.';
         return;
     }
-    localStorage.setItem('estoqueapp_url_backend', novaUrl);
+    localStorage.setItem('estoqueapp_supabase_url', novaUrl);
+    localStorage.setItem('estoqueapp_supabase_key', novaKey);
     statusEl.className = 'status-msg sucesso';
     statusEl.textContent = '✅ Salvo! Recarregando...';
     setTimeout(() => location.reload(), 600);
 });
 
+/* ============================================================
+   RELATÓRIOS (PDF e Excel) da requisição do projeto atual
+   ============================================================ */
+function obterProjetoAtual() {
+    return projetos.find(p => p.id === projetoAtualId);
+}
+
+function itensComDadosProjeto(proj) {
+    return (proj.itens || []).map(item => {
+        const prod = produtos.find(p => p.id === item.produtoId);
+        const entregue = entreguePorItem(item.id);
+        return { item, prod, entregue, subtotal: item.qtdRequisitada * (prod ? prod.valor : 0) };
+    });
+}
+
+function atendimentosDoItem(itemId) {
+    return movimentacoes
+        .filter(m => String(m.itemProjetoId) === String(itemId) && m.tipo === 'saida')
+        .sort((a, b) => (a.data || '').localeCompare(b.data || ''));
+}
+
+function slugArquivo(s) {
+    return String(s || 'projeto')
+        .toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'projeto';
+}
+
+function exigirProjetoParaRelatorio() {
+    const proj = obterProjetoAtual();
+    if (!proj) {
+        alert('Selecione um projeto antes de gerar o relatório.');
+        return null;
+    }
+    if (!(proj.itens || []).length) {
+        alert('Este projeto ainda não tem itens na requisição.');
+        return null;
+    }
+    return proj;
+}
+
+function cabecalhoRelatorio(doc, proj, subtitulo) {
+    doc.setFontSize(16);
+    doc.text('Requisição de Saída' + (subtitulo ? ' — ' + subtitulo : ''), 14, 18);
+    doc.setFontSize(10);
+    doc.text(`Projeto: ${proj.descricao} (${proj.tipo === 'conteiner' ? 'Contêiner' : 'Esquadria'})`, 14, 26);
+    doc.text(`Data de criação do projeto: ${proj.data}`, 14, 32);
+    doc.text(`Relatório emitido em: ${hojeISO()}`, 14, 38);
+    return 44;
+}
+
+/* ---------- compartilhar (com fallback para download tradicional) ---------- */
+async function compartilharOuBaixarArquivo(blob, nomeArquivo, mimeType, titulo) {
+    try {
+        const file = new File([blob], nomeArquivo, { type: mimeType });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+            await navigator.share({ files: [file], title: titulo || nomeArquivo });
+            return;
+        }
+    } catch (err) {
+        if (err && err.name === 'AbortError') return; // usuário cancelou o compartilhamento
+        console.warn('Compartilhamento não disponível, baixando arquivo:', err);
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = nomeArquivo;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+/* ---------- PDF resumido (igual à tela) ---------- */
+/* ---------- construtores (retornam doc/dados, sem salvar/compartilhar) ---------- */
+function construirPdfProjetoResumo(proj) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const startY = cabecalhoRelatorio(doc, proj, 'Resumo');
+
+    const linhas = itensComDadosProjeto(proj);
+    const corpo = linhas.map(l => [
+        l.prod ? l.prod.id : l.item.produtoId,
+        l.prod ? l.prod.nome : '-',
+        l.item.tag || '-',
+        l.item.evento || '-',
+        formatarMoeda(l.prod ? l.prod.valor : 0),
+        Number(l.item.qtdRequisitada).toLocaleString('pt-BR'),
+        Number(l.entregue).toLocaleString('pt-BR'),
+        formatarMoeda(l.subtotal)
+    ]);
+    const totalPedido = linhas.reduce((s, l) => s + l.subtotal, 0);
+
+    doc.autoTable({
+        startY,
+        head: [['Código', 'Descrição', 'Tag', 'Evento', 'Valor Unit.', 'Qtd. Pedida', 'Qtd. Atendida', 'Subtotal']],
+        body: corpo,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [21, 101, 192] }
+    });
+
+    const finalY = doc.lastAutoTable.finalY || startY;
+    doc.setFontSize(11);
+    doc.text(`Total pedido: ${formatarMoeda(totalPedido)}`, 14, finalY + 10);
+    return doc;
+}
+
+function construirPdfProjetoDetalhado(proj) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    let y = cabecalhoRelatorio(doc, proj, 'Detalhado');
+    let totalAtendidoGeral = 0;
+
+    itensComDadosProjeto(proj).forEach(l => {
+        if (y > 255) { doc.addPage(); y = 20; }
+        doc.setFontSize(10);
+        doc.setFont(undefined, 'bold');
+        doc.text(`${l.prod ? l.prod.id : l.item.produtoId} — ${l.prod ? l.prod.nome : ''}`, 14, y);
+        doc.setFont(undefined, 'normal');
+        y += 5;
+        doc.setFontSize(9);
+        doc.text(`Tag: ${l.item.tag || '-'}   ·   Evento: ${l.item.evento || '-'}   ·   Valor Unit.: ${formatarMoeda(l.prod ? l.prod.valor : 0)}   ·   Pedido: ${l.item.qtdRequisitada}   ·   Atendido: ${l.entregue}`, 14, y);
+        y += 6;
+
+        const atendimentos = atendimentosDoItem(l.item.id);
+        if (!atendimentos.length) {
+            doc.text('   Nenhuma retirada registrada ainda.', 14, y);
+            y += 8;
+        } else {
+            const corpo = atendimentos.map(a => {
+                const subtotalRetirada = Number(a.qtd) * Number(a.valorUnit);
+                totalAtendidoGeral += subtotalRetirada;
+                return [
+                    a.data, Number(a.qtd).toLocaleString('pt-BR'), formatarMoeda(a.valorUnit),
+                    formatarMoeda(subtotalRetirada), a.responsavel || '-', a.observacao || '-'
+                ];
+            });
+            doc.autoTable({
+                startY: y,
+                head: [['Data', 'Qtd. retirada', 'Valor Unit.', 'Subtotal', 'Responsável', 'Observação']],
+                body: corpo,
+                styles: { fontSize: 8 },
+                headStyles: { fillColor: [46, 125, 50] },
+                margin: { left: 14, right: 14 }
+            });
+            y = doc.lastAutoTable.finalY + 8;
+        }
+    });
+
+    if (y > 270) { doc.addPage(); y = 20; }
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text(`Total atendido (R$): ${formatarMoeda(totalAtendidoGeral)}`, 14, y + 4);
+    doc.setFont(undefined, 'normal');
+    return doc;
+}
+
+function construirDadosExcelProjetoResumo(proj) {
+    return itensComDadosProjeto(proj).map(l => ({
+        'Código': l.prod ? l.prod.id : l.item.produtoId,
+        'Descrição': l.prod ? l.prod.nome : '',
+        'Tag': l.item.tag || '',
+        'Evento': l.item.evento || '',
+        'Valor Unit.': l.prod ? l.prod.valor : 0,
+        'Qtd. Pedida': l.item.qtdRequisitada,
+        'Qtd. Atendida': l.entregue,
+        'Subtotal': l.subtotal
+    }));
+}
+
+function construirDadosExcelProjetoDetalhado(proj) {
+    const colunas = ['Código', 'Descrição', 'Tag', 'Evento', 'Valor Unit.', 'Qtd. Pedida', 'Data retirada', 'Qtd. retirada', 'Subtotal retirada', 'Responsável', 'Observação'];
+    const dados = [];
+    let totalAtendido = 0;
+    itensComDadosProjeto(proj).forEach(l => {
+        const atendimentos = atendimentosDoItem(l.item.id);
+        const base = {
+            'Código': l.prod ? l.prod.id : l.item.produtoId,
+            'Descrição': l.prod ? l.prod.nome : '',
+            'Tag': l.item.tag || '',
+            'Evento': l.item.evento || '',
+            'Valor Unit.': l.prod ? l.prod.valor : 0,
+            'Qtd. Pedida': l.item.qtdRequisitada
+        };
+        if (!atendimentos.length) {
+            dados.push({ ...base, 'Data retirada': '', 'Qtd. retirada': '', 'Subtotal retirada': '', 'Responsável': '', 'Observação': '' });
+        } else {
+            atendimentos.forEach(a => {
+                const subtotalRetirada = Number(a.qtd) * Number(a.valorUnit);
+                totalAtendido += subtotalRetirada;
+                dados.push({
+                    ...base,
+                    'Data retirada': a.data,
+                    'Qtd. retirada': a.qtd,
+                    'Subtotal retirada': subtotalRetirada,
+                    'Responsável': a.responsavel || '',
+                    'Observação': a.observacao || ''
+                });
+            });
+        }
+    });
+    dados.push({});
+    dados.push({ 'Qtd. retirada': 'TOTAL ATENDIDO (R$):', 'Subtotal retirada': totalAtendido });
+    dados._colunas = colunas;
+    return dados;
+}
+
+function baixarExcel(wb, nomeArquivo) {
+    XLSX.writeFile(wb, nomeArquivo);
+}
+
+function blobExcel(wb) {
+    return new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
+function montarWorkbook(dados, nomeAba, colunas) {
+    const ws = XLSX.utils.json_to_sheet(dados, colunas ? { header: colunas } : undefined);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, nomeAba);
+    return wb;
+}
+
+/* ---------- pré-visualização de tabelas (Excel) num popup ---------- */
+function visualizarTabelaHtml(titulo, dados) {
+    const colunas = dados._colunas || Object.keys(dados.find(d => Object.keys(d).length) || {});
+    let html = `<h4 style="margin-top:0;">${escapeHtml(titulo)}</h4><div style="max-height:60vh; overflow:auto;"><table class="tabela"><thead><tr>${colunas.map(c => `<th>${escapeHtml(c)}</th>`).join('')}</tr></thead><tbody>`;
+    dados.forEach(row => {
+        html += '<tr>' + colunas.map(c => `<td>${row[c] !== undefined && row[c] !== null ? escapeHtml(String(row[c])) : ''}</td>`).join('') + '</tr>';
+    });
+    html += '</tbody></table></div>';
+    document.getElementById('modalPreviewConteudo').innerHTML = html;
+    document.getElementById('modalPreview').classList.add('aberto');
+}
+document.getElementById('btnFecharPreview').addEventListener('click', () => {
+    document.getElementById('modalPreview').classList.remove('aberto');
+});
+
+/* ---------- ação genérica: ver / compartilhar / salvar (PDF ou Excel) ---------- */
+function executarAcaoPdf(acao, doc, nomeArquivo) {
+    if (acao === 'ver') { window.open(doc.output('bloburl'), '_blank'); return; }
+    if (acao === 'salvar') { doc.save(nomeArquivo); return; }
+    if (acao === 'compartilhar') { compartilharOuBaixarArquivo(doc.output('blob'), nomeArquivo, 'application/pdf', nomeArquivo); return; }
+}
+function executarAcaoExcel(acao, dados, nomeAba, nomeArquivo, titulo) {
+    if (acao === 'ver') { visualizarTabelaHtml(titulo, dados); return; }
+    const wb = montarWorkbook(dados, nomeAba, dados._colunas);
+    if (acao === 'salvar') { baixarExcel(wb, nomeArquivo); return; }
+    if (acao === 'compartilhar') { compartilharOuBaixarArquivo(blobExcel(wb), nomeArquivo, blobExcel(wb).type, nomeArquivo); return; }
+}
+
+/* ---------- Requisição de Saída: botões existentes (sempre "compartilhar") ---------- */
+function gerarPdfResumo() {
+    const proj = exigirProjetoParaRelatorio();
+    if (!proj) return;
+    const doc = construirPdfProjetoResumo(proj);
+    executarAcaoPdf('compartilhar', doc, `requisicao-${slugArquivo(proj.descricao)}-resumo.pdf`);
+}
+function gerarPdfDetalhado() {
+    const proj = exigirProjetoParaRelatorio();
+    if (!proj) return;
+    const doc = construirPdfProjetoDetalhado(proj);
+    executarAcaoPdf('compartilhar', doc, `requisicao-${slugArquivo(proj.descricao)}-detalhado.pdf`);
+}
+function gerarExcelResumo() {
+    const proj = exigirProjetoParaRelatorio();
+    if (!proj) return;
+    const dados = construirDadosExcelProjetoResumo(proj);
+    executarAcaoExcel('compartilhar', dados, 'Resumo', `requisicao-${slugArquivo(proj.descricao)}-resumo.xlsx`, proj.descricao);
+}
+function gerarExcelDetalhado() {
+    const proj = exigirProjetoParaRelatorio();
+    if (!proj) return;
+    const dados = construirDadosExcelProjetoDetalhado(proj);
+    executarAcaoExcel('compartilhar', dados, 'Detalhado', `requisicao-${slugArquivo(proj.descricao)}-detalhado.xlsx`, proj.descricao);
+}
+
+document.getElementById('btnPdfResumo').addEventListener('click', gerarPdfResumo);
+document.getElementById('btnPdfDetalhado').addEventListener('click', gerarPdfDetalhado);
+document.getElementById('btnExcelResumo').addEventListener('click', gerarExcelResumo);
+document.getElementById('btnExcelDetalhado').addEventListener('click', gerarExcelDetalhado);
+
+/* ============================================================
+   ABA RELATÓRIOS (por Evento, por Tag, por Projeto)
+   ============================================================ */
+let eventoSelecionadoRelatorio = null;
+
+function construirLinhasMovimentacoes(lista) {
+    return lista.map(m => {
+        const prod = produtos.find(p => p.id === m.produtoId);
+        const proj = m.projetoId ? projetos.find(p => String(p.id) === String(m.projetoId)) : null;
+        return { m, prod, proj, subtotal: Number(m.qtd) * Number(m.valorUnit) };
+    });
+}
+function movimentacoesPorEvento(codigoEvento) {
+    const alvo = String(codigoEvento || '').trim();
+    return movimentacoes.filter(m => m.tipo === 'saida' && String(m.evento || '').trim() === alvo)
+        .sort((a, b) => (a.data || '').localeCompare(b.data || ''));
+}
+function movimentacoesPorTag(tag) {
+    const alvo = String(tag || '').trim().toLowerCase();
+    return movimentacoes.filter(m => m.tipo === 'saida' && String(m.tag || '').trim().toLowerCase() === alvo)
+        .sort((a, b) => (a.data || '').localeCompare(b.data || ''));
+}
+
+function construirPdfListaMovimentacoes(titulo, subtitulo, linhas, colunaExtra) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text(titulo, 14, 18);
+    doc.setFontSize(10);
+    doc.text(subtitulo, 14, 26);
+    doc.text(`Relatório emitido em: ${hojeISO()}`, 14, 32);
+
+    const corpo = linhas.map(l => [
+        l.m.data,
+        l.prod ? l.prod.nome : ('#' + l.m.produtoId),
+        colunaExtra.getter(l.m) || '-',
+        l.proj ? l.proj.descricao : '-',
+        Number(l.m.qtd).toLocaleString('pt-BR'),
+        formatarMoeda(l.m.valorUnit),
+        formatarMoeda(l.subtotal),
+        l.m.responsavel || '-'
+    ]);
+    const total = linhas.reduce((s, l) => s + l.subtotal, 0);
+
+    doc.autoTable({
+        startY: 38,
+        head: [['Data', 'Produto', colunaExtra.header, 'Projeto', 'Qtd', 'Valor Unit.', 'Subtotal', 'Responsável']],
+        body: corpo,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [21, 101, 192] }
+    });
+    const finalY = doc.lastAutoTable.finalY || 38;
+    doc.setFontSize(11);
+    doc.text(`Total (R$): ${formatarMoeda(total)}`, 14, finalY + 10);
+    return doc;
+}
+
+function construirDadosExcelMovimentacoes(linhas, colunaExtra) {
+    const colunas = ['Data', 'Produto', colunaExtra.header, 'Projeto', 'Qtd', 'Valor Unit.', 'Subtotal', 'Responsável', 'Observação'];
+    const dados = linhas.map(l => ({
+        'Data': l.m.data,
+        'Produto': l.prod ? l.prod.nome : ('#' + l.m.produtoId),
+        [colunaExtra.header]: colunaExtra.getter(l.m) || '',
+        'Projeto': l.proj ? l.proj.descricao : '',
+        'Qtd': l.m.qtd,
+        'Valor Unit.': l.m.valorUnit,
+        'Subtotal': l.subtotal,
+        'Responsável': l.m.responsavel || '',
+        'Observação': l.m.observacao || ''
+    }));
+    const total = linhas.reduce((s, l) => s + l.subtotal, 0);
+    dados.push({});
+    dados.push({ 'Produto': 'TOTAL (R$):', 'Subtotal': total });
+    dados._colunas = colunas;
+    return dados;
+}
+
+/* ---------- módulo: por Evento ---------- */
+function renderizarResultadosEventoRelatorio(termo) {
+    const el = document.getElementById('relResultadosEvento');
+    const lista = buscarEventos(termo);
+    if (!lista.length) {
+        el.innerHTML = '<div class="item-resultado">Nenhum evento encontrado.</div>';
+        el.classList.add('aberto');
+        return;
+    }
+    el.innerHTML = '';
+    lista.forEach(ev => {
+        const div = document.createElement('div');
+        div.className = 'item-resultado';
+        div.innerHTML = `
+            <div class="info-resultado"><span class="cod">${escapeHtml(ev.codigo)}</span> — ${escapeHtml(ev.descricao)}</div>
+            <button class="btn btn-verde btn-pequeno">Selecionar</button>
+        `;
+        div.querySelector('button').addEventListener('click', () => {
+            eventoSelecionadoRelatorio = ev;
+            document.getElementById('relEventoSelecionado').innerHTML = `Selecionado: <strong>${escapeHtml(ev.codigo)} — ${escapeHtml(ev.descricao)}</strong>`;
+            el.classList.remove('aberto');
+            document.getElementById('relBuscaEvento').value = '';
+        });
+        el.appendChild(div);
+    });
+    el.classList.add('aberto');
+}
+document.getElementById('relBtnBuscarEvento').addEventListener('click', () => renderizarResultadosEventoRelatorio(document.getElementById('relBuscaEvento').value));
+document.getElementById('relBuscaEvento').addEventListener('input', () => {
+    const termo = document.getElementById('relBuscaEvento').value;
+    if (termo.trim()) renderizarResultadosEventoRelatorio(termo);
+    else document.getElementById('relResultadosEvento').classList.remove('aberto');
+});
+document.getElementById('relBuscaEvento').addEventListener('keydown', e => {
+    if (e.key === 'Enter') renderizarResultadosEventoRelatorio(document.getElementById('relBuscaEvento').value);
+});
+
+function executarRelatorioEvento(acao) {
+    if (!eventoSelecionadoRelatorio) { alert('Selecione um evento primeiro.'); return; }
+    const linhas = construirLinhasMovimentacoes(movimentacoesPorEvento(eventoSelecionadoRelatorio.codigo));
+    if (!linhas.length) { alert('Nenhuma retirada encontrada para esse evento.'); return; }
+    const formato = document.getElementById('relEventoFormato').value;
+    const titulo = 'Relatório por Evento — Detalhado';
+    const subtitulo = `Evento: ${eventoSelecionadoRelatorio.codigo} — ${eventoSelecionadoRelatorio.descricao || ''}`;
+    const nomeBase = `relatorio-evento-${slugArquivo(eventoSelecionadoRelatorio.codigo)}`;
+    const colunaExtra = { header: 'Tag', getter: m => m.tag };
+    if (formato === 'pdf') {
+        executarAcaoPdf(acao, construirPdfListaMovimentacoes(titulo, subtitulo, linhas, colunaExtra), `${nomeBase}.pdf`);
+    } else {
+        executarAcaoExcel(acao, construirDadosExcelMovimentacoes(linhas, colunaExtra), 'Relatório', `${nomeBase}.xlsx`, titulo);
+    }
+}
+document.getElementById('relEventoVer').addEventListener('click', () => executarRelatorioEvento('ver'));
+document.getElementById('relEventoCompartilhar').addEventListener('click', () => executarRelatorioEvento('compartilhar'));
+document.getElementById('relEventoSalvar').addEventListener('click', () => executarRelatorioEvento('salvar'));
+
+/* ---------- módulo: por Tag ---------- */
+function executarRelatorioTag(acao) {
+    const tag = document.getElementById('relBuscaTag').value.trim();
+    if (!tag) { alert('Informe uma tag primeiro.'); return; }
+    const linhas = construirLinhasMovimentacoes(movimentacoesPorTag(tag));
+    if (!linhas.length) { alert('Nenhuma retirada encontrada para essa tag.'); return; }
+    const formato = document.getElementById('relTagFormato').value;
+    const titulo = 'Relatório por Tag — Detalhado';
+    const subtitulo = `Tag: ${tag}`;
+    const nomeBase = `relatorio-tag-${slugArquivo(tag)}`;
+    const colunaExtra = { header: 'Evento', getter: m => m.evento };
+    if (formato === 'pdf') {
+        executarAcaoPdf(acao, construirPdfListaMovimentacoes(titulo, subtitulo, linhas, colunaExtra), `${nomeBase}.pdf`);
+    } else {
+        executarAcaoExcel(acao, construirDadosExcelMovimentacoes(linhas, colunaExtra), 'Relatório', `${nomeBase}.xlsx`, titulo);
+    }
+}
+document.getElementById('relTagVer').addEventListener('click', () => executarRelatorioTag('ver'));
+document.getElementById('relTagCompartilhar').addEventListener('click', () => executarRelatorioTag('compartilhar'));
+document.getElementById('relTagSalvar').addEventListener('click', () => executarRelatorioTag('salvar'));
+
+/* ---------- módulo: por Projeto ---------- */
+function executarRelatorioProjeto(acao) {
+    const valor = document.getElementById('relProjetoSelect').value;
+    if (!valor) { alert('Selecione um projeto primeiro.'); return; }
+    const proj = projetos.find(p => p.id === Number(valor));
+    if (!proj || !(proj.itens || []).length) { alert('Esse projeto ainda não tem itens na requisição.'); return; }
+
+    const tipo = document.getElementById('relProjetoTipo').value;
+    const formato = document.getElementById('relProjetoFormato').value;
+    const nomeBase = `requisicao-${slugArquivo(proj.descricao)}-${tipo}`;
+    const titulo = `Requisição — ${proj.descricao} (${tipo === 'resumo' ? 'Resumo' : 'Detalhado'})`;
+
+    if (formato === 'pdf') {
+        const doc = tipo === 'resumo' ? construirPdfProjetoResumo(proj) : construirPdfProjetoDetalhado(proj);
+        executarAcaoPdf(acao, doc, `${nomeBase}.pdf`);
+    } else {
+        const dados = tipo === 'resumo' ? construirDadosExcelProjetoResumo(proj) : construirDadosExcelProjetoDetalhado(proj);
+        executarAcaoExcel(acao, dados, tipo === 'resumo' ? 'Resumo' : 'Detalhado', `${nomeBase}.xlsx`, titulo);
+    }
+}
+document.getElementById('relProjetoVer').addEventListener('click', () => executarRelatorioProjeto('ver'));
+document.getElementById('relProjetoCompartilhar').addEventListener('click', () => executarRelatorioProjeto('compartilhar'));
+document.getElementById('relProjetoSalvar').addEventListener('click', () => executarRelatorioProjeto('salvar'));
+
+
 /* ---------- inicialização ---------- */
 (async function iniciar() {
-    if (!urlBackendValida()) {
-        document.getElementById('tagContagem').textContent = '⚠️ Configure a URL do backend clicando na engrenagem ⚙️ no topo.';
+    if (!configValida()) {
+        document.getElementById('tagContagem').textContent = '⚠️ Configure a conexão com o Supabase clicando na engrenagem ⚙️ no topo.';
         abrirConfiguracoes();
         return;
     }
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     await carregarTudo();
     renderizarTabelaEstoque(buscarProdutos(''));
     renderizarListaProjetos();
