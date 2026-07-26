@@ -260,10 +260,37 @@
   .drawer-section{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 18px; margin-bottom:14px; }
   .drawer-section-title{ font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:12px; }
   .drawer-body .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-  .companion-view{
-    background:var(--bg); border-radius:8px; padding:9px 12px; margin-bottom:6px; font-size:.85rem;
-    display:flex; justify-content:space-between;
+  .companion-edit{
+    background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:9px 10px; margin-bottom:8px;
+    display:grid; grid-template-columns:1.3fr 1fr auto auto; gap:8px; align-items:center;
   }
+  @media (max-width:480px){ .companion-edit{ grid-template-columns:1fr 1fr; } }
+  .companion-edit input[type="text"], .companion-edit input[type="date"]{
+    padding:8px 10px; border-radius:6px; border:1px solid var(--border); font-size:.82rem; background:var(--surface); color:var(--ink);
+  }
+  .comp-cadeirinha-label{ display:flex; align-items:center; gap:6px; font-size:.76rem; color:var(--muted); white-space:nowrap; }
+  .comp-cadeirinha-label input{ width:14px; height:14px; }
+  .btn-remover-acompanhante{
+    background:var(--danger-soft); color:var(--danger); border:none; width:26px; height:26px; border-radius:6px;
+    cursor:pointer; font-size:.85rem; flex-shrink:0;
+  }
+  .btn-remover-acompanhante:hover{ background:#f5d6d2; }
+  .btn-add-acompanhante{
+    width:100%; background:none; border:1.5px dashed var(--border); color:var(--muted); font-weight:600;
+    font-size:.82rem; padding:9px; border-radius:8px; cursor:pointer; margin-top:4px; transition:border-color .15s, color .15s;
+  }
+  .btn-add-acompanhante:hover{ border-color:var(--brand-2); color:var(--brand-2); }
+
+  .check-valor-manual{
+    display:flex; align-items:flex-start; gap:9px; font-size:.82rem; color:var(--ink); cursor:pointer; line-height:1.4;
+  }
+  .check-valor-manual input{ width:16px; height:16px; margin-top:2px; accent-color:var(--brand); flex-shrink:0; }
+
+  #d_forma_pagamento{
+    width:100%; padding:11px 14px; border-radius:10px; border:1.5px solid var(--border);
+    font-size:.9rem; background:var(--surface); color:var(--ink);
+  }
+
   .valor-total-box{ display:flex; align-items:baseline; justify-content:space-between; }
   .valor-total-box .num{ font-size:1.3rem; font-weight:700; color:var(--brand-2); }
 
@@ -303,6 +330,8 @@
   .btn-confirmar:hover:not(:disabled){ background:#e5991f; }
   .btn-cancelar{ background:none; border:1.5px solid var(--danger); color:var(--danger); }
   .btn-cancelar:hover:not(:disabled){ background:var(--danger-soft); }
+  .btn-reabrir{ background:none; border:1.5px solid var(--brand-2); color:var(--brand-2); }
+  .btn-reabrir:hover:not(:disabled){ background:var(--brand-soft); }
 
   #loadingScreen{ position:fixed; inset:0; background:var(--bg); z-index:100; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px; }
   .spinner{ width:32px; height:32px; border:3px solid var(--border); border-top-color:var(--brand); border-radius:50%; animation:spin .8s linear infinite; }
@@ -462,6 +491,7 @@
       </div>
       <div class="drawer-body" id="drawerBody"></div>
       <div class="drawer-actions">
+        <button class="btn-acao btn-reabrir" id="btnReabrirReserva">Reabrir</button>
         <button class="btn-acao btn-cancelar" id="btnCancelarReserva">Cancelar</button>
         <button class="btn-acao btn-salvar" id="btnSalvarReserva">Salvar</button>
         <button class="btn-acao btn-confirmar" id="btnConfirmarReserva">Confirmar</button>
@@ -628,7 +658,7 @@
       .from('receptivo_reservas')
       .select(`
         id, reserva_hotel, voo_chegada, voo_partida, data_hr_chegada, data_hr_partida,
-        obs_geral, valor_total, status, created_at,
+        obs_geral, valor_total, valor_manual, forma_pagamento, status, created_at,
         receptivo_hoteis ( nome ),
         receptivo_servicos ( nome ),
         receptivo_clientes_reserva ( id, eh_principal, nome, sobrenome, endereco, whatsapp, email, data_nascimento, precisa_cadeirinha )
@@ -1208,13 +1238,11 @@
       </div>
 
       <div class="drawer-section">
-        <div class="drawer-section-title">Acompanhantes (${acompanhantes.length})</div>
-        ${acompanhantes.length ? acompanhantes.map(a => `
-          <div class="companion-view">
-            <span>${a.nome}</span>
-            <span>${a.data_nascimento ? new Date(a.data_nascimento + 'T00:00:00').toLocaleDateString('pt-BR') : '—'}</span>
-          </div>
-        `).join('') : '<p style="font-size:.85rem; color:var(--muted);">Nenhum acompanhante.</p>'}
+        <div class="drawer-section-title">Acompanhantes (<span id="qtdAcompanhantesLabel">${acompanhantes.length}</span>)</div>
+        <div id="listaAcompanhantesEdicao">
+          ${acompanhantes.map(a => gerarLinhaAcompanhante(a)).join('')}
+        </div>
+        <button type="button" class="btn-add-acompanhante" id="btnAddAcompanhanteDrawer">+ Adicionar acompanhante</button>
       </div>
 
       <div class="drawer-section">
@@ -1232,19 +1260,113 @@
       </div>
 
       <div class="drawer-section">
-        <div class="drawer-section-title">Valor total</div>
-        <div class="valor-total-box">
-          <span class="num mono">${r.valor_total !== null ? formatarMoeda(r.valor_total) : 'Sob consulta'}</span>
+        <div class="drawer-section-title">Pagamento</div>
+        <div class="field-group">
+          <label>Forma de pagamento</label>
+          <select id="d_forma_pagamento">
+            <option value="">Não informado</option>
+            <option value="Dinheiro" ${r.forma_pagamento === 'Dinheiro' ? 'selected' : ''}>Dinheiro</option>
+            <option value="Pix" ${r.forma_pagamento === 'Pix' ? 'selected' : ''}>Pix</option>
+            <option value="Cartão de crédito" ${r.forma_pagamento === 'Cartão de crédito' ? 'selected' : ''}>Cartão de crédito</option>
+            <option value="Cartão de débito" ${r.forma_pagamento === 'Cartão de débito' ? 'selected' : ''}>Cartão de débito</option>
+            <option value="Transferência" ${r.forma_pagamento === 'Transferência' ? 'selected' : ''}>Transferência</option>
+            <option value="A combinar" ${r.forma_pagamento === 'A combinar' ? 'selected' : ''}>A combinar</option>
+          </select>
         </div>
+      </div>
+
+      <div class="drawer-section">
+        <div class="drawer-section-title">Valor total</div>
+        <label class="check-valor-manual">
+          <input type="checkbox" id="d_valor_manual" ${r.valor_manual ? 'checked' : ''}>
+          Definir valor manualmente (tarifa de grupo/acordo — trava o cálculo automático por passageiro)
+        </label>
+        <div class="field-group" style="margin-top:12px;">
+          <label>Valor (R$)</label>
+          <input type="number" step="0.01" id="d_valor_total" value="${r.valor_total !== null ? r.valor_total : ''}" ${r.valor_manual ? '' : 'disabled'}>
+        </div>
+        <p style="font-size:.76rem; color:var(--muted); margin-top:6px;" id="dicaValorManual">
+          ${r.valor_manual ? 'Valor travado manualmente — não recalcula sozinho ao mudar acompanhantes.' : 'Calculado automaticamente pelo sistema conforme os passageiros.'}
+        </p>
       </div>
     `;
 
+    // habilita/desabilita o campo de valor conforme o checkbox de valor manual
+    const checkValorManual = document.getElementById('d_valor_manual');
+    const inputValorTotal = document.getElementById('d_valor_total');
+    const dicaValorManual = document.getElementById('dicaValorManual');
+    checkValorManual.addEventListener('change', () => {
+      inputValorTotal.disabled = !checkValorManual.checked;
+      dicaValorManual.textContent = checkValorManual.checked
+        ? 'Valor travado manualmente — não recalcula sozinho ao mudar acompanhantes.'
+        : 'Ao salvar, o sistema recalcula automaticamente conforme os passageiros.';
+      if(checkValorManual.checked) inputValorTotal.focus();
+    });
+
+    // botões de remover acompanhante (existentes) e adicionar novo
+    document.getElementById('listaAcompanhantesEdicao').querySelectorAll('.btn-remover-acompanhante').forEach(btn => {
+      btn.addEventListener('click', () => removerAcompanhanteDrawer(btn));
+    });
+    document.getElementById('btnAddAcompanhanteDrawer').addEventListener('click', adicionarLinhaAcompanhanteDrawer);
+
     const btnConfirmar = document.getElementById('btnConfirmarReserva');
     const btnCancelar = document.getElementById('btnCancelarReserva');
+    const btnReabrir = document.getElementById('btnReabrirReserva');
     btnConfirmar.disabled = r.status !== 'pendente';
     btnCancelar.disabled = r.status === 'cancelada';
+    btnReabrir.disabled = r.status !== 'cancelada';
 
     drawerOverlay.classList.add('show');
+  }
+
+  let contadorAcompanhanteNovo = 0;
+
+  function gerarLinhaAcompanhante(a){
+    const idAttr = a.id || '';
+    return `
+      <div class="companion-edit" data-comp-id="${idAttr}">
+        <input type="text" class="comp-nome" placeholder="Nome" value="${a.nome || ''}">
+        <input type="date" class="comp-nascimento" value="${a.data_nascimento || ''}">
+        <label class="comp-cadeirinha-label"><input type="checkbox" class="comp-cadeirinha" ${a.precisa_cadeirinha ? 'checked' : ''}> Cadeirinha</label>
+        <button type="button" class="btn-remover-acompanhante" title="Remover acompanhante">✕</button>
+      </div>
+    `;
+  }
+
+  function adicionarLinhaAcompanhanteDrawer(){
+    contadorAcompanhanteNovo++;
+    const div = document.createElement('div');
+    div.innerHTML = gerarLinhaAcompanhante({ id: '', nome: '', data_nascimento: '', precisa_cadeirinha: false }).trim();
+    const linha = div.firstElementChild;
+    linha.dataset.compId = 'novo-' + contadorAcompanhanteNovo;
+    linha.querySelector('.btn-remover-acompanhante').addEventListener('click', () => removerAcompanhanteDrawer(linha.querySelector('.btn-remover-acompanhante')));
+    document.getElementById('listaAcompanhantesEdicao').appendChild(linha);
+    atualizarContadorAcompanhantes();
+  }
+
+  async function removerAcompanhanteDrawer(btn){
+    const linha = btn.closest('.companion-edit');
+    const compId = linha.dataset.compId;
+
+    // se já existe no banco (id real, não "novo-"), confirma e apaga de verdade
+    if(compId && !compId.startsWith('novo-')){
+      if(!confirm('Remover este acompanhante da reserva?')) return;
+      const { error } = await sb.from('receptivo_clientes_reserva').delete().eq('id', compId);
+      if(error){ alert('Erro ao remover: ' + error.message); return; }
+      await carregarTudo();
+      abrirDrawer(reservaSelecionadaId); // reabre já atualizado
+      return;
+    }
+
+    // se é uma linha nova ainda não salva, só remove da tela
+    linha.remove();
+    atualizarContadorAcompanhantes();
+  }
+
+  function atualizarContadorAcompanhantes(){
+    const qtd = document.querySelectorAll('#listaAcompanhantesEdicao .companion-edit').length;
+    const label = document.getElementById('qtdAcompanhantesLabel');
+    if(label) label.textContent = qtd;
   }
 
   function formatarParaInput(valor){
@@ -1266,14 +1388,26 @@
       const r = todasReservas.find(x => x.id === reservaSelecionadaId);
       const principal = (r.receptivo_clientes_reserva || []).find(c => c.eh_principal);
 
-      const { error: erroReserva } = await sb.from('receptivo_reservas').update({
+      const valorManual = document.getElementById('d_valor_manual').checked;
+      const valorTotalDigitado = document.getElementById('d_valor_total').value;
+
+      const payloadReserva = {
         reserva_hotel: document.getElementById('d_reserva_hotel').value || null,
         voo_chegada: document.getElementById('d_voo_chegada').value || null,
         voo_partida: document.getElementById('d_voo_partida').value || null,
         data_hr_chegada: document.getElementById('d_data_hr_chegada').value || null,
         data_hr_partida: document.getElementById('d_data_hr_partida').value || null,
-        obs_geral: document.getElementById('d_obs_geral').value || null
-      }).eq('id', reservaSelecionadaId);
+        obs_geral: document.getElementById('d_obs_geral').value || null,
+        forma_pagamento: document.getElementById('d_forma_pagamento').value || null,
+        valor_manual: valorManual
+      };
+      // só grava o valor digitado se estiver em modo manual — caso
+      // contrário, deixa o trigger do banco recalcular sozinho
+      if(valorManual){
+        payloadReserva.valor_total = valorTotalDigitado !== '' ? Number(valorTotalDigitado) : null;
+      }
+
+      const { error: erroReserva } = await sb.from('receptivo_reservas').update(payloadReserva).eq('id', reservaSelecionadaId);
       if(erroReserva) throw new Error(erroReserva.message);
 
       if(principal){
@@ -1285,6 +1419,34 @@
           email: document.getElementById('d_email').value
         }).eq('id', principal.id);
         if(erroPrincipal) throw new Error(erroPrincipal.message);
+      }
+
+      // acompanhantes: linhas com id real são UPDATE, linhas "novo-*" são INSERT
+      const linhasAcompanhantes = document.querySelectorAll('#listaAcompanhantesEdicao .companion-edit');
+      for(const linha of linhasAcompanhantes){
+        const compId = linha.dataset.compId;
+        const nome = linha.querySelector('.comp-nome').value.trim();
+        const nascimento = linha.querySelector('.comp-nascimento').value || null;
+        const cadeirinha = linha.querySelector('.comp-cadeirinha').checked;
+        if(!nome) continue; // ignora linha em branco
+
+        if(compId && !compId.startsWith('novo-')){
+          const { error } = await sb.from('receptivo_clientes_reserva').update({
+            nome, data_nascimento: nascimento, precisa_cadeirinha: cadeirinha
+          }).eq('id', compId);
+          if(error) throw new Error('Erro ao salvar acompanhante: ' + error.message);
+        } else {
+          const { error } = await sb.from('receptivo_clientes_reserva').insert({
+            reserva_id: reservaSelecionadaId, eh_principal: false,
+            nome, data_nascimento: nascimento, precisa_cadeirinha: cadeirinha
+          });
+          if(error) throw new Error('Erro ao adicionar acompanhante: ' + error.message);
+        }
+      }
+
+      // se voltou pro modo automático, recalcula na hora (RPC direto)
+      if(!valorManual){
+        await sb.rpc('fn_recalcular_valor_total', { p_reserva_id: reservaSelecionadaId });
       }
 
       await carregarTudo();
@@ -1308,6 +1470,14 @@
   document.getElementById('btnCancelarReserva').addEventListener('click', async () => {
     if(!confirm('Tem certeza que deseja cancelar esta reserva?')) return;
     const { error } = await sb.from('receptivo_reservas').update({ status: 'cancelada' }).eq('id', reservaSelecionadaId);
+    if(error){ alert('Erro: ' + error.message); return; }
+    await carregarTudo();
+    drawerOverlay.classList.remove('show');
+  });
+
+  document.getElementById('btnReabrirReserva').addEventListener('click', async () => {
+    if(!confirm('Reabrir esta reserva? Ela volta pro status "pendente".')) return;
+    const { error } = await sb.from('receptivo_reservas').update({ status: 'pendente' }).eq('id', reservaSelecionadaId);
     if(error){ alert('Erro: ' + error.message); return; }
     await carregarTudo();
     drawerOverlay.classList.remove('show');
