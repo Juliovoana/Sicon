@@ -1205,7 +1205,13 @@ async function buscarCotacoesSalvas() {
         const respostaTexto = await buscarViaJSONP(url);
         let lista = typeof respostaTexto === "string" ? JSON.parse(respostaTexto) : respostaTexto;
 
-        if (!lista || lista.length === 0) {
+        if (!Array.isArray(lista)) {
+            const mensagemErro = (lista && lista.erro) ? lista.erro : "resposta inesperada do servidor.";
+            resultadosEl.innerHTML = `<div class="item-cotacao-salva">Erro ao buscar: ${mensagemErro}</div>`;
+            return;
+        }
+
+        if (lista.length === 0) {
             resultadosEl.innerHTML = '<div class="item-cotacao-salva">Nenhuma cotação encontrada.</div>';
             return;
         }
@@ -1245,6 +1251,17 @@ document.getElementById("buscaCotacaoSalva").addEventListener("keydown", functio
     if (e.key === "Enter") buscarCotacoesSalvas();
 });
 
+// Normaliza qualquer formato de data (ex: com hora embutida) para yyyy-MM-dd
+function normalizarDataParaCampo(valor) {
+    if (!valor) return new Date().toISOString().slice(0, 10);
+    const texto = String(valor);
+    const match = texto.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (match) return match[1];
+    const data = new Date(texto);
+    if (!isNaN(data.getTime())) return data.toISOString().slice(0, 10);
+    return new Date().toISOString().slice(0, 10);
+}
+
 async function carregarCotacaoSalva(id) {
     statusSalvaEl.className = "";
     statusSalvaEl.textContent = "Carregando cotação...";
@@ -1262,7 +1279,7 @@ async function carregarCotacaoSalva(id) {
 
         document.getElementById("campoCliente").value = (resposta.cliente || "").toUpperCase();
         document.getElementById("campoVendedor").value = (resposta.vendedor || "").toUpperCase();
-        document.getElementById("campoData").value = resposta.data || new Date().toISOString().slice(0, 10);
+        document.getElementById("campoData").value = normalizarDataParaCampo(resposta.data);
         document.getElementById("tipoDesconto").value = resposta.tipoDesconto || "none";
         document.getElementById("valorDesconto").value = resposta.valorDesconto || "";
         document.getElementById("valorDesconto").style.display = (resposta.tipoDesconto && resposta.tipoDesconto !== "none") ? "inline-block" : "none";
