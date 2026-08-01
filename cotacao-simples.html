@@ -310,6 +310,13 @@
         overflow-y: auto;
         margin-top: 4px;
     }
+    .titulo-resultados-salva {
+        display: block;
+        font-size: 0.8em;
+        font-weight: bold;
+        color: #6a1b9a;
+        margin-top: 8px;
+    }
     .item-cotacao-salva {
         display: flex;
         justify-content: space-between;
@@ -616,6 +623,7 @@
             </svg>
         </button>
     </div>
+    <span id="tituloResultadosBuscaSalva" class="titulo-resultados-salva"></span>
     <div id="resultadosBuscaSalva"></div>
 </div>
 
@@ -701,7 +709,7 @@ function buscarViaJSONP(url) {
                 limpar();
                 reject(new Error("Tempo esgotado ao buscar o catálogo."));
             }
-        }, 15000);
+        }, 30000);
 
         window[nomeCallback] = function(dados) {
             if (finalizado) return;
@@ -1177,22 +1185,37 @@ document.getElementById("btnSalvarCotacao").addEventListener("click", async func
 });
 
 document.getElementById("btnBuscarSalva").addEventListener("click", function() {
-    document.getElementById("painelBuscaSalva").classList.toggle("aberto");
+    const painel = document.getElementById("painelBuscaSalva");
+    const estavaFechado = !painel.classList.contains("aberto");
+    painel.classList.toggle("aberto");
+    if (estavaFechado) {
+        buscarCotacoesSalvas();
+    }
 });
 
 async function buscarCotacoesSalvas() {
     const termo = document.getElementById("buscaCotacaoSalva").value.trim();
     const resultadosEl = document.getElementById("resultadosBuscaSalva");
+    const tituloLista = document.getElementById("tituloResultadosBuscaSalva");
     resultadosEl.innerHTML = '<div class="item-cotacao-salva">Buscando...</div>';
+    tituloLista.textContent = "";
 
     try {
         const url = `${URL_CATALOGO}?acao=listarCotacoes&termo=${encodeURIComponent(termo)}`;
         const respostaTexto = await buscarViaJSONP(url);
-        const lista = typeof respostaTexto === "string" ? JSON.parse(respostaTexto) : respostaTexto;
+        let lista = typeof respostaTexto === "string" ? JSON.parse(respostaTexto) : respostaTexto;
 
         if (!lista || lista.length === 0) {
             resultadosEl.innerHTML = '<div class="item-cotacao-salva">Nenhuma cotação encontrada.</div>';
             return;
+        }
+
+        // Sem termo de busca: mostra só as 10 mais recentes (a lista já vem ordenada da mais nova pra mais antiga)
+        if (!termo) {
+            lista = lista.slice(0, 10);
+            tituloLista.textContent = "Últimas 10 cotações salvas:";
+        } else {
+            tituloLista.textContent = `${lista.length} resultado(s) para "${termo}":`;
         }
 
         resultadosEl.innerHTML = "";
@@ -1213,6 +1236,7 @@ async function buscarCotacoesSalvas() {
     } catch (err) {
         console.error(err);
         resultadosEl.innerHTML = '<div class="item-cotacao-salva">Erro ao buscar cotações salvas.</div>';
+        tituloLista.textContent = "";
     }
 }
 
@@ -1396,8 +1420,13 @@ document.getElementById("btnSalvarConfigEmpresa").addEventListener("click", asyn
 
 renderizarCarrinho();
 atualizarIndicadorNumero();
-carregarCatalogo();
-carregarConfigEmpresa();
+
+// Roda uma busca de cada vez (não simultâneas), pra evitar sobrecarregar
+// o Apps Script logo na abertura da página (ex: cold start)
+(async function iniciarCargasIniciais() {
+    await carregarCatalogo();
+    await carregarConfigEmpresa();
+})();
 </script>
 </body>
 </html>
