@@ -155,6 +155,11 @@
     .btn-icone:hover { background: #f0f0f0; }
     .modal-caixa.larga { max-width: 780px; }
 
+    .th-ordenavel { cursor: pointer; user-select: none; }
+    .th-ordenavel:hover { background: #e4e4e4; }
+    .seta-ordem { font-size: 0.8em; color: #999; }
+    .seta-ordem.ativa { color: #1565c0; font-weight: bold; }
+
     .linha-atendimento {
         display: flex; justify-content: space-between; align-items: center;
         padding: 8px 0; border-bottom: 1px solid #eee; font-size: 0.85em; gap: 8px;
@@ -168,16 +173,224 @@
         width: 40px; height: 40px; font-size: 1.15em; cursor: pointer; flex-shrink: 0;
     }
     .botao-engrenagem:hover { background: #444; }
+
+    /* ===== Login (reaproveita o padrão visual do módulo Verba) ===== */
+    :root {
+        --verde-escuro: #3C6B55;
+        --verde-escuro-2: #325B48;
+        --linha: #E1E5E2;
+        --texto-fraco: #6B7570;
+    }
+    .hidden { display: none !important; }
+    #login-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; background: #F7F8F7; }
+    .login-card { width: 100%; max-width: 360px; background: #fff; border: 1px solid var(--linha); border-radius: 10px; padding: 28px 22px; box-shadow: 0 2px 10px rgba(30,40,35,.06); font-family: Arial, sans-serif; }
+    .login-card .wordmark { font-size: 1.4em; font-weight: 700; margin: 0 0 2px; color: var(--verde-escuro); }
+    .login-card .tag { color: var(--texto-fraco); font-size: 0.85em; margin: 0 0 22px; }
+    .field { margin-bottom: 12px; }
+    .field label { display: block; font-size: 0.75em; color: var(--texto-fraco); margin-bottom: 5px; }
+    .login-card input { width: 100%; background: #fff; border: 1px solid var(--linha); color: #222; padding: 9px 10px; border-radius: 8px; font-size: 0.95em; font-family: inherit; }
+    .login-card input:focus { outline: 2px solid var(--verde-escuro); outline-offset: 0; border-color: var(--verde-escuro); }
+    .btn-primary { background: var(--verde-escuro); color: #fff; width: 100%; border: none; border-radius: 8px; padding: 10px 16px; font-size: 0.9em; font-weight: 600; cursor: pointer; font-family: inherit; }
+    .btn-primary:hover { background: var(--verde-escuro-2); }
+    .msg-erro { color: #B5453B; font-size: 0.82em; margin-top: 10px; min-height: 1.1em; }
+    .msg-ok { color: #1E7A46; font-size: 0.82em; margin-top: 10px; min-height: 1.1em; }
+    .campo-senha-wrap { position: relative; }
+    .campo-senha-wrap input { padding-right: 38px; }
+    .btn-olho-senha { position: absolute; top: 50%; right: 5px; transform: translateY(-50%); background: none; border: none; padding: 6px; cursor: pointer; color: var(--texto-fraco); display: flex; align-items: center; justify-content: center; border-radius: 6px; }
+    .btn-olho-senha:hover { color: var(--verde-escuro); }
+    .btn-olho-senha svg { width: 17px; height: 17px; }
+    .link-discreto { background: none; border: none; color: var(--texto-fraco); font-size: 0.8em; cursor: pointer; text-decoration: underline; }
+    .btn-unidade { width: 100%; text-align: left; padding: 12px 14px; border: 1px solid var(--linha); border-radius: 8px; background: #fff; cursor: pointer; font-size: 0.95em; }
+    .btn-unidade:hover { background: #f5f9ff; border-color: #1565c0; }
 </style>
 </head>
 <body>
 
-<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+<!-- ============================================================
+     TELA DE LOGIN (reaproveita servir_unidades_negocio / servir_unidade_usuarios)
+     ============================================================ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div id="bloco-entrar">
+      <p class="wordmark">SICON</p>
+      <p class="tag">Controle de Estoque &amp; Projetos — entre com seu usuário</p>
+      <div class="field">
+        <label for="login-email">E-mail</label>
+        <input type="email" id="login-email" autocomplete="username" placeholder="seu@email.com">
+      </div>
+      <div class="field">
+        <label for="login-senha">Senha</label>
+        <div class="campo-senha-wrap">
+          <input type="password" id="login-senha" autocomplete="current-password" placeholder="••••••••">
+          <button type="button" class="btn-olho-senha" data-alvo="login-senha" aria-label="Mostrar senha"></button>
+        </div>
+      </div>
+      <p style="text-align:right;margin:-6px 0 12px;">
+        <button id="btn-ir-esqueci-senha" class="link-discreto">Esqueci minha senha</button>
+      </p>
+
+      <button class="btn btn-primary" id="btn-login">Entrar</button>
+      <p class="msg-erro" id="login-erro"></p>
+
+      <p style="text-align:center;margin-top:10px;">
+        <button id="btn-ir-cadastro" class="link-discreto">Ainda não tem conta? Criar unidade</button>
+        ·
+        <button id="btn-ir-convite" class="link-discreto">Tenho um convite</button>
+      </p>
+
+      <p style="text-align:center;margin-top:6px;">
+        <button id="btn-abrir-config" class="link-discreto">⚙️ Configurações do banco de dados</button>
+      </p>
+
+      <div id="painel-config" class="hidden" style="margin-top:14px;border-top:1px solid var(--linha);padding-top:14px;">
+        <div class="field">
+          <label for="cfg-url">Supabase URL</label>
+          <input type="text" id="cfg-url" placeholder="https://xxxxx.supabase.co">
+        </div>
+        <div class="field">
+          <label for="cfg-key">Supabase anon key</label>
+          <input type="text" id="cfg-key" placeholder="eyJhbGci... ou sb_publishable_...">
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn" id="btn-salvar-config" style="background:var(--verde-escuro);color:#fff;flex:1;">Salvar e recarregar</button>
+          <button class="btn" id="btn-restaurar-config" style="background:var(--fundo);border:1px solid var(--linha);color:var(--texto-fraco);flex:1;">Restaurar padrão</button>
+        </div>
+        <p style="font-size:.72rem;color:var(--texto-fraco);margin-top:8px;">
+          Fica salvo só neste navegador/aparelho.
+        </p>
+        <p class="msg-ok" id="config-status"></p>
+      </div>
+    </div>
+
+    <div id="bloco-criar-unidade" class="hidden">
+      <p class="wordmark">SICON</p>
+      <p class="tag">Criar sua unidade de negócio</p>
+      <div class="field">
+        <label for="cu-nome">Nome da unidade</label>
+        <input type="text" id="cu-nome" placeholder="Ex: Fábrica Contêiner">
+      </div>
+      <div class="field">
+        <label for="cu-whatsapp">WhatsApp de contato</label>
+        <input type="tel" id="cu-whatsapp" placeholder="(00) 00000-0000" maxlength="15">
+      </div>
+      <div class="field">
+        <label for="cu-email">E-mail</label>
+        <input type="email" id="cu-email" placeholder="seu@email.com">
+      </div>
+      <div class="field">
+        <label for="cu-senha">Senha</label>
+        <div class="campo-senha-wrap">
+          <input type="password" id="cu-senha" placeholder="Mínimo 6 caracteres">
+          <button type="button" class="btn-olho-senha" data-alvo="cu-senha" aria-label="Mostrar senha"></button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="cu-senha-confirma">Confirmar senha</label>
+        <div class="campo-senha-wrap">
+          <input type="password" id="cu-senha-confirma">
+          <button type="button" class="btn-olho-senha" data-alvo="cu-senha-confirma" aria-label="Mostrar senha"></button>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="btn-criar-unidade">Criar unidade</button>
+      <p class="msg-erro" id="cu-erro"></p>
+      <p style="text-align:center;margin-top:10px;">
+        <button id="btn-cu-para-entrar" class="link-discreto">Já tem conta? Entrar</button>
+      </p>
+    </div>
+
+    <div id="bloco-convite" class="hidden">
+      <p class="wordmark">SICON</p>
+      <p class="tag">Entrar com convite</p>
+      <div class="field">
+        <label for="cv-codigo">Código de convite</label>
+        <input type="text" id="cv-codigo" placeholder="Ex: A1B2C3D4" style="text-transform:uppercase;">
+      </div>
+      <div class="field">
+        <label for="cv-email">E-mail</label>
+        <input type="email" id="cv-email" placeholder="seu@email.com">
+      </div>
+      <div class="field">
+        <label for="cv-senha" id="cv-senha-label">Senha</label>
+        <div class="campo-senha-wrap">
+          <input type="password" id="cv-senha" placeholder="Mínimo 6 caracteres">
+          <button type="button" class="btn-olho-senha" data-alvo="cv-senha" aria-label="Mostrar senha"></button>
+        </div>
+      </div>
+      <div class="field" id="cv-campo-confirma">
+        <label for="cv-senha-confirma">Confirmar senha</label>
+        <div class="campo-senha-wrap">
+          <input type="password" id="cv-senha-confirma">
+          <button type="button" class="btn-olho-senha" data-alvo="cv-senha-confirma" aria-label="Mostrar senha"></button>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="btn-entrar-convite">Entrar com convite</button>
+      <p class="msg-erro" id="cv-erro"></p>
+      <p style="text-align:center;margin-top:10px;">
+        <button id="btn-cv-para-entrar" class="link-discreto">Já tem conta? Entrar</button>
+      </p>
+    </div>
+
+    <div id="bloco-esqueci-senha" class="hidden">
+      <p class="wordmark">SICON</p>
+      <p class="tag">Recuperar senha</p>
+      <div class="field">
+        <label for="es-email">E-mail</label>
+        <input type="email" id="es-email" placeholder="seu@email.com">
+      </div>
+      <button class="btn btn-primary" id="btn-enviar-recuperacao">Enviar link de recuperação</button>
+      <p class="msg-erro" id="es-erro"></p>
+      <p style="text-align:center;margin-top:10px;">
+        <button id="btn-es-para-entrar" class="link-discreto">Lembrou a senha? Entrar</button>
+      </p>
+    </div>
+
+    <div id="bloco-recuperacao-enviada" class="hidden">
+      <p class="wordmark">SICON</p>
+      <p class="tag">Confira seu e-mail — enviamos um link de recuperação. Clique nele pra definir uma nova senha.</p>
+      <p style="text-align:center;margin-top:10px;">
+        <button id="btn-rec-para-entrar" class="link-discreto">Voltar para o login</button>
+      </p>
+    </div>
+
+    <div id="bloco-nova-senha" class="hidden">
+      <p class="wordmark">SICON</p>
+      <p class="tag">Defina sua nova senha</p>
+      <div class="field">
+        <label for="ns-senha">Nova senha</label>
+        <div class="campo-senha-wrap">
+          <input type="password" id="ns-senha" placeholder="Mínimo 6 caracteres">
+          <button type="button" class="btn-olho-senha" data-alvo="ns-senha" aria-label="Mostrar senha"></button>
+        </div>
+      </div>
+      <div class="field">
+        <label for="ns-senha-confirma">Confirmar nova senha</label>
+        <div class="campo-senha-wrap">
+          <input type="password" id="ns-senha-confirma">
+          <button type="button" class="btn-olho-senha" data-alvo="ns-senha-confirma" aria-label="Mostrar senha"></button>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="btn-salvar-nova-senha">Salvar nova senha</button>
+      <p class="msg-erro" id="ns-erro"></p>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     APP (só aparece depois de logado)
+     ============================================================ -->
+<div id="app-fabrica" class="hidden">
+
+<div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
     <div>
         <h2 style="margin-bottom:4px;">Controle de Estoque &amp; Projetos</h2>
         <p class="subtitulo">Contêiner &amp; Esquadria — controle de produção, estoque e movimentações</p>
     </div>
-    <button id="btnConfiguracoes" title="Configurações" class="botao-engrenagem">⚙️</button>
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <span id="unidade-logada" style="font-size:0.85em; color:#555;"></span>
+        <button class="btn btn-cinza" id="btn-trocar-unidade" style="display:none;" title="Trocar unidade">⇄ Trocar unidade</button>
+        <button class="btn btn-cinza" id="btn-convidar-colaborador" style="display:none;" title="Convidar colaborador">👤+ Convidar</button>
+        <button class="btn btn-vermelho" id="btn-sair">Sair</button>
+    </div>
 </div>
 <span class="tag-status" id="tagContagem">carregando...</span>
 
@@ -185,8 +398,10 @@
     <button class="aba-btn ativa" data-aba="estoque">📦 Estoque</button>
     <button class="aba-btn" data-aba="movimentacao">🧾 Requisição de Saída</button>
     <button class="aba-btn" data-aba="projetos">🏗️ Projetos</button>
+    <button class="aba-btn" data-aba="movpainel">📋 Movimentações</button>
     <button class="aba-btn" data-aba="relatorios">📊 Relatórios</button>
 </div>
+
 
 <!-- ===================== ABA ESTOQUE ===================== -->
 <div class="conteudo-aba ativa" id="aba-estoque">
@@ -196,12 +411,15 @@
             <button class="btn btn-azul" id="btnBuscarEstoque">Buscar</button>
         </div>
         <button class="btn btn-verde" id="btnNovoProduto" style="margin-top:8px;">+ Novo produto</button>
+        <button class="btn btn-azul" id="btnBaixaDireta" style="margin-top:8px;">⬇️ Baixa direta (sem projeto)</button>
+        <button class="btn btn-cinza" id="btnImportarNFe" style="margin-top:8px;">📄 Importar NF-e (XML)</button>
     </div>
 
     <div class="caixa" id="painelNovoProduto" style="display:none;">
         <h4 style="margin-top:0;">Novo produto</h4>
         <div class="grade col4">
-            <div class="campo"><label>Código (opcional)</label><input type="text" id="npCodigo" placeholder="auto"></div>
+            <div class="campo"><label>Código interno (opcional)</label><input type="text" id="npCodigo" placeholder="auto"></div>
+            <div class="campo"><label>Código externo (opcional)</label><input type="text" id="npCodigoExterno" placeholder="código no sistema externo"></div>
             <div class="campo" style="grid-column: span 2;"><label>Nome do produto</label><input type="text" id="npNome"></div>
             <div class="campo"><label>Unidade</label><input type="text" id="npUn" value="UN"></div>
             <div class="campo"><label>Valor unitário (R$)</label><input type="number" step="0.01" id="npValor"></div>
@@ -217,7 +435,7 @@
 
     <table class="tabela" id="tabelaEstoque">
         <thead>
-            <tr><th>Código</th><th>Produto</th><th>Un</th><th class="num">Valor (R$)</th><th class="num">Estoque Inicial</th><th class="num">Estoque Atual</th><th class="center">Ações</th></tr>
+            <tr><th>Código</th><th>Cód. Externo</th><th>Produto</th><th>Un</th><th class="num">Valor (R$)</th><th class="num">Últ. Compra</th><th class="num">Preço Médio</th><th class="num">Estoque Inicial</th><th class="num">Estoque Atual</th><th class="center">Ações</th></tr>
         </thead>
         <tbody id="corpoTabelaEstoque"></tbody>
     </table>
@@ -257,7 +475,17 @@
 
         <table class="tabela" id="tabelaItensProjeto" style="margin-top:14px;">
             <thead>
-                <tr><th>Código</th><th>Descrição</th><th>Tag</th><th>Evento</th><th class="num">Valor Unit.</th><th class="num">Qtd. Pedida</th><th class="center">Qtd. Atendida</th><th class="num">Subtotal</th><th class="center">Ações</th></tr>
+                <tr>
+                    <th class="th-ordenavel" data-ordenar="codigo">Código <span class="seta-ordem"></span></th>
+                    <th class="th-ordenavel" data-ordenar="descricao">Descrição <span class="seta-ordem"></span></th>
+                    <th class="th-ordenavel" data-ordenar="tag">Tag <span class="seta-ordem"></span></th>
+                    <th class="th-ordenavel" data-ordenar="evento">Evento <span class="seta-ordem"></span></th>
+                    <th class="num">Valor Unit.</th>
+                    <th class="num">Qtd. Pedida</th>
+                    <th class="center">Qtd. Atendida</th>
+                    <th class="num">Subtotal</th>
+                    <th class="center">Ações</th>
+                </tr>
             </thead>
             <tbody id="corpoTabelaItensProjeto"></tbody>
         </table>
@@ -295,8 +523,54 @@
 
     <h4>Projetos</h4>
     <p class="subtitulo">Clique em um projeto para abrir a requisição de saída dele.</p>
+    <div class="linha-busca" style="margin-bottom:10px;">
+        <input type="text" id="buscaProjetos" placeholder="Buscar projeto por nome, tipo ou código...">
+    </div>
     <div class="lista-projetos" id="listaProjetos"></div>
     <div class="vazio" id="vazioProjetos" style="display:none;">Nenhum projeto cadastrado ainda.</div>
+</div>
+
+<!-- ===================== ABA MOVIMENTAÇÕES (painel geral) ===================== -->
+<div class="conteudo-aba" id="aba-movpainel">
+    <div class="caixa">
+        <div class="grade col4">
+            <div class="campo">
+                <label>Produto</label>
+                <input type="text" id="movFiltroProdutoBusca" placeholder="Buscar produto...">
+                <div id="movFiltroProdutoResultados"></div>
+                <div id="movFiltroProdutoSelecionado" style="margin-top:4px; font-size:0.82em;"></div>
+            </div>
+            <div class="campo">
+                <label>Fornecedor</label>
+                <input type="text" id="movFiltroFornecedor" placeholder="Nome ou CNPJ...">
+            </div>
+            <div class="campo">
+                <label>Tag</label>
+                <input type="text" id="movFiltroTag" list="movListaTagsFiltro" placeholder="Tag...">
+                <datalist id="movListaTagsFiltro"></datalist>
+            </div>
+            <div class="campo">
+                <label>Evento</label>
+                <input type="text" id="movFiltroEventoBusca" placeholder="Buscar evento...">
+                <div id="movFiltroEventoResultados"></div>
+                <div id="movFiltroEventoSelecionado" style="margin-top:4px; font-size:0.82em;"></div>
+            </div>
+        </div>
+        <div style="margin-top:10px; display:flex; gap:8px;">
+            <button class="btn btn-azul" id="btnAplicarFiltrosMov">🔍 Buscar</button>
+            <button class="btn btn-cinza" id="btnLimparFiltrosMov">Limpar filtros</button>
+        </div>
+    </div>
+
+    <div style="max-height:65vh; overflow:auto;">
+        <table class="tabela" id="tabelaPainelMov">
+            <thead>
+                <tr><th>Data</th><th>Tipo</th><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th>Tag</th><th>Evento</th><th>Projeto</th><th>Fornecedor / NF</th><th>Responsável</th><th>Obs.</th></tr>
+            </thead>
+            <tbody id="corpoTabelaPainelMov"></tbody>
+        </table>
+    </div>
+    <div class="vazio" id="vazioPainelMov" style="display:none;">Nenhuma movimentação encontrada com esses filtros.</div>
 </div>
 
 <!-- ===================== ABA RELATÓRIOS ===================== -->
@@ -356,10 +630,138 @@
             <button class="btn-icone" id="relProjetoCompartilhar" title="Compartilhar">📤</button>
             <button class="btn-icone" id="relProjetoSalvar" title="Salvar">💾</button>
         </div>
+    <div class="caixa">
+        <h4 style="margin-top:0;">🔄 Reprocessar Estoque <span class="subtitulo" style="font-weight:normal;">(auditoria — recalcula o saldo de todos os produtos a partir do histórico de movimentações)</span></h4>
+        <p class="subtitulo">Recalcula o estoque de cada produto somando estoque inicial + entradas − saídas registradas, e corrige quem estiver divergente. Não mexe em quem já está certo.</p>
+        <button class="btn btn-cinza" id="btnReprocessarEstoque">Reprocessar agora</button>
+        <div id="resultadoReprocessarEstoque" style="margin-top:12px;"></div>
+    </div>
+</div>
+</div> <!-- fim de #aba-relatorios (estava faltando — os modais ficavam presos dentro da aba, por isso não funcionavam fora dela) -->
+
+<!-- ===================== MODAL / POPUP: Pré-visualização (Excel) ===================== -->
+<!-- ===================== MODAL / POPUP: Histórico do produto ===================== -->
+<!-- ===================== MODAL / POPUP: Baixa direta (sem projeto) ===================== -->
+<!-- ===================== MODAL / POPUP: Importar NF-e (XML) ===================== -->
+<div class="modal-overlay" id="modalImportarNFe">
+    <div class="modal-caixa larga">
+        <h4 style="margin-top:0;">Importar NF-e (XML)</h4>
+        <p class="subtitulo" style="margin-bottom:10px;">Carrega os itens da nota e permite lançar tudo como entrada em estoque ou baixa direta.</p>
+
+        <div class="campo">
+            <label>Arquivo XML da NF-e</label>
+            <input type="file" id="nfeArquivo" accept=".xml">
+        </div>
+        <div id="nfeInfo" style="margin-top:10px; font-size:0.9em;"></div>
+
+        <div id="nfeBlocoItens" style="display:none;">
+            <div class="grade col4" style="margin-top:14px;">
+                <div class="campo"><label>Data de lançamento</label><input type="date" id="nfeDataLancamento"></div>
+                <div class="campo"><label>Responsável</label><input type="text" id="nfeResponsavel"></div>
+                <div class="campo"><label>Tag (opcional)</label><input type="text" id="nfeTag"></div>
+                <div class="campo"><label>Evento (opcional)</label><input type="text" id="nfeEvento"></div>
+            </div>
+            <div class="campo" style="margin-top:8px;"><label>Observação (opcional)</label><input type="text" id="nfeObservacao"></div>
+
+            <div style="max-height:40vh; overflow:auto; margin-top:14px;">
+                <table class="tabela">
+                    <thead>
+                        <tr><th>Cód. NF</th><th>Descrição na NF</th><th>Un</th><th class="num">Qtd</th><th class="num">Valor Unit.</th><th>Produto no sistema</th><th class="center">Ações</th></tr>
+                    </thead>
+                    <tbody id="corpoTabelaNFe"></tbody>
+                </table>
+            </div>
+
+            <div style="margin-top:16px; text-align:right; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+                <button class="btn btn-cinza" id="btnCancelarImportarNFe">Sair</button>
+                <button class="btn btn-azul" id="btnNfeBaixa">⬇️ Registrar como Baixa Direta</button>
+                <button class="btn btn-verde" id="btnNfeEntrada">📥 Registrar como Entrada em Estoque</button>
+            </div>
+        </div>
+        <span class="status-msg" id="statusImportarNFe"></span>
     </div>
 </div>
 
-<!-- ===================== MODAL / POPUP: Pré-visualização (Excel) ===================== -->
+<!-- ===================== MODAL / POPUP: Vincular produto (dentro da importação de NF) ===================== -->
+<div class="modal-overlay" id="modalVincularNFe" style="z-index:1002;">
+    <div class="modal-caixa">
+        <h4 style="margin-top:0;">Vincular produto</h4>
+        <div class="linha-busca">
+            <input type="text" id="nfeVinculoBusca" placeholder="Digite código ou descrição do produto...">
+        </div>
+        <div id="nfeVinculoResultados"></div>
+        <div style="margin-top:16px; display:flex; justify-content:space-between; align-items:center;">
+            <button class="btn btn-cinza" id="btnNfeMarcarNovo" type="button">+ Criar como produto novo</button>
+            <button class="btn btn-cinza" id="btnCancelarVincularNFe">Sair</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="modalBaixaDireta">
+    <div class="modal-caixa">
+        <h4 style="margin-top:0;">Baixa direta de estoque</h4>
+        <p class="subtitulo" style="margin-bottom:10px;">Use quando o material foi direto pra produção, sem passar por um projeto/requisição.</p>
+
+        <div class="linha-busca">
+            <input type="text" id="baixaBuscaProduto" placeholder="Digite código ou descrição do produto...">
+            <button class="btn btn-azul" id="baixaBtnBuscarProduto" type="button">Buscar</button>
+        </div>
+        <div id="baixaResultadosProduto"></div>
+        <div id="baixaProdutoSelecionado" style="margin:8px 0; font-size:0.9em;"></div>
+
+        <div class="grade col2" style="margin-top:8px;">
+            <div class="campo"><label>Quantidade</label><input type="number" step="0.01" id="baixaQtd"></div>
+            <div class="campo"><label>Data</label><input type="date" id="baixaData"></div>
+        </div>
+        <div class="grade col2" style="margin-top:8px;">
+            <div class="campo"><label>Tag (opcional)</label><input type="text" id="baixaTag"></div>
+            <div class="campo"><label>Evento (opcional)</label><input type="text" id="baixaEvento"></div>
+        </div>
+        <div class="campo" style="margin-top:8px;"><label>Responsável pela retirada</label><input type="text" id="baixaResponsavel"></div>
+        <div class="campo" style="margin-top:8px;"><label>Observação (opcional)</label><input type="text" id="baixaObservacao"></div>
+
+        <div style="margin-top:16px; text-align:right;">
+            <button class="btn btn-cinza" id="btnCancelarBaixaDireta">Sair</button>
+            <button class="btn btn-verde" id="btnConfirmarBaixaDireta">Registrar baixa</button>
+        </div>
+        <span class="status-msg" id="statusBaixaDireta"></span>
+    </div>
+</div>
+
+<!-- ===================== MODAL / POPUP: Editar produto ===================== -->
+<div class="modal-overlay" id="modalEditarProduto">
+    <div class="modal-caixa">
+        <h4 style="margin-top:0;">Editar produto</h4>
+        <p class="subtitulo" id="editProdutoNome" style="margin-bottom:14px;"></p>
+
+        <div class="grade col2">
+            <div class="campo"><label>Valor unitário (R$)</label><input type="number" step="0.01" id="editProdutoValor"></div>
+            <div class="campo"><label>Estoque atual</label><input type="number" step="0.01" id="editProdutoEstoque"></div>
+        </div>
+
+        <div class="campo" id="campoResponsavelAjuste" style="margin-top:10px; display:none;">
+            <label>Responsável pelo ajuste de estoque</label>
+            <input type="text" id="editProdutoResponsavelAjuste">
+        </div>
+        <p class="subtitulo" id="avisoAjusteEstoque" style="margin-top:6px; display:none;"></p>
+
+        <div style="margin-top:16px; text-align:right;">
+            <button class="btn btn-cinza" id="btnCancelarEditarProduto">Sair</button>
+            <button class="btn btn-verde" id="btnSalvarEditarProduto">Salvar</button>
+        </div>
+        <span class="status-msg" id="statusEditarProduto"></span>
+    </div>
+</div>
+
+<div class="modal-overlay" id="modalInfoProduto">
+    <div class="modal-caixa larga">
+        <div id="modalInfoProdutoConteudo"></div>
+        <div style="margin-top:16px; text-align:right;">
+            <button class="btn btn-cinza" id="btnFecharInfoProduto">Sair</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal-overlay" id="modalPreview">
     <div class="modal-caixa larga">
         <div id="modalPreviewConteudo"></div>
@@ -427,6 +829,16 @@
             <label>Quantidade</label>
             <input type="number" step="0.01" id="modalQtdInicialValor" value="1">
         </div>
+        <div style="margin-top:10px;">
+            <label style="font-size:0.9em; display:flex; align-items:center; gap:6px; cursor:pointer;">
+                <input type="checkbox" id="modalQtdInicialAtenderJa">
+                Atender imediatamente (foi direto pra produção, sem passar pelo almoxarifado)
+            </label>
+        </div>
+        <div class="campo" id="campoResponsavelAtendeJa" style="margin-top:10px; display:none;">
+            <label>Responsável pela retirada</label>
+            <input type="text" id="modalQtdInicialResponsavel">
+        </div>
         <div style="margin-top:16px; text-align:right;">
             <button class="btn btn-cinza" id="btnCancelarQtdInicial">Sair</button>
             <button class="btn btn-verde" id="btnConfirmarQtdInicial">Adicionar</button>
@@ -455,31 +867,49 @@
     </div>
 </div>
 
-<div class="modal-overlay" id="modalConfig">
+<!-- ===================== MODAL: escolher unidade (quando o login tem mais de uma) ===================== -->
+<div class="modal-overlay" id="modal-unidade">
     <div class="modal-caixa">
-        <h4 style="margin-top:0;">Configurações</h4>
-        <div class="campo">
-            <label>Project URL (Supabase)</label>
-            <input type="text" id="configSupabaseUrl" placeholder="https://xxxxxxxxxxxx.supabase.co">
-        </div>
-        <div class="campo" style="margin-top:10px;">
-            <label>Chave anon public (Supabase)</label>
-            <input type="text" id="configSupabaseKey" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...">
-        </div>
-        <p class="subtitulo" style="margin-top:8px;">Esses dados ficam salvos neste navegador — não precisa editar o arquivo. Encontre em Project Settings → API no painel do Supabase.</p>
-        <div style="margin-top:16px; text-align:right;">
-            <button class="btn btn-cinza" id="btnCancelarConfig">Sair</button>
-            <button class="btn btn-verde" id="btnSalvarConfig">Salvar</button>
-        </div>
-        <span class="status-msg" id="statusConfig"></span>
+        <h4 style="margin-top:0;">Escolha a unidade</h4>
+        <p class="subtitulo" style="margin-bottom:14px;">Sua conta está vinculada a mais de uma unidade de negócio. Selecione com qual vai trabalhar agora.</p>
+        <div id="lista-unidades-escolha" style="display:flex; flex-direction:column; gap:8px;"></div>
     </div>
 </div>
 
+<!-- ===================== MODAL: convidar colaborador ===================== -->
+<div class="modal-overlay" id="modal-convite-colaborador">
+    <div class="modal-caixa" style="text-align:center;">
+        <h4 style="margin-top:0;">Convidar colaborador</h4>
+        <p class="subtitulo" style="margin-bottom:14px;">Compartilhe este código com quem você quer convidar. A pessoa deve usar "Tenho um convite" na tela de login.</p>
+        <p class="mono" id="codigo-convite-texto" style="font-size:1.4em; font-weight:bold; letter-spacing:0.15em; color:#1565c0; background:#eef2ff; border:1.5px dashed #1565c0; border-radius:8px; padding:14px;">— — — —</p>
+        <div style="margin-top:16px; display:flex; gap:8px; justify-content:center;">
+            <button class="btn btn-cinza" id="btn-fechar-modal-convite">Fechar</button>
+            <button class="btn btn-verde" id="btn-copiar-codigo-convite">Copiar código</button>
+        </div>
+    </div>
+</div>
+
+</div> <!-- fim de #app-fabrica -->
+
 <script>
-/* ===================== Conexão com o Supabase ===================== */
-/* Fica salva no navegador (localStorage) — configurável pelo ícone de engrenagem no topo. */
-let SUPABASE_URL = localStorage.getItem('estoqueapp_supabase_url') || "COLE_AQUI_A_URL_DO_SEU_PROJETO_SUPABASE";
-let SUPABASE_ANON_KEY = localStorage.getItem('estoqueapp_supabase_key') || "COLE_AQUI_A_CHAVE_ANON_PUBLIC";
+/* ===================== Conexão com o Supabase (mesmo projeto usado nos outros módulos) ===================== */
+const SUPABASE_URL_PADRAO = 'https://frzvcrcshkpvjdbbqkhz.supabase.co';
+const SUPABASE_ANON_KEY_PADRAO = 'sb_publishable_h-JuDyjYgb5YKGYFRKtLEg_8gnJor9w';
+
+function configSalvaParecValida(url, key) {
+    return !!url && !!key
+        && /^https:\/\/.+\.supabase\.co/i.test(url)
+        && key.length > 20
+        && !url.includes('COLE_AQUI')
+        && !key.includes('COLE_AQUI');
+}
+
+const urlSalva = localStorage.getItem('sicon_supabase_url');
+const keySalva = localStorage.getItem('sicon_supabase_key');
+const usarConfigSalva = configSalvaParecValida(urlSalva, keySalva);
+
+let SUPABASE_URL = usarConfigSalva ? urlSalva : SUPABASE_URL_PADRAO;
+let SUPABASE_ANON_KEY = usarConfigSalva ? keySalva : SUPABASE_ANON_KEY_PADRAO;
 </script>
 <script>
 /* ============================================================
@@ -512,26 +942,40 @@ function formatarData(v) {
 function escapeHtml(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
+function proximoIdProduto() {
+    return produtos.reduce((m, p) => Math.max(m, p.id), 0) + 1;
+}
 
 /* ---------- comunicação com o backend (Supabase) ---------- */
-async function chamarGet(acao) {
+async function chamarGet(acao, filtros) {
     if (acao === 'listarProdutos') {
-        const { data, error } = await sb.from('fabrica_produtos').select('*');
+        const { data, error } = await sb.from('estoque_produtos').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).range(0, 9999);
         if (error) throw error;
         return data;
     }
     if (acao === 'listarMovimentacoes') {
-        const { data, error } = await sb.from('fabrica_movimentacoes').select('*').order('data', { ascending: false }).limit(300);
+        const { data, error } = await sb.from('estoque_movimentacoes').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('data', { ascending: false }).limit(300);
+        if (error) throw error;
+        return data;
+    }
+    if (acao === 'listarMovimentacoesFiltradas') {
+        filtros = filtros || {};
+        let query = sb.from('estoque_movimentacoes').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('data', { ascending: false }).limit(500);
+        if (filtros.produtoId) query = query.eq('produto_id', filtros.produtoId);
+        if (filtros.tag) query = query.ilike('tag', `%${filtros.tag}%`);
+        if (filtros.evento) query = query.eq('evento', filtros.evento);
+        if (filtros.fornecedor) query = query.or(`fornecedor_nome.ilike.%${filtros.fornecedor}%,fornecedor_cnpj.ilike.%${filtros.fornecedor}%`);
+        const { data, error } = await query;
         if (error) throw error;
         return data;
     }
     if (acao === 'listarProjetos') {
-        const { data, error } = await sb.from('fabrica_projetos').select('*, fabrica_itens_projeto(*)');
+        const { data, error } = await sb.from('fabrica_projetos').select('*, fabrica_itens_projeto(*)').eq('unidade_negocio_id', meuPerfil.unidadeId).range(0, 9999);
         if (error) throw error;
         return (data || []).map(p => ({ ...p, itens: p.fabrica_itens_projeto || [] }));
     }
     if (acao === 'listarEventos') {
-        const { data, error } = await sb.from('fabrica_eventos').select('*');
+        const { data, error } = await sb.from('fabrica_eventos').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).range(0, 9999);
         if (error) throw error;
         return data;
     }
@@ -543,41 +987,102 @@ async function chamarPost(acao, d) {
         const p = d.produto;
         const registro = {
             nome: p.nome, un: p.un, valor: p.valor, grupo: p.grupo,
-            estoque_inicial: p.estoqueInicial, estoque: p.estoque, almox: p.almox || 1
+            estoque_inicial: p.estoqueInicial, estoque: p.estoque, almox: p.almox || 1,
+            codigo_externo: p.codigoExterno || null,
+            unidade_negocio_id: meuPerfil.unidadeId
         };
-        if (p.id) registro.id = p.id;
-        const { error } = await sb.from('fabrica_produtos').upsert(registro);
+        if (p.id) registro.id = p.id; // se não informado, o banco gera automaticamente
+        const { data, error } = await sb.from('estoque_produtos').upsert(registro).select().single();
         if (error) throw error;
-        return;
+        return data;
     }
     if (acao === 'registrarMovimentacao') {
         const m = d.movimentacao;
-        const { error: e1 } = await sb.from('fabrica_movimentacoes').insert({
+        const { error: e1 } = await sb.from('estoque_movimentacoes').insert({
             data: m.data, produto_id: m.produtoId, tipo: m.tipo, qtd: m.qtd, valor_unit: m.valorUnit,
             tag: m.tag || '', evento: m.evento || '', observacao: m.observacao || '', responsavel: m.responsavel || '',
-            projeto_id: m.projetoId || null, item_projeto_id: m.itemProjetoId || null
+            projeto_id: m.projetoId || null, item_projeto_id: m.itemProjetoId || null,
+            nf_numero: m.nfNumero || null, fornecedor_cnpj: m.fornecedorCnpj || null, fornecedor_nome: m.fornecedorNome || null,
+            estoque_nota_id: m.estoqueNotaId || null,
+            unidade_negocio_id: meuPerfil.unidadeId
         });
         if (e1) throw e1;
-        const { error: e2 } = await sb.rpc('fabrica_ajustar_estoque', {
-            p_produto_id: m.produtoId, p_delta: m.tipo === 'entrada' ? Number(m.qtd) : -Number(m.qtd)
-        });
-        if (e2) throw e2;
+        if (m.tipo === 'entrada') {
+            // entrada: além de somar no estoque, recalcula preço da última compra e preço médio
+            const { error: e2 } = await sb.rpc('fabrica_registrar_entrada_precos', {
+                p_produto_id: m.produtoId, p_qtd: Number(m.qtd), p_valor_unit: Number(m.valorUnit)
+            });
+            if (e2) throw e2;
+        } else {
+            const { error: e2 } = await sb.rpc('fabrica_ajustar_estoque', {
+                p_produto_id: m.produtoId, p_delta: -Number(m.qtd)
+            });
+            if (e2) throw e2;
+        }
+        return;
+    }
+    if (acao === 'salvarNotaFiscal') {
+        const n = d.nota;
+        const { data: notaCriada, error } = await sb.from('estoque_notas').insert({
+            unidade_negocio_id: meuPerfil.unidadeId,
+            numero_nf: n.numeroNf || null,
+            serie: n.serie || null,
+            chave_acesso: n.chaveAcesso || null,
+            natureza_operacao: n.naturezaOperacao || null,
+            data_emissao: n.dataEmissao || null,
+            data_entrada: n.dataEntrada || null,
+            cnpj_fornecedor: n.cnpjFornecedor || null,
+            nome_fornecedor: n.nomeFornecedor || null,
+            cnpj_tomador: n.cnpjTomador || null,
+            nome_tomador: n.nomeTomador || null,
+            valor_produtos: n.valorProdutos || 0,
+            valor_desconto: n.valorDesconto || 0,
+            valor_frete: n.valorFrete || 0,
+            valor_seguro: n.valorSeguro || 0,
+            valor_outras_despesas: n.valorOutrasDespesas || 0,
+            valor_icms: n.valorIcms || 0,
+            valor_ipi: n.valorIpi || 0,
+            valor_pis: n.valorPis || 0,
+            valor_cofins: n.valorCofins || 0,
+            valor_total: n.valorTotal || 0,
+            informacoes_fiscais: n.informacoesFiscais || null,
+            xml_original: n.xmlOriginal || null,
+            responsavel: n.responsavel || null,
+            observacoes: n.observacoes || null
+        }).select().single();
+        if (error) throw error;
+        return notaCriada;
+    }
+    if (acao === 'salvarTitulosNota') {
+        const linhas = (d.titulos || []).map(t => ({
+            unidade_negocio_id: meuPerfil.unidadeId,
+            estoque_nota_id: d.estoqueNotaId,
+            numero_titulo: t.numeroTitulo || null,
+            data_vencimento: t.dataVencimento || null,
+            valor: t.valor || 0,
+            forma_pagamento: t.formaPagamento || null,
+            origem: t.origem || 'manual'
+        }));
+        if (!linhas.length) return;
+        const { error } = await sb.from('estoque_titulos_notas').insert(linhas);
+        if (error) throw error;
         return;
     }
     if (acao === 'salvarProjeto') {
         const p = d.projeto;
-        const { error } = await sb.from('fabrica_projetos').insert({ descricao: p.descricao, tipo: p.tipo, data: p.data });
+        const { error } = await sb.from('fabrica_projetos').insert({ descricao: p.descricao, tipo: p.tipo, data: p.data, unidade_negocio_id: meuPerfil.unidadeId });
         if (error) throw error;
         return;
     }
     if (acao === 'adicionarItemProjeto') {
         const it = d.item;
-        const { error } = await sb.from('fabrica_itens_projeto').insert({
+        const { data, error } = await sb.from('fabrica_itens_projeto').insert({
             projeto_id: it.projetoId, produto_id: it.produtoId, qtd_requisitada: it.qtdRequisitada,
-            responsavel: it.responsavel || '', observacao: it.observacao || '', tag: it.tag || '', evento: it.evento || ''
-        });
+            responsavel: it.responsavel || '', observacao: it.observacao || '', tag: it.tag || '', evento: it.evento || '',
+            unidade_negocio_id: meuPerfil.unidadeId
+        }).select().single();
         if (error) throw error;
-        return;
+        return data;
     }
     if (acao === 'atualizarQtdItem') {
         const { error } = await sb.from('fabrica_itens_projeto').update({ qtd_requisitada: d.novaQtd }).eq('id', d.itemId);
@@ -590,7 +1095,7 @@ async function chamarPost(acao, d) {
         return;
     }
     if (acao === 'editarMovimentacao') {
-        const { data: antiga, error: eSel } = await sb.from('fabrica_movimentacoes').select('produto_id,tipo,qtd').eq('id', d.movId).single();
+        const { data: antiga, error: eSel } = await sb.from('estoque_movimentacoes').select('produto_id,tipo,qtd').eq('id', d.movId).single();
         if (eSel) throw eSel;
         const sinal = antiga.tipo === 'entrada' ? 1 : -1;
         await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: -sinal * Number(antiga.qtd) });
@@ -600,22 +1105,23 @@ async function chamarPost(acao, d) {
         if (d.observacao != null) upd.observacao = d.observacao;
         if (d.tag != null) upd.tag = d.tag;
         if (d.evento != null) upd.evento = d.evento;
-        const { error } = await sb.from('fabrica_movimentacoes').update(upd).eq('id', d.movId);
+        const { error } = await sb.from('estoque_movimentacoes').update(upd).eq('id', d.movId);
         if (error) throw error;
         return;
     }
     if (acao === 'removerMovimentacao') {
-        const { data: antiga, error: eSel } = await sb.from('fabrica_movimentacoes').select('produto_id,tipo,qtd').eq('id', d.movId).single();
+        const { data: antiga, error: eSel } = await sb.from('estoque_movimentacoes').select('produto_id,tipo,qtd').eq('id', d.movId).single();
         if (eSel) throw eSel;
         const sinal = antiga.tipo === 'entrada' ? 1 : -1;
         await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: -sinal * Number(antiga.qtd) });
-        const { error } = await sb.from('fabrica_movimentacoes').delete().eq('id', d.movId);
+        const { error } = await sb.from('estoque_movimentacoes').delete().eq('id', d.movId);
         if (error) throw error;
         return;
     }
     if (acao === 'salvarEvento') {
         const ev = d.evento;
-        const { error } = await sb.from('fabrica_eventos').upsert({ codigo: ev.codigo, descricao: ev.descricao || '' });
+        const { error } = await sb.from('fabrica_eventos')
+            .upsert({ codigo: ev.codigo, descricao: ev.descricao || '', unidade_negocio_id: meuPerfil.unidadeId }, { onConflict: 'unidade_negocio_id,codigo' });
         if (error) throw error;
         return;
     }
@@ -632,13 +1138,16 @@ async function carregarProdutos() {
     const lista = await chamarGet('listarProdutos');
     produtos = (lista || []).map(p => ({
         id: Number(p.id),
+        codigoExterno: p.codigo_externo || '',
         nome: String(p.nome || ''),
         un: String(p.un || 'UN'),
         valor: Number(p.valor) || 0,
         grupo: Number(p.grupo) || 1,
         estoqueInicial: Number(p.estoque_inicial) || 0,
         estoque: Number(p.estoque) || 0,
-        almox: Number(p.almox) || 1
+        almox: Number(p.almox) || 1,
+        precoUltimaCompra: p.preco_ultima_compra != null ? Number(p.preco_ultima_compra) : null,
+        precoMedio: p.preco_medio != null ? Number(p.preco_medio) : null
     }));
 }
 
@@ -656,7 +1165,10 @@ async function carregarMovimentacoes() {
         observacao: m.observacao || '',
         responsavel: m.responsavel || '',
         projetoId: m.projeto_id || null,
-        itemProjetoId: m.item_projeto_id || null
+        itemProjetoId: m.item_projeto_id || null,
+        nfNumero: m.nf_numero || '',
+        fornecedorCnpj: m.fornecedor_cnpj || '',
+        fornecedorNome: m.fornecedor_nome || ''
     }));
 }
 
@@ -713,6 +1225,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
         btn.classList.add('ativa');
         document.getElementById('aba-' + btn.dataset.aba).classList.add('ativa');
         if (btn.dataset.aba === 'relatorios') popularRelatoriosSelects();
+        if (btn.dataset.aba === 'movpainel') abrirPainelMovimentacoes();
     });
 });
 
@@ -730,7 +1243,7 @@ function buscarProdutos(termo) {
     if (!termo) return produtos.slice(0, 60);
     const palavras = termo.split(/\s+/).filter(Boolean);
     return produtos.filter(p => {
-        const texto = (String(p.id) + ' ' + p.nome).toUpperCase();
+        const texto = (String(p.id) + ' ' + (p.codigoExterno || '') + ' ' + p.nome).toUpperCase();
         return palavras.every(palavra => texto.includes(palavra));
     }).slice(0, 60);
 }
@@ -745,34 +1258,663 @@ function renderizarTabelaEstoque(lista) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${p.id}</td>
+            <td>${escapeHtml(p.codigoExterno) || '-'}</td>
             <td>${escapeHtml(p.nome)}</td>
             <td>${escapeHtml(p.un)}</td>
             <td class="num">${formatarMoeda(p.valor)}</td>
+            <td class="num">${p.precoUltimaCompra != null ? formatarMoeda(p.precoUltimaCompra) : '-'}</td>
+            <td class="num">${p.precoMedio != null ? formatarMoeda(p.precoMedio) : '-'}</td>
             <td class="num">${Number(p.estoqueInicial).toLocaleString('pt-BR')}</td>
             <td class="num">${Number(p.estoque).toLocaleString('pt-BR')}</td>
-            <td class="center"><button class="btn btn-cinza btn-pequeno" data-editar="${p.id}">Editar</button></td>
+            <td class="center">
+                <button class="btn btn-cinza btn-pequeno" data-editar="${p.id}">Editar</button>
+                <button class="btn-icone" data-info="${p.id}" title="Ver movimentos">ℹ️</button>
+            </td>
         `;
         corpo.appendChild(tr);
     });
     corpo.querySelectorAll('[data-editar]').forEach(btn => {
         btn.addEventListener('click', () => editarProdutoPrompt(Number(btn.dataset.editar)));
     });
+    corpo.querySelectorAll('[data-info]').forEach(btn => {
+        btn.addEventListener('click', () => abrirInfoProduto(Number(btn.dataset.info)));
+    });
 }
 
-async function editarProdutoPrompt(id) {
+let produtoIdEmEdicao = null;
+
+function editarProdutoPrompt(id) {
     const p = produtos.find(x => x.id === id);
     if (!p) return;
-    const novoValor = prompt(`Novo valor unitário para "${p.nome}":`, p.valor);
-    if (novoValor === null) return;
-    const novoEstoque = prompt(`Novo estoque ATUAL para "${p.nome}" (o estoque inicial não muda):`, p.estoque);
-    if (novoEstoque === null) return;
-    p.valor = parseFloat(String(novoValor).replace(',', '.')) || p.valor;
-    p.estoque = parseFloat(String(novoEstoque).replace(',', '.'));
-    await chamarPost('salvarProduto', { produto: p });
-    await carregarProdutos();
-    renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
-    atualizarTagContagem();
+    produtoIdEmEdicao = id;
+    document.getElementById('editProdutoNome').textContent = `#${p.id} — ${p.nome}`;
+    document.getElementById('editProdutoValor').value = p.valor;
+    document.getElementById('editProdutoEstoque').value = p.estoque;
+    document.getElementById('editProdutoResponsavelAjuste').value = '';
+    document.getElementById('campoResponsavelAjuste').style.display = 'none';
+    document.getElementById('avisoAjusteEstoque').style.display = 'none';
+    document.getElementById('statusEditarProduto').textContent = '';
+    document.getElementById('modalEditarProduto').classList.add('aberto');
 }
+
+document.getElementById('btnCancelarEditarProduto').addEventListener('click', () => {
+    document.getElementById('modalEditarProduto').classList.remove('aberto');
+    produtoIdEmEdicao = null;
+});
+
+// mostra/atualiza o aviso de ajuste conforme o usuário digita o novo estoque
+document.getElementById('editProdutoEstoque').addEventListener('input', () => {
+    const p = produtos.find(x => x.id === produtoIdEmEdicao);
+    if (!p) return;
+    const novoEstoque = parseFloat(document.getElementById('editProdutoEstoque').value);
+    const delta = (isNaN(novoEstoque) ? p.estoque : novoEstoque) - p.estoque;
+    const campoResp = document.getElementById('campoResponsavelAjuste');
+    const aviso = document.getElementById('avisoAjusteEstoque');
+    if (delta !== 0) {
+        campoResp.style.display = 'block';
+        aviso.style.display = 'block';
+        aviso.textContent = delta > 0
+            ? `Isso vai registrar uma ENTRADA de ${delta} na movimentação.`
+            : `Isso vai registrar uma SAÍDA de ${Math.abs(delta)} na movimentação.`;
+    } else {
+        campoResp.style.display = 'none';
+        aviso.style.display = 'none';
+    }
+});
+
+document.getElementById('btnSalvarEditarProduto').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusEditarProduto');
+    const p = produtos.find(x => x.id === produtoIdEmEdicao);
+    if (!p) return;
+
+    const novoValor = parseFloat(document.getElementById('editProdutoValor').value);
+    const novoEstoque = parseFloat(document.getElementById('editProdutoEstoque').value);
+    if (isNaN(novoValor) || isNaN(novoEstoque)) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Preencha valor e estoque corretamente.';
+        return;
+    }
+
+    const estoqueAntigo = p.estoque;
+    const delta = novoEstoque - estoqueAntigo;
+    let responsavel = '';
+    if (delta !== 0) {
+        responsavel = document.getElementById('editProdutoResponsavelAjuste').value.trim().toUpperCase();
+        if (!responsavel) {
+            statusEl.className = 'status-msg erro';
+            statusEl.textContent = 'Informe o responsável pelo ajuste de estoque.';
+            return;
+        }
+    }
+
+    statusEl.className = '';
+    statusEl.textContent = 'Salvando...';
+
+    try {
+        // valor sempre pode ser atualizado direto; o estoque só é tocado aqui se NÃO houve ajuste
+        // (se houve ajuste, quem corrige o estoque é a movimentação registrada abaixo)
+        await chamarPost('salvarProduto', {
+            produto: { ...p, valor: novoValor, estoque: delta !== 0 ? estoqueAntigo : novoEstoque }
+        });
+
+        if (delta !== 0) {
+            await chamarPost('registrarMovimentacao', {
+                movimentacao: {
+                    data: hojeISO(),
+                    produtoId: p.id,
+                    qtd: Math.abs(delta),
+                    valorUnit: novoValor,
+                    tipo: delta > 0 ? 'entrada' : 'saida',
+                    tag: '', evento: '',
+                    observacao: 'Ajuste de estoque',
+                    responsavel,
+                    projetoId: null, itemProjetoId: null
+                }
+            });
+            await carregarMovimentacoes();
+        }
+
+        await carregarProdutos();
+        renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+        atualizarTagContagem();
+        statusEl.className = 'status-msg sucesso';
+        statusEl.textContent = '✅ Produto atualizado.';
+        setTimeout(() => {
+            document.getElementById('modalEditarProduto').classList.remove('aberto');
+            produtoIdEmEdicao = null;
+        }, 900);
+    } catch (err) {
+        console.error(err);
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = '⚠️ ' + err.message;
+    }
+});
+
+/* ---------- popup: histórico de movimentos de um produto ---------- */
+function abrirInfoProduto(produtoId) {
+    const p = produtos.find(x => x.id === produtoId);
+    if (!p) return;
+
+    const movs = movimentacoes
+        .filter(m => m.produtoId === produtoId)
+        .sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+
+    let html = `
+        <h4 style="margin-top:0;">${escapeHtml(p.nome)}</h4>
+        <p class="subtitulo" style="margin-bottom:6px;">
+            #${p.id}${p.codigoExterno ? ' · Código externo: ' + escapeHtml(p.codigoExterno) : ''} · Estoque inicial: ${Number(p.estoqueInicial).toLocaleString('pt-BR')} · Estoque atual: ${Number(p.estoque).toLocaleString('pt-BR')} ${escapeHtml(p.un)}
+        </p>
+        <p class="subtitulo" style="margin-bottom:14px;">
+            Valor cadastrado: ${formatarMoeda(p.valor)} · Última compra: ${p.precoUltimaCompra != null ? formatarMoeda(p.precoUltimaCompra) : '-'} · Preço médio de estoque: ${p.precoMedio != null ? formatarMoeda(p.precoMedio) : '-'}
+        </p>
+    `;
+
+    if (!movs.length) {
+        html += '<div class="vazio" style="padding:10px 0;">Nenhuma movimentação registrada para este produto ainda.</div>';
+    } else {
+        html += `
+            <div style="max-height:55vh; overflow:auto;">
+            <table class="tabela">
+                <thead>
+                    <tr><th>Data</th><th>Tipo</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th>Tag</th><th>Evento</th><th>Projeto</th><th>Fornecedor / NF</th><th>Responsável</th><th>Obs.</th></tr>
+                </thead>
+                <tbody>
+        `;
+        movs.forEach(m => {
+            const proj = m.projetoId ? projetos.find(pr => String(pr.id) === String(m.projetoId)) : null;
+            const fornecedorInfo = m.fornecedorNome
+                ? `${escapeHtml(m.fornecedorNome)}${m.nfNumero ? ' · NF ' + escapeHtml(m.nfNumero) : ''}`
+                : '-';
+            html += `
+                <tr>
+                    <td>${m.data}</td>
+                    <td><span class="pill ${m.tipo === 'entrada' ? 'pill-entrada' : 'pill-saida'}">${m.tipo === 'entrada' ? 'Entrada' : 'Saída'}</span></td>
+                    <td class="num">${Number(m.qtd).toLocaleString('pt-BR')}</td>
+                    <td class="num">${formatarMoeda(m.valorUnit)}</td>
+                    <td>${escapeHtml(m.tag) || '-'}</td>
+                    <td>${escapeHtml(m.evento) || '-'}</td>
+                    <td>${proj ? escapeHtml(proj.descricao) : '-'}</td>
+                    <td>${fornecedorInfo}</td>
+                    <td>${escapeHtml(m.responsavel) || '-'}</td>
+                    <td>${escapeHtml(m.observacao) || '-'}</td>
+                </tr>
+            `;
+        });
+        html += '</tbody></table></div>';
+    }
+
+    document.getElementById('modalInfoProdutoConteudo').innerHTML = html;
+    document.getElementById('modalInfoProduto').classList.add('aberto');
+}
+
+document.getElementById('btnFecharInfoProduto').addEventListener('click', () => {
+    document.getElementById('modalInfoProduto').classList.remove('aberto');
+});
+
+/* ---------- popup: Baixa direta de estoque (sem projeto) ---------- */
+let produtoSelecionadoBaixa = null;
+
+document.getElementById('btnBaixaDireta').addEventListener('click', () => {
+    produtoSelecionadoBaixa = null;
+    document.getElementById('baixaBuscaProduto').value = '';
+    document.getElementById('baixaResultadosProduto').innerHTML = '';
+    document.getElementById('baixaResultadosProduto').classList.remove('aberto');
+    document.getElementById('baixaProdutoSelecionado').innerHTML = '';
+    document.getElementById('baixaQtd').value = '';
+    document.getElementById('baixaData').value = hojeISO();
+    document.getElementById('baixaTag').value = '';
+    document.getElementById('baixaEvento').value = '';
+    document.getElementById('baixaResponsavel').value = '';
+    document.getElementById('baixaObservacao').value = '';
+    document.getElementById('statusBaixaDireta').textContent = '';
+    document.getElementById('modalBaixaDireta').classList.add('aberto');
+});
+
+document.getElementById('btnCancelarBaixaDireta').addEventListener('click', () => {
+    document.getElementById('modalBaixaDireta').classList.remove('aberto');
+});
+
+document.getElementById('baixaBtnBuscarProduto').addEventListener('click', () => {
+    renderizarResultadosBusca('baixaResultadosProduto', document.getElementById('baixaBuscaProduto').value, selecionarProdutoBaixa);
+});
+document.getElementById('baixaBuscaProduto').addEventListener('input', () => {
+    const termo = document.getElementById('baixaBuscaProduto').value;
+    if (termo.trim()) renderizarResultadosBusca('baixaResultadosProduto', termo, selecionarProdutoBaixa);
+    else document.getElementById('baixaResultadosProduto').classList.remove('aberto');
+});
+document.getElementById('baixaBuscaProduto').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('baixaBtnBuscarProduto').click();
+});
+
+function selecionarProdutoBaixa(p) {
+    produtoSelecionadoBaixa = p;
+    document.getElementById('baixaProdutoSelecionado').innerHTML =
+        `Selecionado: <strong>#${p.id} — ${escapeHtml(p.nome)}</strong> (estoque atual: ${Number(p.estoque).toLocaleString('pt-BR')} ${escapeHtml(p.un)})`;
+    document.getElementById('baixaResultadosProduto').classList.remove('aberto');
+    document.getElementById('baixaBuscaProduto').value = '';
+}
+
+document.getElementById('btnConfirmarBaixaDireta').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusBaixaDireta');
+    if (!produtoSelecionadoBaixa) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Selecione um produto.';
+        return;
+    }
+    const qtd = parseFloat(document.getElementById('baixaQtd').value);
+    if (!qtd || qtd <= 0) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Informe uma quantidade válida.';
+        return;
+    }
+    const responsavel = document.getElementById('baixaResponsavel').value.trim().toUpperCase();
+    if (!responsavel) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Informe o responsável pela retirada.';
+        return;
+    }
+    const prod = produtos.find(p => p.id === produtoSelecionadoBaixa.id);
+    if (qtd > prod.estoque) {
+        if (!confirm(`Estoque atual é ${prod.estoque}. Deseja confirmar a baixa de ${qtd} mesmo assim (estoque ficará negativo)?`)) return;
+    }
+
+    statusEl.className = '';
+    statusEl.textContent = 'Registrando...';
+    try {
+        await chamarPost('registrarMovimentacao', {
+            movimentacao: {
+                data: document.getElementById('baixaData').value || hojeISO(),
+                produtoId: prod.id,
+                qtd,
+                valorUnit: prod.valor,
+                tipo: 'saida',
+                tag: document.getElementById('baixaTag').value.trim(),
+                evento: document.getElementById('baixaEvento').value.trim(),
+                observacao: document.getElementById('baixaObservacao').value.trim(),
+                responsavel,
+                projetoId: null,
+                itemProjetoId: null
+            }
+        });
+        await Promise.all([carregarProdutos(), carregarMovimentacoes()]);
+        atualizarTagContagem();
+        statusEl.className = 'status-msg sucesso';
+        statusEl.textContent = '✅ Baixa registrada.';
+        renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+        setTimeout(() => {
+            document.getElementById('modalBaixaDireta').classList.remove('aberto');
+            statusEl.textContent = '';
+        }, 1200);
+    } catch (err) {
+        console.error(err);
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = '⚠️ ' + err.message;
+    }
+});
+
+/* ============================================================
+   IMPORTAÇÃO DE NF-e (XML)
+   ============================================================ */
+let nfeItensParseados = [];
+let nfeIndiceVinculoAtual = null;
+let nfeDadosNota = null;
+
+function parsearXmlNFe(xmlText) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlText, 'text/xml');
+    if (doc.querySelector('parsererror')) throw new Error('Arquivo XML inválido ou corrompido.');
+
+    const get = (parent, tag) => {
+        if (!parent) return '';
+        const el = parent.getElementsByTagName(tag)[0];
+        return el ? el.textContent.trim() : '';
+    };
+
+    const ide = doc.getElementsByTagName('ide')[0];
+    const emit = doc.getElementsByTagName('emit')[0];
+    const dest = doc.getElementsByTagName('dest')[0];
+    const total = doc.getElementsByTagName('ICMSTot')[0];
+    const infAdic = doc.getElementsByTagName('infAdic')[0];
+    const dets = Array.from(doc.getElementsByTagName('det'));
+
+    if (!dets.length) throw new Error('Nenhum item (tag <det>) encontrado nesse XML. Confira se é uma NF-e válida.');
+
+    // chave de acesso: normalmente vem no atributo Id="NFe44dígitos" da tag infNFe
+    const infNFe = doc.getElementsByTagName('infNFe')[0];
+    let chaveAcesso = '';
+    if (infNFe) {
+        const idAttr = infNFe.getAttribute('Id') || '';
+        chaveAcesso = idAttr.replace(/^NFe/i, '').trim();
+    }
+    if (!chaveAcesso) chaveAcesso = get(doc.getElementsByTagName('protNFe')[0], 'chNFe');
+
+    // duplicatas/títulos de pagamento (tag <cobr><dup>...), se existirem no XML
+    const dups = Array.from(doc.getElementsByTagName('dup')).map(dup => ({
+        nDup: get(dup, 'nDup'),
+        dVenc: get(dup, 'dVenc'),
+        vDup: parseFloat(get(dup, 'vDup')) || 0
+    }));
+
+    const itens = dets.map(det => {
+        const prod = det.getElementsByTagName('prod')[0];
+        return {
+            cProd: get(prod, 'cProd'),
+            xProd: get(prod, 'xProd'),
+            uCom: get(prod, 'uCom') || 'UN',
+            qCom: parseFloat(get(prod, 'qCom')) || 0,
+            vUnCom: parseFloat(get(prod, 'vUnCom')) || 0
+        };
+    });
+
+    return {
+        nNF: get(ide, 'nNF'),
+        serie: get(ide, 'serie'),
+        natOp: get(ide, 'natOp'),
+        dhEmi: get(ide, 'dhEmi') || get(ide, 'dEmi'),
+        chaveAcesso,
+        emitNome: get(emit, 'xNome'),
+        emitCnpj: get(emit, 'CNPJ') || get(emit, 'CPF'),
+        destNome: get(dest, 'xNome'),
+        destCnpj: get(dest, 'CNPJ') || get(dest, 'CPF'),
+        vProd: parseFloat(get(total, 'vProd')) || 0,
+        vDesc: parseFloat(get(total, 'vDesc')) || 0,
+        vFrete: parseFloat(get(total, 'vFrete')) || 0,
+        vSeg: parseFloat(get(total, 'vSeg')) || 0,
+        vOutro: parseFloat(get(total, 'vOutro')) || 0,
+        vICMS: parseFloat(get(total, 'vICMS')) || 0,
+        vIPI: parseFloat(get(total, 'vIPI')) || 0,
+        vPIS: parseFloat(get(total, 'vPIS')) || 0,
+        vCOFINS: parseFloat(get(total, 'vCOFINS')) || 0,
+        vNF: parseFloat(get(total, 'vNF')) || 0,
+        infCpl: get(infAdic, 'infCpl'),
+        dups,
+        itens
+    };
+}
+
+function encontrarProdutoCorrespondenteNFe(itemNfe) {
+    const codigoNum = String(itemNfe.cProd || '').replace(/\D/g, '');
+    if (codigoNum) {
+        const porCodigo = produtos.find(p => String(p.id) === codigoNum);
+        if (porCodigo) return porCodigo;
+    }
+    const nomeNfe = (itemNfe.xProd || '').toUpperCase().trim();
+    if (!nomeNfe) return null;
+    return produtos.find(p => {
+        const nomeProd = p.nome.toUpperCase();
+        return nomeProd === nomeNfe || nomeProd.includes(nomeNfe) || nomeNfe.includes(nomeProd);
+    }) || null;
+}
+
+document.getElementById('btnImportarNFe').addEventListener('click', () => {
+    document.getElementById('nfeArquivo').value = '';
+    document.getElementById('nfeInfo').innerHTML = '';
+    document.getElementById('nfeBlocoItens').style.display = 'none';
+    document.getElementById('statusImportarNFe').textContent = '';
+    document.getElementById('nfeDataLancamento').value = hojeISO();
+    document.getElementById('nfeResponsavel').value = '';
+    document.getElementById('nfeTag').value = '';
+    document.getElementById('nfeEvento').value = '';
+    document.getElementById('nfeObservacao').value = '';
+    nfeItensParseados = [];
+    document.getElementById('modalImportarNFe').classList.add('aberto');
+});
+
+document.getElementById('btnCancelarImportarNFe').addEventListener('click', () => {
+    document.getElementById('modalImportarNFe').classList.remove('aberto');
+});
+
+document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
+    const arquivo = e.target.files[0];
+    if (!arquivo) return;
+    const statusEl = document.getElementById('statusImportarNFe');
+    statusEl.className = '';
+    statusEl.textContent = 'Lendo arquivo...';
+    try {
+        const texto = await arquivo.text();
+        const nfe = parsearXmlNFe(texto);
+        nfeDadosNota = nfe;
+
+        document.getElementById('nfeInfo').innerHTML = `
+            <strong>NF nº ${escapeHtml(nfe.nNF) || '-'}</strong> · Emitida em ${escapeHtml(formatarData(nfe.dhEmi))}<br>
+            Emitente: ${escapeHtml(nfe.emitNome) || '-'} ${nfe.emitCnpj ? '(CNPJ: ' + escapeHtml(nfe.emitCnpj) + ')' : ''}<br>
+            Destinatário: ${escapeHtml(nfe.destNome) || '-'}<br>
+            ${nfe.chaveAcesso ? 'Chave de acesso: ' + escapeHtml(nfe.chaveAcesso) + '<br>' : ''}
+            Valor total da nota: ${formatarMoeda(nfe.vNF)}${nfe.vDesc ? ' (desconto: ' + formatarMoeda(nfe.vDesc) + ')' : ''}<br>
+            ${nfe.dups.length ? nfe.dups.length + ' parcela(s) de pagamento encontrada(s) no XML.<br>' : 'Sem parcelas de pagamento no XML — pode lançar manualmente depois.<br>'}
+            ${nfe.itens.length} item(ns) encontrado(s).
+        `;
+
+        nfeItensParseados = nfe.itens.map(it => {
+            const match = encontrarProdutoCorrespondenteNFe(it);
+            return {
+                cProd: it.cProd,
+                xProdOriginal: it.xProd,
+                un: it.uCom,
+                qtd: it.qCom,
+                valorUnit: it.vUnCom,
+                produtoVinculadoId: match ? match.id : null,
+                criarNovo: !match
+            };
+        });
+
+        if (nfe.dhEmi) document.getElementById('nfeDataLancamento').value = String(nfe.dhEmi).slice(0, 10);
+        renderizarTabelaNFe();
+        document.getElementById('nfeBlocoItens').style.display = 'block';
+        statusEl.textContent = '';
+    } catch (err) {
+        console.error(err);
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = '⚠️ ' + err.message;
+    }
+});
+
+function renderizarTabelaNFe() {
+    const corpo = document.getElementById('corpoTabelaNFe');
+    corpo.innerHTML = '';
+    nfeItensParseados.forEach((item, idx) => {
+        const prodVinculado = item.produtoVinculadoId ? produtos.find(p => p.id === item.produtoVinculadoId) : null;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${escapeHtml(item.cProd)}</td>
+            <td>${escapeHtml(item.xProdOriginal)}</td>
+            <td><input type="text" class="input-qtd-pedida" value="${escapeHtml(item.un)}" data-nfe-unidade="${idx}" style="width:70px;"></td>
+            <td class="num"><input type="number" step="0.01" class="input-qtd-pedida" value="${item.qtd}" data-nfe-qtd="${idx}"></td>
+            <td class="num"><input type="number" step="0.01" class="input-qtd-pedida" value="${item.valorUnit}" data-nfe-valor="${idx}"></td>
+            <td>${item.criarNovo
+                ? `<span class="pill" style="background:#fff3e0;color:#e65100;">+ Novo produto</span>`
+                : `<span class="pill pill-entrada">${prodVinculado ? '#' + prodVinculado.id + ' — ' + escapeHtml(prodVinculado.nome) : '-'}</span>`
+            }</td>
+            <td class="center"><button class="btn btn-cinza btn-pequeno" data-nfe-vincular="${idx}">🔍 Vincular</button></td>
+        `;
+        corpo.appendChild(tr);
+    });
+    corpo.querySelectorAll('[data-nfe-unidade]').forEach(inp => {
+        inp.addEventListener('change', () => { nfeItensParseados[Number(inp.dataset.nfeUnidade)].un = inp.value.trim().toUpperCase() || 'UN'; });
+    });
+    corpo.querySelectorAll('[data-nfe-qtd]').forEach(inp => {
+        inp.addEventListener('change', () => { nfeItensParseados[Number(inp.dataset.nfeQtd)].qtd = parseFloat(inp.value) || 0; });
+    });
+    corpo.querySelectorAll('[data-nfe-valor]').forEach(inp => {
+        inp.addEventListener('change', () => { nfeItensParseados[Number(inp.dataset.nfeValor)].valorUnit = parseFloat(inp.value) || 0; });
+    });
+    corpo.querySelectorAll('[data-nfe-vincular]').forEach(btn => {
+        btn.addEventListener('click', () => abrirVinculoProdutoNFe(Number(btn.dataset.nfeVincular)));
+    });
+}
+
+function abrirVinculoProdutoNFe(idx) {
+    nfeIndiceVinculoAtual = idx;
+    document.getElementById('nfeVinculoBusca').value = '';
+    document.getElementById('nfeVinculoResultados').innerHTML = '';
+    document.getElementById('nfeVinculoResultados').classList.remove('aberto');
+    document.getElementById('modalVincularNFe').classList.add('aberto');
+}
+
+document.getElementById('nfeVinculoBusca').addEventListener('input', () => {
+    const termo = document.getElementById('nfeVinculoBusca').value;
+    if (termo.trim()) {
+        renderizarResultadosBusca('nfeVinculoResultados', termo, (p) => {
+            nfeItensParseados[nfeIndiceVinculoAtual].produtoVinculadoId = p.id;
+            nfeItensParseados[nfeIndiceVinculoAtual].criarNovo = false;
+            document.getElementById('modalVincularNFe').classList.remove('aberto');
+            renderizarTabelaNFe();
+        });
+    } else {
+        document.getElementById('nfeVinculoResultados').classList.remove('aberto');
+    }
+});
+
+document.getElementById('btnNfeMarcarNovo').addEventListener('click', () => {
+    nfeItensParseados[nfeIndiceVinculoAtual].criarNovo = true;
+    nfeItensParseados[nfeIndiceVinculoAtual].produtoVinculadoId = null;
+    document.getElementById('modalVincularNFe').classList.remove('aberto');
+    renderizarTabelaNFe();
+});
+
+document.getElementById('btnCancelarVincularNFe').addEventListener('click', () => {
+    document.getElementById('modalVincularNFe').classList.remove('aberto');
+});
+
+async function processarImportacaoNFe(tipo) {
+    const statusEl = document.getElementById('statusImportarNFe');
+    if (!nfeItensParseados.length) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Nenhum item carregado.';
+        return;
+    }
+    const data = document.getElementById('nfeDataLancamento').value || hojeISO();
+    const responsavel = document.getElementById('nfeResponsavel').value.trim().toUpperCase();
+    if (!responsavel) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Informe o responsável.';
+        return;
+    }
+    const tag = document.getElementById('nfeTag').value.trim();
+    const evento = document.getElementById('nfeEvento').value.trim();
+    const observacaoBase = document.getElementById('nfeObservacao').value.trim();
+
+    if (tipo === 'saida' && nfeItensParseados.some(i => i.criarNovo)) {
+        if (!confirm('Alguns itens estão marcados como "novo produto" e serão criados com estoque zerado antes da baixa (o estoque pode ficar negativo). Deseja continuar?')) return;
+    }
+
+    statusEl.className = '';
+    statusEl.textContent = `Processando ${nfeItensParseados.length} item(ns)...`;
+    document.getElementById('btnNfeEntrada').disabled = true;
+    document.getElementById('btnNfeBaixa').disabled = true;
+
+    try {
+        // 1) grava a nota primeiro — todo o resto se liga a ela pelo id
+        let estoqueNotaId = null;
+        if (nfeDadosNota) {
+            const notaCriada = await chamarPost('salvarNotaFiscal', {
+                nota: {
+                    numeroNf: nfeDadosNota.nNF,
+                    serie: nfeDadosNota.serie,
+                    chaveAcesso: nfeDadosNota.chaveAcesso,
+                    naturezaOperacao: nfeDadosNota.natOp,
+                    dataEmissao: nfeDadosNota.dhEmi || null,
+                    dataEntrada: data,
+                    cnpjFornecedor: nfeDadosNota.emitCnpj,
+                    nomeFornecedor: nfeDadosNota.emitNome,
+                    cnpjTomador: nfeDadosNota.destCnpj,
+                    nomeTomador: nfeDadosNota.destNome,
+                    valorProdutos: nfeDadosNota.vProd,
+                    valorDesconto: nfeDadosNota.vDesc,
+                    valorFrete: nfeDadosNota.vFrete,
+                    valorSeguro: nfeDadosNota.vSeg,
+                    valorOutrasDespesas: nfeDadosNota.vOutro,
+                    valorIcms: nfeDadosNota.vICMS,
+                    valorIpi: nfeDadosNota.vIPI,
+                    valorPis: nfeDadosNota.vPIS,
+                    valorCofins: nfeDadosNota.vCOFINS,
+                    valorTotal: nfeDadosNota.vNF,
+                    informacoesFiscais: nfeDadosNota.infCpl,
+                    responsavel,
+                    observacoes: observacaoBase || null
+                }
+            });
+            estoqueNotaId = notaCriada.id;
+        }
+
+        // 2) itens: cria produto se precisar, e a movimentação já ligada à nota
+        for (const item of nfeItensParseados) {
+            let produtoId = item.produtoVinculadoId;
+            if (item.criarNovo || !produtoId) {
+                const criado = await chamarPost('salvarProduto', {
+                    produto: {
+                        id: undefined, // banco gera automaticamente
+                        codigoExterno: item.cProd || null,
+                        nome: (item.xProdOriginal || ('PRODUTO NF ' + item.cProd)).toUpperCase(),
+                        un: item.un || 'UN',
+                        valor: item.valorUnit,
+                        grupo: 1,
+                        estoqueInicial: 0,
+                        estoque: 0,
+                        almox: 1
+                    }
+                });
+                await carregarProdutos();
+                produtoId = criado.id;
+            }
+            await chamarPost('registrarMovimentacao', {
+                movimentacao: {
+                    data, produtoId, qtd: item.qtd, valorUnit: item.valorUnit, tipo,
+                    tag, evento,
+                    observacao: observacaoBase || `Importado da NF-e`,
+                    responsavel, projetoId: null, itemProjetoId: null,
+                    nfNumero: nfeDadosNota ? nfeDadosNota.nNF : '',
+                    fornecedorCnpj: nfeDadosNota ? nfeDadosNota.emitCnpj : '',
+                    fornecedorNome: nfeDadosNota ? nfeDadosNota.emitNome : '',
+                    estoqueNotaId
+                }
+            });
+        }
+
+        // 3) títulos de pagamento (duplicatas), só se o XML tinha (senão fica
+        // pra lançar manualmente depois, na tela de notas)
+        if (estoqueNotaId && nfeDadosNota?.dups?.length) {
+            await chamarPost('salvarTitulosNota', {
+                estoqueNotaId,
+                titulos: nfeDadosNota.dups.map(dup => ({
+                    numeroTitulo: dup.nDup,
+                    dataVencimento: dup.dVenc || null,
+                    valor: dup.vDup,
+                    origem: 'xml'
+                }))
+            });
+        }
+
+        await Promise.all([carregarProdutos(), carregarMovimentacoes()]);
+        atualizarTagContagem();
+        statusEl.className = 'status-msg sucesso';
+        statusEl.textContent = `✅ ${nfeItensParseados.length} item(ns) registrado(s) como ${tipo === 'entrada' ? 'entrada em estoque' : 'baixa direta'}.`;
+        renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+
+        // limpa os dados importados JÁ, na hora — não espera o modal
+        // fechar sozinho, pra não correr risco de registrar de novo
+        // se alguém clicar outra vez em "Registrar" nesse meio-tempo
+        nfeItensParseados = [];
+        nfeDadosNota = null;
+        document.getElementById('nfeArquivo').value = '';
+        document.getElementById('nfeInfo').innerHTML = '';
+        document.getElementById('nfeBlocoItens').style.display = 'none';
+
+        setTimeout(() => {
+            document.getElementById('modalImportarNFe').classList.remove('aberto');
+        }, 2000);
+    } catch (err) {
+        console.error(err);
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = '⚠️ ' + err.message;
+    } finally {
+        document.getElementById('btnNfeEntrada').disabled = false;
+        document.getElementById('btnNfeBaixa').disabled = false;
+    }
+}
+
+document.getElementById('btnNfeEntrada').addEventListener('click', () => processarImportacaoNFe('entrada'));
+document.getElementById('btnNfeBaixa').addEventListener('click', () => processarImportacaoNFe('saida'));
 
 document.getElementById('btnBuscarEstoque').addEventListener('click', () => {
     renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
@@ -804,9 +1946,11 @@ document.getElementById('btnSalvarProduto').addEventListener('click', async () =
         statusEl.textContent = 'Já existe um produto com esse código.';
         return;
     }
+    const codigoExterno = document.getElementById('npCodigoExterno').value.trim();
     const estoqueInicial = parseFloat(document.getElementById('npEstoque').value) || 0;
     const novo = {
-        id: codigo ? Number(codigo) : null, // null = backend gera o próximo código
+        id: codigo ? Number(codigo) : undefined, // se não informado, o banco gera automaticamente
+        codigoExterno: codigoExterno || null,
         nome: nome.toUpperCase(),
         valor: parseFloat(document.getElementById('npValor').value) || 0,
         un: document.getElementById('npUn').value.trim().toUpperCase() || 'UN',
@@ -817,15 +1961,21 @@ document.getElementById('btnSalvarProduto').addEventListener('click', async () =
     };
     statusEl.className = '';
     statusEl.textContent = 'Salvando...';
-    await chamarPost('salvarProduto', { produto: novo });
-    await carregarProdutos();
-    atualizarTagContagem();
-    statusEl.className = 'status-msg sucesso';
-    statusEl.textContent = '✅ Produto salvo.';
-    ['npCodigo','npNome','npValor'].forEach(id2 => document.getElementById(id2).value = '');
-    document.getElementById('npEstoque').value = 0;
-    renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
-    setTimeout(() => { document.getElementById('painelNovoProduto').style.display = 'none'; statusEl.textContent=''; }, 1200);
+    try {
+        await chamarPost('salvarProduto', { produto: novo });
+        await carregarProdutos();
+        atualizarTagContagem();
+        statusEl.className = 'status-msg sucesso';
+        statusEl.textContent = '✅ Produto salvo.';
+        ['npCodigo', 'npCodigoExterno', 'npNome', 'npValor'].forEach(id2 => document.getElementById(id2).value = '');
+        document.getElementById('npEstoque').value = 0;
+        renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+        setTimeout(() => { document.getElementById('painelNovoProduto').style.display = 'none'; statusEl.textContent = ''; }, 1200);
+    } catch (err) {
+        console.error(err);
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = '⚠️ ' + err.message;
+    }
 });
 
 /* ============================================================
@@ -915,13 +2065,25 @@ function entreguePorItem(itemId) {
         .reduce((s, m) => s + Number(m.qtd), 0);
 }
 
+function buscarProjetosLista(termo) {
+    termo = (termo || '').trim().toUpperCase();
+    const listaOrdenada = [...projetos].sort((a, b) => b.id - a.id); // mais recente primeiro
+    if (!termo) return listaOrdenada;
+    const palavras = termo.split(/\s+/).filter(Boolean);
+    return listaOrdenada.filter(p => {
+        const texto = (String(p.id) + ' ' + p.descricao + ' ' + p.tipo).toUpperCase();
+        return palavras.every(pal => texto.includes(pal));
+    });
+}
+
 function renderizarListaProjetos() {
     const el = document.getElementById('listaProjetos');
     const vazio = document.getElementById('vazioProjetos');
+    const lista = buscarProjetosLista(document.getElementById('buscaProjetos').value);
     el.innerHTML = '';
-    if (!projetos.length) { vazio.style.display = 'block'; return; }
+    if (!lista.length) { vazio.style.display = 'block'; return; }
     vazio.style.display = 'none';
-    projetos.forEach(proj => {
+    lista.forEach(proj => {
         const { requisitado, entregue } = totaisProjeto(proj);
         const pct = requisitado > 0 ? Math.min(100, Math.round(entregue / requisitado * 100)) : 0;
         const div = document.createElement('div');
@@ -937,6 +2099,7 @@ function renderizarListaProjetos() {
         el.appendChild(div);
     });
 }
+document.getElementById('buscaProjetos').addEventListener('input', () => renderizarListaProjetos());
 
 function ultimoTagEventoDoProjeto(proj) {
     const itensOrdenados = [...(proj.itens || [])].sort((a, b) => b.id - a.id);
@@ -971,6 +2134,10 @@ function abrirRequisicao(id) {
     document.getElementById('resultadosBuscaEvento').classList.remove('aberto');
     eventoSelecionadoAtual = null;
 
+    // reseta a ordenação da tabela (volta pro padrão: lançamento mais recente primeiro)
+    itensOrdenacao = { coluna: null, direcao: 'asc' };
+    document.querySelectorAll('.th-ordenavel .seta-ordem').forEach(s => { s.textContent = ''; s.classList.remove('ativa'); });
+
     // troca para a aba "Requisição de Saída"
     document.querySelectorAll('.aba-btn').forEach(b => b.classList.remove('ativa'));
     document.querySelectorAll('.conteudo-aba').forEach(c => c.classList.remove('ativa'));
@@ -995,6 +2162,45 @@ document.getElementById('reqProjetoSelect').addEventListener('change', () => {
     renderizarRequisicao(projetoAtualId);
 });
 
+let itensOrdenacao = { coluna: null, direcao: 'asc' };
+
+function ordenarItensRequisicao(itens) {
+    const lista = [...itens];
+    if (!itensOrdenacao.coluna) {
+        return lista.sort((a, b) => b.id - a.id); // padrão: lançamento mais recente primeiro
+    }
+    const dir = itensOrdenacao.direcao === 'asc' ? 1 : -1;
+    lista.sort((a, b) => {
+        let va, vb;
+        if (itensOrdenacao.coluna === 'codigo') { va = a.produtoId; vb = b.produtoId; }
+        else if (itensOrdenacao.coluna === 'descricao') {
+            const pa = produtos.find(p => p.id === a.produtoId);
+            const pb = produtos.find(p => p.id === b.produtoId);
+            va = pa ? pa.nome : ''; vb = pb ? pb.nome : '';
+        } else if (itensOrdenacao.coluna === 'tag') { va = a.tag || ''; vb = b.tag || ''; }
+        else if (itensOrdenacao.coluna === 'evento') { va = a.evento || ''; vb = b.evento || ''; }
+        if (typeof va === 'string') return va.localeCompare(vb) * dir;
+        return ((va || 0) - (vb || 0)) * dir;
+    });
+    return lista;
+}
+
+document.querySelectorAll('.th-ordenavel').forEach(th => {
+    th.addEventListener('click', () => {
+        const coluna = th.dataset.ordenar;
+        if (itensOrdenacao.coluna === coluna) {
+            itensOrdenacao.direcao = itensOrdenacao.direcao === 'asc' ? 'desc' : 'asc';
+        } else {
+            itensOrdenacao = { coluna, direcao: 'asc' };
+        }
+        document.querySelectorAll('.th-ordenavel .seta-ordem').forEach(s => { s.textContent = ''; s.classList.remove('ativa'); });
+        const seta = th.querySelector('.seta-ordem');
+        seta.textContent = itensOrdenacao.direcao === 'asc' ? '▲' : '▼';
+        seta.classList.add('ativa');
+        if (projetoAtualId) renderizarRequisicao(projetoAtualId);
+    });
+});
+
 function renderizarRequisicao(id) {
     const bloco = document.getElementById('blocoRequisicao');
     const aviso = document.getElementById('avisoSemProjeto');
@@ -1014,7 +2220,7 @@ function renderizarRequisicao(id) {
     if (!(proj.itens || []).length) { vazio.style.display = 'block'; }
     else {
         vazio.style.display = 'none';
-        proj.itens.forEach(item => {
+        ordenarItensRequisicao(proj.itens).forEach(item => {
             const prod = produtos.find(p => p.id === item.produtoId);
             const ent = entreguePorItem(item.id);
             const subtotal = item.qtdRequisitada * (prod ? prod.valor : 0);
@@ -1209,11 +2415,19 @@ function adicionarProdutoAoProjeto(p) {
     produtoPendenteAdicionar = p;
     document.getElementById('modalQtdInicialProduto').textContent = `#${p.id} — ${p.nome}`;
     document.getElementById('modalQtdInicialValor').value = 1;
+    document.getElementById('modalQtdInicialAtenderJa').checked = false;
+    document.getElementById('modalQtdInicialResponsavel').value = '';
+    document.getElementById('campoResponsavelAtendeJa').style.display = 'none';
     document.getElementById('statusModalQtdInicial').textContent = '';
     document.getElementById('modalQtdInicial').classList.add('aberto');
     document.getElementById('modalQtdInicialValor').focus();
     document.getElementById('modalQtdInicialValor').select();
 }
+
+document.getElementById('modalQtdInicialAtenderJa').addEventListener('change', () => {
+    document.getElementById('campoResponsavelAtendeJa').style.display =
+        document.getElementById('modalQtdInicialAtenderJa').checked ? 'block' : 'none';
+});
 
 document.getElementById('btnCancelarQtdInicial').addEventListener('click', () => {
     document.getElementById('modalQtdInicial').classList.remove('aberto');
@@ -1235,30 +2449,62 @@ document.getElementById('btnConfirmarQtdInicial').addEventListener('click', asyn
         statusModalEl.textContent = 'Informe uma quantidade válida.';
         return;
     }
+    const atenderJa = document.getElementById('modalQtdInicialAtenderJa').checked;
+    const responsavelAtendeJa = document.getElementById('modalQtdInicialResponsavel').value.trim().toUpperCase();
+    if (atenderJa && !responsavelAtendeJa) {
+        statusModalEl.className = 'status-msg erro';
+        statusModalEl.textContent = 'Informe quem retirou, pra atender imediatamente.';
+        return;
+    }
 
     statusModalEl.className = '';
     statusModalEl.textContent = 'Salvando...';
 
     try {
-        await chamarPost('adicionarItemProjeto', {
+        const tagAtual = document.getElementById('cabTag').value.trim();
+        const eventoAtual = eventoSelecionadoAtual ? eventoSelecionadoAtual.codigo : '';
+        const novoItem = await chamarPost('adicionarItemProjeto', {
             item: {
                 projetoId: projetoAtualId,
                 produtoId: p.id,
                 qtdRequisitada: qtd,
                 responsavel: '',
                 observacao: '',
-                tag: document.getElementById('cabTag').value.trim(),
-                evento: eventoSelecionadoAtual ? eventoSelecionadoAtual.codigo : ''
+                tag: tagAtual,
+                evento: eventoAtual
             }
         });
+
+        if (atenderJa && novoItem && novoItem.id) {
+            await chamarPost('registrarMovimentacao', {
+                movimentacao: {
+                    data: document.getElementById('cabData').value || hojeISO(),
+                    produtoId: p.id,
+                    qtd,
+                    valorUnit: p.valor,
+                    tipo: 'saida',
+                    tag: tagAtual,
+                    evento: eventoAtual,
+                    observacao: 'Atendimento imediato (foi direto pra produção)',
+                    responsavel: responsavelAtendeJa,
+                    projetoId: projetoAtualId,
+                    itemProjetoId: novoItem.id
+                }
+            });
+            await carregarProdutos();
+            await carregarMovimentacoes();
+        }
+
         await carregarProjetos();
+        atualizarTagContagem();
         document.getElementById('modalQtdInicial').classList.remove('aberto');
         produtoPendenteAdicionar = null;
         statusEl.className = 'status-msg sucesso';
-        statusEl.textContent = '✅ Produto adicionado à lista.';
+        statusEl.textContent = atenderJa ? '✅ Produto adicionado e já atendido.' : '✅ Produto adicionado à lista.';
         renderizarRequisicao(projetoAtualId);
         renderizarListaProjetos();
-        setTimeout(() => statusEl.textContent = '', 1200);
+        renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+        setTimeout(() => statusEl.textContent = '', 1500);
     } catch (err) {
         console.error('Erro ao adicionar produto à requisição:', err);
         statusModalEl.className = 'status-msg erro';
@@ -1475,41 +2721,392 @@ document.getElementById('btnConfirmarAtender').addEventListener('click', async (
 });
 
 /* ============================================================
-   CONFIGURAÇÕES (URL + chave do Supabase salvas no navegador)
+   LOGIN / AUTENTICAÇÃO (reaproveita servir_unidades_negocio e
+   servir_unidade_usuarios, do mesmo padrão usado no módulo Verba)
    ============================================================ */
-function configValida() {
-    return SUPABASE_URL && SUPABASE_URL.indexOf('COLE_AQUI') === -1 &&
-           SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.indexOf('COLE_AQUI') === -1;
+
+// ---------- painel de config do Supabase (dentro da tela de login) ----------
+if (!SUPABASE_URL || SUPABASE_URL.includes('COLE_AQUI') || !SUPABASE_ANON_KEY || SUPABASE_ANON_KEY.includes('COLE_AQUI')) {
+    document.getElementById('login-erro').textContent =
+        'Configuração ausente: clique em "⚙️ Configurações do banco de dados" abaixo e informe a URL e a chave do seu projeto Supabase.';
+    document.getElementById('btn-login').disabled = true;
 }
 
-function abrirConfiguracoes() {
-    document.getElementById('configSupabaseUrl').value = (SUPABASE_URL && SUPABASE_URL.indexOf('COLE_AQUI') === -1) ? SUPABASE_URL : '';
-    document.getElementById('configSupabaseKey').value = (SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.indexOf('COLE_AQUI') === -1) ? SUPABASE_ANON_KEY : '';
-    document.getElementById('statusConfig').textContent = '';
-    document.getElementById('modalConfig').classList.add('aberto');
-}
-
-document.getElementById('btnConfiguracoes').addEventListener('click', abrirConfiguracoes);
-
-document.getElementById('btnCancelarConfig').addEventListener('click', () => {
-    document.getElementById('modalConfig').classList.remove('aberto');
+document.getElementById('btn-abrir-config').addEventListener('click', () => {
+    document.getElementById('cfg-url').value = SUPABASE_URL.includes('COLE_AQUI') ? '' : SUPABASE_URL;
+    document.getElementById('cfg-key').value = SUPABASE_ANON_KEY.includes('COLE_AQUI') ? '' : SUPABASE_ANON_KEY;
+    document.getElementById('painel-config').classList.toggle('hidden');
 });
-
-document.getElementById('btnSalvarConfig').addEventListener('click', () => {
-    const statusEl = document.getElementById('statusConfig');
-    const novaUrl = document.getElementById('configSupabaseUrl').value.trim();
-    const novaKey = document.getElementById('configSupabaseKey').value.trim();
-    if (!novaUrl || !novaKey) {
-        statusEl.className = 'status-msg erro';
-        statusEl.textContent = 'Preencha a Project URL e a chave anon public do Supabase.';
-        return;
-    }
-    localStorage.setItem('estoqueapp_supabase_url', novaUrl);
-    localStorage.setItem('estoqueapp_supabase_key', novaKey);
-    statusEl.className = 'status-msg sucesso';
-    statusEl.textContent = '✅ Salvo! Recarregando...';
+document.getElementById('btn-salvar-config').addEventListener('click', () => {
+    const url = document.getElementById('cfg-url').value.trim();
+    const key = document.getElementById('cfg-key').value.trim();
+    const statusEl = document.getElementById('config-status');
+    if (!url || !key) { statusEl.className = 'msg-erro'; statusEl.textContent = 'Preencha os dois campos.'; return; }
+    localStorage.setItem('sicon_supabase_url', url);
+    localStorage.setItem('sicon_supabase_key', key);
+    statusEl.className = 'msg-ok';
+    statusEl.textContent = 'Salvo! Recarregando...';
     setTimeout(() => location.reload(), 600);
 });
+document.getElementById('btn-restaurar-config').addEventListener('click', () => {
+    localStorage.removeItem('sicon_supabase_url');
+    localStorage.removeItem('sicon_supabase_key');
+    document.getElementById('config-status').className = 'msg-ok';
+    document.getElementById('config-status').textContent = 'Restaurado ao padrão. Recarregando...';
+    setTimeout(() => location.reload(), 600);
+});
+
+try {
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} catch (e) {
+    console.error('Falha ao criar client Supabase:', e);
+}
+
+// ---------- olho de mostrar/ocultar senha ----------
+const svgOlhoAberto = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+const svgOlhoFechado = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+document.querySelectorAll('.btn-olho-senha').forEach(btn => {
+    btn.innerHTML = svgOlhoFechado;
+    btn.addEventListener('click', () => {
+        const input = document.getElementById(btn.dataset.alvo);
+        if (!input) return;
+        const mostrando = input.type === 'text';
+        input.type = mostrando ? 'password' : 'text';
+        btn.innerHTML = mostrando ? svgOlhoFechado : svgOlhoAberto;
+    });
+});
+
+// ---------- alternar entre os blocos da tela de login ----------
+const blocosLogin = ['bloco-entrar', 'bloco-criar-unidade', 'bloco-convite', 'bloco-esqueci-senha', 'bloco-recuperacao-enviada', 'bloco-nova-senha'];
+function mostrarBlocoLogin(idAlvo) {
+    blocosLogin.forEach(id => document.getElementById(id).classList.toggle('hidden', id !== idAlvo));
+}
+document.getElementById('btn-ir-cadastro').addEventListener('click', () => mostrarBlocoLogin('bloco-criar-unidade'));
+document.getElementById('btn-cu-para-entrar').addEventListener('click', () => mostrarBlocoLogin('bloco-entrar'));
+document.getElementById('btn-ir-convite').addEventListener('click', () => { resetarModoConviteExistente(); mostrarBlocoLogin('bloco-convite'); });
+document.getElementById('btn-cv-para-entrar').addEventListener('click', () => { resetarModoConviteExistente(); mostrarBlocoLogin('bloco-entrar'); });
+document.getElementById('btn-ir-esqueci-senha').addEventListener('click', () => {
+    document.getElementById('es-email').value = document.getElementById('login-email').value.trim();
+    mostrarBlocoLogin('bloco-esqueci-senha');
+});
+document.getElementById('btn-es-para-entrar').addEventListener('click', () => mostrarBlocoLogin('bloco-entrar'));
+document.getElementById('btn-rec-para-entrar').addEventListener('click', () => mostrarBlocoLogin('bloco-entrar'));
+
+// ---------- login ----------
+document.getElementById('btn-login').addEventListener('click', async () => {
+    const statusEl = document.getElementById('login-erro');
+    if (!sb) { statusEl.textContent = 'Configure a URL e a chave do Supabase antes de entrar.'; return; }
+    const email = document.getElementById('login-email').value.trim();
+    const senha = document.getElementById('login-senha').value;
+    statusEl.textContent = '';
+    if (!email || !senha) { statusEl.textContent = 'Preencha e-mail e senha.'; return; }
+    try {
+        const { error } = await sb.auth.signInWithPassword({ email, password: senha });
+        if (error) { statusEl.textContent = 'Não foi possível entrar: ' + error.message; return; }
+        await onLogin();
+    } catch (e) {
+        statusEl.textContent = 'Erro de conexão. Confira a URL e a chave do Supabase. (' + (e?.message || e) + ')';
+        console.error(e);
+    }
+});
+document.getElementById('login-senha').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btn-login').click(); });
+
+document.getElementById('btn-sair').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    // reforço: limpa qualquer resíduo de sessão que possa ter sobrado
+    // no localStorage, pra garantir que o próximo login começa 100% do
+    // zero (evita "herdar" dado da unidade/usuário anterior)
+    Object.keys(localStorage).filter(k => k.startsWith('sb-')).forEach(k => localStorage.removeItem(k));
+    location.reload();
+});
+
+// ---------- criar unidade ----------
+document.getElementById('btn-criar-unidade').addEventListener('click', async () => {
+    const nome = document.getElementById('cu-nome').value.trim();
+    const whatsapp = document.getElementById('cu-whatsapp').value.trim();
+    const email = document.getElementById('cu-email').value.trim();
+    const senha = document.getElementById('cu-senha').value;
+    const confirma = document.getElementById('cu-senha-confirma').value;
+    const erroEl = document.getElementById('cu-erro');
+    erroEl.className = 'msg-erro';
+    erroEl.textContent = '';
+
+    if (!nome) { erroEl.textContent = 'Informe o nome da unidade.'; return; }
+    if (!email) { erroEl.textContent = 'Informe seu e-mail.'; return; }
+    if (senha.length < 6) { erroEl.textContent = 'A senha precisa ter pelo menos 6 caracteres.'; return; }
+    if (senha !== confirma) { erroEl.textContent = 'As senhas não coincidem.'; return; }
+
+    const btn = document.getElementById('btn-criar-unidade');
+    btn.disabled = true;
+    try {
+        const { data, error } = await sb.auth.signUp({
+            email, password: senha,
+            options: { data: { unidade_nome_pendente: nome, unidade_whatsapp_pendente: whatsapp } }
+        });
+        if (error) { erroEl.textContent = 'Não foi possível criar a conta: ' + error.message; return; }
+        if (data.session) {
+            await onLogin();
+        } else {
+            erroEl.className = 'msg-ok';
+            erroEl.textContent = 'Conta criada! Verifique seu e-mail para confirmar antes de entrar.';
+        }
+    } catch (e) {
+        erroEl.textContent = 'Erro de conexão. (' + (e?.message || e) + ')';
+        console.error(e);
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+// ---------- entrar com convite ----------
+let modoConviteExistente = false;
+function resetarModoConviteExistente() {
+    modoConviteExistente = false;
+    document.getElementById('cv-campo-confirma').classList.remove('hidden');
+    document.getElementById('cv-senha-label').textContent = 'Senha';
+    document.getElementById('cv-senha').placeholder = 'Mínimo 6 caracteres';
+    document.getElementById('btn-entrar-convite').textContent = 'Entrar com convite';
+    document.getElementById('cv-senha').value = '';
+    document.getElementById('cv-senha-confirma').value = '';
+}
+
+document.getElementById('btn-entrar-convite').addEventListener('click', async () => {
+    const codigo = document.getElementById('cv-codigo').value.trim().toUpperCase();
+    const email = document.getElementById('cv-email').value.trim();
+    const senha = document.getElementById('cv-senha').value;
+    const confirma = document.getElementById('cv-senha-confirma').value;
+    const erroEl = document.getElementById('cv-erro');
+    erroEl.className = 'msg-erro';
+    erroEl.textContent = '';
+
+    if (!codigo) { erroEl.textContent = 'Informe o código de convite.'; return; }
+    if (!email) { erroEl.textContent = 'Informe seu e-mail.'; return; }
+    if (senha.length < 6) { erroEl.textContent = 'A senha precisa ter pelo menos 6 caracteres.'; return; }
+
+    const btn = document.getElementById('btn-entrar-convite');
+    btn.disabled = true;
+    try {
+        if (modoConviteExistente) {
+            const { error: erroLogin } = await sb.auth.signInWithPassword({ email, password: senha });
+            if (erroLogin) { erroEl.textContent = 'E-mail ou senha inválidos.'; return; }
+            const { error: erroConvite } = await sb.rpc('fn_entrar_com_convite', { p_codigo: codigo });
+            if (erroConvite) { erroEl.textContent = erroConvite.message; return; }
+            await onLogin();
+            return;
+        }
+
+        if (senha !== confirma) { erroEl.textContent = 'As senhas não coincidem.'; return; }
+
+        const { data, error } = await sb.auth.signUp({
+            email, password: senha,
+            options: { data: { convite_codigo_pendente: codigo } }
+        });
+        if (error) { erroEl.textContent = 'Não foi possível criar a conta: ' + error.message; return; }
+
+        const jaExistia = data.user && Array.isArray(data.user.identities) && data.user.identities.length === 0;
+        if (jaExistia) {
+            modoConviteExistente = true;
+            document.getElementById('cv-campo-confirma').classList.add('hidden');
+            document.getElementById('cv-senha-label').textContent = 'Sua senha atual';
+            document.getElementById('cv-senha').placeholder = 'Digite sua senha existente';
+            document.getElementById('btn-entrar-convite').textContent = 'Entrar e aplicar convite';
+            erroEl.textContent = 'Esse e-mail já tem conta. Confirme sua senha atual pra aplicar o convite.';
+            return;
+        }
+
+        if (data.session) {
+            await onLogin();
+        } else {
+            erroEl.className = 'msg-ok';
+            erroEl.textContent = 'Conta criada! Verifique seu e-mail para confirmar antes de entrar.';
+        }
+    } catch (e) {
+        erroEl.textContent = 'Erro de conexão. (' + (e?.message || e) + ')';
+        console.error(e);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = modoConviteExistente ? 'Entrar e aplicar convite' : 'Entrar com convite';
+    }
+});
+
+// ---------- esqueci minha senha ----------
+document.getElementById('btn-enviar-recuperacao').addEventListener('click', async () => {
+    const email = document.getElementById('es-email').value.trim();
+    const erroEl = document.getElementById('es-erro');
+    erroEl.className = 'msg-erro';
+    erroEl.textContent = '';
+    if (!email) { erroEl.textContent = 'Informe seu e-mail.'; return; }
+
+    const btn = document.getElementById('btn-enviar-recuperacao');
+    btn.disabled = true;
+    try {
+        const { error } = await sb.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.href.split('?')[0].split('#')[0]
+        });
+        if (error) { erroEl.textContent = error.message; return; }
+        mostrarBlocoLogin('bloco-recuperacao-enviada');
+    } catch (e) {
+        erroEl.textContent = 'Erro de conexão. (' + (e?.message || e) + ')';
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+document.getElementById('btn-salvar-nova-senha').addEventListener('click', async () => {
+    const novaSenha = document.getElementById('ns-senha').value;
+    const confirma = document.getElementById('ns-senha-confirma').value;
+    const erroEl = document.getElementById('ns-erro');
+    erroEl.className = 'msg-erro';
+    erroEl.textContent = '';
+    if (novaSenha.length < 6) { erroEl.textContent = 'A senha precisa ter pelo menos 6 caracteres.'; return; }
+    if (novaSenha !== confirma) { erroEl.textContent = 'As senhas não coincidem.'; return; }
+
+    const btn = document.getElementById('btn-salvar-nova-senha');
+    btn.disabled = true;
+    try {
+        const { error } = await sb.auth.updateUser({ password: novaSenha });
+        if (error) { erroEl.textContent = error.message; return; }
+        await onLogin();
+    } catch (e) {
+        erroEl.textContent = 'Erro de conexão. (' + (e?.message || e) + ')';
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+// link de recuperação de senha abre a página com esse evento
+if (sb) {
+    sb.auth.onAuthStateChange((event) => {
+        if (event === 'PASSWORD_RECOVERY') {
+            document.getElementById('app-fabrica').classList.add('hidden');
+            document.getElementById('login-screen').classList.remove('hidden');
+            mostrarBlocoLogin('bloco-nova-senha');
+        }
+    });
+}
+
+async function checkSession() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) { await onLogin(); }
+}
+
+// ---------- unidade de negócio ativa ----------
+let meuPerfil = { unidadeId: null, unidadeNome: '', ehPrincipal: false };
+let vinculosGlobais = [];
+
+function definirUnidadeAtiva(vinculo) {
+    meuPerfil.unidadeId = vinculo.unidade_id;
+    meuPerfil.unidadeNome = vinculo.nome || '';
+    meuPerfil.ehPrincipal = !!vinculo.eh_principal;
+    document.getElementById('unidade-logada').textContent = meuPerfil.unidadeNome ? ('· ' + meuPerfil.unidadeNome) : '';
+    document.getElementById('btn-convidar-colaborador').style.display = meuPerfil.ehPrincipal ? '' : 'none';
+    document.getElementById('btn-trocar-unidade').style.display = vinculosGlobais.length > 1 ? '' : 'none';
+}
+
+function abrirEscolhaUnidade(vinculos) {
+    const wrap = document.getElementById('lista-unidades-escolha');
+    wrap.innerHTML = '';
+    vinculos.forEach(v => {
+        const btn = document.createElement('button');
+        btn.className = 'btn-unidade';
+        btn.textContent = v.nome;
+        btn.addEventListener('click', async () => {
+            definirUnidadeAtiva(v);
+            document.getElementById('modal-unidade').classList.remove('aberto');
+            await iniciarAppFabrica();
+        });
+        wrap.appendChild(btn);
+    });
+    document.getElementById('modal-unidade').classList.add('aberto');
+}
+document.getElementById('btn-trocar-unidade').addEventListener('click', () => abrirEscolhaUnidade(vinculosGlobais));
+
+// ---------- convidar colaborador ----------
+document.getElementById('btn-convidar-colaborador').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-convidar-colaborador');
+    btn.disabled = true;
+    const { data: codigo, error } = await sb.rpc('fn_gerar_codigo_convite', { p_agencia_id: meuPerfil.unidadeId });
+    btn.disabled = false;
+    if (error) { alert('Erro ao gerar código: ' + error.message); return; }
+    document.getElementById('codigo-convite-texto').textContent = codigo;
+    document.getElementById('modal-convite-colaborador').classList.add('aberto');
+});
+document.getElementById('btn-copiar-codigo-convite').addEventListener('click', async () => {
+    const codigo = document.getElementById('codigo-convite-texto').textContent;
+    try { await navigator.clipboard.writeText(codigo); alert('Código copiado!'); }
+    catch (e) { prompt('Copie o código manualmente:', codigo); }
+});
+document.getElementById('btn-fechar-modal-convite').addEventListener('click', () => {
+    document.getElementById('modal-convite-colaborador').classList.remove('aberto');
+});
+
+async function carregarMeuPerfil() {
+    const { data: sessao } = await sb.auth.getUser();
+    const userId = sessao?.user?.id;
+    if (!userId) return;
+
+    const { data: vinculos, error } = await sb
+        .from('servir_unidade_usuarios')
+        .select('unidade_negocio_id, eh_principal')
+        .eq('user_id', userId)
+        .order('eh_principal', { ascending: false });
+    if (error) { console.error(error); return; }
+
+    if (!vinculos || vinculos.length === 0) {
+        const nomePendente = sessao.user.user_metadata?.unidade_nome_pendente;
+        const whatsappPendente = sessao.user.user_metadata?.unidade_whatsapp_pendente;
+        const codigoPendente = sessao.user.user_metadata?.convite_codigo_pendente;
+
+        if (nomePendente) {
+            const { data: novaUnidade, error: erroNova } = await sb
+                .from('servir_unidades_negocio')
+                .insert({ nome: nomePendente, whatsapp_contato: (whatsappPendente || '').replace(/\D/g, ''), ativo: true })
+                .select().single();
+            if (erroNova) { document.getElementById('unidade-logada').textContent = '⚠️ erro ao criar unidade'; console.error(erroNova); return; }
+            await sb.from('servir_unidade_usuarios').insert({ unidade_negocio_id: novaUnidade.id, user_id: userId, eh_principal: true });
+            vinculosGlobais = [{ unidade_id: novaUnidade.id, eh_principal: true, nome: novaUnidade.nome }];
+            definirUnidadeAtiva(vinculosGlobais[0]);
+            return;
+        }
+
+        if (codigoPendente) {
+            const { data: unidadeIdRetornada, error: erroConvite } = await sb.rpc('fn_entrar_com_convite', { p_codigo: codigoPendente });
+            if (erroConvite) { document.getElementById('unidade-logada').textContent = '⚠️ ' + erroConvite.message; console.error(erroConvite); return; }
+            const { data: unidadeInfo } = await sb.from('servir_unidades_negocio').select('nome').eq('id', unidadeIdRetornada).single();
+            vinculosGlobais = [{ unidade_id: unidadeIdRetornada, eh_principal: false, nome: unidadeInfo?.nome || '' }];
+            definirUnidadeAtiva(vinculosGlobais[0]);
+            return;
+        }
+
+        document.getElementById('unidade-logada').textContent = '⚠️ sem unidade vinculada';
+        return;
+    }
+
+    const ids = [...new Set(vinculos.map(v => v.unidade_negocio_id))];
+    const { data: unidadesData, error: errUnidades } = await sb
+        .from('servir_unidades_negocio')
+        .select('id,nome')
+        .in('id', ids);
+    if (errUnidades) console.error(errUnidades);
+
+    const nomePorId = new Map((unidadesData || []).map(a => [a.id, a.nome]));
+    const vinculosComNome = vinculos.map(v => ({
+        unidade_id: v.unidade_negocio_id,
+        eh_principal: v.eh_principal,
+        nome: nomePorId.get(v.unidade_negocio_id) || '(unidade sem nome)'
+    }));
+    vinculosGlobais = vinculosComNome;
+
+    definirUnidadeAtiva(vinculosComNome[0]);
+    if (vinculosComNome.length > 1) abrirEscolhaUnidade(vinculosComNome);
+}
+
+async function onLogin() {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('app-fabrica').classList.remove('hidden');
+    await carregarMeuPerfil();
+    await iniciarAppFabrica();
+}
 
 /* ============================================================
    RELATÓRIOS (PDF e Excel) da requisição do projeto atual
@@ -1897,6 +3494,50 @@ function renderizarResultadosEventoRelatorio(termo) {
     });
     el.classList.add('aberto');
 }
+document.getElementById('btnReprocessarEstoque').addEventListener('click', async () => {
+    const btn = document.getElementById('btnReprocessarEstoque');
+    const resultadoEl = document.getElementById('resultadoReprocessarEstoque');
+    if (!confirm('Isso vai recalcular o estoque de todos os produtos dessa unidade a partir do histórico de movimentações, e corrigir quem estiver divergente. Continuar?')) return;
+
+    btn.disabled = true;
+    const textoOriginal = btn.textContent;
+    btn.textContent = 'Reprocessando...';
+    resultadoEl.innerHTML = '';
+
+    try {
+        const { data, error } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId });
+        if (error) throw error;
+
+        if (!data || data.length === 0) {
+            resultadoEl.innerHTML = `<p class="status-msg sucesso">✅ Tudo certo — nenhum produto precisou de ajuste.</p>`;
+        } else {
+            const linhas = data.map(r => `
+                <tr>
+                    <td>#${r.produto_id} — ${escapeHtml(r.nome)}</td>
+                    <td class="num">${Number(r.estoque_anterior).toLocaleString('pt-BR')}</td>
+                    <td class="num">${Number(r.estoque_recalculado).toLocaleString('pt-BR')}</td>
+                    <td class="num" style="color:${Number(r.diferenca) < 0 ? '#c62828' : '#2e7d32'};">${Number(r.diferenca) > 0 ? '+' : ''}${Number(r.diferenca).toLocaleString('pt-BR')}</td>
+                </tr>
+            `).join('');
+            resultadoEl.innerHTML = `
+                <p class="status-msg sucesso">⚠️ ${data.length} produto(s) corrigido(s):</p>
+                <table class="tabela" style="margin-top:8px;">
+                    <thead><tr><th>Produto</th><th class="num">Estava</th><th class="num">Correto</th><th class="num">Diferença</th></tr></thead>
+                    <tbody>${linhas}</tbody>
+                </table>
+            `;
+            await carregarProdutos();
+            renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+        }
+    } catch (err) {
+        console.error(err);
+        resultadoEl.innerHTML = `<p class="status-msg erro">⚠️ ${escapeHtml(err.message)}</p>`;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = textoOriginal;
+    }
+});
+
 document.getElementById('relBtnBuscarEvento').addEventListener('click', () => renderizarResultadosEventoRelatorio(document.getElementById('relBuscaEvento').value));
 document.getElementById('relBuscaEvento').addEventListener('input', () => {
     const termo = document.getElementById('relBuscaEvento').value;
@@ -1972,20 +3613,144 @@ document.getElementById('relProjetoCompartilhar').addEventListener('click', () =
 document.getElementById('relProjetoSalvar').addEventListener('click', () => executarRelatorioProjeto('salvar'));
 
 
-/* ---------- inicialização ---------- */
-(async function iniciar() {
-    if (!configValida()) {
-        document.getElementById('tagContagem').textContent = '⚠️ Configure a conexão com o Supabase clicando na engrenagem ⚙️ no topo.';
-        abrirConfiguracoes();
+/* ============================================================
+   ABA MOVIMENTAÇÕES (painel geral com filtros)
+   ============================================================ */
+let movFiltroProdutoId = null;
+let movFiltroEventoCodigo = null;
+
+function abrirPainelMovimentacoes() {
+    const tags = [...new Set(movimentacoes.map(m => m.tag).filter(Boolean))].sort();
+    document.getElementById('movListaTagsFiltro').innerHTML = tags.map(t => `<option value="${escapeHtml(t)}"></option>`).join('');
+    buscarPainelMovimentacoes();
+}
+
+document.getElementById('movFiltroProdutoBusca').addEventListener('input', () => {
+    const termo = document.getElementById('movFiltroProdutoBusca').value;
+    if (termo.trim()) {
+        renderizarResultadosBusca('movFiltroProdutoResultados', termo, (p) => {
+            movFiltroProdutoId = p.id;
+            document.getElementById('movFiltroProdutoSelecionado').innerHTML = `Filtrando: <strong>#${p.id} — ${escapeHtml(p.nome)}</strong> <a href="#" data-limpar-produto style="color:#b00020;">(remover)</a>`;
+            document.getElementById('movFiltroProdutoResultados').classList.remove('aberto');
+            document.getElementById('movFiltroProdutoBusca').value = '';
+            document.querySelector('[data-limpar-produto]').addEventListener('click', (e) => {
+                e.preventDefault();
+                movFiltroProdutoId = null;
+                document.getElementById('movFiltroProdutoSelecionado').innerHTML = '';
+            });
+        });
+    } else {
+        document.getElementById('movFiltroProdutoResultados').classList.remove('aberto');
+    }
+});
+
+document.getElementById('movFiltroEventoBusca').addEventListener('input', () => {
+    const termo = document.getElementById('movFiltroEventoBusca').value;
+    const el = document.getElementById('movFiltroEventoResultados');
+    if (!termo.trim()) { el.classList.remove('aberto'); return; }
+    const lista = buscarEventos(termo);
+    if (!lista.length) {
+        el.innerHTML = '<div class="item-resultado">Nenhum evento encontrado.</div>';
+        el.classList.add('aberto');
         return;
     }
-    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    el.innerHTML = '';
+    lista.forEach(ev => {
+        const div = document.createElement('div');
+        div.className = 'item-resultado';
+        div.innerHTML = `<div class="info-resultado"><span class="cod">${escapeHtml(ev.codigo)}</span> — ${escapeHtml(ev.descricao)}</div><button class="btn btn-verde btn-pequeno">Selecionar</button>`;
+        div.querySelector('button').addEventListener('click', () => {
+            movFiltroEventoCodigo = ev.codigo;
+            document.getElementById('movFiltroEventoSelecionado').innerHTML = `Filtrando: <strong>${escapeHtml(ev.codigo)} — ${escapeHtml(ev.descricao)}</strong> <a href="#" data-limpar-evento style="color:#b00020;">(remover)</a>`;
+            el.classList.remove('aberto');
+            document.getElementById('movFiltroEventoBusca').value = '';
+            document.querySelector('[data-limpar-evento]').addEventListener('click', (e) => {
+                e.preventDefault();
+                movFiltroEventoCodigo = null;
+                document.getElementById('movFiltroEventoSelecionado').innerHTML = '';
+            });
+        });
+        el.appendChild(div);
+    });
+    el.classList.add('aberto');
+});
+
+document.getElementById('btnLimparFiltrosMov').addEventListener('click', () => {
+    movFiltroProdutoId = null;
+    movFiltroEventoCodigo = null;
+    document.getElementById('movFiltroProdutoSelecionado').innerHTML = '';
+    document.getElementById('movFiltroEventoSelecionado').innerHTML = '';
+    document.getElementById('movFiltroProdutoBusca').value = '';
+    document.getElementById('movFiltroEventoBusca').value = '';
+    document.getElementById('movFiltroFornecedor').value = '';
+    document.getElementById('movFiltroTag').value = '';
+    buscarPainelMovimentacoes();
+});
+
+document.getElementById('btnAplicarFiltrosMov').addEventListener('click', buscarPainelMovimentacoes);
+
+async function buscarPainelMovimentacoes() {
+    const corpo = document.getElementById('corpoTabelaPainelMov');
+    const vazio = document.getElementById('vazioPainelMov');
+    corpo.innerHTML = '<tr><td colspan="11" class="vazio">Carregando...</td></tr>';
+    vazio.style.display = 'none';
+
+    const filtros = {
+        produtoId: movFiltroProdutoId,
+        tag: document.getElementById('movFiltroTag').value.trim(),
+        evento: movFiltroEventoCodigo,
+        fornecedor: document.getElementById('movFiltroFornecedor').value.trim()
+    };
+
+    try {
+        const dados = await chamarGet('listarMovimentacoesFiltradas', filtros);
+        const lista = (dados || []).map(m => ({
+            id: Number(m.id), data: formatarData(m.data), produtoId: Number(m.produto_id), tipo: m.tipo,
+            qtd: Number(m.qtd) || 0, valorUnit: Number(m.valor_unit) || 0, tag: m.tag || '', evento: m.evento || '',
+            observacao: m.observacao || '', responsavel: m.responsavel || '', projetoId: m.projeto_id || null,
+            nfNumero: m.nf_numero || '', fornecedorCnpj: m.fornecedor_cnpj || '', fornecedorNome: m.fornecedor_nome || ''
+        }));
+
+        corpo.innerHTML = '';
+        if (!lista.length) { vazio.style.display = 'block'; return; }
+        lista.forEach(m => {
+            const prod = produtos.find(p => p.id === m.produtoId);
+            const proj = m.projetoId ? projetos.find(pr => String(pr.id) === String(m.projetoId)) : null;
+            const fornecedorInfo = m.fornecedorNome ? `${escapeHtml(m.fornecedorNome)}${m.nfNumero ? ' · NF ' + escapeHtml(m.nfNumero) : ''}` : '-';
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${m.data}</td>
+                <td><span class="pill ${m.tipo === 'entrada' ? 'pill-entrada' : 'pill-saida'}">${m.tipo === 'entrada' ? 'Entrada' : 'Saída'}</span></td>
+                <td>${prod ? escapeHtml(prod.nome) : ('#' + m.produtoId)}</td>
+                <td class="num">${Number(m.qtd).toLocaleString('pt-BR')}</td>
+                <td class="num">${formatarMoeda(m.valorUnit)}</td>
+                <td>${escapeHtml(m.tag) || '-'}</td>
+                <td>${escapeHtml(m.evento) || '-'}</td>
+                <td>${proj ? escapeHtml(proj.descricao) : '-'}</td>
+                <td>${fornecedorInfo}</td>
+                <td>${escapeHtml(m.responsavel) || '-'}</td>
+                <td>${escapeHtml(m.observacao) || '-'}</td>
+            `;
+            corpo.appendChild(tr);
+        });
+    } catch (err) {
+        console.error(err);
+        corpo.innerHTML = '';
+        vazio.style.display = 'block';
+        vazio.textContent = '⚠️ ' + err.message;
+    }
+}
+
+/* ---------- inicialização (chamada de dentro de onLogin) ---------- */
+async function iniciarAppFabrica() {
     await carregarTudo();
     renderizarTabelaEstoque(buscarProdutos(''));
     renderizarListaProjetos();
     popularSelectProjetos(document.getElementById('reqProjetoSelect'));
     renderizarRequisicao(null);
-})();
+}
+
+if (sb) checkSession();
 
 </script>
 </body>
