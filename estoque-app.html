@@ -70,6 +70,12 @@
         max-height: 260px; overflow-y: auto; display: none;
     }
     #resultadosBuscaProduto.aberto { display: block; }
+    #notaItemProdutoResultados {
+        position: absolute; z-index: 20; background: #fff; width: 100%;
+        border: 1px solid #ddd; border-radius: 6px; max-height: 220px; overflow-y: auto; display: none;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+    }
+    #notaItemProdutoResultados.aberto { display: block; }
     .item-resultado {
         display: flex; justify-content: space-between; align-items: center;
         padding: 9px 12px; border-bottom: 1px solid #eee; gap: 10px;
@@ -127,6 +133,7 @@
         background: #fff; border-radius: 8px; padding: 22px; width: 90%; max-width: 520px;
         box-shadow: 0 8px 30px rgba(0,0,0,0.25); max-height: 88vh; overflow-y: auto;
     }
+    .modal-caixa.larga { max-width: 980px; }
 
     .aviso-carregando { color:#666; font-style: italic; padding: 20px 0; }
 
@@ -399,6 +406,7 @@
     <button class="aba-btn" data-aba="movimentacao">🧾 Requisição de Saída</button>
     <button class="aba-btn" data-aba="projetos">🏗️ Projetos</button>
     <button class="aba-btn" data-aba="movpainel">📋 Movimentações</button>
+    <button class="aba-btn" data-aba="notasentrada">🧾 Notas de Entrada</button>
     <button class="aba-btn" data-aba="relatorios">📊 Relatórios</button>
 </div>
 
@@ -565,12 +573,44 @@
     <div style="max-height:65vh; overflow:auto;">
         <table class="tabela" id="tabelaPainelMov">
             <thead>
-                <tr><th>Data</th><th>Tipo</th><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th>Tag</th><th>Evento</th><th>Projeto</th><th>Fornecedor / NF</th><th>Responsável</th><th>Obs.</th></tr>
+                <tr><th>Data</th><th>Tipo</th><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th>Tag</th><th>Evento</th><th>Projeto</th><th>Fornecedor / NF</th><th>Responsável</th><th>Obs.</th><th>Ações</th></tr>
             </thead>
             <tbody id="corpoTabelaPainelMov"></tbody>
         </table>
     </div>
     <div class="vazio" id="vazioPainelMov" style="display:none;">Nenhuma movimentação encontrada com esses filtros.</div>
+</div>
+
+<!-- ===================== ABA NOTAS DE ENTRADA ===================== -->
+<div class="conteudo-aba" id="aba-notasentrada">
+    <div class="caixa">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div class="grade col2" style="flex:1; min-width:260px;">
+                <div class="campo">
+                    <label>Fornecedor</label>
+                    <input type="text" id="notasFiltroFornecedor" placeholder="Nome ou CNPJ...">
+                </div>
+                <div class="campo">
+                    <label>Nº da NF</label>
+                    <input type="text" id="notasFiltroNumero" placeholder="Número da nota...">
+                </div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:flex-end;">
+                <button class="btn btn-azul" id="btnBuscarNotasEntrada">🔍 Buscar</button>
+                <button class="btn btn-verde" id="btnNovaNotaEntrada">+ Nova entrada direta</button>
+            </div>
+        </div>
+    </div>
+
+    <div style="max-height:65vh; overflow:auto;">
+        <table class="tabela" id="tabelaNotasEntrada">
+            <thead>
+                <tr><th>Data entrada</th><th>NF nº</th><th>Fornecedor</th><th>Origem</th><th class="num">Itens</th><th class="num">Títulos</th><th class="num">Valor total</th><th>Ações</th></tr>
+            </thead>
+            <tbody id="corpoTabelaNotasEntrada"></tbody>
+        </table>
+    </div>
+    <div class="vazio" id="vazioNotasEntrada" style="display:none;">Nenhuma nota de entrada encontrada.</div>
 </div>
 
 <!-- ===================== ABA RELATÓRIOS ===================== -->
@@ -645,7 +685,10 @@
 <!-- ===================== MODAL / POPUP: Importar NF-e (XML) ===================== -->
 <div class="modal-overlay" id="modalImportarNFe">
     <div class="modal-caixa larga">
-        <h4 style="margin-top:0;">Importar NF-e (XML)</h4>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h4 style="margin:0;">Importar NF-e (XML)</h4>
+            <button class="btn btn-cinza btn-pequeno" id="btnFecharModalImportarNFeTopo">✕ Fechar</button>
+        </div>
         <p class="subtitulo" style="margin-bottom:10px;">Carrega os itens da nota e permite lançar tudo como entrada em estoque ou baixa direta.</p>
 
         <div class="campo">
@@ -732,12 +775,26 @@
 <div class="modal-overlay" id="modalEditarProduto">
     <div class="modal-caixa">
         <h4 style="margin-top:0;">Editar produto</h4>
-        <p class="subtitulo" id="editProdutoNome" style="margin-bottom:14px;"></p>
+        <p class="subtitulo" id="editProdutoCodigo" style="margin-bottom:10px;"></p>
 
-        <div class="grade col2">
+        <div class="campo"><label>Nome do produto</label><input type="text" id="editProdutoNome"></div>
+
+        <div class="grade col2" style="margin-top:10px;">
+            <div class="campo"><label>Código externo</label><input type="text" id="editProdutoCodigoExterno"></div>
+            <div class="campo"><label>Unidade (Un)</label><input type="text" id="editProdutoUn"></div>
+        </div>
+
+        <div class="grade col2" style="margin-top:10px;">
             <div class="campo"><label>Valor unitário (R$)</label><input type="number" step="0.01" id="editProdutoValor"></div>
             <div class="campo"><label>Estoque atual</label><input type="number" step="0.01" id="editProdutoEstoque"></div>
         </div>
+
+        <div class="grade col2" style="margin-top:10px;">
+            <div class="campo"><label>Estoque inicial</label><input type="number" step="0.01" id="editProdutoEstoqueInicial"></div>
+            <div class="campo"><label>Grupo</label><input type="number" id="editProdutoGrupo"></div>
+        </div>
+
+        <div class="campo" style="margin-top:10px;"><label>Almoxarifado</label><input type="number" id="editProdutoAlmox"></div>
 
         <div class="campo" id="campoResponsavelAjuste" style="margin-top:10px; display:none;">
             <label>Responsável pelo ajuste de estoque</label>
@@ -750,6 +807,138 @@
             <button class="btn btn-verde" id="btnSalvarEditarProduto">Salvar</button>
         </div>
         <span class="status-msg" id="statusEditarProduto"></span>
+    </div>
+</div>
+
+<!-- ===================== MODAL / POPUP: Editar movimentação (qualquer uma, do Painel) ===================== -->
+<div class="modal-overlay" id="modalEditarMovGeral">
+    <div class="modal-caixa">
+        <h4 style="margin-top:0;">Editar movimentação</h4>
+        <p class="subtitulo" id="editMovGeralInfo" style="margin-bottom:14px;"></p>
+
+        <div class="grade col2">
+            <div class="campo"><label>Quantidade</label><input type="number" step="0.01" id="editMovGeralQtd"></div>
+            <div class="campo"><label>Valor unitário (R$)</label><input type="number" step="0.01" id="editMovGeralValor"></div>
+        </div>
+        <div class="campo" style="margin-top:10px;"><label>Observação</label><input type="text" id="editMovGeralObservacao"></div>
+
+        <p class="subtitulo" style="margin-top:12px; color:#b45309;">⚠️ Corrigir aqui ajusta só esse registro. Depois de salvar, use "🔄 Reprocessar Estoque" (na aba Relatórios) pra recalcular estoque e preço médio do produto com base no histórico corrigido.</p>
+
+        <div style="margin-top:16px; text-align:right;">
+            <button class="btn btn-cinza" id="btnCancelarEditarMovGeral">Sair</button>
+            <button class="btn btn-verde" id="btnSalvarEditarMovGeral">Salvar</button>
+        </div>
+        <span class="status-msg" id="statusEditarMovGeral"></span>
+    </div>
+</div>
+
+<!-- ===================== MODAL / POPUP: Nota de Entrada (criar/editar) ===================== -->
+<div class="modal-overlay" id="modalNotaEntrada">
+    <div class="modal-caixa larga">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <h4 style="margin:0;" id="tituloNotaEntrada">Nova entrada direta</h4>
+            <button class="btn btn-cinza btn-pequeno" id="btnFecharNotaEntrada">✕ Fechar</button>
+        </div>
+        <p class="subtitulo" id="origemNotaEntrada" style="margin-bottom:12px;"></p>
+
+        <!-- cabeçalho -->
+        <div class="grade col4">
+            <div class="campo"><label>Nº da NF</label><input type="text" id="notaNumeroNf"></div>
+            <div class="campo"><label>Série</label><input type="text" id="notaSerie"></div>
+            <div class="campo"><label>Data da nota</label><input type="date" id="notaDataEmissao"></div>
+            <div class="campo"><label>Data de entrada</label><input type="date" id="notaDataEntrada"></div>
+        </div>
+        <div class="grade col2" style="margin-top:10px;">
+            <div class="campo">
+                <label>Fornecedor</label>
+                <input type="text" id="notaFornecedorNome" list="notaListaFornecedores" placeholder="Nome do fornecedor">
+                <datalist id="notaListaFornecedores"></datalist>
+            </div>
+            <div class="campo"><label>CNPJ do fornecedor</label><input type="text" id="notaFornecedorCnpj"></div>
+        </div>
+        <div class="grade col4" style="margin-top:10px;">
+            <div class="campo"><label>Valor desconto (R$)</label><input type="number" step="0.01" id="notaValorDesconto" value="0"></div>
+            <div class="campo"><label>Valor frete (R$)</label><input type="number" step="0.01" id="notaValorFrete" value="0"></div>
+            <div class="campo"><label>Responsável</label><input type="text" id="notaResponsavel"></div>
+            <div class="campo"><label>Chave de acesso (opcional)</label><input type="text" id="notaChaveAcesso"></div>
+        </div>
+        <div class="campo" style="margin-top:10px;"><label>Observações</label><input type="text" id="notaObservacoes"></div>
+
+        <div style="margin-top:14px; text-align:right;">
+            <button class="btn btn-verde" id="btnSalvarCabecalhoNota">💾 Salvar cabeçalho</button>
+        </div>
+        <span class="status-msg" id="statusNotaEntrada"></span>
+
+        <!-- itens e títulos, só aparecem depois do cabeçalho salvo (precisa do id da nota) -->
+        <div id="blocoItensTitulosNota" style="display:none; margin-top:18px;">
+
+            <h4 style="margin-bottom:8px;">Itens</h4>
+            <div class="grade col4" style="align-items:flex-end;">
+                <div class="campo" style="grid-column:span 2; position:relative;">
+                    <label>Produto</label>
+                    <input type="text" id="notaItemProdutoBusca" placeholder="Buscar ou digitar nome de produto novo...">
+                    <div id="notaItemProdutoResultados"></div>
+                </div>
+                <div class="campo"><label>Qtd</label><input type="number" step="0.01" id="notaItemQtd" value="1"></div>
+                <div class="campo"><label>Valor unit. (R$)</label><input type="number" step="0.01" id="notaItemValor"></div>
+            </div>
+            <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
+                <span class="subtitulo" id="notaItemProdutoSelecionado"></span>
+                <button class="btn btn-azul btn-pequeno" id="btnAdicionarItemNota">+ Adicionar item</button>
+            </div>
+
+            <table class="tabela" style="margin-top:10px;">
+                <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th class="num">Subtotal</th><th>Ações</th></tr></thead>
+                <tbody id="corpoItensNota"></tbody>
+            </table>
+            <div style="text-align:right; margin-top:6px; font-weight:600;">Total dos itens: <span id="totalItensNota">R$ 0,00</span></div>
+
+            <h4 style="margin-top:20px; margin-bottom:8px;">Títulos / Vencimentos</h4>
+            <div class="grade col4" style="align-items:flex-end;">
+                <div class="campo"><label>Nº do título</label><input type="text" id="tituloNumero" placeholder="Ex: 1/3"></div>
+                <div class="campo"><label>Vencimento</label><input type="date" id="tituloVencimento"></div>
+                <div class="campo"><label>Valor (R$)</label><input type="number" step="0.01" id="tituloValor"></div>
+                <div class="campo"><label>Forma de pagamento</label><input type="text" id="tituloFormaPagamento" placeholder="Boleto, Pix..."></div>
+            </div>
+            <div style="margin-top:8px; text-align:right;">
+                <button class="btn btn-azul btn-pequeno" id="btnAdicionarTituloNota">+ Adicionar título</button>
+                <button class="btn btn-cinza btn-pequeno" id="btnGerarParcelasIguais">Dividir valor total em parcelas iguais</button>
+            </div>
+
+            <table class="tabela" style="margin-top:10px;">
+                <thead><tr><th>Título</th><th>Vencimento</th><th class="num">Valor</th><th>Forma</th><th>Origem</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody id="corpoTitulosNota"></tbody>
+            </table>
+            <div style="text-align:right; margin-top:6px; font-weight:600;">Total dos títulos: <span id="totalTitulosNota">R$ 0,00</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== MODAL / POPUP: Editar título (vencimento/valor/forma) ===================== -->
+<div class="modal-overlay" id="modalEditarTitulo" style="z-index:1050;">
+    <div class="modal-caixa">
+        <h4 style="margin-top:0;">Editar título</h4>
+        <div class="grade col2">
+            <div class="campo"><label>Nº do título</label><input type="text" id="editTituloNumero"></div>
+            <div class="campo"><label>Vencimento</label><input type="date" id="editTituloVencimento"></div>
+        </div>
+        <div class="grade col2" style="margin-top:10px;">
+            <div class="campo"><label>Valor (R$)</label><input type="number" step="0.01" id="editTituloValor"></div>
+            <div class="campo"><label>Forma de pagamento</label><input type="text" id="editTituloFormaPagamento"></div>
+        </div>
+        <div class="campo" style="margin-top:10px;">
+            <label>Status</label>
+            <select id="editTituloStatus">
+                <option value="pendente">Pendente</option>
+                <option value="pago">Pago</option>
+                <option value="cancelado">Cancelado</option>
+            </select>
+        </div>
+        <div style="margin-top:16px; text-align:right;">
+            <button class="btn btn-cinza" id="btnCancelarEditarTitulo">Sair</button>
+            <button class="btn btn-verde" id="btnSalvarEditarTitulo">Salvar</button>
+        </div>
+        <span class="status-msg" id="statusEditarTitulo"></span>
     </div>
 </div>
 
@@ -979,6 +1168,40 @@ async function chamarGet(acao, filtros) {
         if (error) throw error;
         return data;
     }
+    if (acao === 'listarNotasEntrada') {
+        filtros = filtros || {};
+        let query = sb.from('estoque_notas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('data_entrada', { ascending: false }).order('id', { ascending: false }).limit(300);
+        if (filtros.fornecedor) query = query.or(`nome_fornecedor.ilike.%${filtros.fornecedor}%,cnpj_fornecedor.ilike.%${filtros.fornecedor}%`);
+        if (filtros.numero) query = query.ilike('numero_nf', `%${filtros.numero}%`);
+        const { data, error } = await query;
+        if (error) throw error;
+        return data;
+    }
+    if (acao === 'listarItensNota') {
+        const { data, error } = await sb.from('estoque_movimentacoes').select('*').eq('estoque_nota_id', filtros.notaId).order('id', { ascending: true });
+        if (error) throw error;
+        return data;
+    }
+    if (acao === 'listarTitulosNota') {
+        const { data, error } = await sb.from('estoque_titulos_notas').select('*').eq('estoque_nota_id', filtros.notaId).order('id', { ascending: true });
+        if (error) throw error;
+        return data;
+    }
+    if (acao === 'listarMapeamentosFornecedor') {
+        const { data, error } = await sb.from('estoque_produtos_fornecedor_codigos')
+            .select('produto_id, codigo_fornecedor, codigo_barras')
+            .eq('unidade_negocio_id', meuPerfil.unidadeId)
+            .eq('cnpj_fornecedor', filtros.cnpjFornecedor);
+        if (error) throw error;
+        return data;
+    }
+    if (acao === 'contarItensTitulosPorNota') {
+        const { data: itens, error: e1 } = await sb.from('estoque_movimentacoes').select('estoque_nota_id, qtd, valor_unit').eq('unidade_negocio_id', meuPerfil.unidadeId).not('estoque_nota_id', 'is', null);
+        if (e1) throw e1;
+        const { data: titulos, error: e2 } = await sb.from('estoque_titulos_notas').select('estoque_nota_id').eq('unidade_negocio_id', meuPerfil.unidadeId);
+        if (e2) throw e2;
+        return { itens: itens || [], titulos: titulos || [] };
+    }
     throw new Error('ação GET desconhecida: ' + acao);
 }
 
@@ -1021,9 +1244,22 @@ async function chamarPost(acao, d) {
         }
         return;
     }
+    if (acao === 'salvarMapeamentoFornecedor') {
+        const { error } = await sb.from('estoque_produtos_fornecedor_codigos')
+            .upsert({
+                unidade_negocio_id: meuPerfil.unidadeId,
+                produto_id: d.produtoId,
+                cnpj_fornecedor: d.cnpjFornecedor,
+                nome_fornecedor: d.nomeFornecedor || null,
+                codigo_fornecedor: d.codigoFornecedor,
+                codigo_barras: d.codigoBarras || null
+            }, { onConflict: 'unidade_negocio_id,cnpj_fornecedor,codigo_fornecedor' });
+        if (error) throw error;
+        return;
+    }
     if (acao === 'salvarNotaFiscal') {
         const n = d.nota;
-        const { data: notaCriada, error } = await sb.from('estoque_notas').insert({
+        const registro = {
             unidade_negocio_id: meuPerfil.unidadeId,
             numero_nf: n.numeroNf || null,
             serie: n.serie || null,
@@ -1049,7 +1285,14 @@ async function chamarPost(acao, d) {
             xml_original: n.xmlOriginal || null,
             responsavel: n.responsavel || null,
             observacoes: n.observacoes || null
-        }).select().single();
+        };
+        // "id" é generated always as identity — não pode aparecer num INSERT
+        // (nem por baixo de um upsert), por isso aqui é insert OU update,
+        // nunca upsert com id junto
+        const query = n.id
+            ? sb.from('estoque_notas').update(registro).eq('id', n.id)
+            : sb.from('estoque_notas').insert(registro);
+        const { data: notaCriada, error } = await query.select().single();
         if (error) throw error;
         return notaCriada;
     }
@@ -1064,7 +1307,23 @@ async function chamarPost(acao, d) {
             origem: t.origem || 'manual'
         }));
         if (!linhas.length) return;
-        const { error } = await sb.from('estoque_titulos_notas').insert(linhas);
+        const { data, error } = await sb.from('estoque_titulos_notas').insert(linhas).select();
+        if (error) throw error;
+        return data;
+    }
+    if (acao === 'editarTitulo') {
+        const { error } = await sb.from('estoque_titulos_notas').update({
+            numero_titulo: d.numeroTitulo || null,
+            data_vencimento: d.dataVencimento || null,
+            valor: d.valor || 0,
+            forma_pagamento: d.formaPagamento || null,
+            status: d.status || 'pendente'
+        }).eq('id', d.tituloId);
+        if (error) throw error;
+        return;
+    }
+    if (acao === 'removerTitulo') {
+        const { error } = await sb.from('estoque_titulos_notas').delete().eq('id', d.tituloId);
         if (error) throw error;
         return;
     }
@@ -1101,6 +1360,7 @@ async function chamarPost(acao, d) {
         await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: -sinal * Number(antiga.qtd) });
         await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: sinal * Number(d.novaQtd) });
         const upd = { qtd: d.novaQtd };
+        if (d.novoValorUnit != null) upd.valor_unit = d.novoValorUnit;
         if (d.responsavel != null) upd.responsavel = d.responsavel;
         if (d.observacao != null) upd.observacao = d.observacao;
         if (d.tag != null) upd.tag = d.tag;
@@ -1226,6 +1486,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
         document.getElementById('aba-' + btn.dataset.aba).classList.add('ativa');
         if (btn.dataset.aba === 'relatorios') popularRelatoriosSelects();
         if (btn.dataset.aba === 'movpainel') abrirPainelMovimentacoes();
+        if (btn.dataset.aba === 'notasentrada') carregarListaNotasEntrada();
     });
 });
 
@@ -1287,9 +1548,15 @@ function editarProdutoPrompt(id) {
     const p = produtos.find(x => x.id === id);
     if (!p) return;
     produtoIdEmEdicao = id;
-    document.getElementById('editProdutoNome').textContent = `#${p.id} — ${p.nome}`;
+    document.getElementById('editProdutoCodigo').textContent = `#${p.id}`;
+    document.getElementById('editProdutoNome').value = p.nome;
+    document.getElementById('editProdutoCodigoExterno').value = p.codigoExterno || '';
+    document.getElementById('editProdutoUn').value = p.un || '';
     document.getElementById('editProdutoValor').value = p.valor;
     document.getElementById('editProdutoEstoque').value = p.estoque;
+    document.getElementById('editProdutoEstoqueInicial').value = p.estoqueInicial ?? 0;
+    document.getElementById('editProdutoGrupo').value = p.grupo ?? 1;
+    document.getElementById('editProdutoAlmox').value = p.almox ?? 1;
     document.getElementById('editProdutoResponsavelAjuste').value = '';
     document.getElementById('campoResponsavelAjuste').style.display = 'none';
     document.getElementById('avisoAjusteEstoque').style.display = 'none';
@@ -1327,11 +1594,22 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
     const p = produtos.find(x => x.id === produtoIdEmEdicao);
     if (!p) return;
 
+    const novoNome = document.getElementById('editProdutoNome').value.trim();
+    const novoCodigoExterno = document.getElementById('editProdutoCodigoExterno').value.trim();
+    const novaUn = document.getElementById('editProdutoUn').value.trim() || 'UN';
     const novoValor = parseFloat(document.getElementById('editProdutoValor').value);
     const novoEstoque = parseFloat(document.getElementById('editProdutoEstoque').value);
-    if (isNaN(novoValor) || isNaN(novoEstoque)) {
+    const novoEstoqueInicial = parseFloat(document.getElementById('editProdutoEstoqueInicial').value);
+    const novoGrupo = parseInt(document.getElementById('editProdutoGrupo').value, 10);
+    const novoAlmox = parseInt(document.getElementById('editProdutoAlmox').value, 10);
+    if (!novoNome) {
         statusEl.className = 'status-msg erro';
-        statusEl.textContent = 'Preencha valor e estoque corretamente.';
+        statusEl.textContent = 'Informe o nome do produto.';
+        return;
+    }
+    if (isNaN(novoValor) || isNaN(novoEstoque) || isNaN(novoEstoqueInicial) || isNaN(novoGrupo) || isNaN(novoAlmox)) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Preencha todos os campos numéricos corretamente.';
         return;
     }
 
@@ -1354,7 +1632,11 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
         // valor sempre pode ser atualizado direto; o estoque só é tocado aqui se NÃO houve ajuste
         // (se houve ajuste, quem corrige o estoque é a movimentação registrada abaixo)
         await chamarPost('salvarProduto', {
-            produto: { ...p, valor: novoValor, estoque: delta !== 0 ? estoqueAntigo : novoEstoque }
+            produto: {
+                ...p, nome: novoNome, codigoExterno: novoCodigoExterno || null, un: novaUn,
+                valor: novoValor, estoque: delta !== 0 ? estoqueAntigo : novoEstoque,
+                estoqueInicial: novoEstoqueInicial, grupo: novoGrupo, almox: novoAlmox
+            }
         });
 
         if (delta !== 0) {
@@ -1597,12 +1879,16 @@ function parsearXmlNFe(xmlText) {
 
     const itens = dets.map(det => {
         const prod = det.getElementsByTagName('prod')[0];
+        const cEan = get(prod, 'cEAN');
         return {
             cProd: get(prod, 'cProd'),
             xProd: get(prod, 'xProd'),
             uCom: get(prod, 'uCom') || 'UN',
             qCom: parseFloat(get(prod, 'qCom')) || 0,
-            vUnCom: parseFloat(get(prod, 'vUnCom')) || 0
+            vUnCom: parseFloat(get(prod, 'vUnCom')) || 0,
+            // "SEM GTIN" é o valor padrão da nota quando não tem código de
+            // barras — trata como se não tivesse
+            cEan: (cEan && cEan.toUpperCase() !== 'SEM GTIN') ? cEan : ''
         };
     });
 
@@ -1664,6 +1950,10 @@ document.getElementById('btnCancelarImportarNFe').addEventListener('click', () =
     document.getElementById('modalImportarNFe').classList.remove('aberto');
 });
 
+document.getElementById('btnFecharModalImportarNFeTopo').addEventListener('click', () => {
+    document.getElementById('modalImportarNFe').classList.remove('aberto');
+});
+
 document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
     const arquivo = e.target.files[0];
     if (!arquivo) return;
@@ -1673,6 +1963,7 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
     try {
         const texto = await arquivo.text();
         const nfe = parsearXmlNFe(texto);
+        nfe.xmlOriginal = texto; // guarda o XML bruto — é o que marca essa nota como "origem: XML" na lista
         nfeDadosNota = nfe;
 
         document.getElementById('nfeInfo').innerHTML = `
@@ -1685,10 +1976,18 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
             ${nfe.itens.length} item(ns) encontrado(s).
         `;
 
+        // busca o mapeamento código-do-fornecedor -> nosso produto, feito em
+        // importações anteriores desse mesmo fornecedor (evita depender só
+        // de nome parecido, e não colide entre fornecedores diferentes)
+        const mapeamentosFornecedor = nfe.emitCnpj ? await chamarGet('listarMapeamentosFornecedor', { cnpjFornecedor: nfe.emitCnpj }) : [];
+        const mapaCodigoParaProdutoId = new Map((mapeamentosFornecedor || []).map(m => [m.codigo_fornecedor, m.produto_id]));
+
         nfeItensParseados = nfe.itens.map(it => {
-            const match = encontrarProdutoCorrespondenteNFe(it);
+            const produtoIdMapeado = mapaCodigoParaProdutoId.get(it.cProd);
+            const match = produtoIdMapeado ? produtos.find(p => p.id === produtoIdMapeado) : encontrarProdutoCorrespondenteNFe(it);
             return {
                 cProd: it.cProd,
+                cEan: it.cEan,
                 xProdOriginal: it.xProd,
                 un: it.uCom,
                 qtd: it.qCom,
@@ -1830,6 +2129,7 @@ async function processarImportacaoNFe(tipo) {
                     valorCofins: nfeDadosNota.vCOFINS,
                     valorTotal: nfeDadosNota.vNF,
                     informacoesFiscais: nfeDadosNota.infCpl,
+                    xmlOriginal: nfeDadosNota.xmlOriginal || null,
                     responsavel,
                     observacoes: observacaoBase || null
                 }
@@ -1844,7 +2144,6 @@ async function processarImportacaoNFe(tipo) {
                 const criado = await chamarPost('salvarProduto', {
                     produto: {
                         id: undefined, // banco gera automaticamente
-                        codigoExterno: item.cProd || null,
                         nome: (item.xProdOriginal || ('PRODUTO NF ' + item.cProd)).toUpperCase(),
                         un: item.un || 'UN',
                         valor: item.valorUnit,
@@ -1857,6 +2156,20 @@ async function processarImportacaoNFe(tipo) {
                 await carregarProdutos();
                 produtoId = criado.id;
             }
+
+            // grava (ou atualiza) o mapeamento código-do-fornecedor -> nosso
+            // produto, pra próxima nota desse mesmo fornecedor já casar
+            // direto, sem depender de nome parecido
+            if (item.cProd && nfeDadosNota?.emitCnpj) {
+                await chamarPost('salvarMapeamentoFornecedor', {
+                    produtoId,
+                    cnpjFornecedor: nfeDadosNota.emitCnpj,
+                    nomeFornecedor: nfeDadosNota.emitNome,
+                    codigoFornecedor: item.cProd,
+                    codigoBarras: item.cEan || null
+                });
+            }
+
             await chamarPost('registrarMovimentacao', {
                 movimentacao: {
                     data, produtoId, qtd: item.qtd, valorUnit: item.valorUnit, tipo,
@@ -3516,13 +3829,15 @@ document.getElementById('btnReprocessarEstoque').addEventListener('click', async
                     <td>#${r.produto_id} — ${escapeHtml(r.nome)}</td>
                     <td class="num">${Number(r.estoque_anterior).toLocaleString('pt-BR')}</td>
                     <td class="num">${Number(r.estoque_recalculado).toLocaleString('pt-BR')}</td>
-                    <td class="num" style="color:${Number(r.diferenca) < 0 ? '#c62828' : '#2e7d32'};">${Number(r.diferenca) > 0 ? '+' : ''}${Number(r.diferenca).toLocaleString('pt-BR')}</td>
+                    <td class="num" style="color:${Number(r.diferenca_estoque) < 0 ? '#c62828' : '#2e7d32'};">${Number(r.diferenca_estoque) > 0 ? '+' : ''}${Number(r.diferenca_estoque).toLocaleString('pt-BR')}</td>
+                    <td class="num" style="${Number(r.preco_medio_anterior) !== Number(r.preco_medio_recalculado) ? 'color:#b45309; font-weight:600;' : ''}">${formatarMoeda(r.preco_medio_anterior)} → ${formatarMoeda(r.preco_medio_recalculado)}</td>
+                    <td class="num" style="${Number(r.preco_ultima_compra_anterior) !== Number(r.preco_ultima_compra_recalculado) ? 'color:#b45309; font-weight:600;' : ''}">${formatarMoeda(r.preco_ultima_compra_anterior)} → ${formatarMoeda(r.preco_ultima_compra_recalculado)}</td>
                 </tr>
             `).join('');
             resultadoEl.innerHTML = `
                 <p class="status-msg sucesso">⚠️ ${data.length} produto(s) corrigido(s):</p>
                 <table class="tabela" style="margin-top:8px;">
-                    <thead><tr><th>Produto</th><th class="num">Estava</th><th class="num">Correto</th><th class="num">Diferença</th></tr></thead>
+                    <thead><tr><th>Produto</th><th class="num">Estoque estava</th><th class="num">Correto</th><th class="num">Diferença</th><th class="num">Preço médio</th><th class="num">Última compra</th></tr></thead>
                     <tbody>${linhas}</tbody>
                 </table>
             `;
@@ -3689,10 +4004,68 @@ document.getElementById('btnLimparFiltrosMov').addEventListener('click', () => {
 
 document.getElementById('btnAplicarFiltrosMov').addEventListener('click', buscarPainelMovimentacoes);
 
+let movGeralEmEdicaoId = null;
+
+function abrirModalEditarMovimentacaoGeral(movId, listaAtual) {
+    const mov = listaAtual.find(m => m.id === movId);
+    if (!mov) return;
+    movGeralEmEdicaoId = movId;
+    const prod = produtos.find(p => p.id === mov.produtoId);
+    document.getElementById('editMovGeralInfo').textContent =
+        `${mov.tipo === 'entrada' ? 'Entrada' : 'Saída'} · ${prod ? prod.nome : '#' + mov.produtoId} · ${mov.data}`;
+    document.getElementById('editMovGeralQtd').value = mov.qtd;
+    document.getElementById('editMovGeralValor').value = mov.valorUnit;
+    document.getElementById('editMovGeralObservacao').value = mov.observacao || '';
+    document.getElementById('statusEditarMovGeral').textContent = '';
+    document.getElementById('modalEditarMovGeral').classList.add('aberto');
+}
+
+document.getElementById('btnCancelarEditarMovGeral').addEventListener('click', () => {
+    document.getElementById('modalEditarMovGeral').classList.remove('aberto');
+    movGeralEmEdicaoId = null;
+});
+
+document.getElementById('btnSalvarEditarMovGeral').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusEditarMovGeral');
+    const novaQtd = parseFloat(document.getElementById('editMovGeralQtd').value);
+    const novoValorUnit = parseFloat(document.getElementById('editMovGeralValor').value);
+    if (isNaN(novaQtd) || novaQtd <= 0 || isNaN(novoValorUnit) || novoValorUnit < 0) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Preencha quantidade e valor unitário corretamente.';
+        return;
+    }
+    const novaObservacao = document.getElementById('editMovGeralObservacao').value.trim();
+
+    statusEl.className = '';
+    statusEl.textContent = 'Salvando...';
+    try {
+        await chamarPost('editarMovimentacao', {
+            movId: movGeralEmEdicaoId,
+            novaQtd,
+            novoValorUnit,
+            observacao: novaObservacao
+        });
+        document.getElementById('modalEditarMovGeral').classList.remove('aberto');
+        movGeralEmEdicaoId = null;
+        await Promise.all([carregarProdutos(), carregarMovimentacoes()]);
+        atualizarTagContagem();
+        renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+        if (document.getElementById('modalNotaEntrada').classList.contains('aberto') && notaEmEdicaoId) {
+            await carregarItensETitulosDaNota(notaEmEdicaoId);
+        } else {
+            await buscarPainelMovimentacoes();
+        }
+    } catch (err) {
+        console.error(err);
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = '⚠️ ' + err.message;
+    }
+});
+
 async function buscarPainelMovimentacoes() {
     const corpo = document.getElementById('corpoTabelaPainelMov');
     const vazio = document.getElementById('vazioPainelMov');
-    corpo.innerHTML = '<tr><td colspan="11" class="vazio">Carregando...</td></tr>';
+    corpo.innerHTML = '<tr><td colspan="12" class="vazio">Carregando...</td></tr>';
     vazio.style.display = 'none';
 
     const filtros = {
@@ -3730,8 +4103,12 @@ async function buscarPainelMovimentacoes() {
                 <td>${fornecedorInfo}</td>
                 <td>${escapeHtml(m.responsavel) || '-'}</td>
                 <td>${escapeHtml(m.observacao) || '-'}</td>
+                <td class="center"><button class="btn btn-cinza btn-pequeno" data-editar-mov="${m.id}">✏️ Editar</button></td>
             `;
             corpo.appendChild(tr);
+        });
+        corpo.querySelectorAll('[data-editar-mov]').forEach(btn => {
+            btn.addEventListener('click', () => abrirModalEditarMovimentacaoGeral(Number(btn.dataset.editarMov), lista));
         });
     } catch (err) {
         console.error(err);
@@ -3740,6 +4117,420 @@ async function buscarPainelMovimentacoes() {
         vazio.textContent = '⚠️ ' + err.message;
     }
 }
+
+/* =========================================================================
+   NOTAS DE ENTRADA — lista, criação manual, edição (inclusive as que
+   vieram de importação de XML), itens e títulos de pagamento.
+   ========================================================================= */
+let notaEmEdicaoId = null;
+let itensNotaAtual = [];
+let titulosNotaAtual = [];
+let produtoSelecionadoItemNota = null;
+let tituloEmEdicaoId = null;
+
+async function carregarListaNotasEntrada() {
+    const corpo = document.getElementById('corpoTabelaNotasEntrada');
+    const vazio = document.getElementById('vazioNotasEntrada');
+    corpo.innerHTML = '<tr><td colspan="8" class="vazio">Carregando...</td></tr>';
+    vazio.style.display = 'none';
+
+    const filtros = {
+        fornecedor: document.getElementById('notasFiltroFornecedor').value.trim(),
+        numero: document.getElementById('notasFiltroNumero').value.trim()
+    };
+
+    try {
+        const [notas, contagens] = await Promise.all([
+            chamarGet('listarNotasEntrada', filtros),
+            chamarGet('contarItensTitulosPorNota')
+        ]);
+
+        const itensPorNota = {}, valorPorNota = {}, titulosPorNota = {};
+        (contagens.itens || []).forEach(i => {
+            itensPorNota[i.estoque_nota_id] = (itensPorNota[i.estoque_nota_id] || 0) + 1;
+            valorPorNota[i.estoque_nota_id] = (valorPorNota[i.estoque_nota_id] || 0) + Number(i.qtd) * Number(i.valor_unit);
+        });
+        (contagens.titulos || []).forEach(t => {
+            titulosPorNota[t.estoque_nota_id] = (titulosPorNota[t.estoque_nota_id] || 0) + 1;
+        });
+
+        corpo.innerHTML = '';
+        if (!notas || notas.length === 0) { vazio.style.display = 'block'; return; }
+
+        notas.forEach(n => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${formatarData(n.data_entrada)}</td>
+                <td>${escapeHtml(n.numero_nf) || '-'}</td>
+                <td>${escapeHtml(n.nome_fornecedor) || '-'}</td>
+                <td><span class="pill ${n.xml_original ? 'pill-entrada' : 'pill-saida'}">${n.xml_original ? 'XML' : 'Manual'}</span></td>
+                <td class="num">${itensPorNota[n.id] || 0}</td>
+                <td class="num">${titulosPorNota[n.id] || 0}</td>
+                <td class="num">${formatarMoeda(valorPorNota[n.id] || n.valor_total)}</td>
+                <td class="center"><button class="btn btn-cinza btn-pequeno" data-abrir-nota="${n.id}">✏️ Abrir</button></td>
+            `;
+            corpo.appendChild(tr);
+        });
+        corpo.querySelectorAll('[data-abrir-nota]').forEach(btn => {
+            btn.addEventListener('click', () => abrirNotaEntradaExistente(Number(btn.dataset.abrirNota)));
+        });
+
+        // datalist de fornecedores já usados, pra sugestão rápida
+        const nomes = [...new Set((notas || []).map(n => n.nome_fornecedor).filter(Boolean))];
+        document.getElementById('notaListaFornecedores').innerHTML = nomes.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
+    } catch (err) {
+        console.error(err);
+        corpo.innerHTML = '';
+        vazio.style.display = 'block';
+        vazio.textContent = '⚠️ ' + err.message;
+    }
+}
+
+document.getElementById('btnBuscarNotasEntrada').addEventListener('click', carregarListaNotasEntrada);
+document.getElementById('btnNovaNotaEntrada').addEventListener('click', abrirNovaNotaEntrada);
+document.getElementById('btnFecharNotaEntrada').addEventListener('click', () => {
+    document.getElementById('modalNotaEntrada').classList.remove('aberto');
+    carregarListaNotasEntrada();
+});
+
+function limparFormularioNota() {
+    ['notaNumeroNf', 'notaSerie', 'notaDataEmissao', 'notaDataEntrada', 'notaFornecedorNome', 'notaFornecedorCnpj',
+     'notaResponsavel', 'notaChaveAcesso', 'notaObservacoes'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('notaValorDesconto').value = 0;
+    document.getElementById('notaValorFrete').value = 0;
+    document.getElementById('notaDataEntrada').value = hojeISO();
+    document.getElementById('statusNotaEntrada').textContent = '';
+}
+
+function abrirNovaNotaEntrada() {
+    notaEmEdicaoId = null;
+    itensNotaAtual = [];
+    titulosNotaAtual = [];
+    limparFormularioNota();
+    document.getElementById('tituloNotaEntrada').textContent = 'Nova entrada direta';
+    document.getElementById('origemNotaEntrada').textContent = 'Preencha o cabeçalho e clique em "Salvar cabeçalho" pra liberar o lançamento de itens e títulos.';
+    document.getElementById('blocoItensTitulosNota').style.display = 'none';
+    document.getElementById('modalNotaEntrada').classList.add('aberto');
+}
+
+async function abrirNotaEntradaExistente(notaId) {
+    try {
+        const { data: nota, error } = await sb.from('estoque_notas').select('*').eq('id', notaId).single();
+        if (error) throw error;
+
+        notaEmEdicaoId = nota.id;
+        document.getElementById('tituloNotaEntrada').textContent = `Editando entrada — NF ${nota.numero_nf || '#' + nota.id}`;
+        document.getElementById('origemNotaEntrada').textContent = nota.xml_original
+            ? '📄 Essa nota foi criada a partir de um XML importado.' : '✍️ Essa nota foi criada manualmente.';
+
+        document.getElementById('notaNumeroNf').value = nota.numero_nf || '';
+        document.getElementById('notaSerie').value = nota.serie || '';
+        document.getElementById('notaDataEmissao').value = nota.data_emissao ? String(nota.data_emissao).slice(0, 10) : '';
+        document.getElementById('notaDataEntrada').value = nota.data_entrada || '';
+        document.getElementById('notaFornecedorNome').value = nota.nome_fornecedor || '';
+        document.getElementById('notaFornecedorCnpj').value = nota.cnpj_fornecedor || '';
+        document.getElementById('notaValorDesconto').value = nota.valor_desconto || 0;
+        document.getElementById('notaValorFrete').value = nota.valor_frete || 0;
+        document.getElementById('notaResponsavel').value = nota.responsavel || '';
+        document.getElementById('notaChaveAcesso').value = nota.chave_acesso || '';
+        document.getElementById('notaObservacoes').value = nota.observacoes || '';
+        document.getElementById('statusNotaEntrada').textContent = '';
+
+        document.getElementById('blocoItensTitulosNota').style.display = 'block';
+        await carregarItensETitulosDaNota(notaId);
+        document.getElementById('modalNotaEntrada').classList.add('aberto');
+    } catch (err) {
+        alert('Erro ao abrir a nota: ' + err.message);
+    }
+}
+
+async function carregarItensETitulosDaNota(notaId) {
+    const [itens, titulos] = await Promise.all([
+        chamarGet('listarItensNota', { notaId }),
+        chamarGet('listarTitulosNota', { notaId })
+    ]);
+    itensNotaAtual = itens || [];
+    titulosNotaAtual = titulos || [];
+    renderizarItensNota();
+    renderizarTitulosNota();
+}
+
+function renderizarItensNota() {
+    const corpo = document.getElementById('corpoItensNota');
+    corpo.innerHTML = '';
+    let total = 0;
+    itensNotaAtual.forEach(m => {
+        const prod = produtos.find(p => p.id === m.produto_id);
+        const subtotal = Number(m.qtd) * Number(m.valor_unit);
+        total += subtotal;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${prod ? escapeHtml(prod.nome) : ('#' + m.produto_id)}</td>
+            <td class="num">${Number(m.qtd).toLocaleString('pt-BR')}</td>
+            <td class="num">${formatarMoeda(m.valor_unit)}</td>
+            <td class="num">${formatarMoeda(subtotal)}</td>
+            <td class="center">
+                <button class="btn btn-cinza btn-pequeno" data-editar-item-nota="${m.id}">✏️</button>
+                <button class="btn btn-vermelho btn-pequeno" data-remover-item-nota="${m.id}">🗑️</button>
+            </td>
+        `;
+        corpo.appendChild(tr);
+    });
+    document.getElementById('totalItensNota').textContent = formatarMoeda(total);
+
+    corpo.querySelectorAll('[data-editar-item-nota]').forEach(btn => {
+        btn.addEventListener('click', () => abrirModalEditarMovimentacaoGeral(Number(btn.dataset.editarItemNota), itensNotaAtual.map(m => ({
+            id: m.id, produtoId: m.produto_id, tipo: m.tipo, qtd: Number(m.qtd), valorUnit: Number(m.valor_unit),
+            data: formatarData(m.data), observacao: m.observacao || ''
+        }))));
+    });
+    corpo.querySelectorAll('[data-remover-item-nota]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!confirm('Remover esse item da nota? Isso também reverte o estoque que ele gerou.')) return;
+            try {
+                await chamarPost('removerMovimentacao', { movId: Number(btn.dataset.removerItemNota) });
+                await Promise.all([carregarProdutos(), carregarMovimentacoes()]);
+                await carregarItensETitulosDaNota(notaEmEdicaoId);
+            } catch (err) {
+                alert('Erro ao remover: ' + err.message);
+            }
+        });
+    });
+}
+
+function renderizarTitulosNota() {
+    const corpo = document.getElementById('corpoTitulosNota');
+    corpo.innerHTML = '';
+    let total = 0;
+    const mapaStatusLabel = { pendente: 'Pendente', pago: 'Pago', cancelado: 'Cancelado' };
+    titulosNotaAtual.forEach(t => {
+        total += Number(t.valor);
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${escapeHtml(t.numero_titulo) || '-'}</td>
+            <td>${formatarData(t.data_vencimento)}</td>
+            <td class="num">${formatarMoeda(t.valor)}</td>
+            <td>${escapeHtml(t.forma_pagamento) || '-'}</td>
+            <td><span class="pill ${t.origem === 'xml' ? 'pill-entrada' : 'pill-saida'}">${t.origem === 'xml' ? 'XML' : 'Manual'}</span></td>
+            <td>${mapaStatusLabel[t.status] || t.status}</td>
+            <td class="center">
+                <button class="btn btn-cinza btn-pequeno" data-editar-titulo="${t.id}">✏️</button>
+                <button class="btn btn-vermelho btn-pequeno" data-remover-titulo="${t.id}">🗑️</button>
+            </td>
+        `;
+        corpo.appendChild(tr);
+    });
+    document.getElementById('totalTitulosNota').textContent = formatarMoeda(total);
+
+    corpo.querySelectorAll('[data-editar-titulo]').forEach(btn => {
+        btn.addEventListener('click', () => abrirModalEditarTitulo(Number(btn.dataset.editarTitulo)));
+    });
+    corpo.querySelectorAll('[data-remover-titulo]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+            if (!confirm('Remover esse título?')) return;
+            try {
+                await chamarPost('removerTitulo', { tituloId: Number(btn.dataset.removerTitulo) });
+                await carregarItensETitulosDaNota(notaEmEdicaoId);
+            } catch (err) {
+                alert('Erro ao remover: ' + err.message);
+            }
+        });
+    });
+}
+
+document.getElementById('btnSalvarCabecalhoNota').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusNotaEntrada');
+    const nome = document.getElementById('notaFornecedorNome').value.trim();
+    const dataEntrada = document.getElementById('notaDataEntrada').value;
+    if (!nome) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o nome do fornecedor.'; return; }
+    if (!dataEntrada) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe a data de entrada.'; return; }
+
+    statusEl.className = '';
+    statusEl.textContent = 'Salvando...';
+    try {
+        const nota = await chamarPost('salvarNotaFiscal', {
+            nota: {
+                id: notaEmEdicaoId || undefined,
+                numeroNf: document.getElementById('notaNumeroNf').value.trim(),
+                serie: document.getElementById('notaSerie').value.trim(),
+                dataEmissao: document.getElementById('notaDataEmissao').value || null,
+                dataEntrada,
+                cnpjFornecedor: document.getElementById('notaFornecedorCnpj').value.trim(),
+                nomeFornecedor: nome,
+                valorDesconto: parseFloat(document.getElementById('notaValorDesconto').value) || 0,
+                valorFrete: parseFloat(document.getElementById('notaValorFrete').value) || 0,
+                responsavel: document.getElementById('notaResponsavel').value.trim().toUpperCase(),
+                chaveAcesso: document.getElementById('notaChaveAcesso').value.trim(),
+                observacoes: document.getElementById('notaObservacoes').value.trim()
+            }
+        });
+        notaEmEdicaoId = nota.id;
+        statusEl.className = 'status-msg sucesso';
+        statusEl.textContent = '✅ Cabeçalho salvo.';
+        document.getElementById('tituloNotaEntrada').textContent = `Editando entrada — NF ${nota.numero_nf || '#' + nota.id}`;
+        document.getElementById('blocoItensTitulosNota').style.display = 'block';
+        await carregarItensETitulosDaNota(notaEmEdicaoId);
+    } catch (err) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = '⚠️ ' + err.message;
+    }
+});
+
+/* ---------- busca de produto pro item da nota ---------- */
+document.getElementById('notaItemProdutoBusca').addEventListener('input', () => {
+    const termo = document.getElementById('notaItemProdutoBusca').value;
+    produtoSelecionadoItemNota = null;
+    document.getElementById('notaItemProdutoSelecionado').textContent = '';
+    if (!termo.trim()) { document.getElementById('notaItemProdutoResultados').classList.remove('aberto'); return; }
+    renderizarResultadosBusca('notaItemProdutoResultados', termo, (p) => {
+        produtoSelecionadoItemNota = p;
+        document.getElementById('notaItemProdutoSelecionado').textContent = `Selecionado: #${p.id} — ${p.nome}`;
+        document.getElementById('notaItemValor').value = p.valor;
+        document.getElementById('notaItemProdutoBusca').value = p.nome;
+        document.getElementById('notaItemProdutoResultados').classList.remove('aberto');
+    });
+});
+
+document.getElementById('btnAdicionarItemNota').addEventListener('click', async () => {
+    if (!notaEmEdicaoId) { alert('Salve o cabeçalho da nota primeiro.'); return; }
+    const qtd = parseFloat(document.getElementById('notaItemQtd').value);
+    const valorUnit = parseFloat(document.getElementById('notaItemValor').value);
+    const nomeDigitado = document.getElementById('notaItemProdutoBusca').value.trim();
+    if (!nomeDigitado) { alert('Busque ou digite o nome do produto.'); return; }
+    if (isNaN(qtd) || qtd <= 0 || isNaN(valorUnit) || valorUnit < 0) { alert('Preencha quantidade e valor corretamente.'); return; }
+
+    const btn = document.getElementById('btnAdicionarItemNota');
+    btn.disabled = true;
+    try {
+        let produtoId = produtoSelecionadoItemNota ? produtoSelecionadoItemNota.id : null;
+        if (!produtoId) {
+            // produto novo, digitado na hora — cria no catálogo
+            const criado = await chamarPost('salvarProduto', {
+                produto: { nome: nomeDigitado.toUpperCase(), un: 'UN', valor: valorUnit, grupo: 1, estoqueInicial: 0, estoque: 0, almox: 1 }
+            });
+            await carregarProdutos();
+            produtoId = criado.id;
+        }
+
+        await chamarPost('registrarMovimentacao', {
+            movimentacao: {
+                data: document.getElementById('notaDataEntrada').value, produtoId, qtd, valorUnit, tipo: 'entrada',
+                observacao: `Entrada direta — NF ${document.getElementById('notaNumeroNf').value || ''}`.trim(),
+                responsavel: document.getElementById('notaResponsavel').value.trim().toUpperCase(),
+                fornecedorCnpj: document.getElementById('notaFornecedorCnpj').value.trim(),
+                fornecedorNome: document.getElementById('notaFornecedorNome').value.trim(),
+                estoqueNotaId: notaEmEdicaoId
+            }
+        });
+
+        document.getElementById('notaItemProdutoBusca').value = '';
+        document.getElementById('notaItemProdutoSelecionado').textContent = '';
+        document.getElementById('notaItemQtd').value = 1;
+        document.getElementById('notaItemValor').value = '';
+        produtoSelecionadoItemNota = null;
+
+        await Promise.all([carregarProdutos(), carregarMovimentacoes()]);
+        await carregarItensETitulosDaNota(notaEmEdicaoId);
+    } catch (err) {
+        alert('Erro ao adicionar item: ' + err.message);
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+/* ---------- títulos ---------- */
+document.getElementById('btnAdicionarTituloNota').addEventListener('click', async () => {
+    if (!notaEmEdicaoId) { alert('Salve o cabeçalho da nota primeiro.'); return; }
+    const valor = parseFloat(document.getElementById('tituloValor').value);
+    if (isNaN(valor) || valor <= 0) { alert('Informe o valor do título.'); return; }
+
+    try {
+        await chamarPost('salvarTitulosNota', {
+            estoqueNotaId: notaEmEdicaoId,
+            titulos: [{
+                numeroTitulo: document.getElementById('tituloNumero').value.trim(),
+                dataVencimento: document.getElementById('tituloVencimento').value || null,
+                valor,
+                formaPagamento: document.getElementById('tituloFormaPagamento').value.trim(),
+                origem: 'manual'
+            }]
+        });
+        document.getElementById('tituloNumero').value = '';
+        document.getElementById('tituloVencimento').value = '';
+        document.getElementById('tituloValor').value = '';
+        document.getElementById('tituloFormaPagamento').value = '';
+        await carregarItensETitulosDaNota(notaEmEdicaoId);
+    } catch (err) {
+        alert('Erro ao adicionar título: ' + err.message);
+    }
+});
+
+document.getElementById('btnGerarParcelasIguais').addEventListener('click', async () => {
+    if (!notaEmEdicaoId) { alert('Salve o cabeçalho da nota primeiro.'); return; }
+    const totalItens = itensNotaAtual.reduce((acc, m) => acc + Number(m.qtd) * Number(m.valor_unit), 0);
+    if (totalItens <= 0) { alert('Lance os itens primeiro — a divisão usa o total dos itens.'); return; }
+    const qtdParcelasTexto = prompt('Dividir em quantas parcelas?', '1');
+    const qtdParcelas = parseInt(qtdParcelasTexto, 10);
+    if (!qtdParcelas || qtdParcelas <= 0) return;
+
+    const valorParcela = Math.round((totalItens / qtdParcelas) * 100) / 100;
+    const titulos = [];
+    let restante = totalItens;
+    for (let i = 1; i <= qtdParcelas; i++) {
+        const valor = i === qtdParcelas ? Math.round(restante * 100) / 100 : valorParcela;
+        restante -= valor;
+        titulos.push({ numeroTitulo: `${i}/${qtdParcelas}`, dataVencimento: null, valor, formaPagamento: '', origem: 'manual' });
+    }
+    try {
+        await chamarPost('salvarTitulosNota', { estoqueNotaId: notaEmEdicaoId, titulos });
+        await carregarItensETitulosDaNota(notaEmEdicaoId);
+    } catch (err) {
+        alert('Erro ao gerar parcelas: ' + err.message);
+    }
+});
+
+function abrirModalEditarTitulo(tituloId) {
+    const t = titulosNotaAtual.find(x => x.id === tituloId);
+    if (!t) return;
+    tituloEmEdicaoId = tituloId;
+    document.getElementById('editTituloNumero').value = t.numero_titulo || '';
+    document.getElementById('editTituloVencimento').value = t.data_vencimento || '';
+    document.getElementById('editTituloValor').value = t.valor;
+    document.getElementById('editTituloFormaPagamento').value = t.forma_pagamento || '';
+    document.getElementById('editTituloStatus').value = t.status || 'pendente';
+    document.getElementById('statusEditarTitulo').textContent = '';
+    document.getElementById('modalEditarTitulo').classList.add('aberto');
+}
+
+document.getElementById('btnCancelarEditarTitulo').addEventListener('click', () => {
+    document.getElementById('modalEditarTitulo').classList.remove('aberto');
+    tituloEmEdicaoId = null;
+});
+
+document.getElementById('btnSalvarEditarTitulo').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusEditarTitulo');
+    const valor = parseFloat(document.getElementById('editTituloValor').value);
+    if (isNaN(valor) || valor <= 0) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Valor inválido.'; return; }
+
+    statusEl.className = '';
+    statusEl.textContent = 'Salvando...';
+    try {
+        await chamarPost('editarTitulo', {
+            tituloId: tituloEmEdicaoId,
+            numeroTitulo: document.getElementById('editTituloNumero').value.trim(),
+            dataVencimento: document.getElementById('editTituloVencimento').value || null,
+            valor,
+            formaPagamento: document.getElementById('editTituloFormaPagamento').value.trim(),
+            status: document.getElementById('editTituloStatus').value
+        });
+        document.getElementById('modalEditarTitulo').classList.remove('aberto');
+        tituloEmEdicaoId = null;
+        await carregarItensETitulosDaNota(notaEmEdicaoId);
+    } catch (err) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = '⚠️ ' + err.message;
+    }
+});
 
 /* ---------- inicialização (chamada de dentro de onLogin) ---------- */
 async function iniciarAppFabrica() {
