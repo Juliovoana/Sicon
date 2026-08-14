@@ -76,6 +76,23 @@
         box-shadow: 0 4px 14px rgba(0,0,0,0.15);
     }
     #notaItemProdutoResultados.aberto { display: block; }
+
+    /* os containers de resultado de busca abaixo não tinham NENHUM CSS
+       próprio — a classe "aberto" era adicionada/removida no JS, mas
+       sem efeito nenhum, porque não existia regra que escondesse por
+       padrão. Resultado: a lista ficava sempre visível assim que
+       tinha conteúdo, nunca recolhia depois de escolher um item. */
+    #baixaResultadosProduto, #movFiltroEventoResultados, #movFiltroProdutoResultados,
+    #nfeVinculoResultados, #relResultadosEvento, #resultadosBuscaEvento, #resultadosBuscaItemProjeto {
+        max-width: 620px; border: 1px solid #ddd; border-radius: 6px; margin-top: 6px;
+        max-height: 260px; overflow-y: auto; display: none;
+    }
+    #baixaResultadosProduto.aberto, #movFiltroEventoResultados.aberto, #movFiltroProdutoResultados.aberto,
+    #nfeVinculoResultados.aberto, #relResultadosEvento.aberto, #resultadosBuscaEvento.aberto, #resultadosBuscaItemProjeto.aberto {
+        display: block;
+    }
+    .btn-preco-opcao { background: #f0f0f0; color: #444; border: 1.5px solid #ddd; }
+    .btn-preco-opcao.ativo { background: #2e7d32; color: #fff; border-color: #2e7d32; }
     .item-resultado {
         display: flex; justify-content: space-between; align-items: center;
         padding: 9px 12px; border-bottom: 1px solid #eee; gap: 10px;
@@ -706,6 +723,19 @@
             </div>
             <div class="campo" style="margin-top:8px;"><label>Observação (opcional)</label><input type="text" id="nfeObservacao"></div>
 
+            <p class="subtitulo" style="margin-top:14px; margin-bottom:4px;">Destinação (só é usada se escolher "Baixa Direta" abaixo):</p>
+            <div class="grade col4">
+                <div class="campo"><label>Setor</label><select id="nfeSetor"><option value="">-</option></select></div>
+                <div class="campo"><label>Subsetor</label><select id="nfeSubsetor"><option value="">-</option></select></div>
+                <div class="campo"><label>Veículo / Equipamento</label><select id="nfeVeiculo"><option value="">-</option></select></div>
+                <div class="campo"><label>Plano de Contas</label><select id="nfePlanoContas"><option value="">-</option></select></div>
+            </div>
+            <div class="grade col4" style="margin-top:8px;">
+                <div class="campo"><label>KM na baixa</label><input type="number" step="1" id="nfeKm"></div>
+                <div class="campo"><label>KM próxima troca</label><input type="number" step="1" id="nfeKmProximaTroca"></div>
+                <div class="campo" style="grid-column:span 2;"><label>Data próxima troca</label><input type="date" id="nfeDataProximaTroca"></div>
+            </div>
+
             <div style="max-height:40vh; overflow:auto; margin-top:14px;">
                 <table class="tabela">
                     <thead>
@@ -791,10 +821,23 @@
 
         <div class="grade col2" style="margin-top:10px;">
             <div class="campo"><label>Estoque inicial</label><input type="number" step="0.01" id="editProdutoEstoqueInicial"></div>
+            <div class="campo">
+                <label>Valor unit. do estoque inicial (R$)</label>
+                <input type="number" step="0.01" id="editProdutoValorEstoqueInicial">
+            </div>
+        </div>
+        <p class="subtitulo" style="margin-top:4px;">Obrigatório preencher se tem estoque inicial, pra "Reprocessar Estoque" (aba Relatórios) funcionar certo nesse produto.</p>
+
+        <div class="grade col2" style="margin-top:10px;">
             <div class="campo"><label>Grupo</label><input type="number" id="editProdutoGrupo"></div>
+            <div class="campo"><label>Almoxarifado</label><input type="number" id="editProdutoAlmox"></div>
         </div>
 
-        <div class="campo" style="margin-top:10px;"><label>Almoxarifado</label><input type="number" id="editProdutoAlmox"></div>
+        <div class="campo" style="margin-top:10px; background:#FFF8E1; border:1px solid #F2A93B; border-radius:8px; padding:10px;">
+            <label>Preço médio — correção manual (R$)</label>
+            <input type="number" step="0.01" id="editProdutoPrecoMedio">
+            <p class="subtitulo" style="margin-top:4px; margin-bottom:0;">Normalmente calculado sozinho a cada entrada — só mexe aqui se precisar corrigir um valor que ficou errado por algum motivo.</p>
+        </div>
 
         <div class="campo" id="campoResponsavelAjuste" style="margin-top:10px; display:none;">
             <label>Responsável pelo ajuste de estoque</label>
@@ -811,7 +854,7 @@
 </div>
 
 <!-- ===================== MODAL / POPUP: Editar movimentação (qualquer uma, do Painel) ===================== -->
-<div class="modal-overlay" id="modalEditarMovGeral">
+<div class="modal-overlay" id="modalEditarMovGeral" style="z-index:1050;">
     <div class="modal-caixa">
         <h4 style="margin-top:0;">Editar movimentação</h4>
         <p class="subtitulo" id="editMovGeralInfo" style="margin-bottom:14px;"></p>
@@ -822,7 +865,7 @@
         </div>
         <div class="campo" style="margin-top:10px;"><label>Observação</label><input type="text" id="editMovGeralObservacao"></div>
 
-        <p class="subtitulo" style="margin-top:12px; color:#b45309;">⚠️ Corrigir aqui ajusta só esse registro. Depois de salvar, use "🔄 Reprocessar Estoque" (na aba Relatórios) pra recalcular estoque e preço médio do produto com base no histórico corrigido.</p>
+        <p class="subtitulo" style="margin-top:12px; color:#b45309;">⚠️ Corrigir aqui recalcula automaticamente o estoque e o preço médio do produto, com base no histórico completo (pode levar alguns segundos a mais pra salvar).</p>
 
         <div style="margin-top:16px; text-align:right;">
             <button class="btn btn-cinza" id="btnCancelarEditarMovGeral">Sair</button>
@@ -837,7 +880,11 @@
     <div class="modal-caixa larga">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
             <h4 style="margin:0;" id="tituloNotaEntrada">Nova entrada direta</h4>
-            <button class="btn btn-cinza btn-pequeno" id="btnFecharNotaEntrada">✕ Fechar</button>
+            <div>
+                <button class="btn btn-azul btn-pequeno" id="btnBaixarItensNota" style="display:none;">📤 Baixar itens dessa nota</button>
+                <button class="btn btn-vermelho btn-pequeno" id="btnRemoverNotaEntrada" style="display:none;">🗑️ Remover nota</button>
+                <button class="btn btn-cinza btn-pequeno" id="btnFecharNotaEntrada">✕ Fechar</button>
+            </div>
         </div>
         <p class="subtitulo" id="origemNotaEntrada" style="margin-bottom:12px;"></p>
 
@@ -914,6 +961,53 @@
     </div>
 </div>
 
+<!-- ===================== MODAL / POPUP: Gerar parcelas iguais (com regra de vencimento) ===================== -->
+<div class="modal-overlay" id="modalParcelasIguais" style="z-index:1050;">
+    <div class="modal-caixa">
+        <h4 style="margin-top:0;">Dividir valor em parcelas iguais</h4>
+        <p class="subtitulo" id="parcelasIguaisTotalTexto" style="margin-bottom:14px;"></p>
+
+        <div class="grade col2">
+            <div class="campo"><label>Quantidade de parcelas</label><input type="number" step="1" min="1" id="parcelasIguaisQtd" value="1"></div>
+            <div class="campo"><label>Data do 1º vencimento</label><input type="date" id="parcelasIguaisPrimeiroVencimento"></div>
+        </div>
+
+        <div class="campo" style="margin-top:14px;">
+            <label>Regra para os vencimentos seguintes</label>
+            <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
+                <label style="font-size:0.9em; display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    <input type="radio" name="parcelasIguaisRegra" id="parcelasIguaisRegraDias" value="dias" checked>
+                    Intervalo fixo em dias
+                </label>
+                <label style="font-size:0.9em; display:flex; align-items:center; gap:6px; cursor:pointer;">
+                    <input type="radio" name="parcelasIguaisRegra" id="parcelasIguaisRegraMesmoDia" value="mesmoDia">
+                    Mesmo dia do mês (base: dia do 1º vencimento)
+                </label>
+            </div>
+        </div>
+
+        <div id="parcelasIguaisBlocoDias" style="margin-top:10px;">
+            <label style="font-size:0.85em; color:var(--muted, #666);">Dias entre parcelas</label>
+            <div style="display:flex; gap:6px; margin-top:4px; flex-wrap:wrap; align-items:center;">
+                <button type="button" class="btn btn-cinza btn-pequeno" data-dias="7">7</button>
+                <button type="button" class="btn btn-cinza btn-pequeno" data-dias="10">10</button>
+                <button type="button" class="btn btn-cinza btn-pequeno" data-dias="15">15</button>
+                <button type="button" class="btn btn-cinza btn-pequeno" data-dias="30">30</button>
+                <input type="number" step="1" min="1" id="parcelasIguaisDiasCustom" placeholder="outro" style="width:80px;">
+            </div>
+        </div>
+        <p class="subtitulo" id="parcelasIguaisAvisoMesmoDia" style="display:none; margin-top:10px;">
+            Se o dia do 1º vencimento não existir no mês seguinte (ex: 29, 30 ou 31), a parcela cai no último dia daquele mês.
+        </p>
+
+        <div style="margin-top:16px; text-align:right;">
+            <button class="btn btn-cinza" id="btnCancelarParcelasIguais">Sair</button>
+            <button class="btn btn-verde" id="btnConfirmarParcelasIguais">Gerar parcelas</button>
+        </div>
+        <span class="status-msg" id="statusModalParcelasIguais"></span>
+    </div>
+</div>
+
 <!-- ===================== MODAL / POPUP: Editar título (vencimento/valor/forma) ===================== -->
 <div class="modal-overlay" id="modalEditarTitulo" style="z-index:1050;">
     <div class="modal-caixa">
@@ -939,6 +1033,53 @@
             <button class="btn btn-verde" id="btnSalvarEditarTitulo">Salvar</button>
         </div>
         <span class="status-msg" id="statusEditarTitulo"></span>
+    </div>
+</div>
+
+<!-- ===================== MODAL / POPUP: Baixar Itens da Nota ===================== -->
+<div class="modal-overlay" id="modalBaixaItensNota" style="z-index:1100;">
+    <div class="modal-caixa larga" style="max-width:1200px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <h4 style="margin:0;" id="tituloBaixaItensNota">Baixar itens da nota</h4>
+            <button class="btn btn-cinza btn-pequeno" id="btnFecharBaixaItensNota">✕ Fechar</button>
+        </div>
+        <p class="subtitulo" style="margin-bottom:12px;">Preenche os campos abaixo e clica em "Aplicar a todos" pra usar como padrão em todas as linhas — depois ajusta linha a linha o que precisar. Pra dividir uma linha entre destinos diferentes (ex: 5 unidades, sendo 2 pra um veículo e 3 pra outro), usa o botão "Dividir" na linha.</p>
+
+        <div class="grade col4">
+            <div class="campo"><label>Setor</label><select id="baixaSetor"><option value="">-</option></select></div>
+            <div class="campo"><label>Subsetor</label><select id="baixaSubsetor"><option value="">-</option></select></div>
+            <div class="campo"><label>Veículo / Equipamento</label><select id="baixaVeiculo"><option value="">-</option></select></div>
+            <div class="campo"><label>Plano de Contas</label><select id="baixaPlanoContas"><option value="">-</option></select></div>
+        </div>
+        <div class="grade col4" style="margin-top:10px;">
+            <div class="campo"><label>Data</label><input type="date" id="baixaData"></div>
+            <div class="campo"><label>KM na baixa</label><input type="number" step="1" id="baixaKm"></div>
+            <div class="campo"><label>KM próxima troca</label><input type="number" step="1" id="baixaKmProximaTroca"></div>
+            <div class="campo"><label>Data próxima troca</label><input type="date" id="baixaDataProximaTroca"></div>
+        </div>
+        <div class="grade col2" style="margin-top:10px;">
+            <div class="campo"><label>Evento</label><input type="text" id="baixaEvento"></div>
+            <div class="campo"><label>Responsável pela retirada</label><input type="text" id="baixaResponsavel"></div>
+        </div>
+        <div style="margin-top:10px; text-align:right;">
+            <button class="btn btn-cinza btn-pequeno" id="btnAplicarTodosBaixa">⬇️ Aplicar a todos os itens abaixo</button>
+        </div>
+
+        <table class="tabela" style="margin-top:14px; font-size:0.85em;">
+            <thead>
+                <tr>
+                    <th>Produto</th><th class="num">Vlr Unit.</th><th class="num">Disponível</th><th class="num">Qtd a baixar</th>
+                    <th>Setor</th><th>Subsetor</th><th>Veículo</th><th class="num">KM</th><th class="num">KM Próx.</th><th>Dt. Próx.</th>
+                    <th>Evento</th><th>Plano Contas</th><th>Ações</th>
+                </tr>
+            </thead>
+            <tbody id="corpoBaixaItensNota"></tbody>
+        </table>
+
+        <div style="margin-top:16px; display:flex; justify-content:space-between; align-items:center;">
+            <span class="status-msg" id="statusBaixaItensNota"></span>
+            <button class="btn btn-verde" id="btnConfirmarBaixaItensNota">Confirmar Baixa e Finalizar</button>
+        </div>
     </div>
 </div>
 
@@ -972,6 +1113,15 @@
         <div class="grade col2" style="margin-top:10px;">
             <div class="campo"><label>Quantidade atendida agora</label><input type="number" step="0.01" id="modalQtdAtendida"></div>
             <div class="campo"><label>Quem retirou (responsável)</label><input type="text" id="modalResponsavelRetirada"></div>
+        </div>
+        <div class="campo" style="margin-top:10px;">
+            <label>Valor unitário pra essa saída (R$)</label>
+            <input type="number" step="0.01" id="modalAtenderValorUnit">
+            <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
+                <button type="button" class="btn btn-cinza btn-pequeno" id="btnAtenderUsarPrecoMedio">Preço médio</button>
+                <button type="button" class="btn btn-cinza btn-pequeno" id="btnAtenderUsarUltimaCompra">Última compra</button>
+                <button type="button" class="btn btn-cinza btn-pequeno" id="btnAtenderUsarValorCadastrado">Valor cadastrado</button>
+            </div>
         </div>
         <div class="campo" style="margin-top:10px;"><label>Observação (opcional)</label><input type="text" id="modalObservacaoRetirada"></div>
         <div style="margin-top:16px; text-align:right;">
@@ -1013,7 +1163,8 @@
 <div class="modal-overlay" id="modalQtdInicial">
     <div class="modal-caixa">
         <h4 style="margin-top:0;">Quantidade solicitada</h4>
-        <p class="subtitulo" id="modalQtdInicialProduto" style="margin-bottom:14px;"></p>
+        <p class="subtitulo" id="modalQtdInicialProduto" style="margin-bottom:6px;"></p>
+        <p class="subtitulo" id="modalQtdInicialInfo" style="margin-bottom:14px; font-size:0.85em;"></p>
         <div class="campo">
             <label>Quantidade</label>
             <input type="number" step="0.01" id="modalQtdInicialValor" value="1">
@@ -1027,6 +1178,16 @@
         <div class="campo" id="campoResponsavelAtendeJa" style="margin-top:10px; display:none;">
             <label>Responsável pela retirada</label>
             <input type="text" id="modalQtdInicialResponsavel">
+        </div>
+        <div class="campo" id="campoValorAtendeJa" style="margin-top:10px;">
+            <label>Valor unitário (usado se "Atender imediatamente" estiver marcado)</label>
+            <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
+                <button type="button" class="btn btn-pequeno btn-preco-opcao" id="btnQtdInicialUsarPrecoMedio">Preço médio</button>
+                <button type="button" class="btn btn-pequeno btn-preco-opcao" id="btnQtdInicialUsarUltimaCompra">Última compra</button>
+                <button type="button" class="btn btn-pequeno btn-preco-opcao" id="btnQtdInicialUsarValorCadastrado">Valor cadastrado</button>
+            </div>
+            <p class="subtitulo" id="modalQtdInicialValorEscolhidoTexto" style="margin-top:6px;"></p>
+            <input type="hidden" id="modalQtdInicialValorUnit">
         </div>
         <div style="margin-top:16px; text-align:right;">
             <button class="btn btn-cinza" id="btnCancelarQtdInicial">Sair</button>
@@ -1128,6 +1289,14 @@ function formatarData(v) {
     const s = String(v);
     return s.length >= 10 ? s.slice(0, 10) : s;
 }
+function formatarDataBR(v) {
+    if (!v) return '-';
+    const s = String(v).slice(0, 10);
+    const partes = s.split('-');
+    if (partes.length !== 3) return s;
+    const [y, m, d] = partes;
+    return `${d}/${m}/${y}`;
+}
 function escapeHtml(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -1195,6 +1364,30 @@ async function chamarGet(acao, filtros) {
         if (error) throw error;
         return data;
     }
+    if (acao === 'listarCatalogosBaixa') {
+        const [setores, subsetores, veiculos, planoContas] = await Promise.all([
+            sb.from('unidade_setores').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome'),
+            sb.from('unidade_subsetores').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome'),
+            sb.from('unidade_equipamentos_veiculos').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome'),
+            sb.from('unidade_plano_de_contas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('codigo')
+        ]);
+        if (setores.error) throw setores.error;
+        if (subsetores.error) throw subsetores.error;
+        if (veiculos.error) throw veiculos.error;
+        if (planoContas.error) throw planoContas.error;
+        return {
+            setores: setores.data || [], subsetores: subsetores.data || [],
+            veiculos: veiculos.data || [], planoContas: planoContas.data || []
+        };
+    }
+    if (acao === 'somaBaixadoPorOrigem') {
+        const { data, error } = await sb.from('estoque_movimentacoes')
+            .select('movimentacao_origem_id, qtd')
+            .in('movimentacao_origem_id', filtros.idsOrigem)
+            .eq('tipo', 'saida');
+        if (error) throw error;
+        return data || [];
+    }
     if (acao === 'contarItensTitulosPorNota') {
         const { data: itens, error: e1 } = await sb.from('estoque_movimentacoes').select('estoque_nota_id, qtd, valor_unit').eq('unidade_negocio_id', meuPerfil.unidadeId).not('estoque_nota_id', 'is', null);
         if (e1) throw e1;
@@ -1212,6 +1405,8 @@ async function chamarPost(acao, d) {
             nome: p.nome, un: p.un, valor: p.valor, grupo: p.grupo,
             estoque_inicial: p.estoqueInicial, estoque: p.estoque, almox: p.almox || 1,
             codigo_externo: p.codigoExterno || null,
+            valor_estoque_inicial: p.valorEstoqueInicial,
+            preco_medio: p.precoMedio,
             unidade_negocio_id: meuPerfil.unidadeId
         };
         if (p.id) registro.id = p.id; // se não informado, o banco gera automaticamente
@@ -1227,6 +1422,9 @@ async function chamarPost(acao, d) {
             projeto_id: m.projetoId || null, item_projeto_id: m.itemProjetoId || null,
             nf_numero: m.nfNumero || null, fornecedor_cnpj: m.fornecedorCnpj || null, fornecedor_nome: m.fornecedorNome || null,
             estoque_nota_id: m.estoqueNotaId || null,
+            setor_id: m.setorId || null, subsetor_id: m.subsetorId || null,
+            plano_contas_id: m.planoContasId || null, equipamento_veiculo_id: m.veiculoId || null,
+            km_troca: m.km || null, km_proxima_troca: m.kmProximaTroca || null, dt_proxima_troca: m.dtProximaTroca || null,
             unidade_negocio_id: meuPerfil.unidadeId
         });
         if (e1) throw e1;
@@ -1242,6 +1440,24 @@ async function chamarPost(acao, d) {
             });
             if (e2) throw e2;
         }
+        return;
+    }
+    if (acao === 'registrarMovimentacaoBaixaNota') {
+        const m = d.movimentacao;
+        const { error: e1 } = await sb.from('estoque_movimentacoes').insert({
+            data: m.data, produto_id: m.produtoId, tipo: 'saida', qtd: m.qtd, valor_unit: m.valorUnit,
+            responsavel: m.responsavel || '', observacao: m.observacao || '', evento: m.evento || '',
+            setor_id: m.setorId || null, subsetor_id: m.subsetorId || null,
+            plano_contas_id: m.planoContasId || null, equipamento_veiculo_id: m.veiculoId || null,
+            km_troca: m.km || null, km_proxima_troca: m.kmProximaTroca || null, dt_proxima_troca: m.dtProximaTroca || null,
+            movimentacao_origem_id: m.movimentacaoOrigemId || null,
+            unidade_negocio_id: meuPerfil.unidadeId
+        });
+        if (e1) throw e1;
+        const { error: e2 } = await sb.rpc('fabrica_ajustar_estoque', {
+            p_produto_id: m.produtoId, p_delta: -Number(m.qtd)
+        });
+        if (e2) throw e2;
         return;
     }
     if (acao === 'salvarMapeamentoFornecedor') {
@@ -1327,6 +1543,19 @@ async function chamarPost(acao, d) {
         if (error) throw error;
         return;
     }
+    if (acao === 'removerNota') {
+        // ordem importa: primeiro os filhos (títulos e movimentações), depois a nota
+        const { error: e1 } = await sb.from('estoque_titulos_notas').delete().eq('estoque_nota_id', d.estoqueNotaId);
+        if (e1) throw e1;
+        const { error: e2 } = await sb.from('estoque_movimentacoes').delete().eq('estoque_nota_id', d.estoqueNotaId);
+        if (e2) throw e2;
+        const { error: e3 } = await sb.from('estoque_notas').delete().eq('id', d.estoqueNotaId);
+        if (e3) throw e3;
+        // recalcula estoque, preço médio e última compra a partir do histórico já sem essa nota
+        const { error: e4 } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId });
+        if (e4) throw e4;
+        return;
+    }
     if (acao === 'salvarProjeto') {
         const p = d.projeto;
         const { error } = await sb.from('fabrica_projetos').insert({ descricao: p.descricao, tipo: p.tipo, data: p.data, unidade_negocio_id: meuPerfil.unidadeId });
@@ -1407,7 +1636,8 @@ async function carregarProdutos() {
         estoque: Number(p.estoque) || 0,
         almox: Number(p.almox) || 1,
         precoUltimaCompra: p.preco_ultima_compra != null ? Number(p.preco_ultima_compra) : null,
-        precoMedio: p.preco_medio != null ? Number(p.preco_medio) : null
+        precoMedio: p.preco_medio != null ? Number(p.preco_medio) : null,
+        valorEstoqueInicial: p.valor_estoque_inicial != null ? Number(p.valor_estoque_inicial) : null
     }));
 }
 
@@ -1555,6 +1785,8 @@ function editarProdutoPrompt(id) {
     document.getElementById('editProdutoValor').value = p.valor;
     document.getElementById('editProdutoEstoque').value = p.estoque;
     document.getElementById('editProdutoEstoqueInicial').value = p.estoqueInicial ?? 0;
+    document.getElementById('editProdutoValorEstoqueInicial').value = p.valorEstoqueInicial ?? '';
+    document.getElementById('editProdutoPrecoMedio').value = p.precoMedio ?? '';
     document.getElementById('editProdutoGrupo').value = p.grupo ?? 1;
     document.getElementById('editProdutoAlmox').value = p.almox ?? 1;
     document.getElementById('editProdutoResponsavelAjuste').value = '';
@@ -1602,6 +1834,10 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
     const novoEstoqueInicial = parseFloat(document.getElementById('editProdutoEstoqueInicial').value);
     const novoGrupo = parseInt(document.getElementById('editProdutoGrupo').value, 10);
     const novoAlmox = parseInt(document.getElementById('editProdutoAlmox').value, 10);
+    const valorEstoqueInicialTexto = document.getElementById('editProdutoValorEstoqueInicial').value;
+    const novoValorEstoqueInicial = valorEstoqueInicialTexto === '' ? null : parseFloat(valorEstoqueInicialTexto);
+    const precoMedioTexto = document.getElementById('editProdutoPrecoMedio').value;
+    const novoPrecoMedio = precoMedioTexto === '' ? null : parseFloat(precoMedioTexto);
     if (!novoNome) {
         statusEl.className = 'status-msg erro';
         statusEl.textContent = 'Informe o nome do produto.';
@@ -1610,6 +1846,11 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
     if (isNaN(novoValor) || isNaN(novoEstoque) || isNaN(novoEstoqueInicial) || isNaN(novoGrupo) || isNaN(novoAlmox)) {
         statusEl.className = 'status-msg erro';
         statusEl.textContent = 'Preencha todos os campos numéricos corretamente.';
+        return;
+    }
+    if (novoEstoqueInicial > 0 && (novoValorEstoqueInicial === null || isNaN(novoValorEstoqueInicial))) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Como esse produto tem estoque inicial, informe também o valor unitário dele (senão o "Reprocessar Estoque" não vai funcionar pra ele).';
         return;
     }
 
@@ -1635,7 +1876,9 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
             produto: {
                 ...p, nome: novoNome, codigoExterno: novoCodigoExterno || null, un: novaUn,
                 valor: novoValor, estoque: delta !== 0 ? estoqueAntigo : novoEstoque,
-                estoqueInicial: novoEstoqueInicial, grupo: novoGrupo, almox: novoAlmox
+                estoqueInicial: novoEstoqueInicial, grupo: novoGrupo, almox: novoAlmox,
+                valorEstoqueInicial: novoValorEstoqueInicial,
+                precoMedio: novoPrecoMedio !== null ? novoPrecoMedio : p.precoMedio
             }
         });
 
@@ -1808,7 +2051,7 @@ document.getElementById('btnConfirmarBaixaDireta').addEventListener('click', asy
                 data: document.getElementById('baixaData').value || hojeISO(),
                 produtoId: prod.id,
                 qtd,
-                valorUnit: prod.valor,
+                valorUnit: prod.precoMedio || prod.valor,
                 tipo: 'saida',
                 tag: document.getElementById('baixaTag').value.trim(),
                 evento: document.getElementById('baixaEvento').value.trim(),
@@ -1838,6 +2081,17 @@ document.getElementById('btnConfirmarBaixaDireta').addEventListener('click', asy
    IMPORTAÇÃO DE NF-e (XML)
    ============================================================ */
 let nfeItensParseados = [];
+let importacaoNFeEmAndamento = false;
+
+// Evita fechar/recarregar a aba no meio de uma importação de NF-e em
+// andamento — o processamento roda no navegador (não no backend), então
+// sair da página no meio interrompe a gravação dos itens restantes.
+window.addEventListener('beforeunload', (e) => {
+    if (importacaoNFeEmAndamento) {
+        e.preventDefault();
+        e.returnValue = '';
+    }
+});
 let nfeIndiceVinculoAtual = null;
 let nfeDadosNota = null;
 
@@ -1954,6 +2208,13 @@ document.getElementById('btnFecharModalImportarNFeTopo').addEventListener('click
     document.getElementById('modalImportarNFe').classList.remove('aberto');
 });
 
+document.getElementById('nfeSetor').addEventListener('change', (e) => {
+    const setorId = e.target.value;
+    const selectSubsetor = document.getElementById('nfeSubsetor');
+    const filtrados = setorId ? catalogosBaixa.subsetores.filter(s => String(s.setor_id) === setorId) : catalogosBaixa.subsetores;
+    selectSubsetor.innerHTML = '<option value="">-</option>' + filtrados.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+});
+
 document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
     const arquivo = e.target.files[0];
     if (!arquivo) return;
@@ -1981,6 +2242,18 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
         // de nome parecido, e não colide entre fornecedores diferentes)
         const mapeamentosFornecedor = nfe.emitCnpj ? await chamarGet('listarMapeamentosFornecedor', { cnpjFornecedor: nfe.emitCnpj }) : [];
         const mapaCodigoParaProdutoId = new Map((mapeamentosFornecedor || []).map(m => [m.codigo_fornecedor, m.produto_id]));
+
+        // popula os selects de destinação (setor/subsetor/veículo/plano de
+        // contas), usados só se a pessoa escolher "Baixa Direta" depois
+        catalogosBaixa = await chamarGet('listarCatalogosBaixa');
+        const optSetorNfe = '<option value="">-</option>' + catalogosBaixa.setores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+        const optSubsetorNfe = '<option value="">-</option>' + catalogosBaixa.subsetores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+        const optVeiculoNfe = '<option value="">-</option>' + catalogosBaixa.veiculos.map(v => `<option value="${v.id}">${escapeHtml(v.nome)}${v.placa ? ' — ' + escapeHtml(v.placa) : ''}</option>`).join('');
+        const optPlanoContasNfe = '<option value="">-</option>' + catalogosBaixa.planoContas.map(p => `<option value="${p.id}">${escapeHtml(p.codigo)} — ${escapeHtml(p.descricao)}</option>`).join('');
+        document.getElementById('nfeSetor').innerHTML = optSetorNfe;
+        document.getElementById('nfeSubsetor').innerHTML = optSubsetorNfe;
+        document.getElementById('nfeVeiculo').innerHTML = optVeiculoNfe;
+        document.getElementById('nfePlanoContas').innerHTML = optPlanoContasNfe;
 
         nfeItensParseados = nfe.itens.map(it => {
             const produtoIdMapeado = mapaCodigoParaProdutoId.get(it.cProd);
@@ -2032,7 +2305,22 @@ function renderizarTabelaNFe() {
         inp.addEventListener('change', () => { nfeItensParseados[Number(inp.dataset.nfeUnidade)].un = inp.value.trim().toUpperCase() || 'UN'; });
     });
     corpo.querySelectorAll('[data-nfe-qtd]').forEach(inp => {
-        inp.addEventListener('change', () => { nfeItensParseados[Number(inp.dataset.nfeQtd)].qtd = parseFloat(inp.value) || 0; });
+        inp.addEventListener('change', () => {
+            const i = Number(inp.dataset.nfeQtd);
+            const item = nfeItensParseados[i];
+            // preserva o valor TOTAL que estava lançado (qtd × valor antigos) e
+            // recalcula o valor unitário em cima da quantidade nova — resolve
+            // o caso clássico de "caixa c/10" lançada como 1 unidade: corrige
+            // a quantidade pra 10 e o valor unitário já vem dividido certinho
+            const totalAnterior = Number(item.qtd) * Number(item.valorUnit);
+            const novaQtd = parseFloat(inp.value) || 0;
+            item.qtd = novaQtd;
+            if (novaQtd > 0 && totalAnterior > 0) {
+                item.valorUnit = Math.round((totalAnterior / novaQtd) * 100) / 100;
+                const inputValor = corpo.querySelector(`[data-nfe-valor="${i}"]`);
+                if (inputValor) inputValor.value = item.valorUnit;
+            }
+        });
     });
     corpo.querySelectorAll('[data-nfe-valor]').forEach(inp => {
         inp.addEventListener('change', () => { nfeItensParseados[Number(inp.dataset.nfeValor)].valorUnit = parseFloat(inp.value) || 0; });
@@ -2093,14 +2381,30 @@ async function processarImportacaoNFe(tipo) {
     const evento = document.getElementById('nfeEvento').value.trim();
     const observacaoBase = document.getElementById('nfeObservacao').value.trim();
 
+    // destinação só faz sentido pra baixa direta (produto saindo) — pra
+    // entrada em estoque, fica tudo null mesmo que os campos estejam
+    // preenchidos na tela
+    const destinacao = tipo === 'saida' ? {
+        setorId: document.getElementById('nfeSetor').value || null,
+        subsetorId: document.getElementById('nfeSubsetor').value || null,
+        veiculoId: document.getElementById('nfeVeiculo').value || null,
+        planoContasId: document.getElementById('nfePlanoContas').value || null,
+        km: document.getElementById('nfeKm').value || null,
+        kmProximaTroca: document.getElementById('nfeKmProximaTroca').value || null,
+        dtProximaTroca: document.getElementById('nfeDataProximaTroca').value || null
+    } : {};
+
     if (tipo === 'saida' && nfeItensParseados.some(i => i.criarNovo)) {
         if (!confirm('Alguns itens estão marcados como "novo produto" e serão criados com estoque zerado antes da baixa (o estoque pode ficar negativo). Deseja continuar?')) return;
     }
 
     statusEl.className = '';
-    statusEl.textContent = `Processando ${nfeItensParseados.length} item(ns)...`;
+    statusEl.textContent = `Processando ${nfeItensParseados.length} item(ns)... Não feche esta janela.`;
+    importacaoNFeEmAndamento = true;
     document.getElementById('btnNfeEntrada').disabled = true;
     document.getElementById('btnNfeBaixa').disabled = true;
+    document.getElementById('btnCancelarImportarNFe').disabled = true;
+    document.getElementById('btnFecharModalImportarNFeTopo').disabled = true;
 
     try {
         // 1) grava a nota primeiro — todo o resto se liga a ela pelo id
@@ -2138,7 +2442,9 @@ async function processarImportacaoNFe(tipo) {
         }
 
         // 2) itens: cria produto se precisar, e a movimentação já ligada à nota
-        for (const item of nfeItensParseados) {
+        for (let idx = 0; idx < nfeItensParseados.length; idx++) {
+            const item = nfeItensParseados[idx];
+            statusEl.textContent = `Processando item ${idx + 1} de ${nfeItensParseados.length}... Não feche esta janela.`;
             let produtoId = item.produtoVinculadoId;
             if (item.criarNovo || !produtoId) {
                 const criado = await chamarPost('salvarProduto', {
@@ -2179,7 +2485,8 @@ async function processarImportacaoNFe(tipo) {
                     nfNumero: nfeDadosNota ? nfeDadosNota.nNF : '',
                     fornecedorCnpj: nfeDadosNota ? nfeDadosNota.emitCnpj : '',
                     fornecedorNome: nfeDadosNota ? nfeDadosNota.emitNome : '',
-                    estoqueNotaId
+                    estoqueNotaId,
+                    ...destinacao
                 }
             });
         }
@@ -2221,8 +2528,11 @@ async function processarImportacaoNFe(tipo) {
         statusEl.className = 'status-msg erro';
         statusEl.textContent = '⚠️ ' + err.message;
     } finally {
+        importacaoNFeEmAndamento = false;
         document.getElementById('btnNfeEntrada').disabled = false;
         document.getElementById('btnNfeBaixa').disabled = false;
+        document.getElementById('btnCancelarImportarNFe').disabled = false;
+        document.getElementById('btnFecharModalImportarNFeTopo').disabled = false;
     }
 }
 
@@ -2261,16 +2571,21 @@ document.getElementById('btnSalvarProduto').addEventListener('click', async () =
     }
     const codigoExterno = document.getElementById('npCodigoExterno').value.trim();
     const estoqueInicial = parseFloat(document.getElementById('npEstoque').value) || 0;
+    const valorDeclarado = parseFloat(document.getElementById('npValor').value) || 0;
     const novo = {
         id: codigo ? Number(codigo) : undefined, // se não informado, o banco gera automaticamente
         codigoExterno: codigoExterno || null,
         nome: nome.toUpperCase(),
-        valor: parseFloat(document.getElementById('npValor').value) || 0,
+        valor: valorDeclarado,
         un: document.getElementById('npUn').value.trim().toUpperCase() || 'UN',
         grupo: parseInt(document.getElementById('npGrupo').value) || 1,
         estoqueInicial: estoqueInicial,
         estoque: estoqueInicial,
-        almox: 1
+        almox: 1,
+        // sem nenhuma entrada lançada ainda, o preço médio É o valor do
+        // estoque inicial — não tem outra coisa pra ponderar contra
+        valorEstoqueInicial: estoqueInicial > 0 ? valorDeclarado : null,
+        precoMedio: estoqueInicial > 0 ? valorDeclarado : null
     };
     statusEl.className = '';
     statusEl.textContent = 'Salvando...';
@@ -2306,15 +2621,19 @@ function renderizarResultadosBusca(containerId, termo, aoSelecionar) {
     lista.forEach(p => {
         const div = document.createElement('div');
         div.className = 'item-resultado';
+        div.style.cursor = 'pointer';
         const estoqueClasse = p.estoque <= 0 ? 'estoque-baixo' : '';
         div.innerHTML = `
             <div class="info-resultado">
                 <span class="cod">#${p.id}</span> — ${escapeHtml(p.nome)}<br>
                 <span class="preco">${formatarMoeda(p.valor)}</span> · <span class="${estoqueClasse}">estoque: ${Number(p.estoque).toLocaleString('pt-BR')}</span>
             </div>
-            <button class="btn btn-verde btn-pequeno">Selecionar</button>
         `;
-        div.querySelector('button').addEventListener('click', () => aoSelecionar(p));
+        div.addEventListener('click', () => {
+            el.classList.remove('aberto');
+            el.innerHTML = '';
+            aoSelecionar(p);
+        });
         el.appendChild(div);
     });
     el.classList.add('aberto');
@@ -2620,11 +2939,9 @@ function renderizarResultadosEvento(termo) {
     lista.forEach(ev => {
         const div = document.createElement('div');
         div.className = 'item-resultado';
-        div.innerHTML = `
-            <div class="info-resultado"><span class="cod">${escapeHtml(ev.codigo)}</span> — ${escapeHtml(ev.descricao)}</div>
-            <button class="btn btn-verde btn-pequeno">Selecionar</button>
-        `;
-        div.querySelector('button').addEventListener('click', () => selecionarEvento(ev));
+        div.style.cursor = 'pointer';
+        div.innerHTML = `<div class="info-resultado"><span class="cod">${escapeHtml(ev.codigo)}</span> — ${escapeHtml(ev.descricao)}</div>`;
+        div.addEventListener('click', () => selecionarEvento(ev));
         el.appendChild(div);
     });
     el.classList.add('aberto');
@@ -2727,19 +3044,45 @@ function adicionarProdutoAoProjeto(p) {
 
     produtoPendenteAdicionar = p;
     document.getElementById('modalQtdInicialProduto').textContent = `#${p.id} — ${p.nome}`;
+    document.getElementById('modalQtdInicialInfo').innerHTML =
+        `Estoque disponível: <strong>${Number(p.estoque).toLocaleString('pt-BR')}</strong> · ` +
+        `Valor cadastrado: <strong>${formatarMoeda(p.valor)}</strong> · ` +
+        `Última compra: <strong>${formatarMoeda(p.precoUltimaCompra)}</strong> · ` +
+        `Preço médio: <strong>${formatarMoeda(p.precoMedio)}</strong>`;
     document.getElementById('modalQtdInicialValor').value = 1;
     document.getElementById('modalQtdInicialAtenderJa').checked = false;
     document.getElementById('modalQtdInicialResponsavel').value = '';
     document.getElementById('campoResponsavelAtendeJa').style.display = 'none';
     document.getElementById('statusModalQtdInicial').textContent = '';
+    escolherPrecoQtdInicial(p.precoMedio || p.valor || 0, document.getElementById('btnQtdInicialUsarPrecoMedio'));
     document.getElementById('modalQtdInicial').classList.add('aberto');
     document.getElementById('modalQtdInicialValor').focus();
     document.getElementById('modalQtdInicialValor').select();
 }
 
 document.getElementById('modalQtdInicialAtenderJa').addEventListener('change', () => {
-    document.getElementById('campoResponsavelAtendeJa').style.display =
-        document.getElementById('modalQtdInicialAtenderJa').checked ? 'block' : 'none';
+    const marcado = document.getElementById('modalQtdInicialAtenderJa').checked;
+    document.getElementById('campoResponsavelAtendeJa').style.display = marcado ? 'block' : 'none';
+});
+
+function escolherPrecoQtdInicial(valor, botaoAtivo) {
+    document.getElementById('modalQtdInicialValorUnit').value = valor;
+    document.getElementById('modalQtdInicialValorEscolhidoTexto').textContent = `Valor escolhido: ${formatarMoeda(valor)}`;
+    document.querySelectorAll('.btn-preco-opcao').forEach(b => b.classList.remove('ativo'));
+    botaoAtivo.classList.add('ativo');
+}
+
+document.getElementById('btnQtdInicialUsarPrecoMedio').addEventListener('click', (e) => {
+    const p = produtoPendenteAdicionar;
+    escolherPrecoQtdInicial(p.precoMedio || p.valor || 0, e.target);
+});
+document.getElementById('btnQtdInicialUsarUltimaCompra').addEventListener('click', (e) => {
+    const p = produtoPendenteAdicionar;
+    escolherPrecoQtdInicial(p.precoUltimaCompra || p.valor || 0, e.target);
+});
+document.getElementById('btnQtdInicialUsarValorCadastrado').addEventListener('click', (e) => {
+    const p = produtoPendenteAdicionar;
+    escolherPrecoQtdInicial(p.valor || 0, e.target);
 });
 
 document.getElementById('btnCancelarQtdInicial').addEventListener('click', () => {
@@ -2769,6 +3112,12 @@ document.getElementById('btnConfirmarQtdInicial').addEventListener('click', asyn
         statusModalEl.textContent = 'Informe quem retirou, pra atender imediatamente.';
         return;
     }
+    const valorUnitAtendeJa = parseFloat(document.getElementById('modalQtdInicialValorUnit').value);
+    if (atenderJa && (isNaN(valorUnitAtendeJa) || valorUnitAtendeJa < 0)) {
+        statusModalEl.className = 'status-msg erro';
+        statusModalEl.textContent = 'Informe um valor unitário válido pra essa saída.';
+        return;
+    }
 
     statusModalEl.className = '';
     statusModalEl.textContent = 'Salvando...';
@@ -2794,7 +3143,7 @@ document.getElementById('btnConfirmarQtdInicial').addEventListener('click', asyn
                     data: document.getElementById('cabData').value || hojeISO(),
                     produtoId: p.id,
                     qtd,
-                    valorUnit: p.valor,
+                    valorUnit: valorUnitAtendeJa,
                     tipo: 'saida',
                     tag: tagAtual,
                     evento: eventoAtual,
@@ -2847,10 +3196,33 @@ function abrirModalAtender(itemId) {
     document.getElementById('modalQtdAtendida').value = restante > 0 ? restante : '';
     document.getElementById('modalResponsavelRetirada').value = '';
     document.getElementById('modalObservacaoRetirada').value = '';
+    // padrão: preço médio. Se o produto ainda não tem preço médio calculado
+    // (nenhuma entrada lançada ainda), cai pro valor cadastrado
+    const precoMedioOuValor = (prod && prod.precoMedio) ? prod.precoMedio : (prod ? prod.valor : 0);
+    document.getElementById('modalAtenderValorUnit').value = precoMedioOuValor;
     document.getElementById('statusModalAtender').textContent = '';
     renderizarListaAtendimentosItem(itemId);
     document.getElementById('modalAtender').classList.add('aberto');
 }
+
+document.getElementById('btnAtenderUsarPrecoMedio').addEventListener('click', () => {
+    const proj = projetos.find(p => p.id === projetoAtualId);
+    const item = proj.itens.find(i => i.id === itemAtualAtendimentoId);
+    const prod = produtos.find(p => p.id === item.produtoId);
+    document.getElementById('modalAtenderValorUnit').value = prod.precoMedio || prod.valor || 0;
+});
+document.getElementById('btnAtenderUsarUltimaCompra').addEventListener('click', () => {
+    const proj = projetos.find(p => p.id === projetoAtualId);
+    const item = proj.itens.find(i => i.id === itemAtualAtendimentoId);
+    const prod = produtos.find(p => p.id === item.produtoId);
+    document.getElementById('modalAtenderValorUnit').value = prod.precoUltimaCompra || prod.valor || 0;
+});
+document.getElementById('btnAtenderUsarValorCadastrado').addEventListener('click', () => {
+    const proj = projetos.find(p => p.id === projetoAtualId);
+    const item = proj.itens.find(i => i.id === itemAtualAtendimentoId);
+    const prod = produtos.find(p => p.id === item.produtoId);
+    document.getElementById('modalAtenderValorUnit').value = prod.valor || 0;
+});
 
 function renderizarListaAtendimentosItem(itemId) {
     const el = document.getElementById('listaAtendimentosItem');
@@ -3002,12 +3374,18 @@ document.getElementById('btnConfirmarAtender').addEventListener('click', async (
 
     const tagAtual = document.getElementById('modalAtenderTag').value.trim();
     const eventoAtual = document.getElementById('modalAtenderEvento').value.trim();
+    const valorUnitEscolhido = parseFloat(document.getElementById('modalAtenderValorUnit').value);
+    if (isNaN(valorUnitEscolhido) || valorUnitEscolhido < 0) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Informe um valor unitário válido pra essa saída.';
+        return;
+    }
 
     const mov = {
         data: document.getElementById('cabData').value || hojeISO(),
         produtoId: prod.id,
         qtd,
-        valorUnit: prod.valor,
+        valorUnit: valorUnitEscolhido,
         tipo: 'saida',
         tag: tagAtual,
         evento: eventoAtual,
@@ -3793,11 +4171,9 @@ function renderizarResultadosEventoRelatorio(termo) {
     lista.forEach(ev => {
         const div = document.createElement('div');
         div.className = 'item-resultado';
-        div.innerHTML = `
-            <div class="info-resultado"><span class="cod">${escapeHtml(ev.codigo)}</span> — ${escapeHtml(ev.descricao)}</div>
-            <button class="btn btn-verde btn-pequeno">Selecionar</button>
-        `;
-        div.querySelector('button').addEventListener('click', () => {
+        div.style.cursor = 'pointer';
+        div.innerHTML = `<div class="info-resultado"><span class="cod">${escapeHtml(ev.codigo)}</span> — ${escapeHtml(ev.descricao)}</div>`;
+        div.addEventListener('click', () => {
             eventoSelecionadoRelatorio = ev;
             document.getElementById('relEventoSelecionado').innerHTML = `Selecionado: <strong>${escapeHtml(ev.codigo)} — ${escapeHtml(ev.descricao)}</strong>`;
             el.classList.remove('aberto');
@@ -3824,23 +4200,51 @@ document.getElementById('btnReprocessarEstoque').addEventListener('click', async
         if (!data || data.length === 0) {
             resultadoEl.innerHTML = `<p class="status-msg sucesso">✅ Tudo certo — nenhum produto precisou de ajuste.</p>`;
         } else {
-            const linhas = data.map(r => `
-                <tr>
-                    <td>#${r.produto_id} — ${escapeHtml(r.nome)}</td>
-                    <td class="num">${Number(r.estoque_anterior).toLocaleString('pt-BR')}</td>
-                    <td class="num">${Number(r.estoque_recalculado).toLocaleString('pt-BR')}</td>
-                    <td class="num" style="color:${Number(r.diferenca_estoque) < 0 ? '#c62828' : '#2e7d32'};">${Number(r.diferenca_estoque) > 0 ? '+' : ''}${Number(r.diferenca_estoque).toLocaleString('pt-BR')}</td>
-                    <td class="num" style="${Number(r.preco_medio_anterior) !== Number(r.preco_medio_recalculado) ? 'color:#b45309; font-weight:600;' : ''}">${formatarMoeda(r.preco_medio_anterior)} → ${formatarMoeda(r.preco_medio_recalculado)}</td>
-                    <td class="num" style="${Number(r.preco_ultima_compra_anterior) !== Number(r.preco_ultima_compra_recalculado) ? 'color:#b45309; font-weight:600;' : ''}">${formatarMoeda(r.preco_ultima_compra_anterior)} → ${formatarMoeda(r.preco_ultima_compra_recalculado)}</td>
-                </tr>
-            `).join('');
-            resultadoEl.innerHTML = `
-                <p class="status-msg sucesso">⚠️ ${data.length} produto(s) corrigido(s):</p>
-                <table class="tabela" style="margin-top:8px;">
-                    <thead><tr><th>Produto</th><th class="num">Estoque estava</th><th class="num">Correto</th><th class="num">Diferença</th><th class="num">Preço médio</th><th class="num">Última compra</th></tr></thead>
-                    <tbody>${linhas}</tbody>
-                </table>
-            `;
+            const pulados = data.filter(r => r.pulado_motivo);
+            const corrigidos = data.filter(r => !r.pulado_motivo);
+            let html = '';
+
+            if (pulados.length > 0) {
+                const linhasPuladas = pulados.map(r => `
+                    <tr>
+                        <td>#${r.produto_id} — ${escapeHtml(r.nome)}</td>
+                        <td>${escapeHtml(r.pulado_motivo)}</td>
+                        <td class="center"><button class="btn btn-cinza btn-pequeno" data-editar-produto-reprocessar="${r.produto_id}">Editar produto</button></td>
+                    </tr>
+                `).join('');
+                html += `
+                    <p class="status-msg" style="background:#FFF8E1; color:#8A5E12; border:1px solid #F2A93B;">⚠️ ${pulados.length} produto(s) pulado(s) — precisam de informação antes de reprocessar:</p>
+                    <table class="tabela" style="margin-top:8px; margin-bottom:16px;">
+                        <thead><tr><th>Produto</th><th>Motivo</th><th>Ação</th></tr></thead>
+                        <tbody>${linhasPuladas}</tbody>
+                    </table>
+                `;
+            }
+
+            if (corrigidos.length > 0) {
+                const linhas = corrigidos.map(r => `
+                    <tr>
+                        <td>#${r.produto_id} — ${escapeHtml(r.nome)}</td>
+                        <td class="num">${Number(r.estoque_anterior).toLocaleString('pt-BR')}</td>
+                        <td class="num">${Number(r.estoque_recalculado).toLocaleString('pt-BR')}</td>
+                        <td class="num" style="color:${Number(r.diferenca_estoque) < 0 ? '#c62828' : '#2e7d32'};">${Number(r.diferenca_estoque) > 0 ? '+' : ''}${Number(r.diferenca_estoque).toLocaleString('pt-BR')}</td>
+                        <td class="num" style="${Number(r.preco_medio_anterior) !== Number(r.preco_medio_recalculado) ? 'color:#b45309; font-weight:600;' : ''}">${formatarMoeda(r.preco_medio_anterior)} → ${formatarMoeda(r.preco_medio_recalculado)}</td>
+                        <td class="num" style="${Number(r.preco_ultima_compra_anterior) !== Number(r.preco_ultima_compra_recalculado) ? 'color:#b45309; font-weight:600;' : ''}">${formatarMoeda(r.preco_ultima_compra_anterior)} → ${formatarMoeda(r.preco_ultima_compra_recalculado)}</td>
+                    </tr>
+                `).join('');
+                html += `
+                    <p class="status-msg sucesso">✅ ${corrigidos.length} produto(s) corrigido(s):</p>
+                    <table class="tabela" style="margin-top:8px;">
+                        <thead><tr><th>Produto</th><th class="num">Estoque estava</th><th class="num">Correto</th><th class="num">Diferença</th><th class="num">Preço médio</th><th class="num">Última compra</th></tr></thead>
+                        <tbody>${linhas}</tbody>
+                    </table>
+                `;
+            }
+
+            resultadoEl.innerHTML = html;
+            resultadoEl.querySelectorAll('[data-editar-produto-reprocessar]').forEach(btn2 => {
+                btn2.addEventListener('click', () => editarProdutoPrompt(Number(btn2.dataset.editarProdutoReprocessar)));
+            });
             await carregarProdutos();
             renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
         }
@@ -3973,8 +4377,9 @@ document.getElementById('movFiltroEventoBusca').addEventListener('input', () => 
     lista.forEach(ev => {
         const div = document.createElement('div');
         div.className = 'item-resultado';
-        div.innerHTML = `<div class="info-resultado"><span class="cod">${escapeHtml(ev.codigo)}</span> — ${escapeHtml(ev.descricao)}</div><button class="btn btn-verde btn-pequeno">Selecionar</button>`;
-        div.querySelector('button').addEventListener('click', () => {
+        div.style.cursor = 'pointer';
+        div.innerHTML = `<div class="info-resultado"><span class="cod">${escapeHtml(ev.codigo)}</span> — ${escapeHtml(ev.descricao)}</div>`;
+        div.addEventListener('click', () => {
             movFiltroEventoCodigo = ev.codigo;
             document.getElementById('movFiltroEventoSelecionado').innerHTML = `Filtrando: <strong>${escapeHtml(ev.codigo)} — ${escapeHtml(ev.descricao)}</strong> <a href="#" data-limpar-evento style="color:#b00020;">(remover)</a>`;
             el.classList.remove('aberto');
@@ -4045,6 +4450,14 @@ document.getElementById('btnSalvarEditarMovGeral').addEventListener('click', asy
             novoValorUnit,
             observacao: novaObservacao
         });
+        // editar quantidade/valor de uma movimentação já lançada não dá pra
+        // corrigir o preço médio incrementalmente (a média ponderada depende
+        // da ordem cronológica de tudo) — por isso, depois de qualquer edição,
+        // reprocessa automaticamente pra garantir que estoque e preço médio
+        // do produto continuam batendo com o histórico real
+        const { error: erroReprocessar } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId });
+        if (erroReprocessar) throw erroReprocessar;
+
         document.getElementById('modalEditarMovGeral').classList.remove('aberto');
         movGeralEmEdicaoId = null;
         await Promise.all([carregarProdutos(), carregarMovimentacoes()]);
@@ -4193,6 +4606,26 @@ document.getElementById('btnFecharNotaEntrada').addEventListener('click', () => 
     carregarListaNotasEntrada();
 });
 
+document.getElementById('btnRemoverNotaEntrada').addEventListener('click', async () => {
+    if (!notaEmEdicaoId) return;
+    if (!confirm('Isso vai remover a nota, todos os itens (movimentações) e todos os títulos/vencimentos lançados por ela, e recalcular o estoque e os preços dos produtos afetados. Não tem como desfazer. Continuar?')) return;
+
+    const btn = document.getElementById('btnRemoverNotaEntrada');
+    btn.disabled = true;
+    const textoOriginal = btn.textContent;
+    btn.textContent = 'Removendo...';
+    try {
+        await chamarPost('removerNota', { estoqueNotaId: notaEmEdicaoId });
+        document.getElementById('modalNotaEntrada').classList.remove('aberto');
+        await carregarListaNotasEntrada();
+    } catch (err) {
+        alert('Erro ao remover nota: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = textoOriginal;
+    }
+});
+
 function limparFormularioNota() {
     ['notaNumeroNf', 'notaSerie', 'notaDataEmissao', 'notaDataEntrada', 'notaFornecedorNome', 'notaFornecedorCnpj',
      'notaResponsavel', 'notaChaveAcesso', 'notaObservacoes'].forEach(id => document.getElementById(id).value = '');
@@ -4210,6 +4643,8 @@ function abrirNovaNotaEntrada() {
     document.getElementById('tituloNotaEntrada').textContent = 'Nova entrada direta';
     document.getElementById('origemNotaEntrada').textContent = 'Preencha o cabeçalho e clique em "Salvar cabeçalho" pra liberar o lançamento de itens e títulos.';
     document.getElementById('blocoItensTitulosNota').style.display = 'none';
+    document.getElementById('btnRemoverNotaEntrada').style.display = 'none';
+    document.getElementById('btnBaixarItensNota').style.display = 'none';
     document.getElementById('modalNotaEntrada').classList.add('aberto');
 }
 
@@ -4237,6 +4672,8 @@ async function abrirNotaEntradaExistente(notaId) {
         document.getElementById('statusNotaEntrada').textContent = '';
 
         document.getElementById('blocoItensTitulosNota').style.display = 'block';
+        document.getElementById('btnRemoverNotaEntrada').style.display = '';
+        document.getElementById('btnBaixarItensNota').style.display = '';
         await carregarItensETitulosDaNota(notaId);
         document.getElementById('modalNotaEntrada').classList.add('aberto');
     } catch (err) {
@@ -4308,7 +4745,7 @@ function renderizarTitulosNota() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${escapeHtml(t.numero_titulo) || '-'}</td>
-            <td>${formatarData(t.data_vencimento)}</td>
+            <td>${formatarDataBR(t.data_vencimento)}</td>
             <td class="num">${formatarMoeda(t.valor)}</td>
             <td>${escapeHtml(t.forma_pagamento) || '-'}</td>
             <td><span class="pill ${t.origem === 'xml' ? 'pill-entrada' : 'pill-saida'}">${t.origem === 'xml' ? 'XML' : 'Manual'}</span></td>
@@ -4465,13 +4902,104 @@ document.getElementById('btnAdicionarTituloNota').addEventListener('click', asyn
     }
 });
 
-document.getElementById('btnGerarParcelasIguais').addEventListener('click', async () => {
+/* ---------- gerar parcelas iguais (com regra de vencimento) ---------- */
+
+// Converte uma string 'YYYY-MM-DD' (valor de <input type=date>) num Date local,
+// sem passar por UTC (evita o input "voltar um dia" conforme fuso horário).
+function parseDataInputLocal(str) {
+    const [y, m, d] = str.split('-').map(Number);
+    return new Date(y, m - 1, d);
+}
+
+// Formata um Date local de volta para 'YYYY-MM-DD'.
+function formatarDataISOLocal(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+// Soma "mesesSomar" meses a partir de "dataBase", preservando o dia original.
+// Se o mês de destino não tiver esse dia (ex: 31, 30 ou 29/02 fora de bissexto),
+// usa o último dia daquele mês.
+function addMonthsClamped(dataBase, mesesSomar) {
+    const dia = dataBase.getDate();
+    const alvo = new Date(dataBase.getFullYear(), dataBase.getMonth() + mesesSomar, 1);
+    const ultimoDiaAlvo = new Date(alvo.getFullYear(), alvo.getMonth() + 1, 0).getDate();
+    alvo.setDate(Math.min(dia, ultimoDiaAlvo));
+    return alvo;
+}
+
+// Gera as N datas de vencimento a partir da data do 1º vencimento e da regra escolhida.
+// regra: 'dias' (intervalo fixo) ou 'mesmoDia' (mesmo dia do mês, com clamping de fim de mês).
+function calcularVencimentosParcelas(primeiroVencimentoStr, qtdParcelas, regra, intervaloDias) {
+    const dataInicial = parseDataInputLocal(primeiroVencimentoStr);
+    const vencimentos = [];
+    for (let i = 0; i < qtdParcelas; i++) {
+        let dataParcela;
+        if (regra === 'mesmoDia') {
+            dataParcela = addMonthsClamped(dataInicial, i);
+        } else {
+            dataParcela = new Date(dataInicial.getFullYear(), dataInicial.getMonth(), dataInicial.getDate() + (intervaloDias * i));
+        }
+        vencimentos.push(formatarDataISOLocal(dataParcela));
+    }
+    return vencimentos;
+}
+
+document.getElementById('btnGerarParcelasIguais').addEventListener('click', () => {
     if (!notaEmEdicaoId) { alert('Salve o cabeçalho da nota primeiro.'); return; }
     const totalItens = itensNotaAtual.reduce((acc, m) => acc + Number(m.qtd) * Number(m.valor_unit), 0);
     if (totalItens <= 0) { alert('Lance os itens primeiro — a divisão usa o total dos itens.'); return; }
-    const qtdParcelasTexto = prompt('Dividir em quantas parcelas?', '1');
-    const qtdParcelas = parseInt(qtdParcelasTexto, 10);
-    if (!qtdParcelas || qtdParcelas <= 0) return;
+
+    document.getElementById('parcelasIguaisTotalTexto').textContent = `Total a parcelar: ${formatarMoeda(totalItens)}`;
+    document.getElementById('parcelasIguaisQtd').value = '1';
+    document.getElementById('parcelasIguaisPrimeiroVencimento').value = '';
+    document.getElementById('parcelasIguaisDiasCustom').value = '';
+    document.getElementById('parcelasIguaisRegraDias').checked = true;
+    document.getElementById('parcelasIguaisRegraMesmoDia').checked = false;
+    document.getElementById('parcelasIguaisBlocoDias').style.display = '';
+    document.getElementById('parcelasIguaisAvisoMesmoDia').style.display = 'none';
+    document.getElementById('statusModalParcelasIguais').textContent = '';
+    document.getElementById('modalParcelasIguais').classList.add('aberto');
+});
+
+document.getElementById('btnCancelarParcelasIguais').addEventListener('click', () => {
+    document.getElementById('modalParcelasIguais').classList.remove('aberto');
+});
+
+document.querySelectorAll('#parcelasIguaisBlocoDias [data-dias]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.getElementById('parcelasIguaisDiasCustom').value = btn.dataset.dias;
+    });
+});
+
+document.getElementById('parcelasIguaisRegraDias').addEventListener('change', atualizarBlocoRegraParcelasIguais);
+document.getElementById('parcelasIguaisRegraMesmoDia').addEventListener('change', atualizarBlocoRegraParcelasIguais);
+function atualizarBlocoRegraParcelasIguais() {
+    const mesmoDia = document.getElementById('parcelasIguaisRegraMesmoDia').checked;
+    document.getElementById('parcelasIguaisBlocoDias').style.display = mesmoDia ? 'none' : '';
+    document.getElementById('parcelasIguaisAvisoMesmoDia').style.display = mesmoDia ? '' : 'none';
+}
+
+document.getElementById('btnConfirmarParcelasIguais').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusModalParcelasIguais');
+    statusEl.textContent = '';
+
+    const totalItens = itensNotaAtual.reduce((acc, m) => acc + Number(m.qtd) * Number(m.valor_unit), 0);
+    const qtdParcelas = parseInt(document.getElementById('parcelasIguaisQtd').value, 10);
+    const primeiroVencimento = document.getElementById('parcelasIguaisPrimeiroVencimento').value;
+    const regra = document.getElementById('parcelasIguaisRegraMesmoDia').checked ? 'mesmoDia' : 'dias';
+    const intervaloDias = parseInt(document.getElementById('parcelasIguaisDiasCustom').value, 10);
+
+    if (!qtdParcelas || qtdParcelas <= 0) { statusEl.textContent = 'Informe a quantidade de parcelas.'; return; }
+    if (!primeiroVencimento) { statusEl.textContent = 'Informe a data do 1º vencimento.'; return; }
+    if (regra === 'dias' && (!intervaloDias || intervaloDias <= 0)) {
+        statusEl.textContent = 'Informe o intervalo em dias (ou escolha um dos valores rápidos).';
+        return;
+    }
+
+    const vencimentos = calcularVencimentosParcelas(primeiroVencimento, qtdParcelas, regra, intervaloDias);
 
     const valorParcela = Math.round((totalItens / qtdParcelas) * 100) / 100;
     const titulos = [];
@@ -4479,13 +5007,21 @@ document.getElementById('btnGerarParcelasIguais').addEventListener('click', asyn
     for (let i = 1; i <= qtdParcelas; i++) {
         const valor = i === qtdParcelas ? Math.round(restante * 100) / 100 : valorParcela;
         restante -= valor;
-        titulos.push({ numeroTitulo: `${i}/${qtdParcelas}`, dataVencimento: null, valor, formaPagamento: '', origem: 'manual' });
+        titulos.push({
+            numeroTitulo: `${i}/${qtdParcelas}`,
+            dataVencimento: vencimentos[i - 1],
+            valor,
+            formaPagamento: '',
+            origem: 'manual'
+        });
     }
+
     try {
         await chamarPost('salvarTitulosNota', { estoqueNotaId: notaEmEdicaoId, titulos });
+        document.getElementById('modalParcelasIguais').classList.remove('aberto');
         await carregarItensETitulosDaNota(notaEmEdicaoId);
     } catch (err) {
-        alert('Erro ao gerar parcelas: ' + err.message);
+        statusEl.textContent = 'Erro ao gerar parcelas: ' + err.message;
     }
 });
 
@@ -4529,6 +5065,229 @@ document.getElementById('btnSalvarEditarTitulo').addEventListener('click', async
     } catch (err) {
         statusEl.className = 'status-msg erro';
         statusEl.textContent = '⚠️ ' + err.message;
+    }
+});
+
+/* =========================================================================
+   BAIXAR ITENS DA NOTA — pega os itens (entradas) de uma nota já salva
+   e gera saídas de estoque pra setor/veículo/evento/plano de contas,
+   podendo dividir a quantidade de um mesmo item entre destinos
+   diferentes. Rastreia quanto de cada item já foi baixado (pra
+   permitir baixar aos poucos, em sessões diferentes).
+   ========================================================================= */
+let itensBaixaAtual = [];
+let catalogosBaixa = { setores: [], subsetores: [], veiculos: [], planoContas: [] };
+let proximoIdLinhaBaixa = 1;
+
+async function abrirModalBaixaItensNota() {
+    if (!notaEmEdicaoId) return;
+    document.getElementById('tituloBaixaItensNota').textContent = `Baixar itens — NF ${document.getElementById('notaNumeroNf').value || '#' + notaEmEdicaoId}`;
+    document.getElementById('statusBaixaItensNota').textContent = '';
+    document.getElementById('baixaSetor').value = '';
+    document.getElementById('baixaSubsetor').value = '';
+    document.getElementById('baixaVeiculo').value = '';
+    document.getElementById('baixaPlanoContas').value = '';
+    document.getElementById('baixaData').value = hojeISO();
+    document.getElementById('baixaKm').value = '';
+    document.getElementById('baixaKmProximaTroca').value = '';
+    document.getElementById('baixaDataProximaTroca').value = '';
+    document.getElementById('baixaEvento').value = '';
+    document.getElementById('baixaResponsavel').value = '';
+
+    try {
+        catalogosBaixa = await chamarGet('listarCatalogosBaixa');
+        popularSelectsCatalogosBaixa();
+
+        // itensNotaAtual já está carregado (é a nota aberta) — pega só
+        // as entradas (todo item de nota é entrada, mas confere por
+        // garantia caso um dia isso mude)
+        const itensEntrada = itensNotaAtual.filter(m => m.tipo === 'entrada');
+        const idsOrigem = itensEntrada.map(m => m.id);
+
+        let jaBaixadoPorOrigem = {};
+        if (idsOrigem.length > 0) {
+            const somas = await chamarGet('somaBaixadoPorOrigem', { idsOrigem });
+            somas.forEach(s => {
+                jaBaixadoPorOrigem[s.movimentacao_origem_id] = (jaBaixadoPorOrigem[s.movimentacao_origem_id] || 0) + Number(s.qtd);
+            });
+        }
+
+        itensBaixaAtual = itensEntrada.map(item => {
+            const prod = produtos.find(p => p.id === item.produto_id);
+            const jaBaixado = jaBaixadoPorOrigem[item.id] || 0;
+            const disponivel = Number(item.qtd) - jaBaixado;
+            return {
+                linhaId: proximoIdLinhaBaixa++,
+                itemOrigemId: item.id,
+                produtoId: item.produto_id,
+                produtoNome: prod ? prod.nome : ('#' + item.produto_id),
+                valorUnit: Number(item.valor_unit),
+                qtdDisponivelTotal: disponivel,
+                qtdABaixar: disponivel > 0 ? disponivel : 0,
+                setorId: '', subsetorId: '', veiculoId: '',
+                km: '', kmProximaTroca: '', dtProximaTroca: '',
+                evento: '', planoContasId: ''
+            };
+        });
+
+        renderGridBaixa();
+        document.getElementById('modalBaixaItensNota').classList.add('aberto');
+    } catch (err) {
+        alert('Erro ao abrir baixa de itens: ' + err.message);
+    }
+}
+
+document.getElementById('btnBaixarItensNota').addEventListener('click', abrirModalBaixaItensNota);
+document.getElementById('btnFecharBaixaItensNota').addEventListener('click', () => {
+    document.getElementById('modalBaixaItensNota').classList.remove('aberto');
+});
+
+function popularSelectsCatalogosBaixa() {
+    const optSetor = '<option value="">-</option>' + catalogosBaixa.setores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+    const optSubsetor = '<option value="">-</option>' + catalogosBaixa.subsetores.map(s => `<option value="${s.id}" data-setor="${s.setor_id}">${escapeHtml(s.nome)}</option>`).join('');
+    const optVeiculo = '<option value="">-</option>' + catalogosBaixa.veiculos.map(v => `<option value="${v.id}">${escapeHtml(v.nome)}${v.placa ? ' — ' + escapeHtml(v.placa) : ''}</option>`).join('');
+    const optPlanoContas = '<option value="">-</option>' + catalogosBaixa.planoContas.map(p => `<option value="${p.id}">${escapeHtml(p.codigo)} — ${escapeHtml(p.descricao)}</option>`).join('');
+
+    document.getElementById('baixaSetor').innerHTML = optSetor;
+    document.getElementById('baixaSubsetor').innerHTML = optSubsetor;
+    document.getElementById('baixaVeiculo').innerHTML = optVeiculo;
+    document.getElementById('baixaPlanoContas').innerHTML = optPlanoContas;
+}
+
+document.getElementById('baixaSetor').addEventListener('change', (e) => {
+    const setorId = e.target.value;
+    const selectSubsetor = document.getElementById('baixaSubsetor');
+    const filtrados = setorId ? catalogosBaixa.subsetores.filter(s => String(s.setor_id) === setorId) : catalogosBaixa.subsetores;
+    selectSubsetor.innerHTML = '<option value="">-</option>' + filtrados.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+});
+
+function renderGridBaixa() {
+    const corpo = document.getElementById('corpoBaixaItensNota');
+    const optSetor = '<option value="">-</option>' + catalogosBaixa.setores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+    const optSubsetor = '<option value="">-</option>' + catalogosBaixa.subsetores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+    const optVeiculo = '<option value="">-</option>' + catalogosBaixa.veiculos.map(v => `<option value="${v.id}">${escapeHtml(v.nome)}${v.placa ? ' — ' + escapeHtml(v.placa) : ''}</option>`).join('');
+    const optPlanoContas = '<option value="">-</option>' + catalogosBaixa.planoContas.map(p => `<option value="${p.id}">${escapeHtml(p.codigo)}</option>`).join('');
+
+    corpo.innerHTML = itensBaixaAtual.map(linha => `
+        <tr data-linha="${linha.linhaId}">
+            <td>${escapeHtml(linha.produtoNome)}</td>
+            <td class="num">${formatarMoeda(linha.valorUnit)}</td>
+            <td class="num">${linha.qtdDisponivelTotal}</td>
+            <td><input type="number" step="0.01" min="0" style="width:70px;" class="baixa-qtd" value="${linha.qtdABaixar}"></td>
+            <td><select class="baixa-setor" style="width:110px;">${optSetor}</select></td>
+            <td><select class="baixa-subsetor" style="width:110px;">${optSubsetor}</select></td>
+            <td><select class="baixa-veiculo" style="width:110px;">${optVeiculo}</select></td>
+            <td><input type="number" step="1" style="width:60px;" class="baixa-km" value="${linha.km}"></td>
+            <td><input type="number" step="1" style="width:60px;" class="baixa-kmprox" value="${linha.kmProximaTroca}"></td>
+            <td><input type="date" style="width:130px;" class="baixa-dtprox" value="${linha.dtProximaTroca}"></td>
+            <td><input type="text" style="width:90px;" class="baixa-evento" value="${escapeHtml(linha.evento)}"></td>
+            <td><select class="baixa-planocontas" style="width:90px;">${optPlanoContas}</select></td>
+            <td class="center"><button type="button" class="btn btn-cinza btn-pequeno baixa-dividir">✂️ Dividir</button></td>
+        </tr>
+    `).join('');
+
+    // aplica os valores atuais (select via innerHTML não fixa o "selected" certo com id dinâmico, então seta por JS)
+    corpo.querySelectorAll('tr').forEach(tr => {
+        const linhaId = Number(tr.dataset.linha);
+        const linha = itensBaixaAtual.find(l => l.linhaId === linhaId);
+        tr.querySelector('.baixa-setor').value = linha.setorId;
+        tr.querySelector('.baixa-subsetor').value = linha.subsetorId;
+        tr.querySelector('.baixa-veiculo').value = linha.veiculoId;
+        tr.querySelector('.baixa-planocontas').value = linha.planoContasId;
+
+        tr.querySelector('.baixa-qtd').addEventListener('change', (e) => { linha.qtdABaixar = parseFloat(e.target.value) || 0; });
+        tr.querySelector('.baixa-setor').addEventListener('change', (e) => { linha.setorId = e.target.value; });
+        tr.querySelector('.baixa-subsetor').addEventListener('change', (e) => { linha.subsetorId = e.target.value; });
+        tr.querySelector('.baixa-veiculo').addEventListener('change', (e) => { linha.veiculoId = e.target.value; });
+        tr.querySelector('.baixa-km').addEventListener('change', (e) => { linha.km = e.target.value; });
+        tr.querySelector('.baixa-kmprox').addEventListener('change', (e) => { linha.kmProximaTroca = e.target.value; });
+        tr.querySelector('.baixa-dtprox').addEventListener('change', (e) => { linha.dtProximaTroca = e.target.value; });
+        tr.querySelector('.baixa-evento').addEventListener('change', (e) => { linha.evento = e.target.value; });
+        tr.querySelector('.baixa-planocontas').addEventListener('change', (e) => { linha.planoContasId = e.target.value; });
+
+        tr.querySelector('.baixa-dividir').addEventListener('click', () => {
+            const metade = Math.floor((linha.qtdABaixar / 2) * 100) / 100;
+            if (metade <= 0) { alert('Quantidade muito pequena pra dividir.'); return; }
+            const novaLinha = { ...linha, linhaId: proximoIdLinhaBaixa++, qtdABaixar: linha.qtdABaixar - metade };
+            linha.qtdABaixar = metade;
+            const idx = itensBaixaAtual.findIndex(l => l.linhaId === linhaId);
+            itensBaixaAtual.splice(idx + 1, 0, novaLinha);
+            renderGridBaixa();
+        });
+    });
+}
+
+document.getElementById('btnAplicarTodosBaixa').addEventListener('click', () => {
+    const setorId = document.getElementById('baixaSetor').value;
+    const subsetorId = document.getElementById('baixaSubsetor').value;
+    const veiculoId = document.getElementById('baixaVeiculo').value;
+    const planoContasId = document.getElementById('baixaPlanoContas').value;
+    const km = document.getElementById('baixaKm').value;
+    const kmProximaTroca = document.getElementById('baixaKmProximaTroca').value;
+    const dtProximaTroca = document.getElementById('baixaDataProximaTroca').value;
+    const evento = document.getElementById('baixaEvento').value;
+
+    itensBaixaAtual.forEach(linha => {
+        linha.setorId = setorId; linha.subsetorId = subsetorId; linha.veiculoId = veiculoId;
+        linha.planoContasId = planoContasId; linha.km = km; linha.kmProximaTroca = kmProximaTroca;
+        linha.dtProximaTroca = dtProximaTroca; linha.evento = evento;
+    });
+    renderGridBaixa();
+});
+
+document.getElementById('btnConfirmarBaixaItensNota').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusBaixaItensNota');
+    const data = document.getElementById('baixaData').value || hojeISO();
+    const responsavel = document.getElementById('baixaResponsavel').value.trim().toUpperCase();
+
+    if (!responsavel) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe quem está retirando.'; return; }
+
+    // valida que a soma das linhas de cada item de origem não passa do disponível
+    const somaPorOrigem = {};
+    itensBaixaAtual.forEach(l => { somaPorOrigem[l.itemOrigemId] = (somaPorOrigem[l.itemOrigemId] || 0) + Number(l.qtdABaixar || 0); });
+    for (const linha of itensBaixaAtual) {
+        if (somaPorOrigem[linha.itemOrigemId] > linha.qtdDisponivelTotal + 0.0001) {
+            statusEl.className = 'status-msg erro';
+            statusEl.textContent = `"${linha.produtoNome}" tem mais quantidade dividida (${somaPorOrigem[linha.itemOrigemId]}) do que disponível (${linha.qtdDisponivelTotal}).`;
+            return;
+        }
+    }
+
+    const linhasValidas = itensBaixaAtual.filter(l => Number(l.qtdABaixar) > 0);
+    if (linhasValidas.length === 0) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Nenhuma quantidade pra baixar.'; return; }
+
+    const btn = document.getElementById('btnConfirmarBaixaItensNota');
+    btn.disabled = true;
+    statusEl.className = '';
+    statusEl.textContent = 'Registrando...';
+    try {
+        for (const linha of linhasValidas) {
+            await chamarPost('registrarMovimentacaoBaixaNota', {
+                movimentacao: {
+                    data, produtoId: linha.produtoId, qtd: Number(linha.qtdABaixar), valorUnit: linha.valorUnit,
+                    tipo: 'saida', responsavel,
+                    setorId: linha.setorId || null, subsetorId: linha.subsetorId || null,
+                    veiculoId: linha.veiculoId || null, planoContasId: linha.planoContasId || null,
+                    km: linha.km || null, kmProximaTroca: linha.kmProximaTroca || null,
+                    dtProximaTroca: linha.dtProximaTroca || null, evento: linha.evento || '',
+                    movimentacaoOrigemId: linha.itemOrigemId,
+                    observacao: `Baixa direto da nota #${notaEmEdicaoId}`
+                }
+            });
+        }
+        statusEl.className = 'status-msg sucesso';
+        statusEl.textContent = '✅ Baixa registrada com sucesso.';
+        await Promise.all([carregarProdutos(), carregarMovimentacoes()]);
+        atualizarTagContagem();
+        renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+        setTimeout(() => {
+            document.getElementById('modalBaixaItensNota').classList.remove('aberto');
+        }, 1200);
+    } catch (err) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = '⚠️ ' + err.message;
+    } finally {
+        btn.disabled = false;
     }
 });
 
