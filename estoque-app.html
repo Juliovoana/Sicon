@@ -1567,6 +1567,7 @@ async function chamarPost(acao, d) {
         const { data, error } = await sb.from('fabrica_itens_projeto').insert({
             projeto_id: it.projetoId, produto_id: it.produtoId, qtd_requisitada: it.qtdRequisitada,
             responsavel: it.responsavel || '', observacao: it.observacao || '', tag: it.tag || '', evento: it.evento || '',
+            valor_unitario: it.valorUnitario != null ? it.valorUnitario : null,
             unidade_negocio_id: meuPerfil.unidadeId
         }).select().single();
         if (error) throw error;
@@ -1677,7 +1678,8 @@ async function carregarProjetos() {
             responsavel: i.responsavel || '',
             observacao: i.observacao || '',
             tag: i.tag || '',
-            evento: i.evento || ''
+            evento: i.evento || '',
+            valorUnitario: i.valor_unitario != null ? Number(i.valor_unitario) : null
         }))
     }));
 }
@@ -2855,7 +2857,8 @@ function renderizarRequisicao(id) {
         ordenarItensRequisicao(proj.itens).forEach(item => {
             const prod = produtos.find(p => p.id === item.produtoId);
             const ent = entreguePorItem(item.id);
-            const subtotal = item.qtdRequisitada * (prod ? prod.valor : 0);
+            const valorReferencia = item.valorUnitario != null ? item.valorUnitario : (prod ? prod.valor : 0);
+            const subtotal = item.qtdRequisitada * valorReferencia;
             totalPedido += subtotal;
             let classeBadge = '';
             if (ent >= item.qtdRequisitada && item.qtdRequisitada > 0) classeBadge = ent > item.qtdRequisitada ? 'excedido' : 'completo';
@@ -2865,7 +2868,7 @@ function renderizarRequisicao(id) {
                 <td>${prod ? escapeHtml(prod.nome) : ('#' + item.produtoId)}</td>
                 <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.tag)}" data-tag-item="${item.id}"></td>
                 <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.evento)}" data-evento-item="${item.id}"></td>
-                <td class="num">${formatarMoeda(prod ? prod.valor : 0)}</td>
+                <td class="num">${formatarMoeda(valorReferencia)}</td>
                 <td class="num"><input type="number" step="0.01" class="input-qtd-pedida" value="${item.qtdRequisitada}" data-qtd-item="${item.id}"></td>
                 <td class="center"><span class="badge-atendido ${classeBadge}" data-atender="${item.id}">${ent}</span></td>
                 <td class="num">${formatarMoeda(subtotal)}</td>
@@ -3113,9 +3116,9 @@ document.getElementById('btnConfirmarQtdInicial').addEventListener('click', asyn
         return;
     }
     const valorUnitAtendeJa = parseFloat(document.getElementById('modalQtdInicialValorUnit').value);
-    if (atenderJa && (isNaN(valorUnitAtendeJa) || valorUnitAtendeJa < 0)) {
+    if (isNaN(valorUnitAtendeJa) || valorUnitAtendeJa < 0) {
         statusModalEl.className = 'status-msg erro';
-        statusModalEl.textContent = 'Informe um valor unitário válido pra essa saída.';
+        statusModalEl.textContent = 'Escolha um valor unitário válido (Preço médio, Última compra ou Valor cadastrado).';
         return;
     }
 
@@ -3133,7 +3136,8 @@ document.getElementById('btnConfirmarQtdInicial').addEventListener('click', asyn
                 responsavel: '',
                 observacao: '',
                 tag: tagAtual,
-                evento: eventoAtual
+                evento: eventoAtual,
+                valorUnitario: valorUnitAtendeJa
             }
         });
 
@@ -3810,7 +3814,8 @@ function itensComDadosProjeto(proj) {
     return (proj.itens || []).map(item => {
         const prod = produtos.find(p => p.id === item.produtoId);
         const entregue = entreguePorItem(item.id);
-        return { item, prod, entregue, subtotal: item.qtdRequisitada * (prod ? prod.valor : 0) };
+        const valorReferencia = item.valorUnitario != null ? item.valorUnitario : (prod ? prod.valor : 0);
+        return { item, prod, entregue, valorReferencia, subtotal: item.qtdRequisitada * valorReferencia };
     });
 }
 
@@ -3886,7 +3891,7 @@ function construirPdfProjetoResumo(proj) {
         l.prod ? l.prod.nome : '-',
         l.item.tag || '-',
         l.item.evento || '-',
-        formatarMoeda(l.prod ? l.prod.valor : 0),
+        formatarMoeda(l.valorReferencia),
         Number(l.item.qtdRequisitada).toLocaleString('pt-BR'),
         Number(l.entregue).toLocaleString('pt-BR'),
         formatarMoeda(l.subtotal)
@@ -3921,7 +3926,7 @@ function construirPdfProjetoDetalhado(proj) {
         doc.setFont(undefined, 'normal');
         y += 5;
         doc.setFontSize(9);
-        doc.text(`Tag: ${l.item.tag || '-'}   ·   Evento: ${l.item.evento || '-'}   ·   Valor Unit.: ${formatarMoeda(l.prod ? l.prod.valor : 0)}   ·   Pedido: ${l.item.qtdRequisitada}   ·   Atendido: ${l.entregue}`, 14, y);
+        doc.text(`Tag: ${l.item.tag || '-'}   ·   Evento: ${l.item.evento || '-'}   ·   Valor Unit.: ${formatarMoeda(l.valorReferencia)}   ·   Pedido: ${l.item.qtdRequisitada}   ·   Atendido: ${l.entregue}`, 14, y);
         y += 6;
 
         const atendimentos = atendimentosDoItem(l.item.id);
@@ -3963,7 +3968,7 @@ function construirDadosExcelProjetoResumo(proj) {
         'Descrição': l.prod ? l.prod.nome : '',
         'Tag': l.item.tag || '',
         'Evento': l.item.evento || '',
-        'Valor Unit.': l.prod ? l.prod.valor : 0,
+        'Valor Unit.': l.valorReferencia,
         'Qtd. Pedida': l.item.qtdRequisitada,
         'Qtd. Atendida': l.entregue,
         'Subtotal': l.subtotal
@@ -3981,7 +3986,7 @@ function construirDadosExcelProjetoDetalhado(proj) {
             'Descrição': l.prod ? l.prod.nome : '',
             'Tag': l.item.tag || '',
             'Evento': l.item.evento || '',
-            'Valor Unit.': l.prod ? l.prod.valor : 0,
+            'Valor Unit.': l.valorReferencia,
             'Qtd. Pedida': l.item.qtdRequisitada
         };
         if (!atendimentos.length) {
