@@ -76,6 +76,18 @@
         box-shadow: 0 4px 14px rgba(0,0,0,0.15);
     }
     #notaItemProdutoResultados.aberto { display: block; }
+    #reqCompletaProdutoResultados {
+        position: absolute; z-index: 20; background: #fff; width: 100%;
+        border: 1px solid #ddd; border-radius: 6px; max-height: 220px; overflow-y: auto; display: none;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+    }
+    #reqCompletaProdutoResultados.aberto { display: block; }
+    .dropdown-busca-evento {
+        position: absolute; z-index: 20; background: #fff; width: 100%;
+        border: 1px solid #ddd; border-radius: 6px; max-height: 220px; overflow-y: auto; display: none;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+    }
+    .dropdown-busca-evento.aberto { display: block; }
 
     /* os containers de resultado de busca abaixo não tinham NENHUM CSS
        próprio — a classe "aberto" era adicionada/removida no JS, mas
@@ -423,7 +435,8 @@
     <button class="aba-btn" data-aba="movimentacao">🧾 Requisição de Saída</button>
     <button class="aba-btn" data-aba="projetos">🏗️ Projetos</button>
     <button class="aba-btn" data-aba="movpainel">📋 Movimentações</button>
-    <button class="aba-btn" data-aba="notasentrada">🧾 Notas de Entrada</button>
+    <button class="aba-btn" data-aba="notasentrada">🧾 Notas</button>
+    <button class="aba-btn" data-aba="cadastrosgerais">🗂️ Cadastros</button>
     <button class="aba-btn" data-aba="relatorios">📊 Relatórios</button>
 </div>
 
@@ -615,6 +628,7 @@
             <div style="display:flex; gap:8px; align-items:flex-end;">
                 <button class="btn btn-azul" id="btnBuscarNotasEntrada">🔍 Buscar</button>
                 <button class="btn btn-verde" id="btnNovaNotaEntrada">+ Nova entrada direta</button>
+                <button class="btn btn-verde" id="btnNovaRequisicaoCompleta">+ Nova requisição</button>
             </div>
         </div>
     </div>
@@ -622,15 +636,110 @@
     <div style="max-height:65vh; overflow:auto;">
         <table class="tabela" id="tabelaNotasEntrada">
             <thead>
-                <tr><th>Data entrada</th><th>NF nº</th><th>Fornecedor</th><th>Origem</th><th class="num">Itens</th><th class="num">Títulos</th><th class="num">Valor total</th><th>Ações</th></tr>
+                <tr><th>Data</th><th>Tipo</th><th>NF nº</th><th>Fornecedor</th><th>Origem</th><th class="num">Itens</th><th class="num">Títulos</th><th class="num">Valor total</th><th>Ações</th></tr>
             </thead>
             <tbody id="corpoTabelaNotasEntrada"></tbody>
         </table>
     </div>
-    <div class="vazio" id="vazioNotasEntrada" style="display:none;">Nenhuma nota de entrada encontrada.</div>
+    <div class="vazio" id="vazioNotasEntrada" style="display:none;">Nenhuma nota encontrada.</div>
 </div>
 
 <!-- ===================== ABA RELATÓRIOS ===================== -->
+<div class="conteudo-aba" id="aba-cadastrosgerais">
+    <div class="caixa">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h4 style="margin:0;">Setores</h4>
+            <button class="btn btn-verde btn-pequeno" id="btnNovoSetorCad">+ Novo setor</button>
+        </div>
+        <table class="tabela" style="margin-top:10px;">
+            <thead><tr><th>Nome</th><th class="center">Ativo</th><th>Ações</th></tr></thead>
+            <tbody id="corpoCadSetores"></tbody>
+        </table>
+    </div>
+
+    <div class="caixa">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h4 style="margin:0;">Subsetores</h4>
+            <button class="btn btn-verde btn-pequeno" id="btnNovoSubsetorCad">+ Novo subsetor</button>
+        </div>
+        <table class="tabela" style="margin-top:10px;">
+            <thead><tr><th>Nome</th><th>Setor</th><th class="center">Ativo</th><th>Ações</th></tr></thead>
+            <tbody id="corpoCadSubsetores"></tbody>
+        </table>
+    </div>
+
+    <div class="caixa">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h4 style="margin:0;">Plano de Contas</h4>
+            <button class="btn btn-verde btn-pequeno" id="btnNovoPlanoContasCad">+ Novo plano de contas</button>
+        </div>
+        <table class="tabela" style="margin-top:10px;">
+            <thead><tr><th>Código</th><th>Descrição</th><th class="center">Ativo</th><th>Ações</th></tr></thead>
+            <tbody id="corpoCadPlanoContas"></tbody>
+        </table>
+    </div>
+
+    <div class="caixa">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h4 style="margin:0;">Equipamentos / Veículos</h4>
+            <button class="btn btn-verde btn-pequeno" id="btnNovoEquipamentoCad">+ Novo equipamento/veículo</button>
+        </div>
+        <table class="tabela" style="margin-top:10px;">
+            <thead><tr><th>Nome</th><th>Tipo</th><th>Placa</th><th>Identificador</th><th class="num">Últ. KM</th><th class="num">Últ. Horímetro</th><th class="center">Ativo</th><th>Ações</th></tr></thead>
+            <tbody id="corpoCadEquipamentos"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ===================== MODAL / POPUP: cadastro genérico (Setor/Subsetor/Plano de Contas/Equipamento) ===================== -->
+<div class="modal-overlay" id="modalCadGenerico" style="z-index:1050;">
+    <div class="modal-caixa">
+        <h4 style="margin-top:0;" id="tituloCadGenerico">Novo registro</h4>
+
+        <div class="campo" id="campoCadNome"><label>Nome</label><input type="text" id="cadGenericoNome"></div>
+
+        <div class="campo" id="campoCadCodigo" style="margin-top:10px; display:none;"><label>Código</label><input type="text" id="cadGenericoCodigo"></div>
+        <div class="campo" id="campoCadDescricao" style="margin-top:10px; display:none;"><label>Descrição</label><input type="text" id="cadGenericoDescricao"></div>
+
+        <div class="campo" id="campoCadSetorPai" style="margin-top:10px; display:none;">
+            <label>Setor</label>
+            <select id="cadGenericoSetorPai"><option value="">-</option></select>
+        </div>
+
+        <div id="camposCadEquipamento" style="display:none;">
+            <div class="campo" style="margin-top:10px;">
+                <label>Tipo</label>
+                <select id="cadGenericoTipoEquip">
+                    <option value="veiculo">Veículo</option>
+                    <option value="gerador">Gerador</option>
+                    <option value="climatizador">Climatizador</option>
+                    <option value="outro">Outro</option>
+                </select>
+            </div>
+            <div class="grade col2" style="margin-top:10px;">
+                <div class="campo"><label>Placa (só se for veículo)</label><input type="text" id="cadGenericoPlaca"></div>
+                <div class="campo"><label>Identificador (se não for veículo)</label><input type="text" id="cadGenericoIdentificador"></div>
+            </div>
+            <div class="grade col2" style="margin-top:10px;">
+                <div class="campo"><label>Último KM (veículo)</label><input type="number" step="1" id="cadGenericoUltimoKm"></div>
+                <div class="campo"><label>Último horímetro (gerador/equip.)</label><input type="number" step="1" id="cadGenericoUltimoHorimetro"></div>
+            </div>
+        </div>
+
+        <div class="campo" style="margin-top:10px;">
+            <label>Status</label>
+            <select id="cadGenericoAtivo"><option value="true">Ativo</option><option value="false">Inativo</option></select>
+        </div>
+
+        <div style="margin-top:16px; text-align:right;">
+            <button class="btn btn-vermelho" id="btnExcluirCadGenerico" style="display:none;">Excluir</button>
+            <button class="btn btn-cinza" id="btnCancelarCadGenerico">Sair</button>
+            <button class="btn btn-verde" id="btnSalvarCadGenerico">Salvar</button>
+        </div>
+        <span class="status-msg" id="statusCadGenerico"></span>
+    </div>
+</div>
+
 <div class="conteudo-aba" id="aba-relatorios">
 
     <div class="caixa">
@@ -719,7 +828,12 @@
                 <div class="campo"><label>Data de lançamento</label><input type="date" id="nfeDataLancamento"></div>
                 <div class="campo"><label>Responsável</label><input type="text" id="nfeResponsavel"></div>
                 <div class="campo"><label>Tag (opcional)</label><input type="text" id="nfeTag"></div>
-                <div class="campo"><label>Evento (opcional)</label><input type="text" id="nfeEvento"></div>
+                <div class="campo" style="position:relative;">
+                    <label>Evento (opcional)</label>
+                    <input type="text" id="nfeEventoBusca" placeholder="Buscar evento..." autocomplete="off">
+                    <div id="nfeEventoResultados" class="dropdown-busca-evento"></div>
+                    <p class="subtitulo" id="nfeEventoSelecionado" style="margin-top:4px;"></p>
+                </div>
             </div>
             <div class="campo" style="margin-top:8px;"><label>Observação (opcional)</label><input type="text" id="nfeObservacao"></div>
 
@@ -788,7 +902,12 @@
         </div>
         <div class="grade col2" style="margin-top:8px;">
             <div class="campo"><label>Tag (opcional)</label><input type="text" id="baixaTag"></div>
-            <div class="campo"><label>Evento (opcional)</label><input type="text" id="baixaEvento"></div>
+            <div class="campo" style="position:relative;">
+                <label>Evento (opcional)</label>
+                <input type="text" id="baixaDiretaEventoBusca" placeholder="Buscar evento..." autocomplete="off">
+                <div id="baixaDiretaEventoResultados" class="dropdown-busca-evento"></div>
+                <p class="subtitulo" id="baixaDiretaEventoSelecionado" style="margin-top:4px;"></p>
+            </div>
         </div>
         <div class="campo" style="margin-top:8px;"><label>Responsável pela retirada</label><input type="text" id="baixaResponsavel"></div>
         <div class="campo" style="margin-top:8px;"><label>Observação (opcional)</label><input type="text" id="baixaObservacao"></div>
@@ -855,7 +974,7 @@
 
 <!-- ===================== MODAL / POPUP: Editar movimentação (qualquer uma, do Painel) ===================== -->
 <div class="modal-overlay" id="modalEditarMovGeral" style="z-index:1050;">
-    <div class="modal-caixa">
+    <div class="modal-caixa larga">
         <h4 style="margin-top:0;">Editar movimentação</h4>
         <p class="subtitulo" id="editMovGeralInfo" style="margin-bottom:14px;"></p>
 
@@ -863,9 +982,24 @@
             <div class="campo"><label>Quantidade</label><input type="number" step="0.01" id="editMovGeralQtd"></div>
             <div class="campo"><label>Valor unitário (R$)</label><input type="number" step="0.01" id="editMovGeralValor"></div>
         </div>
+        <div class="grade col2" style="margin-top:10px;">
+            <div class="campo"><label>Tag</label><input type="text" id="editMovGeralTag"></div>
+            <div class="campo" style="position:relative;">
+                <label>Evento</label>
+                <input type="text" id="editMovGeralEventoBusca" placeholder="Buscar evento..." autocomplete="off">
+                <div id="editMovGeralEventoResultados" class="dropdown-busca-evento"></div>
+                <p class="subtitulo" id="editMovGeralEventoSelecionado" style="margin-top:4px;"></p>
+            </div>
+        </div>
+        <div class="grade col4" style="margin-top:10px;">
+            <div class="campo"><label>Setor</label><select id="editMovGeralSetor"><option value="">-</option></select></div>
+            <div class="campo"><label>Subsetor</label><select id="editMovGeralSubsetor"><option value="">-</option></select></div>
+            <div class="campo"><label>Veículo / Equipamento</label><select id="editMovGeralVeiculo"><option value="">-</option></select></div>
+            <div class="campo"><label>Plano de Contas</label><select id="editMovGeralPlanoContas"><option value="">-</option></select></div>
+        </div>
         <div class="campo" style="margin-top:10px;"><label>Observação</label><input type="text" id="editMovGeralObservacao"></div>
 
-        <p class="subtitulo" style="margin-top:12px; color:#b45309;">⚠️ Corrigir aqui recalcula automaticamente o estoque e o preço médio do produto, com base no histórico completo (pode levar alguns segundos a mais pra salvar).</p>
+        <p class="subtitulo" style="margin-top:12px; color:#b45309;">⚠️ Corrigir a quantidade ou o valor recalcula automaticamente o estoque e o preço médio do produto, com base no histórico completo (pode levar alguns segundos a mais pra salvar).</p>
 
         <div style="margin-top:16px; text-align:right;">
             <button class="btn btn-cinza" id="btnCancelarEditarMovGeral">Sair</button>
@@ -920,18 +1054,20 @@
         <div id="blocoItensTitulosNota" style="display:none; margin-top:18px;">
 
             <h4 style="margin-bottom:8px;">Itens</h4>
-            <div class="grade col4" style="align-items:flex-end;">
-                <div class="campo" style="grid-column:span 2; position:relative;">
-                    <label>Produto</label>
-                    <input type="text" id="notaItemProdutoBusca" placeholder="Buscar ou digitar nome de produto novo...">
-                    <div id="notaItemProdutoResultados"></div>
+            <div id="blocoAdicionarItemNota">
+                <div class="grade col4" style="align-items:flex-end;">
+                    <div class="campo" style="grid-column:span 2; position:relative;">
+                        <label>Produto</label>
+                        <input type="text" id="notaItemProdutoBusca" placeholder="Buscar ou digitar nome de produto novo...">
+                        <div id="notaItemProdutoResultados"></div>
+                    </div>
+                    <div class="campo"><label>Qtd</label><input type="number" step="0.01" id="notaItemQtd" value="1"></div>
+                    <div class="campo"><label>Valor unit. (R$)</label><input type="number" step="0.01" id="notaItemValor"></div>
                 </div>
-                <div class="campo"><label>Qtd</label><input type="number" step="0.01" id="notaItemQtd" value="1"></div>
-                <div class="campo"><label>Valor unit. (R$)</label><input type="number" step="0.01" id="notaItemValor"></div>
-            </div>
-            <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
-                <span class="subtitulo" id="notaItemProdutoSelecionado"></span>
-                <button class="btn btn-azul btn-pequeno" id="btnAdicionarItemNota">+ Adicionar item</button>
+                <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
+                    <span class="subtitulo" id="notaItemProdutoSelecionado"></span>
+                    <button class="btn btn-azul btn-pequeno" id="btnAdicionarItemNota">+ Adicionar item</button>
+                </div>
             </div>
 
             <table class="tabela" style="margin-top:10px;">
@@ -1052,14 +1188,19 @@
             <div class="campo"><label>Plano de Contas</label><select id="baixaPlanoContas"><option value="">-</option></select></div>
         </div>
         <div class="grade col4" style="margin-top:10px;">
-            <div class="campo"><label>Data</label><input type="date" id="baixaData"></div>
+            <div class="campo"><label>Data</label><input type="date" id="baixaItensNotaData"></div>
             <div class="campo"><label>KM na baixa</label><input type="number" step="1" id="baixaKm"></div>
             <div class="campo"><label>KM próxima troca</label><input type="number" step="1" id="baixaKmProximaTroca"></div>
             <div class="campo"><label>Data próxima troca</label><input type="date" id="baixaDataProximaTroca"></div>
         </div>
         <div class="grade col2" style="margin-top:10px;">
-            <div class="campo"><label>Evento</label><input type="text" id="baixaEvento"></div>
-            <div class="campo"><label>Responsável pela retirada</label><input type="text" id="baixaResponsavel"></div>
+            <div class="campo" style="position:relative;">
+                <label>Evento</label>
+                <input type="text" id="baixaItensNotaEventoBusca" placeholder="Buscar evento..." autocomplete="off">
+                <div id="baixaItensNotaEventoResultados" class="dropdown-busca-evento"></div>
+                <p class="subtitulo" id="baixaItensNotaEventoSelecionado" style="margin-top:4px;"></p>
+            </div>
+            <div class="campo"><label>Responsável pela retirada</label><input type="text" id="baixaItensNotaResponsavel"></div>
         </div>
         <div style="margin-top:10px; text-align:right;">
             <button class="btn btn-cinza btn-pequeno" id="btnAplicarTodosBaixa">⬇️ Aplicar a todos os itens abaixo</button>
@@ -1079,6 +1220,71 @@
         <div style="margin-top:16px; display:flex; justify-content:space-between; align-items:center;">
             <span class="status-msg" id="statusBaixaItensNota"></span>
             <button class="btn btn-verde" id="btnConfirmarBaixaItensNota">Confirmar Baixa e Finalizar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== MODAL / POPUP: Requisição Completa (saída avulsa, sem nota de entrada) ===================== -->
+<div class="modal-overlay" id="modalRequisicaoCompleta" style="z-index:1100;">
+    <div class="modal-caixa larga" style="max-width:1200px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <h4 style="margin:0;">Nova requisição de saída</h4>
+            <button class="btn btn-cinza btn-pequeno" id="btnFecharRequisicaoCompleta">✕ Fechar</button>
+        </div>
+        <p class="subtitulo" style="margin-bottom:12px;">Monta a requisição adicionando produto por produto. Ao confirmar, gera uma nota de saída (aparece na aba Notas) e desconta o estoque de todos os itens de uma vez.</p>
+
+        <div class="grade col4">
+            <div class="campo"><label>Setor</label><select id="reqCompletaSetor"><option value="">-</option></select></div>
+            <div class="campo"><label>Subsetor</label><select id="reqCompletaSubsetor"><option value="">-</option></select></div>
+            <div class="campo"><label>Veículo / Equipamento</label><select id="reqCompletaVeiculo"><option value="">-</option></select></div>
+            <div class="campo"><label>Plano de Contas</label><select id="reqCompletaPlanoContas"><option value="">-</option></select></div>
+        </div>
+        <div class="grade col4" style="margin-top:10px;">
+            <div class="campo"><label>Data</label><input type="date" id="reqCompletaData"></div>
+            <div class="campo"><label>KM na baixa</label><input type="number" step="1" id="reqCompletaKm"></div>
+            <div class="campo"><label>KM próxima troca</label><input type="number" step="1" id="reqCompletaKmProximaTroca"></div>
+            <div class="campo"><label>Data próxima troca</label><input type="date" id="reqCompletaDataProximaTroca"></div>
+        </div>
+        <div class="grade col2" style="margin-top:10px;">
+            <div class="campo" style="position:relative;">
+                <label>Evento</label>
+                <input type="text" id="reqCompletaEventoBusca" placeholder="Buscar evento..." autocomplete="off">
+                <div id="reqCompletaEventoResultados" class="dropdown-busca-evento"></div>
+                <p class="subtitulo" id="reqCompletaEventoSelecionado" style="margin-top:4px;"></p>
+            </div>
+            <div class="campo"><label>Responsável pela retirada</label><input type="text" id="reqCompletaResponsavel"></div>
+        </div>
+
+        <hr style="margin:16px 0; border:none; border-top:1px solid #eee;">
+
+        <div class="grade col4" style="align-items:flex-end;">
+            <div class="campo" style="grid-column:span 2; position:relative;">
+                <label>Produto</label>
+                <input type="text" id="reqCompletaProdutoBusca" placeholder="Buscar produto...">
+                <div id="reqCompletaProdutoResultados"></div>
+            </div>
+            <div class="campo"><label>Qtd</label><input type="number" step="0.01" id="reqCompletaQtd" value="1"></div>
+            <div class="campo"><label>Valor unit. (R$)</label><input type="number" step="0.01" id="reqCompletaValor"></div>
+        </div>
+        <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <button type="button" class="btn btn-pequeno btn-preco-opcao" id="btnReqCompletaUsarPrecoMedio">Preço médio</button>
+                <button type="button" class="btn btn-pequeno btn-preco-opcao" id="btnReqCompletaUsarUltimaCompra">Última compra</button>
+                <button type="button" class="btn btn-pequeno btn-preco-opcao" id="btnReqCompletaUsarValorCadastrado">Valor cadastrado</button>
+            </div>
+            <span class="subtitulo" id="reqCompletaProdutoSelecionado"></span>
+            <button class="btn btn-azul btn-pequeno" id="btnAdicionarItemReqCompleta">+ Adicionar item</button>
+        </div>
+
+        <table class="tabela" style="margin-top:14px; font-size:0.85em;">
+            <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th class="num">Subtotal</th><th>Ações</th></tr></thead>
+            <tbody id="corpoItensReqCompleta"></tbody>
+        </table>
+        <div style="text-align:right; margin-top:6px; font-weight:600;">Total: <span id="totalItensReqCompleta">R$ 0,00</span></div>
+
+        <div style="margin-top:16px; display:flex; justify-content:space-between; align-items:center;">
+            <span class="status-msg" id="statusRequisicaoCompleta"></span>
+            <button class="btn btn-verde" id="btnConfirmarRequisicaoCompleta">Salvar Requisição</button>
         </div>
     </div>
 </div>
@@ -1108,7 +1314,12 @@
         <p class="subtitulo" id="modalAtenderProduto" style="margin-bottom:14px;"></p>
         <div class="grade col2">
             <div class="campo"><label>Tag</label><input type="text" id="modalAtenderTag"></div>
-            <div class="campo"><label>Evento</label><input type="text" id="modalAtenderEvento"></div>
+            <div class="campo" style="position:relative;">
+                <label>Evento</label>
+                <input type="text" id="modalAtenderEventoBusca" placeholder="Buscar evento..." autocomplete="off">
+                <div id="modalAtenderEventoResultados" class="dropdown-busca-evento"></div>
+                <p class="subtitulo" id="modalAtenderEventoSelecionado" style="margin-top:4px;"></p>
+            </div>
         </div>
         <div class="grade col2" style="margin-top:10px;">
             <div class="campo"><label>Quantidade atendida agora</label><input type="number" step="0.01" id="modalQtdAtendida"></div>
@@ -1147,7 +1358,12 @@
         </div>
         <div class="grade col2" style="margin-top:10px;">
             <div class="campo"><label>Tag</label><input type="text" id="editAtendTag"></div>
-            <div class="campo"><label>Evento</label><input type="text" id="editAtendEvento"></div>
+            <div class="campo" style="position:relative;">
+                <label>Evento</label>
+                <input type="text" id="editAtendEventoBusca" placeholder="Buscar evento..." autocomplete="off">
+                <div id="editAtendEventoResultados" class="dropdown-busca-evento"></div>
+                <p class="subtitulo" id="editAtendEventoSelecionado" style="margin-top:4px;"></p>
+            </div>
         </div>
         <div class="campo" style="margin-top:10px;"><label>Observação</label><input type="text" id="editAtendObservacao"></div>
         <div style="margin-top:16px; text-align:right;">
@@ -1416,15 +1632,20 @@ async function chamarPost(acao, d) {
     }
     if (acao === 'registrarMovimentacao') {
         const m = d.movimentacao;
+        // saída nunca tem fornecedor de verdade (isso é conceito de
+        // entrada) — em vez de deixar em branco, identifica que saiu do
+        // almoxarifado
+        const fornecedorNomeFinal = m.fornecedorNome || (m.tipo === 'saida' ? 'Almoxarifado' : null);
         const { error: e1 } = await sb.from('estoque_movimentacoes').insert({
             data: m.data, produto_id: m.produtoId, tipo: m.tipo, qtd: m.qtd, valor_unit: m.valorUnit,
             tag: m.tag || '', evento: m.evento || '', observacao: m.observacao || '', responsavel: m.responsavel || '',
             projeto_id: m.projetoId || null, item_projeto_id: m.itemProjetoId || null,
-            nf_numero: m.nfNumero || null, fornecedor_cnpj: m.fornecedorCnpj || null, fornecedor_nome: m.fornecedorNome || null,
+            nf_numero: m.nfNumero || null, fornecedor_cnpj: m.fornecedorCnpj || null, fornecedor_nome: fornecedorNomeFinal,
             estoque_nota_id: m.estoqueNotaId || null,
             setor_id: m.setorId || null, subsetor_id: m.subsetorId || null,
             plano_contas_id: m.planoContasId || null, equipamento_veiculo_id: m.veiculoId || null,
             km_troca: m.km || null, km_proxima_troca: m.kmProximaTroca || null, dt_proxima_troca: m.dtProximaTroca || null,
+            almoxarifado: m.almoxarifado || 1,
             unidade_negocio_id: meuPerfil.unidadeId
         });
         if (e1) throw e1;
@@ -1447,10 +1668,12 @@ async function chamarPost(acao, d) {
         const { error: e1 } = await sb.from('estoque_movimentacoes').insert({
             data: m.data, produto_id: m.produtoId, tipo: 'saida', qtd: m.qtd, valor_unit: m.valorUnit,
             responsavel: m.responsavel || '', observacao: m.observacao || '', evento: m.evento || '',
+            fornecedor_nome: 'Almoxarifado',
             setor_id: m.setorId || null, subsetor_id: m.subsetorId || null,
             plano_contas_id: m.planoContasId || null, equipamento_veiculo_id: m.veiculoId || null,
             km_troca: m.km || null, km_proxima_troca: m.kmProximaTroca || null, dt_proxima_troca: m.dtProximaTroca || null,
             movimentacao_origem_id: m.movimentacaoOrigemId || null,
+            almoxarifado: m.almoxarifado || 1,
             unidade_negocio_id: meuPerfil.unidadeId
         });
         if (e1) throw e1;
@@ -1458,6 +1681,58 @@ async function chamarPost(acao, d) {
             p_produto_id: m.produtoId, p_delta: -Number(m.qtd)
         });
         if (e2) throw e2;
+        return;
+    }
+    if (acao === 'salvarSetor') {
+        const registro = { unidade_negocio_id: meuPerfil.unidadeId, nome: d.nome, ativo: d.ativo };
+        const query = d.id ? sb.from('unidade_setores').update(registro).eq('id', d.id) : sb.from('unidade_setores').insert(registro);
+        const { error } = await query;
+        if (error) throw error;
+        return;
+    }
+    if (acao === 'excluirSetor') {
+        const { error } = await sb.from('unidade_setores').delete().eq('id', d.id);
+        if (error) throw error;
+        return;
+    }
+    if (acao === 'salvarSubsetor') {
+        const registro = { unidade_negocio_id: meuPerfil.unidadeId, setor_id: d.setorId, nome: d.nome, ativo: d.ativo };
+        const query = d.id ? sb.from('unidade_subsetores').update(registro).eq('id', d.id) : sb.from('unidade_subsetores').insert(registro);
+        const { error } = await query;
+        if (error) throw error;
+        return;
+    }
+    if (acao === 'excluirSubsetor') {
+        const { error } = await sb.from('unidade_subsetores').delete().eq('id', d.id);
+        if (error) throw error;
+        return;
+    }
+    if (acao === 'salvarPlanoContas') {
+        const registro = { unidade_negocio_id: meuPerfil.unidadeId, codigo: d.codigo, descricao: d.descricao, ativo: d.ativo };
+        const query = d.id ? sb.from('unidade_plano_de_contas').update(registro).eq('id', d.id) : sb.from('unidade_plano_de_contas').insert(registro);
+        const { error } = await query;
+        if (error) throw error;
+        return;
+    }
+    if (acao === 'excluirPlanoContas') {
+        const { error } = await sb.from('unidade_plano_de_contas').delete().eq('id', d.id);
+        if (error) throw error;
+        return;
+    }
+    if (acao === 'salvarEquipamento') {
+        const registro = {
+            unidade_negocio_id: meuPerfil.unidadeId, nome: d.nome, tipo: d.tipo,
+            placa: d.placa || null, identificador: d.identificador || null,
+            ultimo_km: d.ultimoKm || null, ultimo_horimetro: d.ultimoHorimetro || null, ativo: d.ativo
+        };
+        const query = d.id ? sb.from('unidade_equipamentos_veiculos').update(registro).eq('id', d.id) : sb.from('unidade_equipamentos_veiculos').insert(registro);
+        const { error } = await query;
+        if (error) throw error;
+        return;
+    }
+    if (acao === 'excluirEquipamento') {
+        const { error } = await sb.from('unidade_equipamentos_veiculos').delete().eq('id', d.id);
+        if (error) throw error;
         return;
     }
     if (acao === 'salvarMapeamentoFornecedor') {
@@ -1477,6 +1752,7 @@ async function chamarPost(acao, d) {
         const n = d.nota;
         const registro = {
             unidade_negocio_id: meuPerfil.unidadeId,
+            tipo: n.tipo || 'entrada',
             numero_nf: n.numeroNf || null,
             serie: n.serie || null,
             chave_acesso: n.chaveAcesso || null,
@@ -1595,6 +1871,10 @@ async function chamarPost(acao, d) {
         if (d.observacao != null) upd.observacao = d.observacao;
         if (d.tag != null) upd.tag = d.tag;
         if (d.evento != null) upd.evento = d.evento;
+        if (d.setorId !== undefined) upd.setor_id = d.setorId;
+        if (d.subsetorId !== undefined) upd.subsetor_id = d.subsetorId;
+        if (d.veiculoId !== undefined) upd.equipamento_veiculo_id = d.veiculoId;
+        if (d.planoContasId !== undefined) upd.plano_contas_id = d.planoContasId;
         const { error } = await sb.from('estoque_movimentacoes').update(upd).eq('id', d.movId);
         if (error) throw error;
         return;
@@ -1719,6 +1999,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
         if (btn.dataset.aba === 'relatorios') popularRelatoriosSelects();
         if (btn.dataset.aba === 'movpainel') abrirPainelMovimentacoes();
         if (btn.dataset.aba === 'notasentrada') carregarListaNotasEntrada();
+        if (btn.dataset.aba === 'cadastrosgerais') carregarCadastrosGerais();
     });
 });
 
@@ -1990,7 +2271,9 @@ document.getElementById('btnBaixaDireta').addEventListener('click', () => {
     document.getElementById('baixaQtd').value = '';
     document.getElementById('baixaData').value = hojeISO();
     document.getElementById('baixaTag').value = '';
-    document.getElementById('baixaEvento').value = '';
+    document.getElementById('baixaDiretaEventoBusca').value = '';
+    document.getElementById('baixaDiretaEventoSelecionado').innerHTML = '';
+    eventoSelecionadoBaixaDireta = null;
     document.getElementById('baixaResponsavel').value = '';
     document.getElementById('baixaObservacao').value = '';
     document.getElementById('statusBaixaDireta').textContent = '';
@@ -2056,7 +2339,7 @@ document.getElementById('btnConfirmarBaixaDireta').addEventListener('click', asy
                 valorUnit: prod.precoMedio || prod.valor,
                 tipo: 'saida',
                 tag: document.getElementById('baixaTag').value.trim(),
-                evento: document.getElementById('baixaEvento').value.trim(),
+                evento: eventoSelecionadoBaixaDireta ? eventoSelecionadoBaixaDireta.codigo : '',
                 observacao: document.getElementById('baixaObservacao').value.trim(),
                 responsavel,
                 projetoId: null,
@@ -2196,7 +2479,9 @@ document.getElementById('btnImportarNFe').addEventListener('click', () => {
     document.getElementById('nfeDataLancamento').value = hojeISO();
     document.getElementById('nfeResponsavel').value = '';
     document.getElementById('nfeTag').value = '';
-    document.getElementById('nfeEvento').value = '';
+    document.getElementById('nfeEventoBusca').value = '';
+    document.getElementById('nfeEventoSelecionado').innerHTML = '';
+    eventoSelecionadoNfe = null;
     document.getElementById('nfeObservacao').value = '';
     nfeItensParseados = [];
     document.getElementById('modalImportarNFe').classList.add('aberto');
@@ -2380,7 +2665,7 @@ async function processarImportacaoNFe(tipo) {
         return;
     }
     const tag = document.getElementById('nfeTag').value.trim();
-    const evento = document.getElementById('nfeEvento').value.trim();
+    const evento = eventoSelecionadoNfe ? eventoSelecionadoNfe.codigo : '';
     const observacaoBase = document.getElementById('nfeObservacao').value.trim();
 
     // destinação só faz sentido pra baixa direta (produto saindo) — pra
@@ -2910,6 +3195,16 @@ function renderizarRequisicao(id) {
             inp.addEventListener('change', async () => {
                 const itemId = Number(inp.dataset.eventoItem);
                 const itemAtual = proj.itens.find(i => i.id === itemId);
+                const valorDigitado = inp.value.trim().toUpperCase();
+                if (valorDigitado) {
+                    const eventoEncontrado = eventos.find(ev => ev.codigo.toUpperCase() === valorDigitado);
+                    if (!eventoEncontrado) {
+                        alert(`Não existe nenhum evento com o código "${valorDigitado}". Cadastre esse evento primeiro (botão "+ Novo evento" acima), ou digite um código já existente.`);
+                        inp.value = itemAtual ? itemAtual.evento : '';
+                        return;
+                    }
+                    inp.value = eventoEncontrado.codigo;
+                }
                 await chamarPost('atualizarTagEventoItem', { itemId, tag: itemAtual ? itemAtual.tag : '', evento: inp.value.trim() });
                 await carregarProjetos();
                 renderizarRequisicao(id);
@@ -2920,6 +3215,86 @@ function renderizarRequisicao(id) {
 }
 
 /* ---------- busca/seleção de evento (aba Projetos) ---------- */
+/* ---------- busca de evento reutilizável, pra qualquer modal novo
+   (evita campo de texto livre onde pode digitar código não catalogado) ---------- */
+let eventoSelecionadoEditMovGeral = null;
+let eventoSelecionadoBaixaItensNota = null;
+let eventoSelecionadoReqCompleta = null;
+let eventoSelecionadoNfe = null;
+let eventoSelecionadoBaixaDireta = null;
+let eventoSelecionadoModalAtender = null;
+let eventoSelecionadoEditAtend = null;
+
+// preenche a UI de "Selecionado: ..." a partir de um código de evento já
+// salvo (ex: ao abrir um item pra editar) — devolve o objeto evento
+// resolvido, pra guardar na variável de estado certa
+function preencherEventoSelecionadoUI(idTexto, codigoEvento) {
+    const ev = codigoEvento ? (eventos.find(e => e.codigo === codigoEvento) || { codigo: codigoEvento, descricao: '' }) : null;
+    const el = document.getElementById(idTexto);
+    el.innerHTML = ev
+        ? `Selecionado: <strong>${escapeHtml(ev.codigo)}${ev.descricao ? ' — ' + escapeHtml(ev.descricao) : ''}</strong> <a href="#" data-limpar-evento style="color:#b00020; font-size:.85em;">(remover)</a>`
+        : '';
+    return ev;
+}
+
+function configurarBuscaEvento(idBusca, idResultados, idSelecionadoTexto, aoSelecionar) {
+    const inputBusca = document.getElementById(idBusca);
+    const elResultados = document.getElementById(idResultados);
+    inputBusca.addEventListener('input', () => {
+        const termo = inputBusca.value;
+        if (!termo.trim()) { elResultados.classList.remove('aberto'); return; }
+        const lista = buscarEventos(termo);
+        elResultados.innerHTML = lista.length
+            ? ''
+            : '<div class="item-resultado">Nenhum evento encontrado.</div>';
+        if (!lista.length) { elResultados.classList.add('aberto'); return; }
+        lista.forEach(ev => {
+            const div = document.createElement('div');
+            div.className = 'item-resultado';
+            div.style.cursor = 'pointer';
+            div.innerHTML = `<div class="info-resultado"><span class="cod">${escapeHtml(ev.codigo)}</span> — ${escapeHtml(ev.descricao)}</div>`;
+            div.addEventListener('click', () => {
+                elResultados.classList.remove('aberto');
+                inputBusca.value = '';
+                aoSelecionar(ev);
+                if (idSelecionadoTexto) {
+                    const elSel = document.getElementById(idSelecionadoTexto);
+                    elSel.innerHTML = `Selecionado: <strong>${escapeHtml(ev.codigo)} — ${escapeHtml(ev.descricao)}</strong> <a href="#" data-limpar-evento style="color:#b00020; font-size:.85em;">(remover)</a>`;
+                    elSel.querySelector('[data-limpar-evento]').addEventListener('click', (e) => {
+                        e.preventDefault();
+                        elSel.innerHTML = '';
+                        aoSelecionar(null);
+                    });
+                }
+            });
+            elResultados.appendChild(div);
+        });
+        elResultados.classList.add('aberto');
+    });
+}
+
+configurarBuscaEvento('editMovGeralEventoBusca', 'editMovGeralEventoResultados', 'editMovGeralEventoSelecionado', (ev) => {
+    eventoSelecionadoEditMovGeral = ev;
+});
+configurarBuscaEvento('baixaItensNotaEventoBusca', 'baixaItensNotaEventoResultados', 'baixaItensNotaEventoSelecionado', (ev) => {
+    eventoSelecionadoBaixaItensNota = ev;
+});
+configurarBuscaEvento('reqCompletaEventoBusca', 'reqCompletaEventoResultados', 'reqCompletaEventoSelecionado', (ev) => {
+    eventoSelecionadoReqCompleta = ev;
+});
+configurarBuscaEvento('nfeEventoBusca', 'nfeEventoResultados', 'nfeEventoSelecionado', (ev) => {
+    eventoSelecionadoNfe = ev;
+});
+configurarBuscaEvento('baixaDiretaEventoBusca', 'baixaDiretaEventoResultados', 'baixaDiretaEventoSelecionado', (ev) => {
+    eventoSelecionadoBaixaDireta = ev;
+});
+configurarBuscaEvento('modalAtenderEventoBusca', 'modalAtenderEventoResultados', 'modalAtenderEventoSelecionado', (ev) => {
+    eventoSelecionadoModalAtender = ev;
+});
+configurarBuscaEvento('editAtendEventoBusca', 'editAtendEventoResultados', 'editAtendEventoSelecionado', (ev) => {
+    eventoSelecionadoEditAtend = ev;
+});
+
 function buscarEventos(termo) {
     termo = (termo || '').trim().toUpperCase();
     if (!termo) return eventos.slice(0, 30);
@@ -3196,7 +3571,15 @@ function abrirModalAtender(itemId) {
         `<strong>${escapeHtml(prod ? prod.nome : '#' + item.produtoId)}</strong><br>
          Requisitado: ${item.qtdRequisitada} · já entregue: ${ent} · restante: ${restante}`;
     document.getElementById('modalAtenderTag').value = item.tag || '';
-    document.getElementById('modalAtenderEvento').value = item.evento || '';
+    document.getElementById('modalAtenderEventoBusca').value = '';
+    eventoSelecionadoModalAtender = preencherEventoSelecionadoUI('modalAtenderEventoSelecionado', item.evento || '');
+    if (eventoSelecionadoModalAtender) {
+        document.getElementById('modalAtenderEventoSelecionado').querySelector('[data-limpar-evento]').addEventListener('click', (e) => {
+            e.preventDefault();
+            eventoSelecionadoModalAtender = null;
+            document.getElementById('modalAtenderEventoSelecionado').innerHTML = '';
+        });
+    }
     document.getElementById('modalQtdAtendida').value = restante > 0 ? restante : '';
     document.getElementById('modalResponsavelRetirada').value = '';
     document.getElementById('modalObservacaoRetirada').value = '';
@@ -3274,7 +3657,15 @@ function abrirModalEditarAtendimento(movId, itemId) {
     document.getElementById('editAtendQtd').value = mov.qtd;
     document.getElementById('editAtendResponsavel').value = mov.responsavel;
     document.getElementById('editAtendTag').value = mov.tag || '';
-    document.getElementById('editAtendEvento').value = mov.evento || '';
+    document.getElementById('editAtendEventoBusca').value = '';
+    eventoSelecionadoEditAtend = preencherEventoSelecionadoUI('editAtendEventoSelecionado', mov.evento || '');
+    if (eventoSelecionadoEditAtend) {
+        document.getElementById('editAtendEventoSelecionado').querySelector('[data-limpar-evento]').addEventListener('click', (e) => {
+            e.preventDefault();
+            eventoSelecionadoEditAtend = null;
+            document.getElementById('editAtendEventoSelecionado').innerHTML = '';
+        });
+    }
     document.getElementById('editAtendObservacao').value = mov.observacao;
     document.getElementById('statusEditarAtendimento').textContent = '';
     document.getElementById('modalEditarAtendimento').classList.add('aberto');
@@ -3297,7 +3688,7 @@ document.getElementById('btnSalvarEditarAtendimento').addEventListener('click', 
     const novoResponsavel = document.getElementById('editAtendResponsavel').value.trim().toUpperCase();
     const novaObservacao = document.getElementById('editAtendObservacao').value.trim();
     const novaTag = document.getElementById('editAtendTag').value.trim();
-    const novoEvento = document.getElementById('editAtendEvento').value.trim();
+    const novoEvento = eventoSelecionadoEditAtend ? eventoSelecionadoEditAtend.codigo : '';
 
     statusEl.className = '';
     statusEl.textContent = 'Atualizando...';
@@ -3377,7 +3768,7 @@ document.getElementById('btnConfirmarAtender').addEventListener('click', async (
     }
 
     const tagAtual = document.getElementById('modalAtenderTag').value.trim();
-    const eventoAtual = document.getElementById('modalAtenderEvento').value.trim();
+    const eventoAtual = eventoSelecionadoModalAtender ? eventoSelecionadoModalAtender.codigo : '';
     const valorUnitEscolhido = parseFloat(document.getElementById('modalAtenderValorUnit').value);
     if (isNaN(valorUnitEscolhido) || valorUnitEscolhido < 0) {
         statusEl.className = 'status-msg erro';
@@ -4416,19 +4807,59 @@ document.getElementById('btnAplicarFiltrosMov').addEventListener('click', buscar
 
 let movGeralEmEdicaoId = null;
 
-function abrirModalEditarMovimentacaoGeral(movId, listaAtual) {
-    const mov = listaAtual.find(m => m.id === movId);
-    if (!mov) return;
-    movGeralEmEdicaoId = movId;
-    const prod = produtos.find(p => p.id === mov.produtoId);
-    document.getElementById('editMovGeralInfo').textContent =
-        `${mov.tipo === 'entrada' ? 'Entrada' : 'Saída'} · ${prod ? prod.nome : '#' + mov.produtoId} · ${mov.data}`;
-    document.getElementById('editMovGeralQtd').value = mov.qtd;
-    document.getElementById('editMovGeralValor').value = mov.valorUnit;
-    document.getElementById('editMovGeralObservacao').value = mov.observacao || '';
-    document.getElementById('statusEditarMovGeral').textContent = '';
-    document.getElementById('modalEditarMovGeral').classList.add('aberto');
+async function abrirModalEditarMovimentacaoGeral(movId) {
+    try {
+        const { data: mov, error } = await sb.from('estoque_movimentacoes').select('*').eq('id', movId).single();
+        if (error) throw error;
+
+        movGeralEmEdicaoId = movId;
+        const prod = produtos.find(p => p.id === mov.produto_id);
+        document.getElementById('editMovGeralInfo').textContent =
+            `${mov.tipo === 'entrada' ? 'Entrada' : 'Saída'} · ${prod ? prod.nome : '#' + mov.produto_id} · ${formatarData(mov.data)}`;
+        document.getElementById('editMovGeralQtd').value = mov.qtd;
+        document.getElementById('editMovGeralValor').value = mov.valor_unit;
+        document.getElementById('editMovGeralTag').value = mov.tag || '';
+        document.getElementById('editMovGeralObservacao').value = mov.observacao || '';
+        document.getElementById('editMovGeralEventoBusca').value = '';
+        eventoSelecionadoEditMovGeral = mov.evento ? (eventos.find(e => e.codigo === mov.evento) || { codigo: mov.evento, descricao: '' }) : null;
+        document.getElementById('editMovGeralEventoSelecionado').innerHTML = eventoSelecionadoEditMovGeral
+            ? `Selecionado: <strong>${escapeHtml(eventoSelecionadoEditMovGeral.codigo)}${eventoSelecionadoEditMovGeral.descricao ? ' — ' + escapeHtml(eventoSelecionadoEditMovGeral.descricao) : ''}</strong> <a href="#" data-limpar-evento style="color:#b00020; font-size:.85em;">(remover)</a>`
+            : '';
+        if (eventoSelecionadoEditMovGeral) {
+            document.getElementById('editMovGeralEventoSelecionado').querySelector('[data-limpar-evento]').addEventListener('click', (e) => {
+                e.preventDefault();
+                eventoSelecionadoEditMovGeral = null;
+                document.getElementById('editMovGeralEventoSelecionado').innerHTML = '';
+            });
+        }
+
+        if (!catalogosBaixa.setores.length) catalogosBaixa = await chamarGet('listarCatalogosBaixa');
+        const optSetor = '<option value="">-</option>' + catalogosBaixa.setores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+        const optSubsetor = '<option value="">-</option>' + catalogosBaixa.subsetores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+        const optVeiculo = '<option value="">-</option>' + catalogosBaixa.veiculos.map(v => `<option value="${v.id}">${escapeHtml(v.nome)}${v.placa ? ' — ' + escapeHtml(v.placa) : ''}</option>`).join('');
+        const optPlanoContas = '<option value="">-</option>' + catalogosBaixa.planoContas.map(p => `<option value="${p.id}">${escapeHtml(p.codigo)} — ${escapeHtml(p.descricao)}</option>`).join('');
+        document.getElementById('editMovGeralSetor').innerHTML = optSetor;
+        document.getElementById('editMovGeralSubsetor').innerHTML = optSubsetor;
+        document.getElementById('editMovGeralVeiculo').innerHTML = optVeiculo;
+        document.getElementById('editMovGeralPlanoContas').innerHTML = optPlanoContas;
+        document.getElementById('editMovGeralSetor').value = mov.setor_id || '';
+        document.getElementById('editMovGeralSubsetor').value = mov.subsetor_id || '';
+        document.getElementById('editMovGeralVeiculo').value = mov.equipamento_veiculo_id || '';
+        document.getElementById('editMovGeralPlanoContas').value = mov.plano_contas_id || '';
+
+        document.getElementById('statusEditarMovGeral').textContent = '';
+        document.getElementById('modalEditarMovGeral').classList.add('aberto');
+    } catch (err) {
+        alert('Erro ao abrir movimentação: ' + err.message);
+    }
 }
+
+document.getElementById('editMovGeralSetor').addEventListener('change', (e) => {
+    const setorId = e.target.value;
+    const selectSubsetor = document.getElementById('editMovGeralSubsetor');
+    const filtrados = setorId ? catalogosBaixa.subsetores.filter(s => String(s.setor_id) === setorId) : catalogosBaixa.subsetores;
+    selectSubsetor.innerHTML = '<option value="">-</option>' + filtrados.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+});
 
 document.getElementById('btnCancelarEditarMovGeral').addEventListener('click', () => {
     document.getElementById('modalEditarMovGeral').classList.remove('aberto');
@@ -4445,6 +4876,12 @@ document.getElementById('btnSalvarEditarMovGeral').addEventListener('click', asy
         return;
     }
     const novaObservacao = document.getElementById('editMovGeralObservacao').value.trim();
+    const novaTag = document.getElementById('editMovGeralTag').value.trim();
+    const novoEvento = eventoSelecionadoEditMovGeral ? eventoSelecionadoEditMovGeral.codigo : '';
+    const novoSetorId = document.getElementById('editMovGeralSetor').value || null;
+    const novoSubsetorId = document.getElementById('editMovGeralSubsetor').value || null;
+    const novoVeiculoId = document.getElementById('editMovGeralVeiculo').value || null;
+    const novoPlanoContasId = document.getElementById('editMovGeralPlanoContas').value || null;
 
     statusEl.className = '';
     statusEl.textContent = 'Salvando...';
@@ -4453,7 +4890,13 @@ document.getElementById('btnSalvarEditarMovGeral').addEventListener('click', asy
             movId: movGeralEmEdicaoId,
             novaQtd,
             novoValorUnit,
-            observacao: novaObservacao
+            observacao: novaObservacao,
+            tag: novaTag,
+            evento: novoEvento,
+            setorId: novoSetorId,
+            subsetorId: novoSubsetorId,
+            veiculoId: novoVeiculoId,
+            planoContasId: novoPlanoContasId
         });
         // editar quantidade/valor de uma movimentação já lançada não dá pra
         // corrigir o preço médio incrementalmente (a média ponderada depende
@@ -4526,7 +4969,7 @@ async function buscarPainelMovimentacoes() {
             corpo.appendChild(tr);
         });
         corpo.querySelectorAll('[data-editar-mov]').forEach(btn => {
-            btn.addEventListener('click', () => abrirModalEditarMovimentacaoGeral(Number(btn.dataset.editarMov), lista));
+            btn.addEventListener('click', () => abrirModalEditarMovimentacaoGeral(Number(btn.dataset.editarMov)));
         });
     } catch (err) {
         console.error(err);
@@ -4549,7 +4992,7 @@ let tituloEmEdicaoId = null;
 async function carregarListaNotasEntrada() {
     const corpo = document.getElementById('corpoTabelaNotasEntrada');
     const vazio = document.getElementById('vazioNotasEntrada');
-    corpo.innerHTML = '<tr><td colspan="8" class="vazio">Carregando...</td></tr>';
+    corpo.innerHTML = '<tr><td colspan="9" class="vazio">Carregando...</td></tr>';
     vazio.style.display = 'none';
 
     const filtros = {
@@ -4579,6 +5022,7 @@ async function carregarListaNotasEntrada() {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${formatarData(n.data_entrada)}</td>
+                <td><span class="pill ${n.tipo === 'saida' ? 'pill-saida' : 'pill-entrada'}">${n.tipo === 'saida' ? 'Saída' : 'Entrada'}</span></td>
                 <td>${escapeHtml(n.numero_nf) || '-'}</td>
                 <td>${escapeHtml(n.nome_fornecedor) || '-'}</td>
                 <td><span class="pill ${n.xml_original ? 'pill-entrada' : 'pill-saida'}">${n.xml_original ? 'XML' : 'Manual'}</span></td>
@@ -4650,6 +5094,7 @@ function abrirNovaNotaEntrada() {
     document.getElementById('blocoItensTitulosNota').style.display = 'none';
     document.getElementById('btnRemoverNotaEntrada').style.display = 'none';
     document.getElementById('btnBaixarItensNota').style.display = 'none';
+    document.getElementById('blocoAdicionarItemNota').style.display = '';
     document.getElementById('modalNotaEntrada').classList.add('aberto');
 }
 
@@ -4659,9 +5104,10 @@ async function abrirNotaEntradaExistente(notaId) {
         if (error) throw error;
 
         notaEmEdicaoId = nota.id;
-        document.getElementById('tituloNotaEntrada').textContent = `Editando entrada — NF ${nota.numero_nf || '#' + nota.id}`;
-        document.getElementById('origemNotaEntrada').textContent = nota.xml_original
-            ? '📄 Essa nota foi criada a partir de um XML importado.' : '✍️ Essa nota foi criada manualmente.';
+        document.getElementById('tituloNotaEntrada').textContent = `Editando ${nota.tipo === 'saida' ? 'saída' : 'entrada'} — NF ${nota.numero_nf || '#' + nota.id}`;
+        document.getElementById('origemNotaEntrada').textContent = nota.tipo === 'saida'
+            ? '📤 Essa é uma nota de saída (requisição). Os itens só podem ser editados/removidos aqui — pra adicionar mais itens, cria uma nova requisição.'
+            : (nota.xml_original ? '📄 Essa nota foi criada a partir de um XML importado.' : '✍️ Essa nota foi criada manualmente.');
 
         document.getElementById('notaNumeroNf').value = nota.numero_nf || '';
         document.getElementById('notaSerie').value = nota.serie || '';
@@ -4678,7 +5124,11 @@ async function abrirNotaEntradaExistente(notaId) {
 
         document.getElementById('blocoItensTitulosNota').style.display = 'block';
         document.getElementById('btnRemoverNotaEntrada').style.display = '';
-        document.getElementById('btnBaixarItensNota').style.display = '';
+        // "baixar itens" e "adicionar item novo" só fazem sentido numa
+        // nota de entrada — numa de saída, os itens já nasceram prontos
+        // (vieram da requisição), só dá pra editar/remover os existentes
+        document.getElementById('btnBaixarItensNota').style.display = nota.tipo === 'saida' ? 'none' : '';
+        document.getElementById('blocoAdicionarItemNota').style.display = nota.tipo === 'saida' ? 'none' : '';
         await carregarItensETitulosDaNota(notaId);
         document.getElementById('modalNotaEntrada').classList.add('aberto');
     } catch (err) {
@@ -4721,10 +5171,7 @@ function renderizarItensNota() {
     document.getElementById('totalItensNota').textContent = formatarMoeda(total);
 
     corpo.querySelectorAll('[data-editar-item-nota]').forEach(btn => {
-        btn.addEventListener('click', () => abrirModalEditarMovimentacaoGeral(Number(btn.dataset.editarItemNota), itensNotaAtual.map(m => ({
-            id: m.id, produtoId: m.produto_id, tipo: m.tipo, qtd: Number(m.qtd), valorUnit: Number(m.valor_unit),
-            data: formatarData(m.data), observacao: m.observacao || ''
-        }))));
+        btn.addEventListener('click', () => abrirModalEditarMovimentacaoGeral(Number(btn.dataset.editarItemNota)));
     });
     corpo.querySelectorAll('[data-remover-item-nota]').forEach(btn => {
         btn.addEventListener('click', async () => {
@@ -5092,12 +5539,14 @@ async function abrirModalBaixaItensNota() {
     document.getElementById('baixaSubsetor').value = '';
     document.getElementById('baixaVeiculo').value = '';
     document.getElementById('baixaPlanoContas').value = '';
-    document.getElementById('baixaData').value = hojeISO();
+    document.getElementById('baixaItensNotaData').value = hojeISO();
     document.getElementById('baixaKm').value = '';
     document.getElementById('baixaKmProximaTroca').value = '';
     document.getElementById('baixaDataProximaTroca').value = '';
-    document.getElementById('baixaEvento').value = '';
-    document.getElementById('baixaResponsavel').value = '';
+    document.getElementById('baixaItensNotaEventoBusca').value = '';
+    document.getElementById('baixaItensNotaEventoSelecionado').textContent = '';
+    eventoSelecionadoBaixaItensNota = null;
+    document.getElementById('baixaItensNotaResponsavel').value = '';
 
     try {
         catalogosBaixa = await chamarGet('listarCatalogosBaixa');
@@ -5207,14 +5656,39 @@ function renderGridBaixa() {
         tr.querySelector('.baixa-km').addEventListener('change', (e) => { linha.km = e.target.value; });
         tr.querySelector('.baixa-kmprox').addEventListener('change', (e) => { linha.kmProximaTroca = e.target.value; });
         tr.querySelector('.baixa-dtprox').addEventListener('change', (e) => { linha.dtProximaTroca = e.target.value; });
-        tr.querySelector('.baixa-evento').addEventListener('change', (e) => { linha.evento = e.target.value; });
+        tr.querySelector('.baixa-evento').addEventListener('change', (e) => {
+            const valorDigitado = e.target.value.trim().toUpperCase();
+            if (!valorDigitado) { linha.evento = ''; e.target.value = ''; return; }
+            const eventoEncontrado = eventos.find(ev => ev.codigo.toUpperCase() === valorDigitado);
+            if (!eventoEncontrado) {
+                alert(`Não existe nenhum evento com o código "${valorDigitado}". Cadastre esse evento primeiro (aba Projetos → "+ Novo evento"), ou digite um código já existente.`);
+                e.target.value = linha.evento; // volta pro valor anterior
+                return;
+            }
+            linha.evento = eventoEncontrado.codigo;
+            e.target.value = eventoEncontrado.codigo;
+        });
         tr.querySelector('.baixa-planocontas').addEventListener('change', (e) => { linha.planoContasId = e.target.value; });
 
         tr.querySelector('.baixa-dividir').addEventListener('click', () => {
-            const metade = Math.floor((linha.qtdABaixar / 2) * 100) / 100;
-            if (metade <= 0) { alert('Quantidade muito pequena pra dividir.'); return; }
-            const novaLinha = { ...linha, linhaId: proximoIdLinhaBaixa++, qtdABaixar: linha.qtdABaixar - metade };
-            linha.qtdABaixar = metade;
+            const disponivelNaLinha = Number(linha.qtdABaixar);
+            if (disponivelNaLinha <= 0) { alert('Essa linha não tem quantidade disponível pra dividir.'); return; }
+
+            const respostaTexto = prompt(`Quanto você quer separar pra outro destino? (disponível nessa linha: ${disponivelNaLinha})`, '');
+            if (respostaTexto === null) return; // cancelou
+
+            const quantidade = parseFloat(respostaTexto.replace(',', '.'));
+            if (isNaN(quantidade) || quantidade <= 0) {
+                alert('Informe uma quantidade válida, maior que zero.');
+                return;
+            }
+            if (quantidade > disponivelNaLinha) {
+                alert(`Essa quantidade não pode ser maior que o disponível nessa linha (${disponivelNaLinha}).`);
+                return;
+            }
+
+            const novaLinha = { ...linha, linhaId: proximoIdLinhaBaixa++, qtdABaixar: quantidade };
+            linha.qtdABaixar = disponivelNaLinha - quantidade;
             const idx = itensBaixaAtual.findIndex(l => l.linhaId === linhaId);
             itensBaixaAtual.splice(idx + 1, 0, novaLinha);
             renderGridBaixa();
@@ -5230,7 +5704,7 @@ document.getElementById('btnAplicarTodosBaixa').addEventListener('click', () => 
     const km = document.getElementById('baixaKm').value;
     const kmProximaTroca = document.getElementById('baixaKmProximaTroca').value;
     const dtProximaTroca = document.getElementById('baixaDataProximaTroca').value;
-    const evento = document.getElementById('baixaEvento').value;
+    const evento = eventoSelecionadoBaixaItensNota ? eventoSelecionadoBaixaItensNota.codigo : '';
 
     itensBaixaAtual.forEach(linha => {
         linha.setorId = setorId; linha.subsetorId = subsetorId; linha.veiculoId = veiculoId;
@@ -5242,8 +5716,8 @@ document.getElementById('btnAplicarTodosBaixa').addEventListener('click', () => 
 
 document.getElementById('btnConfirmarBaixaItensNota').addEventListener('click', async () => {
     const statusEl = document.getElementById('statusBaixaItensNota');
-    const data = document.getElementById('baixaData').value || hojeISO();
-    const responsavel = document.getElementById('baixaResponsavel').value.trim().toUpperCase();
+    const data = document.getElementById('baixaItensNotaData').value || hojeISO();
+    const responsavel = document.getElementById('baixaItensNotaResponsavel').value.trim().toUpperCase();
 
     if (!responsavel) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe quem está retirando.'; return; }
 
@@ -5293,6 +5767,408 @@ document.getElementById('btnConfirmarBaixaItensNota').addEventListener('click', 
         statusEl.textContent = '⚠️ ' + err.message;
     } finally {
         btn.disabled = false;
+    }
+});
+
+/* =========================================================================
+   REQUISIÇÃO COMPLETA — saída avulsa, sem depender de uma nota de
+   entrada existente. Monta a lista produto por produto (com busca) e,
+   ao confirmar, cria uma estoque_notas do tipo "saida" (aparece junto
+   com as outras na aba Notas) + uma movimentação de saída por item,
+   todas ligadas a essa nota.
+   ========================================================================= */
+let itensReqCompleta = [];
+let produtoSelecionadoReqCompleta = null;
+let valorEscolhidoReqCompleta = 0;
+
+async function abrirModalRequisicaoCompleta() {
+    document.getElementById('statusRequisicaoCompleta').textContent = '';
+    document.getElementById('reqCompletaData').value = hojeISO();
+    document.getElementById('reqCompletaKm').value = '';
+    document.getElementById('reqCompletaKmProximaTroca').value = '';
+    document.getElementById('reqCompletaDataProximaTroca').value = '';
+    document.getElementById('reqCompletaEventoBusca').value = '';
+    document.getElementById('reqCompletaEventoSelecionado').innerHTML = '';
+    eventoSelecionadoReqCompleta = null;
+    document.getElementById('reqCompletaResponsavel').value = '';
+    document.getElementById('reqCompletaProdutoBusca').value = '';
+    document.getElementById('reqCompletaProdutoSelecionado').textContent = '';
+    document.getElementById('reqCompletaQtd').value = 1;
+    document.getElementById('reqCompletaValor').value = '';
+    itensReqCompleta = [];
+    produtoSelecionadoReqCompleta = null;
+
+    try {
+        if (!catalogosBaixa.setores.length) catalogosBaixa = await chamarGet('listarCatalogosBaixa');
+        const optSetor = '<option value="">-</option>' + catalogosBaixa.setores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+        const optSubsetor = '<option value="">-</option>' + catalogosBaixa.subsetores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+        const optVeiculo = '<option value="">-</option>' + catalogosBaixa.veiculos.map(v => `<option value="${v.id}">${escapeHtml(v.nome)}${v.placa ? ' — ' + escapeHtml(v.placa) : ''}</option>`).join('');
+        const optPlanoContas = '<option value="">-</option>' + catalogosBaixa.planoContas.map(p => `<option value="${p.id}">${escapeHtml(p.codigo)} — ${escapeHtml(p.descricao)}</option>`).join('');
+        document.getElementById('reqCompletaSetor').innerHTML = optSetor;
+        document.getElementById('reqCompletaSubsetor').innerHTML = optSubsetor;
+        document.getElementById('reqCompletaVeiculo').innerHTML = optVeiculo;
+        document.getElementById('reqCompletaPlanoContas').innerHTML = optPlanoContas;
+        document.getElementById('reqCompletaSetor').value = '';
+        document.getElementById('reqCompletaSubsetor').value = '';
+        document.getElementById('reqCompletaVeiculo').value = '';
+        document.getElementById('reqCompletaPlanoContas').value = '';
+
+        renderizarItensReqCompleta();
+        document.getElementById('modalRequisicaoCompleta').classList.add('aberto');
+    } catch (err) {
+        alert('Erro ao abrir requisição: ' + err.message);
+    }
+}
+
+document.getElementById('btnNovaRequisicaoCompleta').addEventListener('click', abrirModalRequisicaoCompleta);
+document.getElementById('btnFecharRequisicaoCompleta').addEventListener('click', () => {
+    document.getElementById('modalRequisicaoCompleta').classList.remove('aberto');
+    carregarListaNotasEntrada();
+});
+
+document.getElementById('reqCompletaSetor').addEventListener('change', (e) => {
+    const setorId = e.target.value;
+    const selectSubsetor = document.getElementById('reqCompletaSubsetor');
+    const filtrados = setorId ? catalogosBaixa.subsetores.filter(s => String(s.setor_id) === setorId) : catalogosBaixa.subsetores;
+    selectSubsetor.innerHTML = '<option value="">-</option>' + filtrados.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+});
+
+document.getElementById('reqCompletaProdutoBusca').addEventListener('input', () => {
+    const termo = document.getElementById('reqCompletaProdutoBusca').value;
+    produtoSelecionadoReqCompleta = null;
+    document.getElementById('reqCompletaProdutoSelecionado').textContent = '';
+    if (!termo.trim()) { document.getElementById('reqCompletaProdutoResultados').classList.remove('aberto'); return; }
+    renderizarResultadosBusca('reqCompletaProdutoResultados', termo, (p) => {
+        produtoSelecionadoReqCompleta = p;
+        document.getElementById('reqCompletaProdutoSelecionado').textContent = `Selecionado: #${p.id} — ${p.nome}`;
+        document.getElementById('reqCompletaProdutoBusca').value = p.nome;
+        escolherPrecoReqCompleta(p.precoMedio || p.valor || 0, document.getElementById('btnReqCompletaUsarPrecoMedio'));
+    });
+});
+
+function escolherPrecoReqCompleta(valor, botaoAtivo) {
+    valorEscolhidoReqCompleta = valor;
+    document.getElementById('reqCompletaValor').value = valor;
+    document.querySelectorAll('#modalRequisicaoCompleta .btn-preco-opcao').forEach(b => b.classList.remove('ativo'));
+    if (botaoAtivo) botaoAtivo.classList.add('ativo');
+}
+document.getElementById('btnReqCompletaUsarPrecoMedio').addEventListener('click', (e) => {
+    if (!produtoSelecionadoReqCompleta) return;
+    escolherPrecoReqCompleta(produtoSelecionadoReqCompleta.precoMedio || produtoSelecionadoReqCompleta.valor || 0, e.target);
+});
+document.getElementById('btnReqCompletaUsarUltimaCompra').addEventListener('click', (e) => {
+    if (!produtoSelecionadoReqCompleta) return;
+    escolherPrecoReqCompleta(produtoSelecionadoReqCompleta.precoUltimaCompra || produtoSelecionadoReqCompleta.valor || 0, e.target);
+});
+document.getElementById('btnReqCompletaUsarValorCadastrado').addEventListener('click', (e) => {
+    if (!produtoSelecionadoReqCompleta) return;
+    escolherPrecoReqCompleta(produtoSelecionadoReqCompleta.valor || 0, e.target);
+});
+
+document.getElementById('btnAdicionarItemReqCompleta').addEventListener('click', () => {
+    if (!produtoSelecionadoReqCompleta) { alert('Busque e selecione um produto primeiro.'); return; }
+    const qtd = parseFloat(document.getElementById('reqCompletaQtd').value);
+    const valorUnit = parseFloat(document.getElementById('reqCompletaValor').value);
+    if (isNaN(qtd) || qtd <= 0) { alert('Informe uma quantidade válida.'); return; }
+    if (isNaN(valorUnit) || valorUnit < 0) { alert('Informe um valor unitário válido.'); return; }
+
+    itensReqCompleta.push({ produtoId: produtoSelecionadoReqCompleta.id, produtoNome: produtoSelecionadoReqCompleta.nome, qtd, valorUnit });
+
+    document.getElementById('reqCompletaProdutoBusca').value = '';
+    document.getElementById('reqCompletaProdutoSelecionado').textContent = '';
+    document.getElementById('reqCompletaQtd').value = 1;
+    document.getElementById('reqCompletaValor').value = '';
+    document.querySelectorAll('#modalRequisicaoCompleta .btn-preco-opcao').forEach(b => b.classList.remove('ativo'));
+    produtoSelecionadoReqCompleta = null;
+    renderizarItensReqCompleta();
+});
+
+function renderizarItensReqCompleta() {
+    const corpo = document.getElementById('corpoItensReqCompleta');
+    let total = 0;
+    corpo.innerHTML = itensReqCompleta.map((item, idx) => {
+        const subtotal = item.qtd * item.valorUnit;
+        total += subtotal;
+        return `
+            <tr>
+                <td>${escapeHtml(item.produtoNome)}</td>
+                <td class="num">${item.qtd}</td>
+                <td class="num">${formatarMoeda(item.valorUnit)}</td>
+                <td class="num">${formatarMoeda(subtotal)}</td>
+                <td class="center"><button type="button" class="btn btn-vermelho btn-pequeno" data-remover-item-req="${idx}">🗑️</button></td>
+            </tr>
+        `;
+    }).join('');
+    document.getElementById('totalItensReqCompleta').textContent = formatarMoeda(total);
+
+    corpo.querySelectorAll('[data-remover-item-req]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            itensReqCompleta.splice(Number(btn.dataset.removerItemReq), 1);
+            renderizarItensReqCompleta();
+        });
+    });
+}
+
+document.getElementById('btnConfirmarRequisicaoCompleta').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusRequisicaoCompleta');
+    const responsavel = document.getElementById('reqCompletaResponsavel').value.trim().toUpperCase();
+    if (!responsavel) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe quem está retirando.'; return; }
+    if (itensReqCompleta.length === 0) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Adicione pelo menos um item.'; return; }
+
+    const data = document.getElementById('reqCompletaData').value || hojeISO();
+    const setorId = document.getElementById('reqCompletaSetor').value || null;
+    const subsetorId = document.getElementById('reqCompletaSubsetor').value || null;
+    const veiculoId = document.getElementById('reqCompletaVeiculo').value || null;
+    const planoContasId = document.getElementById('reqCompletaPlanoContas').value || null;
+    const km = document.getElementById('reqCompletaKm').value || null;
+    const kmProximaTroca = document.getElementById('reqCompletaKmProximaTroca').value || null;
+    const dtProximaTroca = document.getElementById('reqCompletaDataProximaTroca').value || null;
+    const evento = eventoSelecionadoReqCompleta ? eventoSelecionadoReqCompleta.codigo : '';
+
+    const btn = document.getElementById('btnConfirmarRequisicaoCompleta');
+    btn.disabled = true;
+    statusEl.className = '';
+    statusEl.textContent = 'Salvando...';
+    try {
+        const valorTotal = itensReqCompleta.reduce((acc, it) => acc + it.qtd * it.valorUnit, 0);
+        const nota = await chamarPost('salvarNotaFiscal', {
+            nota: {
+                tipo: 'saida',
+                dataEntrada: data,
+                nomeFornecedor: 'Almoxarifado',
+                responsavel,
+                observacoes: `Requisição de saída${evento ? ' — evento ' + evento : ''}`,
+                valorTotal
+            }
+        });
+
+        for (const item of itensReqCompleta) {
+            await chamarPost('registrarMovimentacao', {
+                movimentacao: {
+                    data, produtoId: item.produtoId, qtd: item.qtd, valorUnit: item.valorUnit, tipo: 'saida',
+                    responsavel, evento,
+                    observacao: 'Requisição de saída',
+                    estoqueNotaId: nota.id,
+                    setorId, subsetorId, veiculoId, planoContasId, km, kmProximaTroca, dtProximaTroca
+                }
+            });
+        }
+
+        statusEl.className = 'status-msg sucesso';
+        statusEl.textContent = '✅ Requisição salva com sucesso.';
+        await Promise.all([carregarProdutos(), carregarMovimentacoes()]);
+        atualizarTagContagem();
+        renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+        setTimeout(() => {
+            document.getElementById('modalRequisicaoCompleta').classList.remove('aberto');
+            carregarListaNotasEntrada();
+        }, 1200);
+    } catch (err) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = '⚠️ ' + err.message;
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+/* =========================================================================
+   CADASTROS GERAIS — Setores, Subsetores, Plano de Contas e
+   Equipamentos/Veículos. Um modal só, que muda os campos visíveis
+   conforme o tipo.
+   ========================================================================= */
+let cadGenericoTipoAtual = null;
+let cadGenericoIdAtual = null;
+
+async function carregarCadastrosGerais() {
+    catalogosBaixa = await chamarGet('listarCatalogosBaixa');
+    renderizarTabelaCadSetores();
+    renderizarTabelaCadSubsetores();
+    renderizarTabelaCadPlanoContas();
+    renderizarTabelaCadEquipamentos();
+}
+
+function renderizarTabelaCadSetores() {
+    document.getElementById('corpoCadSetores').innerHTML = catalogosBaixa.setores.map(s => `
+        <tr>
+            <td>${escapeHtml(s.nome)}</td>
+            <td class="center">${s.ativo ? '✅' : '—'}</td>
+            <td class="center"><button class="btn btn-cinza btn-pequeno" data-editar-setor="${s.id}">✏️ Editar</button></td>
+        </tr>
+    `).join('') || '<tr><td colspan="3" class="vazio">Nenhum setor cadastrado.</td></tr>';
+    document.querySelectorAll('[data-editar-setor]').forEach(btn => {
+        btn.addEventListener('click', () => abrirModalCadGenerico('setor', Number(btn.dataset.editarSetor)));
+    });
+}
+
+function renderizarTabelaCadSubsetores() {
+    document.getElementById('corpoCadSubsetores').innerHTML = catalogosBaixa.subsetores.map(s => {
+        const setor = catalogosBaixa.setores.find(x => x.id === s.setor_id);
+        return `
+            <tr>
+                <td>${escapeHtml(s.nome)}</td>
+                <td>${setor ? escapeHtml(setor.nome) : '-'}</td>
+                <td class="center">${s.ativo ? '✅' : '—'}</td>
+                <td class="center"><button class="btn btn-cinza btn-pequeno" data-editar-subsetor="${s.id}">✏️ Editar</button></td>
+            </tr>
+        `;
+    }).join('') || '<tr><td colspan="4" class="vazio">Nenhum subsetor cadastrado.</td></tr>';
+    document.querySelectorAll('[data-editar-subsetor]').forEach(btn => {
+        btn.addEventListener('click', () => abrirModalCadGenerico('subsetor', Number(btn.dataset.editarSubsetor)));
+    });
+}
+
+function renderizarTabelaCadPlanoContas() {
+    document.getElementById('corpoCadPlanoContas').innerHTML = catalogosBaixa.planoContas.map(p => `
+        <tr>
+            <td>${escapeHtml(p.codigo)}</td>
+            <td>${escapeHtml(p.descricao)}</td>
+            <td class="center">${p.ativo ? '✅' : '—'}</td>
+            <td class="center"><button class="btn btn-cinza btn-pequeno" data-editar-planocontas="${p.id}">✏️ Editar</button></td>
+        </tr>
+    `).join('') || '<tr><td colspan="4" class="vazio">Nenhum plano de contas cadastrado.</td></tr>';
+    document.querySelectorAll('[data-editar-planocontas]').forEach(btn => {
+        btn.addEventListener('click', () => abrirModalCadGenerico('planoContas', Number(btn.dataset.editarPlanocontas)));
+    });
+}
+
+function renderizarTabelaCadEquipamentos() {
+    const rotuloTipo = { veiculo: 'Veículo', gerador: 'Gerador', climatizador: 'Climatizador', outro: 'Outro' };
+    document.getElementById('corpoCadEquipamentos').innerHTML = catalogosBaixa.veiculos.map(v => `
+        <tr>
+            <td>${escapeHtml(v.nome)}</td>
+            <td>${rotuloTipo[v.tipo] || v.tipo}</td>
+            <td>${escapeHtml(v.placa) || '-'}</td>
+            <td>${escapeHtml(v.identificador) || '-'}</td>
+            <td class="num">${v.ultimo_km ?? '-'}</td>
+            <td class="num">${v.ultimo_horimetro ?? '-'}</td>
+            <td class="center">${v.ativo ? '✅' : '—'}</td>
+            <td class="center"><button class="btn btn-cinza btn-pequeno" data-editar-equip="${v.id}">✏️ Editar</button></td>
+        </tr>
+    `).join('') || '<tr><td colspan="8" class="vazio">Nenhum equipamento/veículo cadastrado.</td></tr>';
+    document.querySelectorAll('[data-editar-equip]').forEach(btn => {
+        btn.addEventListener('click', () => abrirModalCadGenerico('equipamento', Number(btn.dataset.editarEquip)));
+    });
+}
+
+function abrirModalCadGenerico(tipo, id) {
+    cadGenericoTipoAtual = tipo;
+    cadGenericoIdAtual = id || null;
+    document.getElementById('statusCadGenerico').textContent = '';
+    document.getElementById('btnExcluirCadGenerico').style.display = id ? '' : 'none';
+
+    // esconde tudo, depois mostra só o que interessa pro tipo
+    document.getElementById('campoCadNome').style.display = 'none';
+    document.getElementById('campoCadCodigo').style.display = 'none';
+    document.getElementById('campoCadDescricao').style.display = 'none';
+    document.getElementById('campoCadSetorPai').style.display = 'none';
+    document.getElementById('camposCadEquipamento').style.display = 'none';
+
+    const titulos = { setor: 'Setor', subsetor: 'Subsetor', planoContas: 'Plano de Contas', equipamento: 'Equipamento/Veículo' };
+    document.getElementById('tituloCadGenerico').textContent = (id ? 'Editar ' : 'Novo ') + titulos[tipo];
+
+    if (tipo === 'setor') {
+        document.getElementById('campoCadNome').style.display = '';
+        const item = id ? catalogosBaixa.setores.find(s => s.id === id) : null;
+        document.getElementById('cadGenericoNome').value = item ? item.nome : '';
+        document.getElementById('cadGenericoAtivo').value = item ? String(item.ativo) : 'true';
+    } else if (tipo === 'subsetor') {
+        document.getElementById('campoCadNome').style.display = '';
+        document.getElementById('campoCadSetorPai').style.display = '';
+        document.getElementById('cadGenericoSetorPai').innerHTML = '<option value="">-</option>' +
+            catalogosBaixa.setores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+        const item = id ? catalogosBaixa.subsetores.find(s => s.id === id) : null;
+        document.getElementById('cadGenericoNome').value = item ? item.nome : '';
+        document.getElementById('cadGenericoSetorPai').value = item ? item.setor_id : '';
+        document.getElementById('cadGenericoAtivo').value = item ? String(item.ativo) : 'true';
+    } else if (tipo === 'planoContas') {
+        document.getElementById('campoCadCodigo').style.display = '';
+        document.getElementById('campoCadDescricao').style.display = '';
+        const item = id ? catalogosBaixa.planoContas.find(p => p.id === id) : null;
+        document.getElementById('cadGenericoCodigo').value = item ? item.codigo : '';
+        document.getElementById('cadGenericoDescricao').value = item ? item.descricao : '';
+        document.getElementById('cadGenericoAtivo').value = item ? String(item.ativo) : 'true';
+    } else if (tipo === 'equipamento') {
+        document.getElementById('campoCadNome').style.display = '';
+        document.getElementById('camposCadEquipamento').style.display = '';
+        const item = id ? catalogosBaixa.veiculos.find(v => v.id === id) : null;
+        document.getElementById('cadGenericoNome').value = item ? item.nome : '';
+        document.getElementById('cadGenericoTipoEquip').value = item ? item.tipo : 'veiculo';
+        document.getElementById('cadGenericoPlaca').value = item ? (item.placa || '') : '';
+        document.getElementById('cadGenericoIdentificador').value = item ? (item.identificador || '') : '';
+        document.getElementById('cadGenericoUltimoKm').value = item ? (item.ultimo_km ?? '') : '';
+        document.getElementById('cadGenericoUltimoHorimetro').value = item ? (item.ultimo_horimetro ?? '') : '';
+        document.getElementById('cadGenericoAtivo').value = item ? String(item.ativo) : 'true';
+    }
+
+    document.getElementById('modalCadGenerico').classList.add('aberto');
+}
+
+document.getElementById('btnNovoSetorCad').addEventListener('click', () => abrirModalCadGenerico('setor', null));
+document.getElementById('btnNovoSubsetorCad').addEventListener('click', () => abrirModalCadGenerico('subsetor', null));
+document.getElementById('btnNovoPlanoContasCad').addEventListener('click', () => abrirModalCadGenerico('planoContas', null));
+document.getElementById('btnNovoEquipamentoCad').addEventListener('click', () => abrirModalCadGenerico('equipamento', null));
+document.getElementById('btnCancelarCadGenerico').addEventListener('click', () => {
+    document.getElementById('modalCadGenerico').classList.remove('aberto');
+});
+
+document.getElementById('btnSalvarCadGenerico').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusCadGenerico');
+    const ativo = document.getElementById('cadGenericoAtivo').value === 'true';
+    const btn = document.getElementById('btnSalvarCadGenerico');
+    btn.disabled = true;
+    statusEl.className = '';
+    statusEl.textContent = 'Salvando...';
+    try {
+        if (cadGenericoTipoAtual === 'setor') {
+            const nome = document.getElementById('cadGenericoNome').value.trim();
+            if (!nome) throw new Error('Informe o nome do setor.');
+            await chamarPost('salvarSetor', { id: cadGenericoIdAtual, nome, ativo });
+        } else if (cadGenericoTipoAtual === 'subsetor') {
+            const nome = document.getElementById('cadGenericoNome').value.trim();
+            const setorId = document.getElementById('cadGenericoSetorPai').value;
+            if (!nome) throw new Error('Informe o nome do subsetor.');
+            if (!setorId) throw new Error('Escolha o setor pai.');
+            await chamarPost('salvarSubsetor', { id: cadGenericoIdAtual, nome, setorId: Number(setorId), ativo });
+        } else if (cadGenericoTipoAtual === 'planoContas') {
+            const codigo = document.getElementById('cadGenericoCodigo').value.trim();
+            const descricao = document.getElementById('cadGenericoDescricao').value.trim();
+            if (!codigo) throw new Error('Informe o código.');
+            if (!descricao) throw new Error('Informe a descrição.');
+            await chamarPost('salvarPlanoContas', { id: cadGenericoIdAtual, codigo, descricao, ativo });
+        } else if (cadGenericoTipoAtual === 'equipamento') {
+            const nome = document.getElementById('cadGenericoNome').value.trim();
+            if (!nome) throw new Error('Informe o nome/apelido do equipamento.');
+            await chamarPost('salvarEquipamento', {
+                id: cadGenericoIdAtual, nome,
+                tipo: document.getElementById('cadGenericoTipoEquip').value,
+                placa: document.getElementById('cadGenericoPlaca').value.trim() || null,
+                identificador: document.getElementById('cadGenericoIdentificador').value.trim() || null,
+                ultimoKm: document.getElementById('cadGenericoUltimoKm').value || null,
+                ultimoHorimetro: document.getElementById('cadGenericoUltimoHorimetro').value || null,
+                ativo
+            });
+        }
+        document.getElementById('modalCadGenerico').classList.remove('aberto');
+        await carregarCadastrosGerais();
+    } catch (err) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = '⚠️ ' + err.message;
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+document.getElementById('btnExcluirCadGenerico').addEventListener('click', async () => {
+    if (!cadGenericoIdAtual) return;
+    if (!confirm('Excluir esse registro? Não é possível desfazer.')) return;
+    const acoes = { setor: 'excluirSetor', subsetor: 'excluirSubsetor', planoContas: 'excluirPlanoContas', equipamento: 'excluirEquipamento' };
+    try {
+        await chamarPost(acoes[cadGenericoTipoAtual], { id: cadGenericoIdAtual });
+        document.getElementById('modalCadGenerico').classList.remove('aberto');
+        await carregarCadastrosGerais();
+    } catch (err) {
+        document.getElementById('statusCadGenerico').className = 'status-msg erro';
+        document.getElementById('statusCadGenerico').textContent = '⚠️ ' + err.message;
     }
 });
 
