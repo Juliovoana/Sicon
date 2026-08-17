@@ -437,6 +437,7 @@
     <button class="aba-btn" data-aba="projetos">🏗️ Projetos</button>
     <button class="aba-btn" data-aba="movpainel">📋 Movimentações</button>
     <button class="aba-btn" data-aba="notasentrada">🧾 Notas</button>
+    <button class="aba-btn" data-aba="protocolo">📮 Protocolo</button>
     <button class="aba-btn" data-aba="cadastrosgerais">🗂️ Cadastros</button>
     <button class="aba-btn" data-aba="relatorios">📊 Relatórios</button>
 </div>
@@ -644,6 +645,69 @@
         </table>
     </div>
     <div class="vazio" id="vazioNotasEntrada" style="display:none;">Nenhuma nota encontrada.</div>
+</div>
+
+<!-- ===================== ABA PROTOCOLO ===================== -->
+<div class="conteudo-aba" id="aba-protocolo">
+    <div class="caixa">
+        <p class="subtitulo" style="margin-bottom:12px;">
+            Agrupa notas já lançadas (e os títulos delas) num número de protocolo sequencial —
+            é esse número que o financeiro usa do outro lado (Sicon) pra saber o que já foi aceito
+            e sincronizar. Não altera nada financeiro aqui, só numera e agrupa.
+        </p>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+                <label style="display:flex; align-items:center; gap:6px; font-weight:normal;">
+                    <input type="radio" name="protocoloFiltro" id="protocoloFiltroPendentes" value="pendentes" checked style="width:auto;">
+                    Ainda não protocoladas
+                </label>
+                <label style="display:flex; align-items:center; gap:6px; font-weight:normal;">
+                    <input type="radio" name="protocoloFiltro" id="protocoloFiltroTodas" value="todas" style="width:auto;">
+                    Já protocoladas (histórico)
+                </label>
+                <div class="campo" style="margin:0;">
+                    <select id="protocoloFiltroTipo" style="min-width:160px;">
+                        <option value="todos">Todos os tipos</option>
+                        <option value="entrada" selected>Só entrada</option>
+                        <option value="saida">Só saída</option>
+                    </select>
+                </div>
+            </div>
+            <div id="protocoloAcoesPendentes" style="display:flex; gap:8px; align-items:center;">
+                <span class="tag-status" id="protocoloContagemSelecionadas">0 selecionada(s)</span>
+                <button class="btn btn-verde" id="btnGerarProtocolo" disabled>📮 Gerar protocolo</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- lista de notas ainda não protocoladas, com checkbox pra selecionar -->
+    <div id="protocoloBlocoPendentes" style="max-height:65vh; overflow:auto;">
+        <table class="tabela" id="tabelaProtocolo">
+            <thead>
+                <tr>
+                    <th class="center" style="width:36px;"><input type="checkbox" id="protocoloMarcarTodas"></th>
+                    <th>Data</th><th>Tipo</th><th>NF nº</th><th>Fornecedor</th>
+                    <th class="num">Títulos</th><th class="num">Valor total</th><th class="center">Protocolo</th>
+                </tr>
+            </thead>
+            <tbody id="corpoTabelaProtocolo"></tbody>
+        </table>
+    </div>
+
+    <!-- histórico: um protocolo por linha, já gerado, com PDF -->
+    <div id="protocoloBlocoHistorico" style="display:none; max-height:65vh; overflow:auto;">
+        <table class="tabela" id="tabelaHistoricoProtocolo">
+            <thead>
+                <tr>
+                    <th class="center">Protocolo</th><th>Tipo</th><th>Gerado em</th>
+                    <th class="num">Nº de notas</th><th class="num">Valor total</th><th class="center">PDF</th>
+                </tr>
+            </thead>
+            <tbody id="corpoHistoricoProtocolo"></tbody>
+        </table>
+    </div>
+
+    <div class="vazio" id="vazioProtocolo" style="display:none;">Nenhuma nota encontrada.</div>
 </div>
 
 <!-- ===================== ABA RELATÓRIOS ===================== -->
@@ -1658,10 +1722,52 @@ async function chamarGet(acao, filtros) {
         if (e2) throw e2;
         return { itens: itens || [], titulos: titulos || [] };
     }
+    if (acao === 'listarNotasProtocolo') {
+        let query = sb.from('estoque_notas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('data_entrada', { ascending: false }).order('id', { ascending: false }).limit(500);
+        query = filtros.somenteAceitas ? query.gt('nr_protocolo', 0) : query.eq('nr_protocolo', 0);
+        if (filtros.tipo && filtros.tipo !== 'todos') query = query.eq('tipo', filtros.tipo);
+        const { data: notas, error: e1 } = await query;
+        if (e1) throw e1;
+        const idsNotas = (notas || []).map(n => n.id);
+        let titulos = [];
+        if (idsNotas.length > 0) {
+            const { data, error: e2 } = await sb.from('estoque_titulos_notas').select('estoque_nota_id, valor').in('estoque_nota_id', idsNotas);
+            if (e2) throw e2;
+            titulos = data || [];
+        }
+        return { notas: notas || [], titulos };
+    }
+    if (acao === 'listarProtocolosGerados') {
+        let query = sb.from('estoque_protocolos').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('nr_protocolo', { ascending: false });
+        if (filtros.tipo && filtros.tipo !== 'todos') query = query.eq('tipo', filtros.tipo);
+        const { data, error } = await query;
+        if (error) throw error;
+        return data || [];
+    }
+    if (acao === 'buscarDadosProtocolo') {
+        const { data: notas, error: e1 } = await sb.from('estoque_notas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('nr_protocolo', filtros.nrProtocolo).order('data_entrada');
+        if (e1) throw e1;
+        const idsNotas = (notas || []).map(n => n.id);
+        let titulos = [];
+        if (idsNotas.length > 0) {
+            const { data, error: e2 } = await sb.from('estoque_titulos_notas').select('*').in('estoque_nota_id', idsNotas).order('id');
+            if (e2) throw e2;
+            titulos = data || [];
+        }
+        return { notas: notas || [], titulos };
+    }
     throw new Error('ação GET desconhecida: ' + acao);
 }
 
 async function chamarPost(acao, d) {
+    if (acao === 'gerarProtocolo') {
+        const { data, error } = await sb.rpc('fn_gerar_protocolo_notas', {
+            p_unidade_id: meuPerfil.unidadeId,
+            p_nota_ids: d.notaIds
+        });
+        if (error) throw error;
+        return data; // número do protocolo gerado
+    }
     if (acao === 'salvarProduto') {
         const p = d.produto;
         const registro = {
@@ -2055,6 +2161,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
         if (btn.dataset.aba === 'relatorios') popularRelatoriosSelects();
         if (btn.dataset.aba === 'movpainel') abrirPainelMovimentacoes();
         if (btn.dataset.aba === 'notasentrada') carregarListaNotasEntrada();
+        if (btn.dataset.aba === 'protocolo') carregarNotasParaProtocolo();
         if (btn.dataset.aba === 'cadastrosgerais') carregarCadastrosGerais();
     });
 });
@@ -5217,6 +5324,271 @@ let itensNotaAtual = [];
 let titulosNotaAtual = [];
 let produtoSelecionadoItemNota = null;
 let tituloEmEdicaoId = null;
+
+/* ============================================================
+   ABA PROTOCOLO
+   ============================================================ */
+let protocoloNotasSelecionadas = new Set();
+
+async function carregarNotasParaProtocolo() {
+    const somenteAceitas = document.getElementById('protocoloFiltroTodas').checked;
+    const tipo = document.getElementById('protocoloFiltroTipo').value;
+
+    document.getElementById('protocoloBlocoPendentes').style.display = somenteAceitas ? 'none' : 'block';
+    document.getElementById('protocoloBlocoHistorico').style.display = somenteAceitas ? 'block' : 'none';
+    document.getElementById('protocoloAcoesPendentes').style.display = somenteAceitas ? 'none' : 'flex';
+    document.getElementById('vazioProtocolo').style.display = 'none';
+
+    if (somenteAceitas) {
+        await carregarHistoricoProtocolo(tipo);
+    } else {
+        await carregarNotasPendentesProtocolo(tipo);
+    }
+}
+
+async function carregarNotasPendentesProtocolo(tipo) {
+    const corpo = document.getElementById('corpoTabelaProtocolo');
+    const vazio = document.getElementById('vazioProtocolo');
+    corpo.innerHTML = '<tr><td colspan="8" class="vazio">Carregando...</td></tr>';
+    vazio.style.display = 'none';
+    protocoloNotasSelecionadas.clear();
+    atualizarContagemSelecionadasProtocolo();
+
+    try {
+        const { notas, titulos } = await chamarGet('listarNotasProtocolo', { somenteAceitas: false, tipo });
+        const somaPorNota = {};
+        titulos.forEach(t => {
+            somaPorNota[t.estoque_nota_id] = (somaPorNota[t.estoque_nota_id] || 0) + Number(t.valor || 0);
+        });
+        renderizarTabelaProtocolo(notas, somaPorNota);
+    } catch (e) {
+        corpo.innerHTML = `<tr><td colspan="8" class="vazio">Erro ao carregar: ${escapeHtml(e.message)}</td></tr>`;
+    }
+}
+
+function renderizarTabelaProtocolo(notas, somaPorNota) {
+    const corpo = document.getElementById('corpoTabelaProtocolo');
+    const vazio = document.getElementById('vazioProtocolo');
+    document.getElementById('protocoloMarcarTodas').checked = false;
+
+    if (!notas || notas.length === 0) {
+        corpo.innerHTML = '';
+        vazio.style.display = 'block';
+        return;
+    }
+    vazio.style.display = 'none';
+
+    corpo.innerHTML = notas.map(n => `
+        <tr>
+            <td class="center"><input type="checkbox" class="protocolo-check" data-nota-id="${n.id}" ${protocoloNotasSelecionadas.has(n.id) ? 'checked' : ''}></td>
+            <td>${formatarDataBR(n.data_entrada)}</td>
+            <td><span class="pill ${n.tipo === 'entrada' ? 'pill-entrada' : 'pill-saida'}">${n.tipo === 'entrada' ? 'Entrada' : 'Saída'}</span></td>
+            <td>${escapeHtml(n.numero_nf) || '-'}</td>
+            <td>${escapeHtml(n.nome_fornecedor) || '-'}</td>
+            <td class="num">${somaPorNota[n.id] ? formatarMoeda(somaPorNota[n.id]) : '-'}</td>
+            <td class="num">${formatarMoeda(n.valor_total)}</td>
+            <td class="center">${n.nr_protocolo > 0 ? `<span class="tag-status">nº ${n.nr_protocolo}</span>` : '-'}</td>
+        </tr>
+    `).join('');
+
+    corpo.querySelectorAll('.protocolo-check').forEach(chk => {
+        chk.addEventListener('change', () => {
+            const id = Number(chk.dataset.notaId);
+            if (chk.checked) protocoloNotasSelecionadas.add(id);
+            else protocoloNotasSelecionadas.delete(id);
+            atualizarContagemSelecionadasProtocolo();
+        });
+    });
+}
+
+function atualizarContagemSelecionadasProtocolo() {
+    const n = protocoloNotasSelecionadas.size;
+    document.getElementById('protocoloContagemSelecionadas').textContent = `${n} selecionada(s)`;
+    document.getElementById('btnGerarProtocolo').disabled = n === 0;
+}
+
+document.getElementById('protocoloMarcarTodas').addEventListener('change', (e) => {
+    document.querySelectorAll('.protocolo-check').forEach(chk => {
+        chk.checked = e.target.checked;
+        const id = Number(chk.dataset.notaId);
+        if (e.target.checked) protocoloNotasSelecionadas.add(id);
+        else protocoloNotasSelecionadas.delete(id);
+    });
+    atualizarContagemSelecionadasProtocolo();
+});
+
+document.getElementById('protocoloFiltroPendentes').addEventListener('change', carregarNotasParaProtocolo);
+document.getElementById('protocoloFiltroTodas').addEventListener('change', carregarNotasParaProtocolo);
+document.getElementById('protocoloFiltroTipo').addEventListener('change', carregarNotasParaProtocolo);
+
+document.getElementById('btnGerarProtocolo').addEventListener('click', async () => {
+    const ids = [...protocoloNotasSelecionadas];
+    if (ids.length === 0) return;
+    if (!confirm(`Gerar um novo protocolo agrupando ${ids.length} nota(s) selecionada(s)? Isso não pode ser desfeito por aqui.`)) return;
+    const btn = document.getElementById('btnGerarProtocolo');
+    btn.disabled = true;
+    btn.textContent = 'Gerando...';
+    try {
+        const numero = await chamarPost('gerarProtocolo', { notaIds: ids });
+        await carregarNotasParaProtocolo();
+        await acaoPdfProtocolo(numero, 'ver');
+    } catch (e) {
+        alert('Erro ao gerar protocolo: ' + e.message);
+    } finally {
+        btn.textContent = '📮 Gerar protocolo';
+    }
+});
+
+/* ---------- histórico de protocolos gerados, com PDF ---------- */
+async function carregarHistoricoProtocolo(tipo) {
+    const corpo = document.getElementById('corpoHistoricoProtocolo');
+    const vazio = document.getElementById('vazioProtocolo');
+    corpo.innerHTML = '<tr><td colspan="6" class="vazio">Carregando...</td></tr>';
+    vazio.style.display = 'none';
+
+    try {
+        const protocolos = await chamarGet('listarProtocolosGerados', { tipo });
+        if (!protocolos || protocolos.length === 0) {
+            corpo.innerHTML = '';
+            vazio.style.display = 'block';
+            return;
+        }
+        corpo.innerHTML = protocolos.map(p => `
+            <tr>
+                <td class="center"><strong>${p.nr_protocolo}</strong></td>
+                <td>${p.tipo === 'entrada' ? '<span class="pill pill-entrada">Entrada</span>' : p.tipo === 'saida' ? '<span class="pill pill-saida">Saída</span>' : 'Misto'}</td>
+                <td>${formatarDataBR(p.criado_em)}</td>
+                <td class="num">${p.qtd_notas}</td>
+                <td class="num">${formatarMoeda(p.valor_total)}</td>
+                <td class="center">
+                    <button class="btn btn-cinza btn-pequeno" data-pdf-ver="${p.nr_protocolo}" title="Visualizar">👁</button>
+                    <button class="btn btn-cinza btn-pequeno" data-pdf-baixar="${p.nr_protocolo}" title="Baixar">📄</button>
+                    <button class="btn btn-cinza btn-pequeno" data-pdf-compartilhar="${p.nr_protocolo}" title="Compartilhar">📤</button>
+                </td>
+            </tr>
+        `).join('');
+
+        corpo.querySelectorAll('[data-pdf-ver]').forEach(btn => {
+            btn.addEventListener('click', () => acaoPdfProtocolo(Number(btn.dataset.pdfVer), 'ver'));
+        });
+        corpo.querySelectorAll('[data-pdf-baixar]').forEach(btn => {
+            btn.addEventListener('click', () => acaoPdfProtocolo(Number(btn.dataset.pdfBaixar), 'baixar'));
+        });
+        corpo.querySelectorAll('[data-pdf-compartilhar]').forEach(btn => {
+            btn.addEventListener('click', () => acaoPdfProtocolo(Number(btn.dataset.pdfCompartilhar), 'compartilhar'));
+        });
+    } catch (e) {
+        corpo.innerHTML = `<tr><td colspan="6" class="vazio">Erro ao carregar: ${escapeHtml(e.message)}</td></tr>`;
+    }
+}
+
+async function construirPdfProtocolo(nrProtocolo) {
+    const { notas, titulos } = await chamarGet('buscarDadosProtocolo', { nrProtocolo });
+    if (!notas || notas.length === 0) {
+        alert('Não foi possível localizar os dados desse protocolo.');
+        return null;
+    }
+    const titulosPorNota = {};
+    titulos.forEach(t => {
+        (titulosPorNota[t.estoque_nota_id] = titulosPorNota[t.estoque_nota_id] || []).push(t);
+    });
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const margem = 14;
+    const larguraUtil = 210 - margem * 2;
+
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(14);
+    doc.text(`PROTOCOLO Nº ${nrProtocolo}`, 105, margem, { align: 'center' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
+    doc.text(`Unidade: ${meuPerfil.unidadeNome || ''}  ·  Gerado em: ${formatarDataBR(notas[0].updated_at || hojeISO())}  ·  ${notas.length} nota(s)`, 105, margem + 6, { align: 'center' });
+
+    const valorTotal = notas.reduce((acc, n) => acc + Number(n.valor_total || 0), 0);
+    let y = margem + 14;
+
+    notas.forEach((nota, idx) => {
+        const titulosDaNota = titulosPorNota[nota.id] || [];
+        // espaço mínimo pra caber pelo menos o cabeçalho da nota + uma linha;
+        // se não couber, quebra pra próxima página antes de começar
+        if (y > 260) { doc.addPage(); y = margem; }
+
+        doc.setFillColor(234, 242, 238);
+        doc.rect(margem, y, larguraUtil, 8, 'F');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.setTextColor(23, 30, 26);
+        doc.text(`NF nº ${nota.numero_nf || '-'}  ·  ${nota.tipo === 'entrada' ? 'Entrada' : 'Saída'}  ·  ${nota.nome_fornecedor || '-'}`, margem + 3, y + 5.5);
+        doc.text(formatarMoeda(nota.valor_total), margem + larguraUtil - 3, y + 5.5, { align: 'right' });
+        doc.setTextColor(0, 0, 0);
+        y += 8;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+        doc.text(`Data: ${formatarDataBR(nota.data_entrada)}`, margem + 3, y + 4);
+        y += 7;
+
+        if (titulosDaNota.length === 0) {
+            doc.setFont('helvetica', 'italic'); doc.setFontSize(8.5); doc.setTextColor(120, 120, 120);
+            doc.text('Não há títulos gerados para essa nota.', margem + 3, y + 3);
+            doc.setTextColor(0, 0, 0);
+            y += 9;
+        } else {
+            doc.autoTable({
+                startY: y,
+                margin: { left: margem, right: margem },
+                head: [['Vencimento', 'Forma', 'Valor']],
+                body: titulosDaNota.map(t => [
+                    formatarDataBR(t.data_vencimento || t.vencimento), t.forma_pagamento || '-', formatarMoeda(t.valor),
+                ]),
+                styles: { fontSize: 8, cellPadding: 1.8 },
+                headStyles: { fillColor: [45, 106, 79] },
+                margin: { left: margem + 3, right: margem },
+            });
+            y = doc.lastAutoTable.finalY + 6;
+        }
+
+        // linha fina separando uma nota da outra, exceto depois da última
+        if (idx < notas.length - 1) {
+            doc.setDrawColor(220, 220, 220);
+            doc.line(margem, y, margem + larguraUtil, y);
+            y += 6;
+        }
+    });
+
+    if (y > 265) { doc.addPage(); y = margem; }
+    y += 4;
+    doc.setDrawColor(23, 30, 26);
+    doc.line(margem, y, margem + larguraUtil, y);
+    y += 6;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+    doc.text(`Total do protocolo: ${formatarMoeda(valorTotal)}`, margem + larguraUtil, y, { align: 'right' });
+
+    const blob = doc.output('blob');
+    const nomeArquivo = `protocolo-${nrProtocolo}.pdf`;
+    return { blob, nomeArquivo };
+}
+
+async function acaoPdfProtocolo(nrProtocolo, tipoAcao) {
+    const resultado = await construirPdfProtocolo(nrProtocolo);
+    if (!resultado) return;
+    const { blob, nomeArquivo } = resultado;
+    if (tipoAcao === 'ver') {
+        window.open(URL.createObjectURL(blob), '_blank');
+    } else if (tipoAcao === 'baixar') {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = nomeArquivo;
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+    } else if (tipoAcao === 'compartilhar') {
+        try {
+            const arquivo = new File([blob], nomeArquivo, { type: 'application/pdf' });
+            if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
+                await navigator.share({ files: [arquivo], title: nomeArquivo });
+            } else {
+                alert('Esse navegador não suporta compartilhar arquivo diretamente. Use "Baixar" e envie por WhatsApp/e-mail manualmente.');
+            }
+        } catch (erro) {
+            if (erro.name !== 'AbortError') alert('Não foi possível compartilhar: ' + erro.message);
+        }
+    }
+}
 
 async function carregarListaNotasEntrada() {
     const corpo = document.getElementById('corpoTabelaNotasEntrada');
