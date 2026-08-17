@@ -825,6 +825,13 @@
         </div>
         <div id="nfeInfo" style="margin-top:10px; font-size:0.9em;"></div>
 
+        <div id="nfeBlocoRateio" style="display:none; background:#FFF8E1; border:1px solid #F2A93B; border-radius:8px; padding:12px 14px; margin-top:10px;">
+            <p id="nfeRateioTexto" style="margin:0 0 8px 0; font-size:0.88em;"></p>
+            <button class="btn btn-cinza btn-pequeno" id="btnAplicarRateioNFe" type="button">🧮 Aplicar rateio no valor dos produtos</button>
+            <button class="btn btn-cinza btn-pequeno" id="btnRemoverRateioNFe" type="button" style="display:none;">↩️ Remover rateio (voltar ao valor original do XML)</button>
+            <p id="nfeStatusRateio" style="margin:8px 0 0 0; font-size:0.82em; color:#8A5E12;"></p>
+        </div>
+
         <div id="nfeBlocoItens" style="display:none;">
             <div class="grade col4" style="margin-top:14px;">
                 <div class="campo"><label>Data de lançamento</label><input type="date" id="nfeDataLancamento"></div>
@@ -2476,7 +2483,13 @@ function parsearXmlNFe(xmlText) {
             vUnCom: parseFloat(get(prod, 'vUnCom')) || 0,
             // "SEM GTIN" é o valor padrão da nota quando não tem código de
             // barras — trata como se não tivesse
-            cEan: (cEan && cEan.toUpperCase() !== 'SEM GTIN') ? cEan : ''
+            cEan: (cEan && cEan.toUpperCase() !== 'SEM GTIN') ? cEan : '',
+            // desconto/frete/outras despesas às vezes vêm lançados item a
+            // item (dentro de <det><prod>), não só no total da nota — quando
+            // vêm assim, aplicamos direto nesse item, sem precisar ratear
+            vDescItem: parseFloat(get(prod, 'vDesc')) || 0,
+            vFreteItem: parseFloat(get(prod, 'vFrete')) || 0,
+            vOutroItem: parseFloat(get(prod, 'vOutro')) || 0,
         };
     });
 
@@ -2507,11 +2520,11 @@ function parsearXmlNFe(xmlText) {
 }
 
 function encontrarProdutoCorrespondenteNFe(itemNfe) {
-    const codigoNum = String(itemNfe.cProd || '').replace(/\D/g, '');
-    if (codigoNum) {
-        const porCodigo = produtos.find(p => String(p.id) === codigoNum);
-        if (porCodigo) return porCodigo;
-    }
+    // Só cai aqui quando não existe mapeamento salvo (estoque_produtos_fornecedor_codigos)
+    // pra esse fornecedor+código. Antes também tentava comparar o código do
+    // fornecedor (cProd) direto com o nosso id interno do produto — isso
+    // casava por coincidência números pequenos com produtos errados, então
+    // foi removido. Agora só tenta por nome parecido, como último recurso.
     const nomeNfe = (itemNfe.xProd || '').toUpperCase().trim();
     if (!nomeNfe) return null;
     return produtos.find(p => {
@@ -2563,15 +2576,39 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
         nfe.xmlOriginal = texto; // guarda o XML bruto — é o que marca essa nota como "origem: XML" na lista
         nfeDadosNota = nfe;
 
+        // soma dos ajustes lançados item a item (não confundir com os do
+        // total da nota — esses aqui já vêm identificados por produto)
+        const somaVDescItens = nfe.itens.reduce((acc, it) => acc + (it.vDescItem || 0), 0);
+        const somaVFreteItens = nfe.itens.reduce((acc, it) => acc + (it.vFreteItem || 0), 0);
+        const somaVOutroItens = nfe.itens.reduce((acc, it) => acc + (it.vOutroItem || 0), 0);
+
         document.getElementById('nfeInfo').innerHTML = `
             <strong>NF nº ${escapeHtml(nfe.nNF) || '-'}</strong> · Emitida em ${escapeHtml(formatarData(nfe.dhEmi))}<br>
             Emitente: ${escapeHtml(nfe.emitNome) || '-'} ${nfe.emitCnpj ? '(CNPJ: ' + escapeHtml(nfe.emitCnpj) + ')' : ''}<br>
             Destinatário: ${escapeHtml(nfe.destNome) || '-'}<br>
             ${nfe.chaveAcesso ? 'Chave de acesso: ' + escapeHtml(nfe.chaveAcesso) + '<br>' : ''}
-            Valor total da nota: ${formatarMoeda(nfe.vNF)}${nfe.vDesc ? ' (desconto: ' + formatarMoeda(nfe.vDesc) + ')' : ''}<br>
+            Valor dos produtos: ${formatarMoeda(nfe.vProd)}${nfe.vDesc ? ' · Desconto (total): ' + formatarMoeda(nfe.vDesc) : ''}${nfe.vFrete ? ' · Frete (total): ' + formatarMoeda(nfe.vFrete) : ''}${nfe.vOutro ? ' · Outras despesas (total): ' + formatarMoeda(nfe.vOutro) : ''}<br>
+            ${(somaVDescItens || somaVFreteItens || somaVOutroItens) ? `Lançado item a item: ${somaVDescItens ? 'desconto ' + formatarMoeda(somaVDescItens) + ' ' : ''}${somaVFreteItens ? 'frete ' + formatarMoeda(somaVFreteItens) + ' ' : ''}${somaVOutroItens ? 'outras despesas ' + formatarMoeda(somaVOutroItens) : ''} — já aplicado direto em cada produto abaixo, sem precisar ratear.<br>` : ''}
+            Valor total da nota: ${formatarMoeda(nfe.vNF)}<br>
             ${nfe.dups.length ? nfe.dups.length + ' parcela(s) de pagamento encontrada(s) no XML.<br>' : 'Sem parcelas de pagamento no XML — pode lançar manualmente depois.<br>'}
             ${nfe.itens.length} item(ns) encontrado(s).
         `;
+
+        // desconto/frete que ainda sobram no NÍVEL DA NOTA (descontando o
+        // que já foi lançado item a item, pra não aplicar duas vezes) —
+        // esse resíduo sim precisa de rateio proporcional
+        const ajusteRateioNfe = ((nfe.vFrete || 0) - somaVFreteItens) + ((nfe.vOutro || 0) - somaVOutroItens) - ((nfe.vDesc || 0) - somaVDescItens);
+        const blocoRateio = document.getElementById('nfeBlocoRateio');
+        if (Math.abs(ajusteRateioNfe) > 0.01) {
+            blocoRateio.style.display = 'block';
+            document.getElementById('nfeRateioTexto').textContent =
+                `Essa nota tem ${formatarMoeda(Math.abs(ajusteRateioNfe))} de ${ajusteRateioNfe > 0 ? 'frete/despesas acessórias' : 'desconto líquido'} no total da nota (fora do que já veio item a item) pra distribuir entre os produtos.`;
+            document.getElementById('nfeStatusRateio').textContent = '';
+            document.getElementById('btnAplicarRateioNFe').style.display = 'inline-block';
+            document.getElementById('btnRemoverRateioNFe').style.display = 'none';
+        } else {
+            blocoRateio.style.display = 'none';
+        }
 
         // busca o mapeamento código-do-fornecedor -> nosso produto, feito em
         // importações anteriores desse mesmo fornecedor (evita depender só
@@ -2595,13 +2632,21 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
         nfeItensParseados = nfe.itens.map(it => {
             const produtoIdMapeado = mapaCodigoParaProdutoId.get(it.cProd);
             const match = produtoIdMapeado ? produtos.find(p => p.id === produtoIdMapeado) : encontrarProdutoCorrespondenteNFe(it);
+            // aplica direto o desconto/frete/outras despesas lançados nesse
+            // item específico (exato, sem precisar ratear) — o valor unit.
+            // do XML (vUnCom) ainda não considera isso
+            const ajusteProprioItem = (it.vFreteItem || 0) + (it.vOutroItem || 0) - (it.vDescItem || 0);
+            const valorTotalComAjusteProprio = (it.qCom * it.vUnCom) + ajusteProprioItem;
+            const valorUnitComAjusteProprio = it.qCom > 0 ? Math.round((valorTotalComAjusteProprio / it.qCom) * 100) / 100 : it.vUnCom;
             return {
                 cProd: it.cProd,
                 cEan: it.cEan,
                 xProdOriginal: it.xProd,
                 un: it.uCom,
                 qtd: it.qCom,
-                valorUnit: it.vUnCom,
+                valorUnit: valorUnitComAjusteProprio,
+                valorUnitOriginal: valorUnitComAjusteProprio, // já com o ajuste próprio do item — referência pro rateio do total da nota
+                temAjusteProprio: ajusteProprioItem !== 0,
                 produtoVinculadoId: match ? match.id : null,
                 criarNovo: !match
             };
@@ -2618,6 +2663,41 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
     }
 });
 
+document.getElementById('btnAplicarRateioNFe').addEventListener('click', () => {
+    if (!nfeDadosNota) return;
+    // frete e outras despesas acréscem o custo; desconto reduz — o líquido
+    // é distribuído proporcionalmente ao valor de cada item na nota
+    const ajusteTotal = (nfeDadosNota.vFrete || 0) + (nfeDadosNota.vOutro || 0) - (nfeDadosNota.vDesc || 0);
+    const totalProdutos = nfeItensParseados.reduce((acc, it) => acc + (Number(it.qtd) * Number(it.valorUnitOriginal)), 0);
+    if (totalProdutos <= 0) {
+        document.getElementById('nfeStatusRateio').textContent = 'Não foi possível ratear: o total dos produtos está zerado.';
+        return;
+    }
+    nfeItensParseados.forEach(item => {
+        const valorTotalOriginal = Number(item.qtd) * Number(item.valorUnitOriginal);
+        const participacao = valorTotalOriginal / totalProdutos;
+        const ajusteItem = ajusteTotal * participacao;
+        const novoValorTotal = valorTotalOriginal + ajusteItem;
+        item.valorUnit = item.qtd > 0 ? Math.round((novoValorTotal / item.qtd) * 100) / 100 : item.valorUnitOriginal;
+        item.percentualRateio = participacao * 100;
+    });
+    document.getElementById('nfeStatusRateio').textContent = '✓ Rateio aplicado — cada produto já reflete sua parte proporcional do ajuste.';
+    document.getElementById('btnAplicarRateioNFe').style.display = 'none';
+    document.getElementById('btnRemoverRateioNFe').style.display = 'inline-block';
+    renderizarTabelaNFe();
+});
+
+document.getElementById('btnRemoverRateioNFe').addEventListener('click', () => {
+    nfeItensParseados.forEach(item => {
+        item.valorUnit = item.valorUnitOriginal;
+        item.percentualRateio = null;
+    });
+    document.getElementById('nfeStatusRateio').textContent = '';
+    document.getElementById('btnAplicarRateioNFe').style.display = 'inline-block';
+    document.getElementById('btnRemoverRateioNFe').style.display = 'none';
+    renderizarTabelaNFe();
+});
+
 function renderizarTabelaNFe() {
     const corpo = document.getElementById('corpoTabelaNFe');
     corpo.innerHTML = '';
@@ -2629,12 +2709,19 @@ function renderizarTabelaNFe() {
             <td>${escapeHtml(item.xProdOriginal)}</td>
             <td><input type="text" class="input-qtd-pedida" value="${escapeHtml(item.un)}" data-nfe-unidade="${idx}" style="width:70px;"></td>
             <td class="num"><input type="number" step="0.01" class="input-qtd-pedida" value="${item.qtd}" data-nfe-qtd="${idx}"></td>
-            <td class="num"><input type="number" step="0.01" class="input-qtd-pedida" value="${item.valorUnit}" data-nfe-valor="${idx}"></td>
+            <td class="num">
+                <input type="number" step="0.01" class="input-qtd-pedida" value="${item.valorUnit}" data-nfe-valor="${idx}">
+                ${item.temAjusteProprio ? `<div style="font-size:0.75em; color:#2D6A4F; margin-top:2px;">✓ já inclui desc./frete do item</div>` : ''}
+                ${item.percentualRateio ? `<div style="font-size:0.75em; color:#8A5E12; margin-top:2px;">+${item.percentualRateio.toFixed(1)}% rateio</div>` : ''}
+            </td>
             <td>${item.criarNovo
                 ? `<span class="pill" style="background:#fff3e0;color:#e65100;">+ Novo produto</span>`
                 : `<span class="pill pill-entrada">${prodVinculado ? '#' + prodVinculado.id + ' — ' + escapeHtml(prodVinculado.nome) : '-'}</span>`
             }</td>
-            <td class="center"><button class="btn btn-cinza btn-pequeno" data-nfe-vincular="${idx}">🔍 Vincular</button></td>
+            <td class="center">
+                <button class="btn btn-cinza btn-pequeno" data-nfe-vincular="${idx}">🔍 ${item.criarNovo ? 'Vincular' : 'Trocar'}</button>
+                ${!item.criarNovo ? `<button class="btn btn-cinza btn-pequeno" data-nfe-desfazer="${idx}" title="Desfazer vínculo e tratar como produto novo" style="margin-left:4px;">❌ Desfazer</button>` : ''}
+            </td>
         `;
         corpo.appendChild(tr);
     });
@@ -2654,16 +2741,29 @@ function renderizarTabelaNFe() {
             item.qtd = novaQtd;
             if (novaQtd > 0 && totalAnterior > 0) {
                 item.valorUnit = Math.round((totalAnterior / novaQtd) * 100) / 100;
+                item.percentualRateio = null; // o percentual exibido não vale mais pra essa nova divisão
                 const inputValor = corpo.querySelector(`[data-nfe-valor="${i}"]`);
                 if (inputValor) inputValor.value = item.valorUnit;
             }
         });
     });
     corpo.querySelectorAll('[data-nfe-valor]').forEach(inp => {
-        inp.addEventListener('change', () => { nfeItensParseados[Number(inp.dataset.nfeValor)].valorUnit = parseFloat(inp.value) || 0; });
+        inp.addEventListener('change', () => {
+            const item = nfeItensParseados[Number(inp.dataset.nfeValor)];
+            item.valorUnit = parseFloat(inp.value) || 0;
+            item.percentualRateio = null; // edição manual sobrepõe o rateio calculado
+        });
     });
     corpo.querySelectorAll('[data-nfe-vincular]').forEach(btn => {
         btn.addEventListener('click', () => abrirVinculoProdutoNFe(Number(btn.dataset.nfeVincular)));
+    });
+    corpo.querySelectorAll('[data-nfe-desfazer]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const idx = Number(btn.dataset.nfeDesfazer);
+            nfeItensParseados[idx].criarNovo = true;
+            nfeItensParseados[idx].produtoVinculadoId = null;
+            renderizarTabelaNFe();
+        });
     });
 }
 
