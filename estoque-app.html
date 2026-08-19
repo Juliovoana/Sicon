@@ -1121,10 +1121,14 @@
             <div class="campo"><label>CNPJ do fornecedor</label><input type="text" id="notaFornecedorCnpj"></div>
         </div>
         <div class="grade col4" style="margin-top:10px;">
+            <div class="campo"><label>Valor total da nota (R$)</label><input type="number" step="0.01" id="notaValorTotal" value="0"></div>
             <div class="campo"><label>Valor desconto (R$)</label><input type="number" step="0.01" id="notaValorDesconto" value="0"></div>
             <div class="campo"><label>Valor frete (R$)</label><input type="number" step="0.01" id="notaValorFrete" value="0"></div>
             <div class="campo"><label>Responsável</label><input type="text" id="notaResponsavel"></div>
+        </div>
+        <div class="grade col2" style="margin-top:10px;">
             <div class="campo"><label>Chave de acesso (opcional)</label><input type="text" id="notaChaveAcesso"></div>
+            <div class="campo" style="align-self:end;"><span class="subtitulo" id="notaValorTotalDica"></span></div>
         </div>
         <div class="campo" style="margin-top:10px;"><label>Observações</label><input type="text" id="notaObservacoes"></div>
 
@@ -1157,7 +1161,7 @@
             </div>
 
             <table class="tabela" style="margin-top:10px;">
-                <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th class="num">Subtotal</th><th>Ações</th></tr></thead>
+                <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit. (original)</th><th class="num">Vlr Unit. (final)</th><th class="num">Subtotal</th><th>Ações</th></tr></thead>
                 <tbody id="corpoItensNota"></tbody>
             </table>
             <div style="text-align:right; margin-top:6px; font-weight:600;">Total dos itens: <span id="totalItensNota">R$ 0,00</span></div>
@@ -1781,6 +1785,11 @@ async function chamarPost(acao, d) {
         if (p.id) registro.id = p.id; // se não informado, o banco gera automaticamente
         const { data, error } = await sb.from('estoque_produtos').upsert(registro).select().single();
         if (error) throw error;
+        // igual acontece ao editar uma movimentação: mudar estoque_inicial (ou
+        // qualquer outro dado que afete o saldo) exige reprocessar, senão o
+        // campo "estoque" fica desatualizado até a próxima entrada/saída
+        const { error: erroReprocessar } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId });
+        if (erroReprocessar) throw erroReprocessar;
         return data;
     }
     if (acao === 'registrarMovimentacao') {
@@ -1791,6 +1800,9 @@ async function chamarPost(acao, d) {
         const fornecedorNomeFinal = m.fornecedorNome || (m.tipo === 'saida' ? 'Almoxarifado' : null);
         const { error: e1 } = await sb.from('estoque_movimentacoes').insert({
             data: m.data, produto_id: m.produtoId, tipo: m.tipo, qtd: m.qtd, valor_unit: m.valorUnit,
+            // quando não vem valor original (lançamento manual, sem rateio de
+            // desconto/frete), o original é o próprio valor final
+            valor_unit_original: m.valorUnitOriginal != null ? m.valorUnitOriginal : m.valorUnit,
             tag: m.tag || '', evento: m.evento || '', observacao: m.observacao || '', responsavel: m.responsavel || '',
             projeto_id: m.projetoId || null, item_projeto_id: m.itemProjetoId || null,
             nf_numero: m.nfNumero || null, fornecedor_cnpj: m.fornecedorCnpj || null, fornecedor_nome: fornecedorNomeFinal,
@@ -3022,7 +3034,8 @@ async function processarImportacaoNFe(tipo) {
 
             await chamarPost('registrarMovimentacao', {
                 movimentacao: {
-                    data, produtoId, qtd: item.qtd, valorUnit: item.valorUnit, tipo,
+                    data, produtoId, qtd: item.qtd, valorUnit: item.valorUnit,
+                    valorUnitOriginal: item.valorUnitOriginal, tipo,
                     tag, evento,
                     observacao: observacaoBase || `Importado da NF-e`,
                     responsavel, projetoId: null, itemProjetoId: null,
@@ -5691,8 +5704,10 @@ document.getElementById('btnRemoverNotaEntrada').addEventListener('click', async
 function limparFormularioNota() {
     ['notaNumeroNf', 'notaSerie', 'notaDataEmissao', 'notaDataEntrada', 'notaFornecedorNome', 'notaFornecedorCnpj',
      'notaResponsavel', 'notaChaveAcesso', 'notaObservacoes'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('notaValorTotal').value = 0;
     document.getElementById('notaValorDesconto').value = 0;
     document.getElementById('notaValorFrete').value = 0;
+    document.getElementById('notaValorTotalDica').textContent = '';
     document.getElementById('notaDataEntrada').value = hojeISO();
     document.getElementById('statusNotaEntrada').textContent = '';
 }
@@ -5730,6 +5745,7 @@ async function abrirNotaEntradaExistente(notaId) {
         document.getElementById('notaDataEntrada').value = nota.data_entrada || '';
         document.getElementById('notaFornecedorNome').value = nota.nome_fornecedor || '';
         document.getElementById('notaFornecedorCnpj').value = nota.cnpj_fornecedor || '';
+        document.getElementById('notaValorTotal').value = nota.valor_total || 0;
         document.getElementById('notaValorDesconto').value = nota.valor_desconto || 0;
         document.getElementById('notaValorFrete').value = nota.valor_frete || 0;
         document.getElementById('notaResponsavel').value = nota.responsavel || '';
@@ -5770,11 +5786,14 @@ function renderizarItensNota() {
         const prod = produtos.find(p => p.id === m.produto_id);
         const subtotal = Number(m.qtd) * Number(m.valor_unit);
         total += subtotal;
+        const valorOriginal = m.valor_unit_original != null ? Number(m.valor_unit_original) : Number(m.valor_unit);
+        const temRateio = Math.abs(valorOriginal - Number(m.valor_unit)) > 0.005;
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${prod ? escapeHtml(prod.nome) : ('#' + m.produto_id)}</td>
             <td class="num">${Number(m.qtd).toLocaleString('pt-BR')}</td>
-            <td class="num">${formatarMoeda(m.valor_unit)}</td>
+            <td class="num">${formatarMoeda(valorOriginal)}</td>
+            <td class="num">${formatarMoeda(m.valor_unit)}${temRateio ? ' <span title="Já inclui rateio de desconto/frete" style="color:#8A5E12;">✓</span>' : ''}</td>
             <td class="num">${formatarMoeda(subtotal)}</td>
             <td class="center">
                 <button class="btn btn-cinza btn-pequeno" data-editar-item-nota="${m.id}">✏️</button>
@@ -5784,6 +5803,8 @@ function renderizarItensNota() {
         corpo.appendChild(tr);
     });
     document.getElementById('totalItensNota').textContent = formatarMoeda(total);
+    const dica = document.getElementById('notaValorTotalDica');
+    if (dica) dica.textContent = total > 0 ? `Soma dos itens: ${formatarMoeda(total)}` : '';
 
     corpo.querySelectorAll('[data-editar-item-nota]').forEach(btn => {
         btn.addEventListener('click', () => abrirModalEditarMovimentacaoGeral(Number(btn.dataset.editarItemNota)));
@@ -5861,6 +5882,7 @@ document.getElementById('btnSalvarCabecalhoNota').addEventListener('click', asyn
                 dataEntrada,
                 cnpjFornecedor: document.getElementById('notaFornecedorCnpj').value.trim(),
                 nomeFornecedor: nome,
+                valorTotal: parseFloat(document.getElementById('notaValorTotal').value) || 0,
                 valorDesconto: parseFloat(document.getElementById('notaValorDesconto').value) || 0,
                 valorFrete: parseFloat(document.getElementById('notaValorFrete').value) || 0,
                 responsavel: document.getElementById('notaResponsavel').value.trim().toUpperCase(),
