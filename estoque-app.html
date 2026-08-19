@@ -1638,9 +1638,23 @@ function proximoIdProduto() {
 /* ---------- comunicação com o backend (Supabase) ---------- */
 async function chamarGet(acao, filtros) {
     if (acao === 'listarProdutos') {
-        const { data, error } = await sb.from('estoque_produtos').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).range(0, 9999);
-        if (error) throw error;
-        return data;
+        // o Supabase tem um limite padrão de 1000 linhas por resposta,
+        // que ignora silenciosamente qualquer .range() maior pedido aqui
+        // — por isso busca em páginas, até a página vir menor que o
+        // tamanho pedido (sinal de que chegou ao fim)
+        const TAMANHO_PAGINA = 1000;
+        let todosProdutos = [];
+        let pagina = 0;
+        while (true) {
+            const inicio = pagina * TAMANHO_PAGINA;
+            const fim = inicio + TAMANHO_PAGINA - 1;
+            const { data, error } = await sb.from('estoque_produtos').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).range(inicio, fim);
+            if (error) throw error;
+            todosProdutos = todosProdutos.concat(data || []);
+            if (!data || data.length < TAMANHO_PAGINA) break;
+            pagina++;
+        }
+        return todosProdutos;
     }
     if (acao === 'listarMovimentacoes') {
         const { data, error } = await sb.from('estoque_movimentacoes').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('data', { ascending: false }).limit(300);
@@ -1659,14 +1673,34 @@ async function chamarGet(acao, filtros) {
         return data;
     }
     if (acao === 'listarProjetos') {
-        const { data, error } = await sb.from('fabrica_projetos').select('*, fabrica_itens_projeto(*)').eq('unidade_negocio_id', meuPerfil.unidadeId).range(0, 9999);
-        if (error) throw error;
-        return (data || []).map(p => ({ ...p, itens: p.fabrica_itens_projeto || [] }));
+        const TAMANHO_PAGINA = 1000;
+        let todosProjetos = [];
+        let pagina = 0;
+        while (true) {
+            const inicio = pagina * TAMANHO_PAGINA;
+            const fim = inicio + TAMANHO_PAGINA - 1;
+            const { data, error } = await sb.from('fabrica_projetos').select('*, fabrica_itens_projeto(*)').eq('unidade_negocio_id', meuPerfil.unidadeId).range(inicio, fim);
+            if (error) throw error;
+            todosProjetos = todosProjetos.concat(data || []);
+            if (!data || data.length < TAMANHO_PAGINA) break;
+            pagina++;
+        }
+        return todosProjetos.map(p => ({ ...p, itens: p.fabrica_itens_projeto || [] }));
     }
     if (acao === 'listarEventos') {
-        const { data, error } = await sb.from('fabrica_eventos').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).range(0, 9999);
-        if (error) throw error;
-        return data;
+        const TAMANHO_PAGINA = 1000;
+        let todosEventos = [];
+        let pagina = 0;
+        while (true) {
+            const inicio = pagina * TAMANHO_PAGINA;
+            const fim = inicio + TAMANHO_PAGINA - 1;
+            const { data, error } = await sb.from('fabrica_eventos').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).range(inicio, fim);
+            if (error) throw error;
+            todosEventos = todosEventos.concat(data || []);
+            if (!data || data.length < TAMANHO_PAGINA) break;
+            pagina++;
+        }
+        return todosEventos;
     }
     if (acao === 'listarNotasEntrada') {
         filtros = filtros || {};
@@ -2040,7 +2074,14 @@ async function chamarPost(acao, d) {
         await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: -sinal * Number(antiga.qtd) });
         await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: sinal * Number(d.novaQtd) });
         const upd = { qtd: d.novaQtd };
-        if (d.novoValorUnit != null) upd.valor_unit = d.novoValorUnit;
+        if (d.novoValorUnit != null) {
+            upd.valor_unit = d.novoValorUnit;
+            // edição manual sobrepõe qualquer rateio anterior — a partir daqui,
+            // o valor editado é a nova referência tanto pro "original" quanto
+            // pro "final" (senão o campo original ficava desatualizado, sem
+            // bater com o que a pessoa realmente editou)
+            upd.valor_unit_original = d.novoValorUnit;
+        }
         if (d.responsavel != null) upd.responsavel = d.responsavel;
         if (d.observacao != null) upd.observacao = d.observacao;
         if (d.tag != null) upd.tag = d.tag;
@@ -2721,10 +2762,8 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
         if (Math.abs(ajusteRateioNfe) > 0.01) {
             blocoRateio.style.display = 'block';
             document.getElementById('nfeRateioTexto').textContent =
-                `Essa nota tem ${formatarMoeda(Math.abs(ajusteRateioNfe))} de ${ajusteRateioNfe > 0 ? 'frete/despesas acessórias' : 'desconto líquido'} no total da nota (fora do que já veio item a item) pra distribuir entre os produtos.`;
+                `Essa nota tem ${formatarMoeda(Math.abs(ajusteRateioNfe))} de ${ajusteRateioNfe > 0 ? 'frete/despesas acessórias' : 'desconto líquido'} no total da nota (fora do que já veio item a item) pra distribuir entre os produtos. Já aplicado automaticamente abaixo — dá pra desfazer se não for o caso.`;
             document.getElementById('nfeStatusRateio').textContent = '';
-            document.getElementById('btnAplicarRateioNFe').style.display = 'inline-block';
-            document.getElementById('btnRemoverRateioNFe').style.display = 'none';
         } else {
             blocoRateio.style.display = 'none';
         }
@@ -2772,7 +2811,11 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
         });
 
         if (nfe.dhEmi) document.getElementById('nfeDataLancamento').value = String(nfe.dhEmi).slice(0, 10);
-        renderizarTabelaNFe();
+        if (Math.abs(ajusteRateioNfe) > 0.01) {
+            aplicarRateioNFe(); // já chama renderizarTabelaNFe() internamente
+        } else {
+            renderizarTabelaNFe();
+        }
         document.getElementById('nfeBlocoItens').style.display = 'block';
         statusEl.textContent = '';
     } catch (err) {
@@ -2782,7 +2825,7 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
     }
 });
 
-document.getElementById('btnAplicarRateioNFe').addEventListener('click', () => {
+function aplicarRateioNFe() {
     if (!nfeDadosNota) return;
     // frete e outras despesas acréscem o custo; desconto reduz — o líquido
     // é distribuído proporcionalmente ao valor de cada item na nota
@@ -2800,11 +2843,12 @@ document.getElementById('btnAplicarRateioNFe').addEventListener('click', () => {
         item.valorUnit = item.qtd > 0 ? Math.round((novoValorTotal / item.qtd) * 100) / 100 : item.valorUnitOriginal;
         item.percentualRateio = participacao * 100;
     });
-    document.getElementById('nfeStatusRateio').textContent = '✓ Rateio aplicado — cada produto já reflete sua parte proporcional do ajuste.';
+    document.getElementById('nfeStatusRateio').textContent = '✓ Rateio aplicado automaticamente — cada produto já reflete sua parte proporcional do ajuste.';
     document.getElementById('btnAplicarRateioNFe').style.display = 'none';
     document.getElementById('btnRemoverRateioNFe').style.display = 'inline-block';
     renderizarTabelaNFe();
-});
+}
+document.getElementById('btnAplicarRateioNFe').addEventListener('click', aplicarRateioNFe);
 
 document.getElementById('btnRemoverRateioNFe').addEventListener('click', () => {
     nfeItensParseados.forEach(item => {
