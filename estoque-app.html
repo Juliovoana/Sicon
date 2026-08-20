@@ -77,9 +77,9 @@
     }
     #notaItemProdutoResultados.aberto { display: block; }
     #reqCompletaProdutoResultados {
-        position: absolute; z-index: 20; background: #fff; width: 100%;
+        position: absolute; top: 100%; left: 0; z-index: 20; background: #fff; width: 100%;
         border: 1px solid #ddd; border-radius: 6px; max-height: 220px; overflow-y: auto; display: none;
-        box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+        box-shadow: 0 4px 14px rgba(0,0,0,0.15); margin-top: 4px;
     }
     #reqCompletaProdutoResultados.aberto { display: block; }
     .dropdown-busca-evento {
@@ -102,6 +102,13 @@
     #baixaResultadosProduto.aberto, #movFiltroEventoResultados.aberto, #movFiltroProdutoResultados.aberto,
     #nfeVinculoResultados.aberto, #relResultadosEvento.aberto, #resultadosBuscaEvento.aberto, #resultadosBuscaItemProjeto.aberto {
         display: block;
+    }
+    /* balão flutuante por cima da tabela, em vez de empurrar o
+       conteúdo abaixo pra baixo conforme a lista de resultados cresce */
+    #resultadosBuscaItemProjeto.aberto {
+        position: absolute; top: 100%; left: 0; right: 0; z-index: 30;
+        background: #fff; box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+        margin-top: 4px;
     }
     .btn-preco-opcao { background: #f0f0f0; color: #444; border: 1.5px solid #ddd; }
     .btn-preco-opcao.ativo { background: #2e7d32; color: #fff; border-color: #2e7d32; }
@@ -175,6 +182,7 @@
     .badge-atendido.completo { background: #2e7d32; }
     .badge-atendido.excedido { background: #b00020; }
     .input-qtd-pedida { width: 80px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; text-align: right; }
+    .input-qtd-pedida:disabled { background: #f0f0f0; color: #888; cursor: not-allowed; border-color: #ddd; }
     .input-tag-evento { width: 100px; padding: 6px; border: 1px solid #ccc; border-radius: 4px; }
 
     .linha-ferramentas-relatorio {
@@ -238,6 +246,10 @@
     .link-discreto { background: none; border: none; color: var(--texto-fraco); font-size: 0.8em; cursor: pointer; text-decoration: underline; }
     .btn-unidade { width: 100%; text-align: left; padding: 12px 14px; border: 1px solid var(--linha); border-radius: 8px; background: #fff; cursor: pointer; font-size: 0.95em; }
     .btn-unidade:hover { background: #f5f9ff; border-color: #1565c0; }
+.usuario-papel-row{ background:#fff; border:1px solid #e2e2e2; border-radius:10px; padding:12px 16px; display:flex; align-items:center; gap:14px; margin-bottom:8px; }
+.usuario-papel-row .email{ flex:1; min-width:0; font-weight:600; font-size:.88rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.usuario-papel-row select{ padding:7px 10px; border-radius:8px; border:1.5px solid #e2e2e2; font-size:.82rem; }
+.tag-principal{ font-size:.7rem; font-weight:700; color:#8A5E12; background:#FEF3E2; padding:4px 10px; border-radius:20px; text-transform:uppercase; }
 </style>
 </head>
 <body>
@@ -439,6 +451,7 @@
     <button class="aba-btn" data-aba="notasentrada">🧾 Notas</button>
     <button class="aba-btn" data-aba="protocolo">📮 Protocolo</button>
     <button class="aba-btn" data-aba="cadastrosgerais">🗂️ Cadastros</button>
+    <button class="aba-btn" data-aba="permissoes" id="tabPermissoesEstoque" style="display:none;">🔐 Permissões</button>
     <button class="aba-btn" data-aba="relatorios">📊 Relatórios</button>
 </div>
 
@@ -492,6 +505,11 @@
             <div class="campo"><label>Tag (código na obra/reforma)</label><input type="text" id="cabTag" placeholder="ex: 112"></div>
             <div class="campo"><label>Data</label><input type="date" id="cabData"></div>
         </div>
+        <div id="blocoStatusProjeto" style="display:none; margin-top:10px; padding:10px 14px; border-radius:8px; align-items:center; gap:12px;">
+            <span id="tagStatusProjeto" class="pill">—</span>
+            <button class="btn btn-verde btn-pequeno" id="btnAvancarStatusProjeto" style="display:none;"></button>
+            <button class="btn btn-cinza btn-pequeno" id="btnVoltarStatusProjeto" style="display:none;">↩️ Voltar status</button>
+        </div>
         <div class="campo" style="margin-top:10px;">
             <label>Evento (o que vai custear a reforma/uso)</label>
             <div class="linha-busca">
@@ -506,12 +524,14 @@
     <div class="vazio" id="avisoSemProjeto">Selecione um projeto acima (ou crie um novo na aba Projetos) para montar a requisição de saída.</div>
 
     <div id="blocoRequisicao" style="display:none;">
-        <div class="linha-busca">
-            <input type="text" id="buscaItemProjeto" placeholder="Digite código ou descrição do produto...">
-            <button class="btn btn-azul" id="btnBuscarItemProjeto">Buscar</button>
-            <button class="btn btn-cinza btn-pequeno" id="btnSincronizarProdutoReq" title="Recarrega a lista de produtos (pra achar produtos criados agora há pouco)">🔄</button>
+        <div style="position:relative;">
+            <div class="linha-busca">
+                <input type="text" id="buscaItemProjeto" placeholder="Digite código ou descrição do produto...">
+                <button class="btn btn-azul" id="btnBuscarItemProjeto">Buscar</button>
+                <button class="btn btn-cinza btn-pequeno" id="btnSincronizarProdutoReq" title="Recarrega a lista de produtos (pra achar produtos criados agora há pouco)">🔄</button>
+            </div>
+            <div id="resultadosBuscaItemProjeto"></div>
         </div>
-        <div id="resultadosBuscaItemProjeto"></div>
         <span class="status-msg" id="statusItemProjeto"></span>
 
         <table class="tabela" id="tabelaItensProjeto" style="margin-top:14px;">
@@ -521,6 +541,7 @@
                     <th class="th-ordenavel" data-ordenar="descricao">Descrição <span class="seta-ordem"></span></th>
                     <th class="th-ordenavel" data-ordenar="tag">Tag <span class="seta-ordem"></span></th>
                     <th class="th-ordenavel" data-ordenar="evento">Evento <span class="seta-ordem"></span></th>
+                    <th>Setor</th>
                     <th class="num">Valor Unit.</th>
                     <th class="num">Qtd. Pedida</th>
                     <th class="center">Qtd. Atendida</th>
@@ -806,6 +827,14 @@
     </div>
 </div>
 
+<div class="conteudo-aba" id="aba-permissoes">
+    <div class="caixa">
+        <h4 style="margin:0 0 4px 0;">🔐 Permissões de acesso (Estoque)</h4>
+        <p class="subtitulo" style="margin-bottom:12px;">Define o papel de cada pessoa vinculada à unidade dentro do módulo Estoque. Quem é Principal da unidade sempre tem acesso completo, sem precisar de papel.</p>
+        <div id="listaUsuariosPapeisEstoque"></div>
+    </div>
+</div>
+
 <div class="conteudo-aba" id="aba-relatorios">
 
     <div class="caixa">
@@ -980,12 +1009,13 @@
         </div>
         <div class="grade col2" style="margin-top:8px;">
             <div class="campo"><label>Tag (opcional)</label><input type="text" id="baixaTag"></div>
-            <div class="campo" style="position:relative;">
-                <label>Evento (opcional)</label>
-                <input type="text" id="baixaDiretaEventoBusca" placeholder="Buscar evento..." autocomplete="off">
-                <div id="baixaDiretaEventoResultados" class="dropdown-busca-evento"></div>
-                <p class="subtitulo" id="baixaDiretaEventoSelecionado" style="margin-top:4px;"></p>
-            </div>
+            <div class="campo"><label>Setor</label><select id="baixaDiretaSetor"><option value="">-</option></select></div>
+        </div>
+        <div class="campo" style="margin-top:8px; position:relative;">
+            <label>Evento (opcional)</label>
+            <input type="text" id="baixaDiretaEventoBusca" placeholder="Buscar evento..." autocomplete="off">
+            <div id="baixaDiretaEventoResultados" class="dropdown-busca-evento"></div>
+            <p class="subtitulo" id="baixaDiretaEventoSelecionado" style="margin-top:4px;"></p>
         </div>
         <div class="campo" style="margin-top:8px;"><label>Responsável pela retirada</label><input type="text" id="baixaResponsavel"></div>
         <div class="campo" style="margin-top:8px;"><label>Observação (opcional)</label><input type="text" id="baixaObservacao"></div>
@@ -1357,6 +1387,10 @@
             </div>
             <div class="campo"><label>Responsável pela retirada</label><input type="text" id="reqCompletaResponsavel"></div>
         </div>
+        <div class="campo" style="margin-top:10px;">
+            <label>Tag padrão (código na obra/reforma — opcional, dá pra trocar por item depois)</label>
+            <input type="text" id="reqCompletaTag" placeholder="ex: 112">
+        </div>
 
         <hr style="margin:16px 0; border:none; border-top:1px solid #eee;">
 
@@ -1383,7 +1417,7 @@
         </div>
 
         <table class="tabela" style="margin-top:14px; font-size:0.85em;">
-            <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th class="num">Subtotal</th><th>Ações</th></tr></thead>
+            <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th>Tag</th><th>Setor</th><th class="num">Subtotal</th><th>Ações</th></tr></thead>
             <tbody id="corpoItensReqCompleta"></tbody>
         </table>
         <div style="text-align:right; margin-top:6px; font-weight:600;">Total: <span id="totalItensReqCompleta">R$ 0,00</span></div>
@@ -2049,6 +2083,12 @@ async function chamarPost(acao, d) {
         if (error) throw error;
         return data;
     }
+    if (acao === 'atualizarStatusProjeto') {
+        const { data, error } = await sb.from('fabrica_projetos').update({ status: d.status }).eq('id', d.projetoId).select().single();
+        if (error) throw error;
+        if (!data) throw new Error('Não foi possível confirmar a atualização do status — pode ser falta de permissão no banco (RLS) pra esse projeto.');
+        return data;
+    }
     if (acao === 'atualizarQtdItem') {
         const { error } = await sb.from('fabrica_itens_projeto').update({ qtd_requisitada: d.novaQtd }).eq('id', d.itemId);
         if (error) throw error;
@@ -2115,6 +2155,11 @@ async function chamarPost(acao, d) {
         if (error) throw error;
         return;
     }
+    if (acao === 'atualizarSetorItem') {
+        const { error } = await sb.from('fabrica_itens_projeto').update({ setor_id: d.setorId }).eq('id', d.itemId);
+        if (error) throw error;
+        return;
+    }
     throw new Error('ação desconhecida: ' + acao);
 }
 
@@ -2165,6 +2210,7 @@ async function carregarProjetos() {
         descricao: String(p.descricao || ''),
         tipo: p.tipo,
         data: formatarData(p.data),
+        status: p.status || 'em_construcao',
         itens: (p.itens || []).map(i => ({
             id: Number(i.id),
             projetoId: Number(i.projeto_id),
@@ -2174,6 +2220,7 @@ async function carregarProjetos() {
             observacao: i.observacao || '',
             tag: i.tag || '',
             evento: i.evento || '',
+            setorId: i.setor_id != null ? Number(i.setor_id) : null,
             valorUnitario: i.valor_unitario != null ? Number(i.valor_unitario) : null
         }))
     }));
@@ -2244,6 +2291,12 @@ function renderizarTabelaEstoque(lista) {
     corpo.innerHTML = '';
     if (!lista.length) { vazio.style.display = 'block'; return; }
     vazio.style.display = 'none';
+    const podeEditar = temPermissaoEstoque('editar_produto');
+    // o ícone "ver movimentos" (consulta rápida de um produto) fica
+    // ligado a ver_estoque, não a ver_movimentacoes -- a guia
+    // Movimentações inteira é outra coisa (mais ampla), pode ficar
+    // fechada pra quem só tem esse acesso pontual de consulta
+    const podeVerMovimentos = temPermissaoEstoque('ver_estoque');
     lista.forEach(p => {
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -2257,8 +2310,8 @@ function renderizarTabelaEstoque(lista) {
             <td class="num">${Number(p.estoqueInicial).toLocaleString('pt-BR')}</td>
             <td class="num">${Number(p.estoque).toLocaleString('pt-BR')}</td>
             <td class="center">
-                <button class="btn btn-cinza btn-pequeno" data-editar="${p.id}">Editar</button>
-                <button class="btn-icone" data-info="${p.id}" title="Ver movimentos">ℹ️</button>
+                ${podeEditar ? `<button class="btn btn-cinza btn-pequeno" data-editar="${p.id}">Editar</button>` : ''}
+                ${podeVerMovimentos ? `<button class="btn-icone" data-info="${p.id}" title="Ver movimentos">ℹ️</button>` : ''}
             </td>
         `;
         corpo.appendChild(tr);
@@ -2478,7 +2531,7 @@ document.getElementById('btnFecharInfoProduto').addEventListener('click', () => 
 /* ---------- popup: Baixa direta de estoque (sem projeto) ---------- */
 let produtoSelecionadoBaixa = null;
 
-document.getElementById('btnBaixaDireta').addEventListener('click', () => {
+document.getElementById('btnBaixaDireta').addEventListener('click', async () => {
     produtoSelecionadoBaixa = null;
     document.getElementById('baixaBuscaProduto').value = '';
     document.getElementById('baixaResultadosProduto').innerHTML = '';
@@ -2487,6 +2540,9 @@ document.getElementById('btnBaixaDireta').addEventListener('click', () => {
     document.getElementById('baixaQtd').value = '';
     document.getElementById('baixaData').value = hojeISO();
     document.getElementById('baixaTag').value = '';
+    if (!catalogosBaixa.setores.length) catalogosBaixa = await chamarGet('listarCatalogosBaixa');
+    document.getElementById('baixaDiretaSetor').innerHTML = '<option value="">-</option>' + (catalogosBaixa.setores || []).map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+    document.getElementById('baixaDiretaSetor').value = '';
     document.getElementById('baixaDiretaEventoBusca').value = '';
     document.getElementById('baixaDiretaEventoSelecionado').innerHTML = '';
     eventoSelecionadoBaixaDireta = null;
@@ -2555,6 +2611,7 @@ document.getElementById('btnConfirmarBaixaDireta').addEventListener('click', asy
                 valorUnit: prod.precoMedio || prod.valor,
                 tipo: 'saida',
                 tag: document.getElementById('baixaTag').value.trim(),
+                setorId: document.getElementById('baixaDiretaSetor').value || null,
                 evento: eventoSelecionadoBaixaDireta ? eventoSelecionadoBaixaDireta.codigo : '',
                 observacao: document.getElementById('baixaObservacao').value.trim(),
                 responsavel,
@@ -3319,16 +3376,40 @@ function renderizarListaProjetos() {
     lista.forEach(proj => {
         const { requisitado, entregue } = totaisProjeto(proj);
         const pct = requisitado > 0 ? Math.min(100, Math.round(entregue / requisitado * 100)) : 0;
+        const status = proj.status || 'em_construcao';
+        const proximoStatus = PROXIMO_STATUS_PROJETO[status];
         const div = document.createElement('div');
         div.className = 'card-projeto';
         div.innerHTML = `
             <div>
-                <div class="titulo-projeto">${escapeHtml(proj.descricao)} <span class="pill" style="background:#eef2ff;color:#1565c0;">${proj.tipo === 'conteiner' ? 'Contêiner' : 'Esquadria'}</span></div>
+                <div class="titulo-projeto">
+                    ${escapeHtml(proj.descricao)}
+                    <span class="pill" style="background:#eef2ff;color:#1565c0;">${proj.tipo === 'conteiner' ? 'Contêiner' : 'Esquadria'}</span>
+                    <span class="pill">${LABEL_STATUS_PROJETO[status] || status}</span>
+                </div>
                 <div class="meta-projeto">${(proj.itens || []).length} itens · ${entregue}/${requisitado} entregue (${pct}%) · criado em ${proj.data}</div>
             </div>
-            <div style="width:120px;"><div class="barra-progresso"><div class="barra-progresso-fill ${entregue > requisitado ? 'excedido' : ''}" style="width:${pct}%;"></div></div></div>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <div style="width:120px;"><div class="barra-progresso"><div class="barra-progresso-fill ${entregue > requisitado ? 'excedido' : ''}" style="width:${pct}%;"></div></div></div>
+                ${(proximoStatus && podeGerenciarStatusProjeto()) ? `<button class="btn btn-verde btn-pequeno" data-avancar-status="${proj.id}">${LABEL_AVANCAR_PROJETO[status]}</button>` : ''}
+            </div>
         `;
-        div.addEventListener('click', () => abrirRequisicao(proj.id));
+        div.addEventListener('click', (e) => {
+            if (e.target.closest('[data-avancar-status]')) return; // não abre o projeto ao clicar no botão de status
+            abrirRequisicao(proj.id);
+        });
+        const btnAvancarCard = div.querySelector('[data-avancar-status]');
+        if (btnAvancarCard) {
+            btnAvancarCard.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                if (!confirm(AVISO_AVANCAR_PROJETO[proximoStatus])) return;
+                try {
+                    await chamarPost('atualizarStatusProjeto', { projetoId: proj.id, status: proximoStatus });
+                    await carregarProjetos();
+                    renderizarListaProjetos();
+                } catch (err) { alert('Erro ao atualizar status: ' + err.message); }
+            });
+        }
         el.appendChild(div);
     });
 }
@@ -3356,6 +3437,221 @@ function aplicarPadraoTagEventoSeVazio(proj) {
         selecionarEvento(ev);
     }
 }
+
+// =====================================================================
+// PAPEL E PERMISSÕES (módulo Estoque)
+// =====================================================================
+let permissoesEstoque = null; // null = sem restrição (Principal, Administrador, ou sem papel definido ainda)
+
+async function carregarPapelEPermissoes() {
+    if (meuPerfil.ehPrincipal) {
+        meuPerfil.papel = 'principal';
+        permissoesEstoque = null;
+        return;
+    }
+    const { data: papel } = await sb.rpc('fn_papel_usuario', { p_unidade_negocio_id: meuPerfil.unidadeId, p_modulo: 'estoque' });
+    meuPerfil.papel = papel || null;
+
+    if (!papel) {
+        // ninguém atribuiu um papel a essa pessoa ainda -- mantém acesso
+        // total (não trava quem já usava o sistema antes dessa
+        // funcionalidade existir); só fica restrito quem receber um
+        // papel explícito na tela de Permissões
+        permissoesEstoque = null;
+        return;
+    }
+
+    const { data: linhas } = await sb.from('servir_permissoes_papel').select('permissao, permitido').eq('modulo', 'estoque').eq('papel', papel);
+    permissoesEstoque = {};
+    (linhas || []).forEach(l => { permissoesEstoque[l.permissao] = l.permitido; });
+}
+
+function temPermissaoEstoque(permissao) {
+    if (permissoesEstoque === null) return true;
+    return !!permissoesEstoque[permissao];
+}
+
+// Administrador/Principal explícitos -- NUNCA cai no "acesso total por
+// padrão" que vale pra quem ainda não tem papel definido. Usado pra
+// decidir status de projeto e, principalmente, quem pode gerenciar
+// permissões -- um usuário recém-convidado, sem papel ainda, não pode
+// ver nem mexer nisso, mesmo que tenha acesso total ao resto do app.
+function ehAdministradorOuPrincipal() {
+    return meuPerfil.ehPrincipal || meuPerfil.papel === 'administrador';
+}
+function podeGerenciarStatusProjeto() {
+    return ehAdministradorOuPrincipal();
+}
+
+function aplicarPermissoesNaInterface() {
+    const mapaAbaPermissao = {
+        estoque: 'ver_estoque',
+        movimentacao: 'requisicao_saida',
+        projetos: 'ver_projetos',
+        movpainel: 'ver_movimentacoes',
+        notasentrada: 'notas_entrada',
+        protocolo: 'protocolo',
+        cadastrosgerais: 'cadastros',
+        // "relatorios" fica sempre visível -- não está na matriz de permissões
+        // "permissoes" é tratada à parte, logo abaixo -- sempre restrita
+    };
+    let abaAtivaFicouEscondida = false;
+    document.querySelectorAll('.aba-btn').forEach(btn => {
+        if (btn.dataset.aba === 'permissoes') return; // tratada à parte
+        const permissaoNecessaria = mapaAbaPermissao[btn.dataset.aba];
+        const liberado = !permissaoNecessaria || temPermissaoEstoque(permissaoNecessaria);
+        btn.style.display = liberado ? '' : 'none';
+        if (!liberado && btn.classList.contains('ativa')) abaAtivaFicouEscondida = true;
+    });
+
+    // guia Permissões: só Principal ou Administrador explícito, nunca
+    // pelo "acesso total por padrão" de quem ainda não tem papel
+    const tabPermissoes = document.getElementById('tabPermissoesEstoque');
+    const podeGerenciarPermissoes = ehAdministradorOuPrincipal();
+    if (tabPermissoes) {
+        tabPermissoes.style.display = podeGerenciarPermissoes ? '' : 'none';
+        if (!podeGerenciarPermissoes && tabPermissoes.classList.contains('ativa')) abaAtivaFicouEscondida = true;
+    }
+
+    if (abaAtivaFicouEscondida) {
+        const primeiraVisivel = [...document.querySelectorAll('.aba-btn')].find(b => b.style.display !== 'none');
+        if (primeiraVisivel) primeiraVisivel.click();
+    }
+
+    const btnNovoProjeto = document.getElementById('btnNovoProjeto');
+    if (btnNovoProjeto) btnNovoProjeto.style.display = temPermissaoEstoque('criar_projetos') ? '' : 'none';
+
+    const btnSalvarProduto = document.getElementById('btnSalvarProduto');
+    if (btnSalvarProduto) btnSalvarProduto.style.display = temPermissaoEstoque('editar_produto') ? '' : 'none';
+
+    // dentro da própria aba Estoque: incluir produto, baixa direta (sem
+    // projeto) e importar XML -- todos ficam ocultos pra quem só tem
+    // acesso de leitura ali (ex: Engenheiro)
+    const btnNovoProduto = document.getElementById('btnNovoProduto');
+    if (btnNovoProduto) btnNovoProduto.style.display = temPermissaoEstoque('editar_produto') ? '' : 'none';
+
+    const btnBaixaDireta = document.getElementById('btnBaixaDireta');
+    if (btnBaixaDireta) btnBaixaDireta.style.display = temPermissaoEstoque('ver_movimentacoes') ? '' : 'none';
+
+    const btnImportarNFe = document.getElementById('btnImportarNFe');
+    if (btnImportarNFe) btnImportarNFe.style.display = temPermissaoEstoque('notas_entrada') ? '' : 'none';
+
+    if (podeGerenciarPermissoes) carregarUsuariosPapeisEstoque();
+}
+
+// =====================================================================
+// PERMISSÕES: atribuir papel de Estoque a cada usuário da unidade
+// =====================================================================
+const LABEL_PAPEL_ESTOQUE = { administrador: 'Administrador', almoxarife: 'Almoxarife', auxiliar_almoxarifado: 'Auxiliar de Almoxarifado', engenheiro: 'Engenheiro' };
+
+async function carregarUsuariosPapeisEstoque() {
+    const lista = document.getElementById('listaUsuariosPapeisEstoque');
+    lista.innerHTML = '<div class="vazio">Carregando...</div>';
+
+    const { data: vinculos, error } = await sb.from('servir_unidade_usuarios').select('user_id, eh_principal').eq('unidade_negocio_id', meuPerfil.unidadeId);
+    if (error) { lista.innerHTML = `<div class="vazio">Erro ao carregar usuários: ${escapeHtml(error.message)}</div>`; return; }
+
+    const { data: papeis } = await sb.from('servir_papeis_usuario').select('user_id, papel').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('modulo', 'estoque');
+    const mapaPapeis = {};
+    (papeis || []).forEach(p => { mapaPapeis[p.user_id] = p.papel; });
+
+    const linhas = [];
+    for (const v of (vinculos || [])) {
+        const { data: email } = await sb.rpc('fn_obter_email_usuario', { p_user_id: v.user_id });
+        linhas.push({ user_id: v.user_id, email: email || 'E-mail indisponível', eh_principal: v.eh_principal, papel: mapaPapeis[v.user_id] || null });
+    }
+
+    if (linhas.length === 0) { lista.innerHTML = '<div class="vazio">Nenhum usuário vinculado a essa unidade.</div>'; return; }
+
+    lista.innerHTML = linhas.map(u => `
+        <div class="usuario-papel-row" data-user-id="${u.user_id}">
+            <span class="email">${escapeHtml(u.email)}</span>
+            ${u.eh_principal ? '<span class="tag-principal">Principal</span>' : ''}
+            <select class="select-papel-usuario-estoque" ${u.eh_principal ? 'disabled title="Principal sempre tem acesso completo"' : ''}>
+                <option value="">Sem acesso explícito (acesso completo, por enquanto)</option>
+                ${Object.entries(LABEL_PAPEL_ESTOQUE).map(([valor, rotulo]) => `<option value="${valor}" ${u.papel === valor ? 'selected' : ''}>${rotulo}</option>`).join('')}
+            </select>
+        </div>
+    `).join('');
+
+    lista.querySelectorAll('.usuario-papel-row').forEach(row => {
+        const select = row.querySelector('.select-papel-usuario-estoque');
+        if (!select || select.disabled) return;
+        select.addEventListener('change', async (e) => {
+            const userId = row.dataset.userId;
+            const papel = e.target.value;
+            try {
+                if (!papel) {
+                    const { error: erroDel } = await sb.from('servir_papeis_usuario').delete().eq('unidade_negocio_id', meuPerfil.unidadeId).eq('user_id', userId).eq('modulo', 'estoque');
+                    if (erroDel) throw erroDel;
+                } else {
+                    const { error: erroUp } = await sb.from('servir_papeis_usuario').upsert({
+                        unidade_negocio_id: meuPerfil.unidadeId, user_id: userId, modulo: 'estoque', papel
+                    }, { onConflict: 'unidade_negocio_id,user_id,modulo' });
+                    if (erroUp) throw erroUp;
+                }
+            } catch (err) {
+                alert('Erro ao salvar papel: ' + err.message);
+            }
+        });
+    });
+}
+
+// =====================================================================
+// STATUS DO PROJETO
+// =====================================================================
+const LABEL_STATUS_PROJETO = { em_construcao: '🟡 Em construção', aprovado: '🔵 Aprovado', finalizado: '⚫ Finalizado' };
+const PROXIMO_STATUS_PROJETO = { em_construcao: 'aprovado', aprovado: 'finalizado' };
+const LABEL_AVANCAR_PROJETO = { em_construcao: '✓ Aprovar projeto', aprovado: '🏁 Finalizar projeto' };
+const AVISO_AVANCAR_PROJETO = {
+    aprovado: 'Depois de aprovar, não vai ser mais possível alterar a quantidade solicitada dos materiais desse projeto. Confirma?',
+    finalizado: 'Depois de finalizar, não vai ser mais possível alterar nada nesse projeto (nem itens, nem quantidade). Confirma?'
+};
+
+function renderizarStatusProjeto(proj) {
+    const bloco = document.getElementById('blocoStatusProjeto');
+    if (!proj) { bloco.style.display = 'none'; return; }
+    bloco.style.display = 'flex';
+    const status = proj.status || 'em_construcao';
+
+    const tag = document.getElementById('tagStatusProjeto');
+    tag.textContent = LABEL_STATUS_PROJETO[status] || status;
+
+    const btnAvancar = document.getElementById('btnAvancarStatusProjeto');
+    const btnVoltar = document.getElementById('btnVoltarStatusProjeto');
+    const proximoStatus = PROXIMO_STATUS_PROJETO[status];
+
+    if (proximoStatus && podeGerenciarStatusProjeto()) {
+        btnAvancar.style.display = '';
+        btnAvancar.textContent = LABEL_AVANCAR_PROJETO[status];
+        btnAvancar.onclick = async () => {
+            if (!confirm(AVISO_AVANCAR_PROJETO[proximoStatus])) return;
+            try {
+                await chamarPost('atualizarStatusProjeto', { projetoId: proj.id, status: proximoStatus });
+                await carregarProjetos();
+                renderizarRequisicao(proj.id);
+            } catch (err) { alert('Erro ao atualizar status: ' + err.message); }
+        };
+    } else {
+        btnAvancar.style.display = 'none';
+    }
+
+    if (status !== 'em_construcao' && podeGerenciarStatusProjeto()) {
+        btnVoltar.style.display = '';
+        btnVoltar.onclick = async () => {
+            const statusAnterior = status === 'finalizado' ? 'aprovado' : 'em_construcao';
+            if (!confirm(`Voltar o status desse projeto pra "${LABEL_STATUS_PROJETO[statusAnterior]}"? Isso libera alteração dos materiais de novo.`)) return;
+            try {
+                await chamarPost('atualizarStatusProjeto', { projetoId: proj.id, status: statusAnterior });
+                await carregarProjetos();
+                renderizarRequisicao(proj.id);
+            } catch (err) { alert('Erro ao voltar status: ' + err.message); }
+        };
+    } else {
+        btnVoltar.style.display = 'none';
+    }
+}
+
 
 function abrirRequisicao(id) {
     projetoAtualId = id;
@@ -3441,10 +3737,12 @@ function renderizarRequisicao(id) {
     if (!proj) {
         bloco.style.display = 'none';
         aviso.style.display = 'block';
+        renderizarStatusProjeto(null);
         return;
     }
     aviso.style.display = 'none';
     bloco.style.display = 'block';
+    renderizarStatusProjeto(proj);
 
     const corpo = document.getElementById('corpoTabelaItensProjeto');
     const vazio = document.getElementById('vazioItensProjeto');
@@ -3453,6 +3751,8 @@ function renderizarRequisicao(id) {
     if (!(proj.itens || []).length) { vazio.style.display = 'block'; }
     else {
         vazio.style.display = 'none';
+        const travado = (proj.status || 'em_construcao') !== 'em_construcao';
+        const travadoAtender = (proj.status || 'em_construcao') === 'finalizado';
         ordenarItensRequisicao(proj.itens).forEach(item => {
             const prod = produtos.find(p => p.id === item.produtoId);
             const ent = entreguePorItem(item.id);
@@ -3467,11 +3767,17 @@ function renderizarRequisicao(id) {
                 <td>${prod ? escapeHtml(prod.nome) : ('#' + item.produtoId)}</td>
                 <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.tag)}" data-tag-item="${item.id}"></td>
                 <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.evento)}" data-evento-item="${item.id}"></td>
+                <td>
+                    <select class="input-tag-evento" data-setor-item="${item.id}" style="padding:6px;">
+                        <option value="">-- sem setor --</option>
+                        ${(catalogosBaixa.setores || []).map(s => `<option value="${s.id}" ${item.setorId === s.id ? 'selected' : ''}>${escapeHtml(s.nome)}</option>`).join('')}
+                    </select>
+                </td>
                 <td class="num">${formatarMoeda(valorReferencia)}</td>
-                <td class="num"><input type="number" step="0.01" class="input-qtd-pedida" value="${item.qtdRequisitada}" data-qtd-item="${item.id}"></td>
-                <td class="center"><span class="badge-atendido ${classeBadge}" data-atender="${item.id}">${ent}</span></td>
+                <td class="num"><input type="number" step="0.01" class="input-qtd-pedida" value="${item.qtdRequisitada}" data-qtd-item="${item.id}" ${travado ? 'disabled title="Projeto não está mais em construção"' : ''}></td>
+                <td class="center"><span class="badge-atendido ${classeBadge}" data-atender="${item.id}" style="${travadoAtender ? 'opacity:0.5; cursor:not-allowed;' : 'cursor:pointer;'}" title="${travadoAtender ? 'Projeto finalizado — não é mais possível lançar baixa' : ''}">${ent}</span></td>
                 <td class="num">${formatarMoeda(subtotal)}</td>
-                <td class="center"><button class="btn btn-vermelho btn-pequeno" data-remover-item="${item.id}">×</button></td>
+                <td class="center">${travado ? '' : `<button class="btn btn-vermelho btn-pequeno" data-remover-item="${item.id}">×</button>`}</td>
             `;
             corpo.appendChild(tr);
         });
@@ -3485,7 +3791,10 @@ function renderizarRequisicao(id) {
             });
         });
         corpo.querySelectorAll('[data-atender]').forEach(btn => {
-            btn.addEventListener('click', () => abrirModalAtender(Number(btn.dataset.atender)));
+            btn.addEventListener('click', () => {
+                if (travadoAtender) { alert('Esse projeto está finalizado — não é mais possível lançar baixa de material.'); return; }
+                abrirModalAtender(Number(btn.dataset.atender));
+            });
         });
         corpo.querySelectorAll('[data-qtd-item]').forEach(inp => {
             inp.addEventListener('change', async () => {
@@ -3522,6 +3831,17 @@ function renderizarRequisicao(id) {
                 await chamarPost('atualizarTagEventoItem', { itemId, tag: itemAtual ? itemAtual.tag : '', evento: inp.value.trim() });
                 await carregarProjetos();
                 renderizarRequisicao(id);
+            });
+        });
+        corpo.querySelectorAll('[data-setor-item]').forEach(sel => {
+            sel.addEventListener('change', async () => {
+                const itemId = Number(sel.dataset.setorItem);
+                const setorId = sel.value ? Number(sel.value) : null;
+                try {
+                    await chamarPost('atualizarSetorItem', { itemId, setorId });
+                    await carregarProjetos();
+                    renderizarRequisicao(id);
+                } catch (err) { alert('Erro ao salvar setor: ' + err.message); }
             });
         });
     }
@@ -6483,6 +6803,7 @@ async function abrirModalRequisicaoCompleta(notaIdExistente) {
     document.getElementById('reqCompletaEventoSelecionado').innerHTML = '';
     eventoSelecionadoReqCompleta = null;
     document.getElementById('reqCompletaResponsavel').value = '';
+    document.getElementById('reqCompletaTag').value = '';
     document.getElementById('reqCompletaProdutoBusca').value = '';
     document.getElementById('reqCompletaProdutoSelecionado').textContent = '';
     document.getElementById('reqCompletaQtd').value = 1;
@@ -6683,7 +7004,11 @@ document.getElementById('btnAdicionarItemReqCompleta').addEventListener('click',
     if (isNaN(qtd) || qtd <= 0) { alert('Informe uma quantidade válida.'); return; }
     if (isNaN(valorUnit) || valorUnit < 0) { alert('Informe um valor unitário válido.'); return; }
 
-    itensReqCompleta.push({ produtoId: produtoSelecionadoReqCompleta.id, produtoNome: produtoSelecionadoReqCompleta.nome, qtd, valorUnit });
+    itensReqCompleta.push({
+        produtoId: produtoSelecionadoReqCompleta.id, produtoNome: produtoSelecionadoReqCompleta.nome, qtd, valorUnit,
+        tag: document.getElementById('reqCompletaTag').value.trim(),
+        setorId: document.getElementById('reqCompletaSetor').value ? Number(document.getElementById('reqCompletaSetor').value) : null
+    });
 
     document.getElementById('reqCompletaProdutoBusca').value = '';
     document.getElementById('reqCompletaProdutoSelecionado').textContent = '';
@@ -6698,6 +7023,7 @@ document.getElementById('btnAdicionarItemReqCompleta').addEventListener('click',
 function renderizarItensReqCompleta() {
     const corpo = document.getElementById('corpoItensReqCompleta');
     let total = 0;
+    const optSetorLinha = '<option value="">-</option>' + (catalogosBaixa.setores || []).map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
     corpo.innerHTML = itensReqCompleta.map((item, idx) => {
         const subtotal = item.qtd * item.valorUnit;
         total += subtotal;
@@ -6706,6 +7032,8 @@ function renderizarItensReqCompleta() {
                 <td>${escapeHtml(item.produtoNome)}</td>
                 <td class="num">${item.qtd}</td>
                 <td class="num">${formatarMoeda(item.valorUnit)}</td>
+                <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.tag || '')}" data-tag-item-req="${idx}" style="width:80px;"></td>
+                <td><select class="input-tag-evento" data-setor-item-req="${idx}" style="padding:6px;">${optSetorLinha}</select></td>
                 <td class="num">${formatarMoeda(subtotal)}</td>
                 <td class="center"><button type="button" class="btn btn-vermelho btn-pequeno" data-remover-item-req="${idx}">🗑️</button></td>
             </tr>
@@ -6713,6 +7041,23 @@ function renderizarItensReqCompleta() {
     }).join('');
     document.getElementById('totalItensReqCompleta').textContent = formatarMoeda(total);
 
+    // pré-seleciona o setor de cada linha (não dá pra fazer isso direto no
+    // template acima porque teria que casar valor dentro de outro template)
+    corpo.querySelectorAll('[data-setor-item-req]').forEach(sel => {
+        const idx = Number(sel.dataset.setorItemReq);
+        sel.value = itensReqCompleta[idx].setorId || '';
+    });
+
+    corpo.querySelectorAll('[data-tag-item-req]').forEach(inp => {
+        inp.addEventListener('change', () => {
+            itensReqCompleta[Number(inp.dataset.tagItemReq)].tag = inp.value.trim();
+        });
+    });
+    corpo.querySelectorAll('[data-setor-item-req]').forEach(sel => {
+        sel.addEventListener('change', () => {
+            itensReqCompleta[Number(sel.dataset.setorItemReq)].setorId = sel.value ? Number(sel.value) : null;
+        });
+    });
     corpo.querySelectorAll('[data-remover-item-req]').forEach(btn => {
         btn.addEventListener('click', () => {
             itensReqCompleta.splice(Number(btn.dataset.removerItemReq), 1);
@@ -6774,9 +7119,10 @@ document.getElementById('btnConfirmarRequisicaoCompleta').addEventListener('clic
                 movimentacao: {
                     data, produtoId: item.produtoId, qtd: item.qtd, valorUnit: item.valorUnit, tipo: 'saida',
                     responsavel, evento,
+                    tag: item.tag || '',
                     observacao: 'Requisição de saída',
                     estoqueNotaId: notaId,
-                    setorId, subsetorId, veiculoId, planoContasId, km, kmProximaTroca, dtProximaTroca
+                    setorId: item.setorId != null ? item.setorId : setorId, subsetorId, veiculoId, planoContasId, km, kmProximaTroca, dtProximaTroca
                 }
             });
         }
@@ -7069,6 +7415,8 @@ document.getElementById('btnSincronizarTudo').addEventListener('click', (e) => s
 }));
 
 async function iniciarAppFabrica() {
+    await carregarPapelEPermissoes();
+    aplicarPermissoesNaInterface();
     await carregarTudo();
     renderizarTabelaEstoque(buscarProdutos(''));
     renderizarListaProjetos();
