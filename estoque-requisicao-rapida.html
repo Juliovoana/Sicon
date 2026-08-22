@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Requisição Rápida — Servir Estoque</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+    :root {
+        --ink:#171E1A; --bg:#F6F7F9; --surface:#FFFFFF; --border:#E8EAED;
+        --muted:#6B7280; --brand:#1B4332; --brand-2:#2D6A4F; --brand-soft:#EAF2EE;
+        --accent:#F2A93B; --accent-ink:#8A5E12; --danger:#C0392B; --danger-soft:#FBEAE8;
+        --success-soft:#E8F3EC;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Inter', sans-serif; }
+    .hidden { display: none !important; }
+
+    /* ---- tela de login ---- */
+    #tela-login {
+        min-height: 100vh; display: flex; align-items: center; justify-content: center;
+        background: linear-gradient(160deg, var(--brand), #0f2a1d);
+    }
+    .caixa-login {
+        background: var(--surface); border-radius: 16px; padding: 32px 28px; width: 100%; max-width: 360px;
+        box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    }
+    .caixa-login h1 { font-family: 'Fraunces', serif; font-size: 1.4rem; color: var(--brand); margin: 0 0 4px 0; }
+    .caixa-login .subtitulo { color: var(--muted); font-size: 0.85rem; margin: 0 0 20px 0; }
+    .campo { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .campo label { font-size: 0.82rem; font-weight: 600; }
+    .campo input, .campo select {
+        font-family: 'Inter', sans-serif; font-size: 0.92rem; padding: 10px 12px;
+        border: 1.5px solid var(--border); border-radius: 9px; width: 100%; background: var(--surface); color: var(--ink);
+    }
+    .campo input:focus, .campo select:focus { outline: none; border-color: var(--brand-2); }
+    .btn { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.92rem; border: none; border-radius: 9px; padding: 11px 18px; cursor: pointer; }
+    .btn-principal { background: var(--brand); color: white; width: 100%; padding: 13px; }
+    .btn-principal:hover { background: var(--brand-2); }
+    .btn-principal:disabled { background: var(--muted); cursor: not-allowed; }
+    .status-msg { font-size: 0.85rem; margin-top: 10px; text-align: center; }
+    .status-erro { color: var(--danger); }
+
+    /* ---- app principal ---- */
+    #app { max-width: 760px; margin: 0 auto; padding: 20px 16px 60px; }
+    .topo { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; flex-wrap: wrap; gap: 10px; }
+    .topo h1 { font-family: 'Fraunces', serif; font-size: 1.35rem; color: var(--brand); margin: 0; }
+    .topo .subtitulo { color: var(--muted); font-size: 0.85rem; margin: 2px 0 0 0; }
+    .btn-cinza { background: #EEF0F1; color: var(--ink); }
+    .abas { display: flex; gap: 6px; margin-bottom: 18px; border-bottom: 2px solid var(--border); }
+    .aba-btn {
+        font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.9rem; color: var(--muted);
+        background: none; border: none; padding: 10px 4px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px;
+    }
+    .aba-btn.ativa { color: var(--brand); border-bottom-color: var(--brand); }
+    .conteudo-aba { display: none; }
+    .conteudo-aba.ativa { display: block; }
+
+    .cartao { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+    .cartao h2 { font-family: 'Fraunces', serif; font-size: 1.02rem; font-weight: 600; margin: 0 0 14px 0; }
+    .grade { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 520px) { .grade { grid-template-columns: 1fr; } }
+
+    .linha-busca { position: relative; }
+    .resultados-busca {
+        position: absolute; top: 100%; left: 0; right: 0; z-index: 20; background: var(--surface);
+        border: 1px solid var(--border); border-radius: 9px; max-height: 220px; overflow-y: auto;
+        display: none; margin-top: 4px; box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+    }
+    .resultados-busca.aberto { display: block; }
+    .resultado-item { padding: 10px 12px; cursor: pointer; font-size: 0.88rem; border-bottom: 1px solid var(--border); }
+    .resultado-item:last-child { border-bottom: none; }
+    .resultado-item:hover { background: var(--brand-soft); }
+    .resultado-item .cod { font-family: 'JetBrains Mono', monospace; color: var(--brand-2); font-size: 0.78rem; }
+    .selecionado-texto { font-size: 0.82rem; color: var(--brand-2); margin-top: 4px; }
+
+    table.itens { width: 100%; border-collapse: collapse; margin-top: 14px; }
+    table.itens th { text-align: left; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); padding: 6px 8px; border-bottom: 2px solid var(--border); }
+    table.itens td { padding: 8px; border-bottom: 1px solid var(--border); font-size: 0.86rem; vertical-align: middle; }
+    table.itens input[type=number] { width: 70px; padding: 6px 8px; border: 1.5px solid var(--border); border-radius: 7px; }
+    .vazio { text-align: center; padding: 24px 0; color: var(--muted); font-size: 0.88rem; }
+    .btn-remover { background: var(--danger-soft); color: var(--danger); border-radius: 7px; width: 28px; height: 28px; font-size: 1rem; padding: 0; }
+    .btn-principal-full { background: var(--brand); color: white; width: 100%; font-size: 1rem; padding: 14px; margin-top: 4px; }
+    .btn-principal-full:hover { background: var(--brand-2); }
+    .btn-principal-full:disabled { background: var(--muted); cursor: not-allowed; }
+
+    .card-requisicao { border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-bottom: 12px; }
+    .card-requisicao .cabecalho-req { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+    .card-requisicao .meta { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+    .pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
+    .pill-pendente { background: #FFF3E0; color: var(--accent-ink); }
+    .pill-atendida { background: var(--success-soft); color: var(--brand-2); }
+    .item-req-linha { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+    .item-req-linha .nome-produto { flex: 1; min-width: 180px; font-size: 0.88rem; }
+    .item-req-linha .obs-item { font-size: 0.78rem; color: var(--accent-ink); font-style: italic; width: 100%; margin-top: 2px; }
+    .badge-restante { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; padding: 3px 8px; border-radius: 6px; background: var(--brand-soft); color: var(--brand-2); cursor: pointer; }
+    .badge-restante.zerado { background: #EEF0F1; color: var(--muted); cursor: default; }
+
+    /* ---- modal de atender ---- */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; padding: 16px; }
+    .modal-overlay.aberto { display: flex; }
+    .modal-caixa { background: var(--surface); border-radius: 14px; padding: 24px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
+    .modal-caixa h3 { font-family: 'Fraunces', serif; margin: 0 0 4px 0; color: var(--brand); }
+    .tipo-req-btn { background: #EEF0F1; color: var(--muted); }
+    .tipo-req-btn.ativa { background: var(--brand); color: white; }
+</style>
+</head>
+<body>
+
+<div id="tela-login">
+    <div class="caixa-login">
+        <h1>Requisição Rápida</h1>
+        <p class="subtitulo">Entre com seu usuário do Servir</p>
+        <div class="campo"><label>E-mail</label><input type="email" id="login-email"></div>
+        <div class="campo"><label>Senha</label><input type="password" id="login-senha"></div>
+        <button class="btn btn-principal" id="btn-login">Entrar</button>
+        <p class="status-msg status-erro" id="status-login"></p>
+    </div>
+</div>
+
+<div id="modal-unidade" class="modal-overlay">
+    <div class="modal-caixa">
+        <h3>Escolha a unidade</h3>
+        <div id="lista-unidades-escolha" style="display:flex; flex-direction:column; gap:8px; margin-top:14px;"></div>
+    </div>
+</div>
+
+<div id="app" class="hidden">
+    <div class="topo">
+        <div>
+            <h1>Requisição Rápida</h1>
+            <p class="subtitulo" id="unidade-logada"></p>
+        </div>
+        <div style="display:flex; gap:8px;">
+            <button class="btn btn-cinza" id="btn-trocar-unidade" style="display:none;">⇄ Trocar unidade</button>
+            <button class="btn btn-cinza" id="btn-sair">Sair</button>
+        </div>
+    </div>
+
+    <div class="abas">
+        <button class="aba-btn ativa" data-aba="nova">📝 Nova requisição</button>
+        <button class="aba-btn" data-aba="atender" id="aba-btn-atender" style="display:none;">📦 Atender requisições</button>
+    </div>
+
+    <div class="conteudo-aba ativa" id="aba-nova">
+        <div class="cartao" style="padding:10px;">
+            <div style="display:flex; gap:8px;">
+                <button type="button" class="btn tipo-req-btn ativa" data-tipo-req="material" style="flex:1;">📦 Material</button>
+                <button type="button" class="btn tipo-req-btn" data-tipo-req="servico_abastecimento" style="flex:1;">⛽ Serviço / Abastecimento</button>
+            </div>
+        </div>
+
+        <div class="cartao">
+            <h2>Dados da requisição</h2>
+            <div class="grade">
+                <div class="campo">
+                    <label>Almoxarifado</label>
+                    <select id="campoAlmoxarifado"><option value="">-- selecione --</option></select>
+                </div>
+                <div class="campo">
+                    <label>Setor</label>
+                    <select id="campoSetor"><option value="">-- selecione --</option></select>
+                </div>
+                <div class="campo linha-busca">
+                    <label>Evento (opcional)</label>
+                    <input type="text" id="campoBuscaEvento" placeholder="Buscar evento..." autocomplete="off">
+                    <div id="resultadosBuscaEvento" class="resultados-busca"></div>
+                    <p class="selecionado-texto" id="eventoSelecionadoTexto"></p>
+                </div>
+                <div class="campo">
+                    <label>Solicitante</label>
+                    <input type="text" id="campoSolicitante">
+                </div>
+            </div>
+        </div>
+
+        <div class="cartao" id="secaoMaterial">
+            <h2>Materiais</h2>
+            <div style="display:flex; gap:8px; align-items:flex-end;">
+                <div class="campo linha-busca" style="flex:1; margin-bottom:0;">
+                    <label>Buscar produto</label>
+                    <input type="text" id="campoBuscaProduto" placeholder="Digite código ou descrição..." autocomplete="off">
+                    <div id="resultadosBuscaProduto" class="resultados-busca"></div>
+                </div>
+                <button type="button" class="btn btn-cinza" id="btnAbrirDescrever" style="white-space:nowrap;">✏️ Descrever produto</button>
+            </div>
+
+            <div id="blocoDescreverProduto" class="hidden" style="margin-top:14px; padding:12px; background:var(--brand-soft); border-radius:10px;">
+                <p class="subtitulo" style="margin:0 0 8px 0;">Pro material que ainda não está cadastrado no estoque:</p>
+                <div class="grade">
+                    <div class="campo"><label>Descrição do produto</label><input type="text" id="campoDescricaoLivre" placeholder="Ex: Parafuso sextavado 1/4 x 2..."></div>
+                    <div class="campo"><label>Quantidade</label><input type="number" step="0.01" id="campoQtdDescricaoLivre" value="1"></div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button type="button" class="btn btn-cinza" id="btnCancelarDescrever" style="flex:1;">Cancelar</button>
+                    <button type="button" class="btn btn-principal" id="btnAdicionarDescricaoLivre" style="flex:1;">+ Adicionar</button>
+                </div>
+            </div>
+
+            <table class="itens">
+                <thead><tr><th>Produto</th><th>Disponível</th><th>Qtd</th><th></th></tr></thead>
+                <tbody id="corpoItensNovaReq"></tbody>
+            </table>
+            <div id="vazioItensNovaReq" class="vazio">Nenhum item adicionado ainda.</div>
+        </div>
+
+        <div class="cartao hidden" id="secaoServico">
+            <h2>Serviço / Abastecimento</h2>
+            <div class="grade">
+                <div class="campo">
+                    <label>Veículo / Equipamento</label>
+                    <select id="campoVeiculoServico"><option value="">-- selecione --</option></select>
+                </div>
+                <div class="campo">
+                    <label>Fornecedor recomendado (opcional)</label>
+                    <input type="text" id="campoFornecedorServico" list="listaFornecedoresRecomendados" placeholder="Digite ou escolha uma sugestão...">
+                    <datalist id="listaFornecedoresRecomendados"></datalist>
+                </div>
+                <div class="campo" style="grid-column: span 2;">
+                    <label>Serviço solicitado</label>
+                    <input type="text" id="campoDescricaoServico" placeholder="Ex: Abastecimento diesel, troca de óleo, manutenção do ar-condicionado...">
+                </div>
+                <div class="campo">
+                    <label>Quantidade estimada (opcional)</label>
+                    <input type="number" step="0.01" id="campoQtdServico">
+                </div>
+                <div class="campo">
+                    <label>Unidade (opcional)</label>
+                    <input type="text" id="campoUnidadeServico" placeholder="Ex: L, H, UN...">
+                </div>
+            </div>
+            <button type="button" class="btn btn-principal" id="btnAdicionarItemServico" style="width:100%; margin-top:4px;">+ Adicionar à requisição</button>
+
+            <table class="itens" style="margin-top:16px;">
+                <thead><tr><th>Veículo</th><th>Serviço</th><th>Fornecedor</th><th>Qtd</th><th></th></tr></thead>
+                <tbody id="corpoItensServico"></tbody>
+            </table>
+            <div id="vazioItensServico" class="vazio">Nenhum item adicionado ainda.</div>
+        </div>
+
+        <button class="btn btn-principal-full" id="btnEnviarRequisicao">Enviar requisição</button>
+        <p class="status-msg" id="statusEnvioRequisicao"></p>
+    </div>
+
+    <div class="conteudo-aba" id="aba-atender">
+        <div class="cartao">
+            <h2>Filtrar</h2>
+            <select id="filtroStatusAtender">
+                <option value="pendente">Pendentes</option>
+                <option value="atendida">Já atendidas</option>
+                <option value="">Todas</option>
+            </select>
+        </div>
+        <div id="listaRequisicoesAtender"></div>
+        <div id="vazioRequisicoesAtender" class="vazio hidden">Nenhuma requisição encontrada.</div>
+    </div>
+</div>
+
+<div id="modal-atender-item" class="modal-overlay">
+    <div class="modal-caixa">
+        <h3>Registrar atendimento</h3>
+        <p class="subtitulo" id="atenderItemInfo" style="margin-bottom:16px;"></p>
+        <div class="campo">
+            <label>Quantidade atendida agora</label>
+            <input type="number" step="0.01" id="atenderQtd">
+        </div>
+        <div class="campo">
+            <label>Observação (opcional — ex: urgente, sem estoque/precisa comprar)</label>
+            <input type="text" id="atenderObservacao">
+        </div>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+            <button class="btn btn-cinza" id="btnCancelarAtender" style="flex:1;">Cancelar</button>
+            <button class="btn btn-principal" id="btnConfirmarAtender" style="flex:1;">Confirmar</button>
+        </div>
+        <p class="status-msg status-erro" id="statusAtenderItem"></p>
+    </div>
+</div>
+
+<div id="modal-escolha-impressao" class="modal-overlay">
+    <div class="modal-caixa">
+        <h3>Imprimir requisição</h3>
+
+        <div id="passoEscolherFormato">
+            <p class="subtitulo" style="margin-bottom:16px;">Escolha o formato:</p>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-cinza" id="btnFormatoA4" style="flex:1;">📄 Folha A4</button>
+                <button class="btn btn-cinza" id="btnFormatoBobina" style="flex:1;">🧾 Bobina (térmica)</button>
+            </div>
+        </div>
+
+        <div id="passoAcoesPdf" class="hidden">
+            <p class="subtitulo" id="formatoEscolhidoTexto" style="margin-bottom:16px;"></p>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-cinza" id="btnVerPdf" style="flex:1;">👁 Visualizar</button>
+                <button class="btn btn-cinza" id="btnBaixarPdf" style="flex:1;">📄 Baixar</button>
+                <button class="btn btn-cinza" id="btnCompartilharPdf" style="flex:1;">📤 Compartilhar</button>
+            </div>
+            <button class="btn btn-cinza" id="btnVoltarFormato" style="width:100%; margin-top:10px;">← Trocar formato</button>
+        </div>
+
+        <button class="btn btn-cinza" id="btnCancelarImpressao" style="width:100%; margin-top:10px;">Fechar</button>
+    </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://frzvcrcshkpvjdbbqkhz.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_h-JuDyjYgb5YKGYFRKtLEg_8gnJor9w';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function escapeHtml(texto) {
+    if (texto == null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(texto);
+    return div.innerHTML;
+}
+function formatarMoeda(v) { return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+
+// ---------------------------------------------------------------
+// ESTADO GLOBAL
+// ---------------------------------------------------------------
+let meuPerfil = { unidadeId: null, unidadeNome: '', ehPrincipal: false, papel: null, email: '' };
+let vinculosGlobais = [];
+let almoxarifados = [];
+let setores = [];
+let eventos = [];
+let produtos = [];
+let saldosAlmoxarifado = [];
+let itensNovaReq = []; // [{produtoId, nome, un, qtd}] ou [{descricaoLivre, qtd}] pros avulsos
+let tipoRequisicaoAtual = 'material';
+let itensServico = []; // [{equipamentoVeiculoId, nomeVeiculo, servicoDescricao, fornecedorRecomendado, qtd, unidadeMedida}]
+let veiculosEquipamentos = [];
+let fornecedoresRecomendados = [];
+let eventoSelecionado = null;
+let requisicoesAtender = [];
+let itemAtenderAtualId = null;
+
+function saldoDoProdutoNoAlmoxarifado(produtoId, almoxarifadoId) {
+    return saldosAlmoxarifado.find(s => s.produtoId === produtoId && s.almoxarifadoId === almoxarifadoId) || null;
+}
+
+const PAPEIS_PODEM_ATENDER = ['administrador', 'almoxarife', 'auxiliar_almoxarifado'];
+
+// ---------------------------------------------------------------
+// LOGIN
+// ---------------------------------------------------------------
+document.getElementById('btn-login').addEventListener('click', async () => {
+    const email = document.getElementById('login-email').value.trim();
+    const senha = document.getElementById('login-senha').value;
+    const statusEl = document.getElementById('status-login');
+    statusEl.textContent = '';
+    if (!email || !senha) { statusEl.textContent = 'Preencha e-mail e senha.'; return; }
+    const btn = document.getElementById('btn-login');
+    btn.disabled = true; btn.textContent = 'Entrando...';
+    const { error } = await sb.auth.signInWithPassword({ email, password: senha });
+    btn.disabled = false; btn.textContent = 'Entrar';
+    if (error) { statusEl.textContent = 'E-mail ou senha incorretos.'; return; }
+    await onLogin();
+});
+document.getElementById('login-senha').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btn-login').click(); });
+
+document.getElementById('btn-sair').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    location.reload();
+});
+
+async function checkSession() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) await onLogin();
+}
+
+async function onLogin() {
+    document.getElementById('tela-login').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+
+    const { data: sessao } = await sb.auth.getUser();
+    meuPerfil.email = sessao?.user?.email || '';
+    const userId = sessao?.user?.id;
+    if (!userId) return;
+
+    const { data: vinculos, error } = await sb.from('servir_unidade_usuarios')
+        .select('unidade_negocio_id, eh_principal, servir_unidades_negocio(nome)')
+        .eq('user_id', userId);
+    if (error || !vinculos || !vinculos.length) {
+        alert('Não encontramos nenhuma unidade vinculada ao seu usuário. Fale com o administrador.');
+        return;
+    }
+    vinculosGlobais = vinculos.map(v => ({ unidade_id: v.unidade_negocio_id, eh_principal: v.eh_principal, nome: v.servir_unidades_negocio?.nome || '' }));
+
+    if (vinculosGlobais.length === 1) {
+        await definirUnidadeAtiva(vinculosGlobais[0]);
+        await iniciarApp();
+    } else {
+        abrirEscolhaUnidade();
+    }
+}
+
+function abrirEscolhaUnidade() {
+    const wrap = document.getElementById('lista-unidades-escolha');
+    wrap.innerHTML = '';
+    vinculosGlobais.forEach(v => {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-cinza';
+        btn.style.width = '100%';
+        btn.textContent = v.nome;
+        btn.addEventListener('click', async () => {
+            await definirUnidadeAtiva(v);
+            document.getElementById('modal-unidade').classList.remove('aberto');
+            await iniciarApp();
+        });
+        wrap.appendChild(btn);
+    });
+    document.getElementById('modal-unidade').classList.add('aberto');
+}
+document.getElementById('btn-trocar-unidade').addEventListener('click', abrirEscolhaUnidade);
+
+async function definirUnidadeAtiva(vinculo) {
+    meuPerfil.unidadeId = vinculo.unidade_id;
+    meuPerfil.unidadeNome = vinculo.nome;
+    meuPerfil.ehPrincipal = !!vinculo.eh_principal;
+    document.getElementById('unidade-logada').textContent = vinculo.nome;
+    document.getElementById('btn-trocar-unidade').style.display = vinculosGlobais.length > 1 ? '' : 'none';
+
+    if (meuPerfil.ehPrincipal) {
+        meuPerfil.papel = 'principal';
+    } else {
+        const { data: papel } = await sb.rpc('fn_papel_usuario', { p_unidade_negocio_id: meuPerfil.unidadeId, p_modulo: 'estoque' });
+        meuPerfil.papel = papel || null;
+    }
+}
+
+// ---------------------------------------------------------------
+// CARREGAMENTO
+// ---------------------------------------------------------------
+async function iniciarApp() {
+    const podeAtender = meuPerfil.ehPrincipal || PAPEIS_PODEM_ATENDER.includes(meuPerfil.papel);
+    document.getElementById('aba-btn-atender').style.display = podeAtender ? '' : 'none';
+
+    document.getElementById('campoSolicitante').value = meuPerfil.email;
+
+    const [{ data: dadosAlmox }, { data: dadosSetores }, { data: dadosEventos }, { data: dadosVeiculos }, { data: dadosFornecedores }] = await Promise.all([
+        sb.from('unidade_almoxarifados').select('id, nome').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome'),
+        sb.from('unidade_setores').select('id, nome').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome'),
+        sb.from('fabrica_eventos').select('codigo, descricao').eq('unidade_negocio_id', meuPerfil.unidadeId),
+        sb.from('unidade_equipamentos_veiculos').select('id, nome').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome'),
+        sb.from('unidade_fornecedores_recomendados').select('id, nome').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome')
+    ]);
+    almoxarifados = dadosAlmox || [];
+    setores = dadosSetores || [];
+    eventos = (dadosEventos || []).map(e => ({ codigo: String(e.codigo ?? ''), descricao: String(e.descricao || '') }));
+    veiculosEquipamentos = dadosVeiculos || [];
+    fornecedoresRecomendados = dadosFornecedores || [];
+
+    document.getElementById('campoVeiculoServico').innerHTML =
+        '<option value="">-- selecione --</option>' + veiculosEquipamentos.map(v => `<option value="${v.id}">${escapeHtml(v.nome)}</option>`).join('');
+    document.getElementById('listaFornecedoresRecomendados').innerHTML =
+        fornecedoresRecomendados.map(f => `<option value="${escapeHtml(f.nome)}">`).join('');
+
+    document.getElementById('campoAlmoxarifado').innerHTML =
+        '<option value="">-- selecione --</option>' + almoxarifados.map(a => `<option value="${a.id}">${escapeHtml(a.nome)}</option>`).join('');
+    document.getElementById('campoSetor').innerHTML =
+        '<option value="">-- selecione --</option>' + setores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+
+    await carregarProdutosESaldos();
+
+    if (podeAtender) await carregarRequisicoesAtender();
+}
+
+async function carregarProdutosESaldos() {
+    const TAMANHO_PAGINA = 1000;
+    async function buscarTudo(tabela, colunas) {
+        let todos = []; let pagina = 0;
+        while (true) {
+            const inicio = pagina * TAMANHO_PAGINA, fim = inicio + TAMANHO_PAGINA - 1;
+            const { data, error } = await sb.from(tabela).select(colunas).eq('unidade_negocio_id', meuPerfil.unidadeId).range(inicio, fim);
+            if (error) throw error;
+            todos = todos.concat(data || []);
+            if (!data || data.length < TAMANHO_PAGINA) break;
+            pagina++;
+        }
+        return todos;
+    }
+    const [dadosProdutos, dadosSaldos] = await Promise.all([
+        buscarTudo('estoque_produtos', 'id, nome, un, codigo_externo'),
+        buscarTudo('estoque_saldo_almoxarifado', 'produto_id, almoxarifado_id, estoque')
+    ]);
+    produtos = dadosProdutos || [];
+    saldosAlmoxarifado = (dadosSaldos || []).map(s => ({
+        produtoId: Number(s.produto_id), almoxarifadoId: Number(s.almoxarifado_id), estoque: Number(s.estoque) || 0
+    }));
+}
+
+// ---------------------------------------------------------------
+// ABAS
+// ---------------------------------------------------------------
+document.querySelectorAll('.aba-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.aba-btn').forEach(b => b.classList.remove('ativa'));
+        document.querySelectorAll('.conteudo-aba').forEach(c => c.classList.remove('ativa'));
+        btn.classList.add('ativa');
+        document.getElementById('aba-' + btn.dataset.aba).classList.add('ativa');
+    });
+});
+
+// ---------------------------------------------------------------
+// BUSCA DE EVENTO
+// ---------------------------------------------------------------
+document.getElementById('campoBuscaEvento').addEventListener('input', (e) => {
+    const termo = e.target.value.trim().toUpperCase();
+    const el = document.getElementById('resultadosBuscaEvento');
+    if (!termo) { el.classList.remove('aberto'); return; }
+    const filtrados = eventos.filter(ev => ev.codigo.toUpperCase().includes(termo) || ev.descricao.toUpperCase().includes(termo)).slice(0, 20);
+    if (!filtrados.length) { el.innerHTML = '<div class="resultado-item">Nenhum evento encontrado.</div>'; el.classList.add('aberto'); return; }
+    el.innerHTML = filtrados.map(ev => `<div class="resultado-item" data-codigo="${escapeHtml(ev.codigo)}"><span class="cod">${escapeHtml(ev.codigo)}</span> — ${escapeHtml(ev.descricao)}</div>`).join('');
+    el.classList.add('aberto');
+    el.querySelectorAll('[data-codigo]').forEach(item => {
+        item.addEventListener('click', () => {
+            eventoSelecionado = eventos.find(ev => ev.codigo === item.dataset.codigo);
+            document.getElementById('eventoSelecionadoTexto').textContent = eventoSelecionado ? `Selecionado: ${eventoSelecionado.codigo} — ${eventoSelecionado.descricao}` : '';
+            document.getElementById('campoBuscaEvento').value = '';
+            el.classList.remove('aberto');
+        });
+    });
+});
+
+// ---------------------------------------------------------------
+// BUSCA DE PRODUTO (mesmo padrão da Requisição de Saída) + itens
+// ---------------------------------------------------------------
+document.getElementById('campoBuscaProduto').addEventListener('input', (e) => {
+    const termo = e.target.value.trim().toUpperCase();
+    const el = document.getElementById('resultadosBuscaProduto');
+    if (!termo) { el.classList.remove('aberto'); return; }
+    const palavras = termo.split(/\s+/).filter(Boolean);
+    const filtrados = produtos.filter(p => {
+        const texto = (String(p.id) + ' ' + (p.codigo_externo || '') + ' ' + p.nome).toUpperCase();
+        return palavras.every(palavra => texto.includes(palavra));
+    }).slice(0, 30);
+
+    const almoxSelecionado = document.getElementById('campoAlmoxarifado').value ? Number(document.getElementById('campoAlmoxarifado').value) : null;
+
+    if (!filtrados.length) { el.innerHTML = '<div class="resultado-item">Nenhum produto encontrado.</div>'; el.classList.add('aberto'); return; }
+    el.innerHTML = filtrados.map(p => {
+        const saldo = almoxSelecionado ? saldoDoProdutoNoAlmoxarifado(p.id, almoxSelecionado) : null;
+        const disp = almoxSelecionado ? (saldo ? saldo.estoque : 0) : null;
+        return `
+            <div class="resultado-item" data-produto="${p.id}">
+                <span class="cod">#${p.id}${p.codigo_externo ? ' · ' + escapeHtml(p.codigo_externo) : ''}</span> — ${escapeHtml(p.nome)} <span style="color:var(--muted);">(${escapeHtml(p.un)})</span>
+                ${almoxSelecionado ? `<br><span style="font-size:0.78em; color:var(--brand-2);">Disponível nesse almoxarifado: ${Number(disp).toLocaleString('pt-BR')}</span>` : ''}
+            </div>`;
+    }).join('');
+    el.classList.add('aberto');
+    el.querySelectorAll('[data-produto]').forEach(item => {
+        item.addEventListener('click', () => {
+            const prod = produtos.find(p => String(p.id) === item.dataset.produto);
+            adicionarItemNovaReq(prod);
+            document.getElementById('campoBuscaProduto').value = '';
+            el.classList.remove('aberto');
+        });
+    });
+});
+
+function adicionarItemNovaReq(prod) {
+    const existente = itensNovaReq.find(i => i.produtoId === prod.id);
+    if (existente) existente.qtd += 1;
+    else itensNovaReq.push({ produtoId: prod.id, nome: prod.nome, un: prod.un, qtd: 1 });
+    renderizarItensNovaReq();
+}
+
+function renderizarItensNovaReq() {
+    const corpo = document.getElementById('corpoItensNovaReq');
+    const vazio = document.getElementById('vazioItensNovaReq');
+    const almoxSelecionado = document.getElementById('campoAlmoxarifado').value ? Number(document.getElementById('campoAlmoxarifado').value) : null;
+    if (!itensNovaReq.length) { corpo.innerHTML = ''; vazio.style.display = 'block'; return; }
+    vazio.style.display = 'none';
+    corpo.innerHTML = itensNovaReq.map((item, idx) => {
+        if (item.produtoId == null) {
+            // item avulso, descrito na hora -- não existe no cadastro ainda
+            return `
+                <tr>
+                    <td>${escapeHtml(item.descricaoLivre)} <span class="pill" style="background:var(--danger-soft); color:var(--danger); font-size:0.65rem;">novo</span></td>
+                    <td>-</td>
+                    <td><input type="number" min="0.01" step="0.01" value="${item.qtd}" data-idx="${idx}" class="input-qtd-nova-req"></td>
+                    <td><button type="button" class="btn btn-remover" data-remover="${idx}">×</button></td>
+                </tr>`;
+        }
+        const saldo = almoxSelecionado ? saldoDoProdutoNoAlmoxarifado(item.produtoId, almoxSelecionado) : null;
+        const disp = almoxSelecionado ? (saldo ? saldo.estoque : 0) : '-';
+        return `
+            <tr>
+                <td>${escapeHtml(item.nome)} <span style="color:var(--muted); font-size:0.8em;">(${escapeHtml(item.un)})</span></td>
+                <td>${disp}</td>
+                <td><input type="number" min="0.01" step="0.01" value="${item.qtd}" data-idx="${idx}" class="input-qtd-nova-req"></td>
+                <td><button type="button" class="btn btn-remover" data-remover="${idx}">×</button></td>
+            </tr>`;
+    }).join('');
+    corpo.querySelectorAll('.input-qtd-nova-req').forEach(inp => {
+        inp.addEventListener('change', () => { itensNovaReq[Number(inp.dataset.idx)].qtd = parseFloat(inp.value) || 0; });
+    });
+    corpo.querySelectorAll('[data-remover]').forEach(btn => {
+        btn.addEventListener('click', () => { itensNovaReq.splice(Number(btn.dataset.remover), 1); renderizarItensNovaReq(); });
+    });
+}
+document.getElementById('campoAlmoxarifado').addEventListener('change', renderizarItensNovaReq);
+
+// ---------------------------------------------------------------
+// ALTERNAR TIPO DE REQUISIÇÃO (material / serviço-abastecimento)
+// ---------------------------------------------------------------
+document.querySelectorAll('.tipo-req-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        tipoRequisicaoAtual = btn.dataset.tipoReq;
+        document.querySelectorAll('.tipo-req-btn').forEach(b => b.classList.remove('ativa'));
+        btn.classList.add('ativa');
+        document.getElementById('secaoMaterial').classList.toggle('hidden', tipoRequisicaoAtual !== 'material');
+        document.getElementById('secaoServico').classList.toggle('hidden', tipoRequisicaoAtual !== 'servico_abastecimento');
+    });
+});
+
+// ---------------------------------------------------------------
+// DESCREVER PRODUTO (item avulso, sem cadastro no estoque)
+// ---------------------------------------------------------------
+document.getElementById('btnAbrirDescrever').addEventListener('click', () => {
+    document.getElementById('blocoDescreverProduto').classList.remove('hidden');
+    document.getElementById('campoDescricaoLivre').value = '';
+    document.getElementById('campoQtdDescricaoLivre').value = 1;
+});
+document.getElementById('btnCancelarDescrever').addEventListener('click', () => {
+    document.getElementById('blocoDescreverProduto').classList.add('hidden');
+});
+document.getElementById('btnAdicionarDescricaoLivre').addEventListener('click', () => {
+    const descricao = document.getElementById('campoDescricaoLivre').value.trim();
+    const qtd = parseFloat(document.getElementById('campoQtdDescricaoLivre').value) || 0;
+    if (!descricao) { alert('Descreva o produto antes de adicionar.'); return; }
+    if (qtd <= 0) { alert('Informe uma quantidade maior que zero.'); return; }
+    itensNovaReq.push({ produtoId: null, descricaoLivre: descricao, un: '', qtd });
+    renderizarItensNovaReq();
+    document.getElementById('blocoDescreverProduto').classList.add('hidden');
+});
+
+// ---------------------------------------------------------------
+// ITENS DE SERVIÇO / ABASTECIMENTO
+// ---------------------------------------------------------------
+document.getElementById('btnAdicionarItemServico').addEventListener('click', () => {
+    const veiculoId = document.getElementById('campoVeiculoServico').value;
+    const fornecedor = document.getElementById('campoFornecedorServico').value.trim();
+    const servico = document.getElementById('campoDescricaoServico').value.trim();
+    const qtd = document.getElementById('campoQtdServico').value ? parseFloat(document.getElementById('campoQtdServico').value) : null;
+    const unidade = document.getElementById('campoUnidadeServico').value.trim();
+
+    if (!servico) { alert('Descreva o serviço solicitado.'); return; }
+
+    const veiculo = veiculoId ? veiculosEquipamentos.find(v => String(v.id) === veiculoId) : null;
+    itensServico.push({
+        equipamentoVeiculoId: veiculoId ? Number(veiculoId) : null,
+        nomeVeiculo: veiculo ? veiculo.nome : '',
+        servicoDescricao: servico,
+        fornecedorRecomendado: fornecedor || null,
+        qtd, unidadeMedida: unidade || null
+    });
+    renderizarItensServico();
+
+    document.getElementById('campoVeiculoServico').value = '';
+    document.getElementById('campoFornecedorServico').value = '';
+    document.getElementById('campoDescricaoServico').value = '';
+    document.getElementById('campoQtdServico').value = '';
+    document.getElementById('campoUnidadeServico').value = '';
+});
+
+function renderizarItensServico() {
+    const corpo = document.getElementById('corpoItensServico');
+    const vazio = document.getElementById('vazioItensServico');
+    if (!itensServico.length) { corpo.innerHTML = ''; vazio.style.display = 'block'; return; }
+    vazio.style.display = 'none';
+    corpo.innerHTML = itensServico.map((item, idx) => `
+        <tr>
+            <td>${item.nomeVeiculo ? escapeHtml(item.nomeVeiculo) : '-'}</td>
+            <td>${escapeHtml(item.servicoDescricao)}</td>
+            <td>${item.fornecedorRecomendado ? escapeHtml(item.fornecedorRecomendado) : '-'}</td>
+            <td>${item.qtd != null ? item.qtd + (item.unidadeMedida ? ' ' + escapeHtml(item.unidadeMedida) : '') : '-'}</td>
+            <td><button type="button" class="btn btn-remover" data-remover-servico="${idx}">×</button></td>
+        </tr>
+    `).join('');
+    corpo.querySelectorAll('[data-remover-servico]').forEach(btn => {
+        btn.addEventListener('click', () => { itensServico.splice(Number(btn.dataset.removerServico), 1); renderizarItensServico(); });
+    });
+}
+
+// ---------------------------------------------------------------
+// ENVIAR NOVA REQUISIÇÃO
+// ---------------------------------------------------------------
+document.getElementById('btnEnviarRequisicao').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusEnvioRequisicao');
+    statusEl.className = 'status-msg'; statusEl.textContent = '';
+
+    const almoxarifadoId = document.getElementById('campoAlmoxarifado').value;
+    const setorId = document.getElementById('campoSetor').value;
+    const solicitante = document.getElementById('campoSolicitante').value.trim();
+    const listaItensAtual = tipoRequisicaoAtual === 'material' ? itensNovaReq : itensServico;
+
+    if (!almoxarifadoId) { statusEl.className = 'status-msg status-erro'; statusEl.textContent = 'Escolha o almoxarifado.'; return; }
+    if (!solicitante) { statusEl.className = 'status-msg status-erro'; statusEl.textContent = 'Informe o solicitante.'; return; }
+    if (!listaItensAtual.length) { statusEl.className = 'status-msg status-erro'; statusEl.textContent = 'Adicione pelo menos um item.'; return; }
+
+    const btn = document.getElementById('btnEnviarRequisicao');
+    btn.disabled = true; btn.textContent = 'Enviando...';
+
+    try {
+        const { data: req, error: e1 } = await sb.from('estoque_requisicoes_rapidas').insert({
+            unidade_negocio_id: meuPerfil.unidadeId,
+            almoxarifado_id: Number(almoxarifadoId),
+            setor_id: setorId ? Number(setorId) : null,
+            evento: eventoSelecionado ? eventoSelecionado.codigo : null,
+            solicitante,
+            tipo: tipoRequisicaoAtual
+        }).select().single();
+        if (e1) throw e1;
+
+        let itensParaInserir;
+        if (tipoRequisicaoAtual === 'material') {
+            itensParaInserir = itensNovaReq.map(i => ({
+                requisicao_id: req.id,
+                produto_id: i.produtoId,
+                descricao_livre: i.produtoId == null ? i.descricaoLivre : null,
+                qtd_solicitada: i.qtd
+            }));
+        } else {
+            itensParaInserir = itensServico.map(i => ({
+                requisicao_id: req.id,
+                equipamento_veiculo_id: i.equipamentoVeiculoId,
+                fornecedor_recomendado: i.fornecedorRecomendado,
+                servico_descricao: i.servicoDescricao,
+                qtd_solicitada: i.qtd,
+                unidade_medida: i.unidadeMedida
+            }));
+        }
+        const { error: e2 } = await sb.from('estoque_requisicoes_rapidas_itens').insert(itensParaInserir);
+        if (e2) throw e2;
+
+        itensNovaReq = [];
+        itensServico = [];
+        renderizarItensNovaReq();
+        renderizarItensServico();
+        document.getElementById('campoBuscaEvento').value = '';
+        document.getElementById('eventoSelecionadoTexto').textContent = '';
+        eventoSelecionado = null;
+        document.getElementById('campoAlmoxarifado').value = '';
+        document.getElementById('campoSetor').value = '';
+        statusEl.className = 'status-msg';
+        statusEl.style.color = 'var(--brand-2)';
+        statusEl.textContent = '✓ Requisição enviada com sucesso!';
+        if (document.getElementById('aba-btn-atender').style.display !== 'none') await carregarRequisicoesAtender();
+
+        // já abre direto o popup de imprimir/compartilhar, sem precisar
+        // ir procurar a requisição na aba de atender depois
+        await gerarEAbrirPopupPdf(req, itensParaInserir, 'a4');
+    } catch (erro) {
+        statusEl.className = 'status-msg status-erro';
+        statusEl.textContent = 'Erro ao enviar: ' + erro.message;
+    } finally {
+        btn.disabled = false; btn.textContent = 'Enviar requisição';
+    }
+});
+
+// ---------------------------------------------------------------
+// ATENDER REQUISIÇÕES
+// ---------------------------------------------------------------
+document.getElementById('filtroStatusAtender').addEventListener('change', carregarRequisicoesAtender);
+
+async function carregarRequisicoesAtender() {
+    const status = document.getElementById('filtroStatusAtender').value;
+    let query = sb.from('estoque_requisicoes_rapidas')
+        .select('*, estoque_requisicoes_rapidas_itens(*)')
+        .eq('unidade_negocio_id', meuPerfil.unidadeId)
+        .order('created_at', { ascending: false });
+    if (status) query = query.eq('status', status);
+    const { data, error } = await query;
+    if (error) { console.error(error); return; }
+    requisicoesAtender = data || [];
+    renderizarRequisicoesAtender();
+}
+
+function renderizarRequisicoesAtender() {
+    const lista = document.getElementById('listaRequisicoesAtender');
+    const vazio = document.getElementById('vazioRequisicoesAtender');
+    if (!requisicoesAtender.length) { lista.innerHTML = ''; vazio.classList.remove('hidden'); return; }
+    vazio.classList.add('hidden');
+
+    lista.innerHTML = requisicoesAtender.map(req => {
+        const almox = almoxarifados.find(a => a.id === req.almoxarifado_id);
+        const setor = setores.find(s => s.id === req.setor_id);
+        const itens = req.estoque_requisicoes_rapidas_itens || [];
+        const linhasItens = itens.map(item => {
+            const restante = Number(item.qtd_solicitada || 0) - Number(item.qtd_atendida || 0);
+            let nomeExibido;
+            if (req.tipo === 'servico_abastecimento') {
+                const veiculo = veiculosEquipamentos.find(v => v.id === item.equipamento_veiculo_id);
+                nomeExibido = `${escapeHtml(item.servico_descricao || '')}${veiculo ? ' — ' + escapeHtml(veiculo.nome) : ''}${item.fornecedor_recomendado ? ' · ' + escapeHtml(item.fornecedor_recomendado) : ''}`;
+            } else {
+                const prod = produtos.find(p => p.id === item.produto_id);
+                nomeExibido = item.produto_id != null
+                    ? escapeHtml(prod ? prod.nome : '#' + item.produto_id)
+                    : `${escapeHtml(item.descricao_livre || '')} <span class="pill" style="background:var(--danger-soft); color:var(--danger); font-size:0.6rem;">novo</span>`;
+            }
+            return `
+                <div class="item-req-linha">
+                    <span class="nome-produto">${nomeExibido}</span>
+                    <span>Solicitado: <strong>${item.qtd_solicitada != null ? item.qtd_solicitada : '-'}${item.unidade_medida ? ' ' + escapeHtml(item.unidade_medida) : ''}</strong></span>
+                    <span>Atendido: <strong>${item.qtd_atendida || 0}</strong></span>
+                    <span class="badge-restante ${restante <= 0 ? 'zerado' : ''}" ${restante > 0 ? `data-atender-item="${item.id}"` : ''}>
+                        ${restante > 0 ? 'Restante: ' + restante + ' — clique pra atender' : 'Completo ✓'}
+                    </span>
+                    ${item.observacao ? `<span class="obs-item">💬 ${escapeHtml(item.observacao)}</span>` : ''}
+                </div>`;
+        }).join('');
+
+        return `
+            <div class="card-requisicao">
+                <div class="cabecalho-req">
+                    <div>
+                        <strong>${escapeHtml(req.solicitante)}</strong>
+                        <span class="pill ${req.status === 'atendida' ? 'pill-atendida' : 'pill-pendente'}">${req.status}</span>
+                        <span class="pill" style="background:#EEF0F1; color:var(--muted);">${req.tipo === 'servico_abastecimento' ? '⛽ serviço' : '📦 material'}</span>
+                        <div class="meta">${almox ? escapeHtml(almox.nome) : '-'} ${setor ? '· ' + escapeHtml(setor.nome) : ''} ${req.evento ? '· evento ' + escapeHtml(req.evento) : ''}</div>
+                        <div class="meta">${new Date(req.created_at).toLocaleString('pt-BR')}</div>
+                    </div>
+                    <div style="display:flex; gap:4px;">
+                        <button type="button" class="btn btn-cinza" data-imprimir-req="${req.id}" data-formato="a4" style="font-size:0.75rem; padding:6px 8px;">📄 A4</button>
+                        <button type="button" class="btn btn-cinza" data-imprimir-req="${req.id}" data-formato="bobina" style="font-size:0.75rem; padding:6px 8px;">🧾 Bobina</button>
+                    </div>
+                </div>
+                ${linhasItens}
+            </div>`;
+    }).join('');
+
+    lista.querySelectorAll('[data-imprimir-req]').forEach(el => {
+        el.addEventListener('click', () => {
+            const req = requisicoesAtender.find(r => r.id === el.dataset.imprimirReq);
+            if (!req) return;
+            gerarEAbrirPopupPdf(req, req.estoque_requisicoes_rapidas_itens || [], el.dataset.formato);
+        });
+    });
+
+    lista.querySelectorAll('[data-atender-item]').forEach(el => {
+        el.addEventListener('click', () => abrirModalAtenderItem(Number(el.dataset.atenderItem)));
+    });
+}
+
+function abrirModalAtenderItem(itemId) {
+    let itemAlvo = null, reqAlvo = null;
+    for (const req of requisicoesAtender) {
+        const item = (req.estoque_requisicoes_rapidas_itens || []).find(i => i.id === itemId);
+        if (item) { itemAlvo = item; reqAlvo = req; break; }
+    }
+    if (!itemAlvo) return;
+    itemAtenderAtualId = itemId;
+    const restante = Number(itemAlvo.qtd_solicitada || 0) - Number(itemAlvo.qtd_atendida || 0);
+    const almox = almoxarifados.find(a => a.id === reqAlvo.almoxarifado_id);
+
+    if (reqAlvo.tipo === 'servico_abastecimento') {
+        const veiculo = veiculosEquipamentos.find(v => v.id === itemAlvo.equipamento_veiculo_id);
+        document.getElementById('atenderItemInfo').innerHTML =
+            `<strong>${escapeHtml(itemAlvo.servico_descricao || '')}</strong><br>
+             ${veiculo ? 'Veículo: ' + escapeHtml(veiculo.nome) + '<br>' : ''}
+             ${itemAlvo.fornecedor_recomendado ? 'Fornecedor: ' + escapeHtml(itemAlvo.fornecedor_recomendado) + '<br>' : ''}
+             Solicitado: ${itemAlvo.qtd_solicitada != null ? itemAlvo.qtd_solicitada : '-'}${itemAlvo.unidade_medida ? ' ' + escapeHtml(itemAlvo.unidade_medida) : ''} · já atendido: ${itemAlvo.qtd_atendida || 0} · restante: ${restante}`;
+    } else {
+        const prod = produtos.find(p => p.id === itemAlvo.produto_id);
+        const nomeItem = itemAlvo.produto_id != null ? (prod ? prod.nome : '#' + itemAlvo.produto_id) : (itemAlvo.descricao_livre + ' (item novo, sem cadastro)');
+        const saldo = itemAlvo.produto_id != null ? saldoDoProdutoNoAlmoxarifado(itemAlvo.produto_id, reqAlvo.almoxarifado_id) : null;
+        document.getElementById('atenderItemInfo').innerHTML =
+            `<strong>${escapeHtml(nomeItem)}</strong><br>
+             Solicitado: ${itemAlvo.qtd_solicitada} · já atendido: ${itemAlvo.qtd_atendida || 0} · restante: ${restante}<br>
+             Almoxarifado: ${almox ? escapeHtml(almox.nome) : '-'}${itemAlvo.produto_id != null ? ' · disponível lá: ' + (saldo ? saldo.estoque : 0) : ''}`;
+    }
+    document.getElementById('atenderQtd').value = restante;
+    document.getElementById('atenderObservacao').value = itemAlvo.observacao || '';
+    document.getElementById('statusAtenderItem').textContent = '';
+    document.getElementById('modal-atender-item').classList.add('aberto');
+}
+
+document.getElementById('btnCancelarAtender').addEventListener('click', () => {
+    document.getElementById('modal-atender-item').classList.remove('aberto');
+});
+
+document.getElementById('btnConfirmarAtender').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusAtenderItem');
+    statusEl.textContent = '';
+    const qtd = parseFloat(document.getElementById('atenderQtd').value) || 0;
+    const observacao = document.getElementById('atenderObservacao').value.trim();
+
+    let itemAlvo = null, reqAlvo = null;
+    for (const req of requisicoesAtender) {
+        const item = (req.estoque_requisicoes_rapidas_itens || []).find(i => i.id === itemAtenderAtualId);
+        if (item) { itemAlvo = item; reqAlvo = req; break; }
+    }
+    if (!itemAlvo) return;
+
+    if (qtd <= 0 && !observacao) { statusEl.textContent = 'Informe uma quantidade maior que zero, ou pelo menos uma observação.'; return; }
+
+    const btn = document.getElementById('btnConfirmarAtender');
+    btn.disabled = true; btn.textContent = 'Salvando...';
+
+    try {
+        const ehMaterialComProdutoReal = reqAlvo.tipo === 'material' && itemAlvo.produto_id != null;
+        if (qtd > 0 && ehMaterialComProdutoReal) {
+            // registra a baixa de estoque de verdade, no almoxarifado certo
+            // -- só faz sentido pra material com produto cadastrado; serviço
+            // e item avulso (sem cadastro) não mexem no estoque
+            const prod = produtos.find(p => p.id === itemAlvo.produto_id);
+            const { error: eMov } = await sb.from('estoque_movimentacoes').insert({
+                data: new Date().toISOString().slice(0, 10),
+                produto_id: itemAlvo.produto_id,
+                tipo: 'saida',
+                qtd: qtd,
+                valor_unit: prod && prod.valor ? prod.valor : 0,
+                almoxarifado_id: reqAlvo.almoxarifado_id,
+                setor_id: reqAlvo.setor_id,
+                evento: reqAlvo.evento || '',
+                responsavel: reqAlvo.solicitante,
+                observacao: 'Requisição rápida' + (observacao ? ' — ' + observacao : ''),
+                unidade_negocio_id: meuPerfil.unidadeId
+            });
+            if (eMov) throw eMov;
+
+            const { error: eAjuste } = await sb.rpc('fabrica_ajustar_estoque', {
+                p_produto_id: itemAlvo.produto_id, p_delta: -qtd, p_almoxarifado_id: reqAlvo.almoxarifado_id
+            });
+            if (eAjuste) throw eAjuste;
+        }
+
+        const novaQtdAtendida = Number(itemAlvo.qtd_atendida || 0) + qtd;
+        const { error: eItem } = await sb.from('estoque_requisicoes_rapidas_itens')
+            .update({ qtd_atendida: novaQtdAtendida, observacao: observacao || null })
+            .eq('id', itemAlvo.id);
+        if (eItem) throw eItem;
+
+        // se todos os itens da requisição já estão completos, marca a
+        // requisição inteira como atendida
+        const todosItens = (reqAlvo.estoque_requisicoes_rapidas_itens || []).map(i =>
+            i.id === itemAlvo.id ? { ...i, qtd_atendida: novaQtdAtendida } : i
+        );
+        const tudoCompleto = todosItens.every(i => Number(i.qtd_atendida || 0) >= Number(i.qtd_solicitada));
+        if (tudoCompleto) {
+            await sb.from('estoque_requisicoes_rapidas').update({ status: 'atendida' }).eq('id', reqAlvo.id);
+        }
+
+        await carregarProdutosESaldos();
+        document.getElementById('modal-atender-item').classList.remove('aberto');
+        await carregarRequisicoesAtender();
+    } catch (erro) {
+        statusEl.textContent = 'Erro: ' + erro.message;
+    } finally {
+        btn.disabled = false; btn.textContent = 'Confirmar';
+    }
+});
+
+// ---------------------------------------------------------------
+// IMPRIMIR/COMPARTILHAR REQUISIÇÃO — gera PDF de verdade (A4 ou
+// bobina térmica) e já abre direto no passo de ação (visualizar /
+// baixar / compartilhar) -- sem passo extra de "escolher formato"
+// no meio do caminho. "Trocar formato" ainda deixa gerar de novo no
+// outro formato, sem precisar sair do popup.
+// ---------------------------------------------------------------
+let pdfGeradoAtual = null; // {blob, nomeArquivo}
+let requisicaoAbertaNoPopup = null; // {req, itens} -- pra "trocar formato" conseguir regerar
+
+async function gerarEAbrirPopupPdf(req, itens, formato) {
+    requisicaoAbertaNoPopup = { req, itens };
+    const resultado = await construirPdfRequisicao(req, itens, formato);
+    if (!resultado) { alert('Não foi possível gerar o PDF dessa requisição.'); return; }
+    pdfGeradoAtual = resultado;
+    document.getElementById('formatoEscolhidoTexto').textContent = `Formato: ${formato === 'bobina' ? 'Bobina (térmica)' : 'Folha A4'}`;
+    document.getElementById('passoEscolherFormato').classList.add('hidden');
+    document.getElementById('passoAcoesPdf').classList.remove('hidden');
+    document.getElementById('modal-escolha-impressao').classList.add('aberto');
+}
+
+document.getElementById('btnCancelarImpressao').addEventListener('click', () => {
+    document.getElementById('modal-escolha-impressao').classList.remove('aberto');
+});
+document.getElementById('btnVoltarFormato').addEventListener('click', () => {
+    document.getElementById('passoEscolherFormato').classList.remove('hidden');
+    document.getElementById('passoAcoesPdf').classList.add('hidden');
+});
+document.getElementById('btnFormatoA4').addEventListener('click', () => {
+    if (!requisicaoAbertaNoPopup) return;
+    gerarEAbrirPopupPdf(requisicaoAbertaNoPopup.req, requisicaoAbertaNoPopup.itens, 'a4');
+});
+document.getElementById('btnFormatoBobina').addEventListener('click', () => {
+    if (!requisicaoAbertaNoPopup) return;
+    gerarEAbrirPopupPdf(requisicaoAbertaNoPopup.req, requisicaoAbertaNoPopup.itens, 'bobina');
+});
+
+async function construirPdfRequisicao(req, itens, formato) {
+    if (!req) return null;
+    const almox = almoxarifados.find(a => a.id === req.almoxarifado_id);
+    const setor = setores.find(s => s.id === req.setor_id);
+    const ehServico = req.tipo === 'servico_abastecimento';
+
+    const { jsPDF } = window.jspdf;
+    // bobina: largura estreita (80mm, padrão de impressora térmica),
+    // altura generosa (calculada por linha depois, mas começa alta o
+    // suficiente pra qualquer requisição comum)
+    const doc = formato === 'bobina'
+        ? new jsPDF({ unit: 'mm', format: [80, 200], orientation: 'portrait' })
+        : new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+
+    const margem = formato === 'bobina' ? 4 : 14;
+    const larguraPagina = formato === 'bobina' ? 80 : 210;
+    const larguraUtil = larguraPagina - margem * 2;
+    const fonteBase = formato === 'bobina' ? 8 : 10;
+    let y = margem;
+
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(formato === 'bobina' ? 10 : 14);
+    doc.text(ehServico ? 'REQUISIÇÃO — SERVIÇO/ABASTECIMENTO' : 'REQUISIÇÃO DE MATERIAL', margem + larguraUtil / 2, y, { align: 'center', maxWidth: larguraUtil });
+    y += formato === 'bobina' ? 8 : 8;
+
+    doc.setDrawColor(150); doc.line(margem, y, margem + larguraUtil, y);
+    y += formato === 'bobina' ? 5 : 6;
+
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(fonteBase);
+    const linhasCabecalho = [
+        `Solicitante: ${req.solicitante}`,
+        `Almoxarifado: ${almox ? almox.nome : '-'}`,
+        setor ? `Setor: ${setor.nome}` : null,
+        req.evento ? `Evento: ${req.evento}` : null,
+        `Data: ${new Date(req.created_at).toLocaleString('pt-BR')}`
+    ].filter(Boolean);
+    linhasCabecalho.forEach(linha => {
+        const linhasQuebradas = doc.splitTextToSize(linha, larguraUtil);
+        doc.text(linhasQuebradas, margem, y);
+        y += linhasQuebradas.length * (formato === 'bobina' ? 3.6 : 5);
+    });
+
+    y += 2;
+    doc.setDrawColor(150); doc.line(margem, y, margem + larguraUtil, y);
+    y += formato === 'bobina' ? 5 : 6;
+
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(fonteBase);
+    if (formato === 'bobina') {
+        // uma linha por item, tudo empilhado (largura estreita não
+        // cabe colunas lado a lado de forma legível)
+        itens.forEach((item, idx) => {
+            doc.setFont('helvetica', 'bold');
+            let tituloItem, detalhes;
+            if (ehServico) {
+                const veiculo = veiculosEquipamentos.find(v => v.id === item.equipamento_veiculo_id);
+                tituloItem = item.servico_descricao || '-';
+                detalhes = [
+                    veiculo ? `Veículo: ${veiculo.nome}` : null,
+                    item.fornecedor_recomendado ? `Fornecedor: ${item.fornecedor_recomendado}` : null,
+                    item.qtd_solicitada != null ? `Qtd: ${item.qtd_solicitada}${item.unidade_medida ? ' ' + item.unidade_medida : ''}` : null
+                ].filter(Boolean);
+            } else {
+                const prod = produtos.find(p => p.id === item.produto_id);
+                tituloItem = item.produto_id != null ? (prod ? prod.nome : '#' + item.produto_id) : `${item.descricao_livre} (novo)`;
+                detalhes = [`Qtd: ${item.qtd_solicitada}`];
+            }
+            const linhasTitulo = doc.splitTextToSize(`${idx + 1}. ${tituloItem}`, larguraUtil);
+            doc.text(linhasTitulo, margem, y);
+            y += linhasTitulo.length * 3.6;
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(fonteBase - 1);
+            detalhes.forEach(d => {
+                const linhasDet = doc.splitTextToSize('   ' + d, larguraUtil);
+                doc.text(linhasDet, margem, y);
+                y += linhasDet.length * 3.2;
+            });
+            doc.setFontSize(fonteBase);
+            y += 1.5;
+        });
+    } else {
+        // A4: colunas lado a lado, cabe bem mais informação por linha
+        const colunas = ehServico
+            ? [{ titulo: 'Serviço', x: margem, w: 70 }, { titulo: 'Veículo', x: margem + 72, w: 45 }, { titulo: 'Fornecedor', x: margem + 119, w: 45 }, { titulo: 'Qtd', x: margem + larguraUtil, w: 0, align: 'right' }]
+            : [{ titulo: 'Produto', x: margem, w: 150 }, { titulo: 'Qtd', x: margem + larguraUtil, w: 0, align: 'right' }];
+
+        colunas.forEach(c => doc.text(c.titulo, c.x, y, c.align ? { align: c.align } : {}));
+        y += 5;
+        doc.setDrawColor(200); doc.line(margem, y, margem + larguraUtil, y);
+        y += 5;
+
+        doc.setFont('helvetica', 'normal');
+        itens.forEach(item => {
+            if (y > 275) { doc.addPage(); y = margem; }
+            if (ehServico) {
+                const veiculo = veiculosEquipamentos.find(v => v.id === item.equipamento_veiculo_id);
+                doc.text(item.servico_descricao || '-', margem, y, { maxWidth: 70 });
+                doc.text(veiculo ? veiculo.nome : '-', margem + 72, y, { maxWidth: 45 });
+                doc.text(item.fornecedor_recomendado || '-', margem + 119, y, { maxWidth: 45 });
+                doc.text(`${item.qtd_solicitada != null ? item.qtd_solicitada : '-'}${item.unidade_medida ? ' ' + item.unidade_medida : ''}`, margem + larguraUtil, y, { align: 'right' });
+            } else {
+                const prod = produtos.find(p => p.id === item.produto_id);
+                const nome = item.produto_id != null ? (prod ? prod.nome : '#' + item.produto_id) : `${item.descricao_livre} (novo)`;
+                doc.text(nome, margem, y, { maxWidth: 150 });
+                doc.text(String(item.qtd_solicitada), margem + larguraUtil, y, { align: 'right' });
+            }
+            y += 6;
+        });
+    }
+
+    y += formato === 'bobina' ? 8 : 14;
+    doc.setDrawColor(150); doc.line(margem, y, margem + larguraUtil, y);
+    y += formato === 'bobina' ? 10 : 10;
+    doc.setFontSize(fonteBase - 1);
+    doc.text('Assinatura: ________________________', margem, y, { maxWidth: larguraUtil });
+
+    const blob = doc.output('blob');
+    const nomeArquivo = `requisicao-${(req.solicitante || 'sem-nome').replace(/\s+/g, '-').toLowerCase()}-${String(req.id).slice(0, 8)}.pdf`;
+    return { blob, nomeArquivo };
+}
+
+document.getElementById('btnVerPdf').addEventListener('click', () => {
+    if (!pdfGeradoAtual) return;
+    window.open(URL.createObjectURL(pdfGeradoAtual.blob), '_blank');
+});
+document.getElementById('btnBaixarPdf').addEventListener('click', () => {
+    if (!pdfGeradoAtual) return;
+    const url = URL.createObjectURL(pdfGeradoAtual.blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = pdfGeradoAtual.nomeArquivo;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+});
+document.getElementById('btnCompartilharPdf').addEventListener('click', async () => {
+    if (!pdfGeradoAtual) return;
+    try {
+        const arquivo = new File([pdfGeradoAtual.blob], pdfGeradoAtual.nomeArquivo, { type: 'application/pdf' });
+        if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
+            await navigator.share({ files: [arquivo], title: pdfGeradoAtual.nomeArquivo });
+        } else {
+            alert('Esse navegador não suporta compartilhar arquivo diretamente. Use "Baixar" e envie por WhatsApp/e-mail manualmente.');
+        }
+    } catch (erro) {
+        if (erro.name !== 'AbortError') alert('Não foi possível compartilhar: ' + erro.message);
+    }
+});
+
+// fecha listas de busca clicando fora
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('.linha-busca')) {
+        document.querySelectorAll('.resultados-busca').forEach(el => el.classList.remove('aberto'));
+    }
+});
+
+if (sb) checkSession();
+</script>
+</body>
+</html>

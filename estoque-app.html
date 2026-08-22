@@ -199,8 +199,8 @@
     .btn-icone:hover { background: #f0f0f0; }
     .modal-caixa.larga { max-width: 780px; }
 
-    .th-ordenavel { cursor: pointer; user-select: none; }
-    .th-ordenavel:hover { background: #e4e4e4; }
+    .th-ordenavel, .th-ordenavel-estoque { cursor: pointer; user-select: none; }
+    .th-ordenavel:hover, .th-ordenavel-estoque:hover { background: #e4e4e4; }
     .seta-ordem { font-size: 0.8em; color: #999; }
     .seta-ordem.ativa { color: #1565c0; font-weight: bold; }
 
@@ -498,7 +498,7 @@
 
     <table class="tabela" id="tabelaEstoque">
         <thead>
-            <tr><th>Código</th><th>Cód. Externo</th><th>Produto</th><th>Un</th><th class="num">Valor (R$)</th><th class="num">Últ. Compra</th><th class="num">Preço Médio</th><th class="num">Estoque Inicial</th><th class="num">Estoque Atual</th><th class="center">Ações</th></tr>
+            <tr><th class="th-ordenavel-estoque" data-ordenar-estoque="codigo">Código <span class="seta-ordem"></span></th><th>Cód. Externo</th><th class="th-ordenavel-estoque" data-ordenar-estoque="nome">Produto <span class="seta-ordem"></span></th><th>Un</th><th class="num">Valor (R$)</th><th class="num">Últ. Compra</th><th class="num">Preço Médio</th><th class="num">Estoque Inicial</th><th class="num">Estoque Atual</th><th class="center">Ações</th></tr>
         </thead>
         <tbody id="corpoTabelaEstoque"></tbody>
     </table>
@@ -2322,15 +2322,52 @@ function popularRelatoriosSelects() {
 /* ============================================================
    ABA ESTOQUE
    ============================================================ */
+let ordenacaoEstoque = { coluna: null, direcao: 'asc' };
+
+function ordenarListaEstoque(lista) {
+    if (!ordenacaoEstoque.coluna) return lista;
+    const dir = ordenacaoEstoque.direcao === 'asc' ? 1 : -1;
+    const copia = [...lista];
+    copia.sort((a, b) => {
+        let va, vb;
+        if (ordenacaoEstoque.coluna === 'codigo') { va = a.id; vb = b.id; }
+        else { va = (a.nome || '').toUpperCase(); vb = (b.nome || '').toUpperCase(); }
+        if (typeof va === 'string') return va.localeCompare(vb) * dir;
+        return (va - vb) * dir;
+    });
+    return copia;
+}
+
 function buscarProdutos(termo) {
     termo = (termo || '').trim().toUpperCase();
-    if (!termo) return produtos.slice(0, 60);
-    const palavras = termo.split(/\s+/).filter(Boolean);
-    return produtos.filter(p => {
-        const texto = (String(p.id) + ' ' + (p.codigoExterno || '') + ' ' + p.nome).toUpperCase();
-        return palavras.every(palavra => texto.includes(palavra));
-    }).slice(0, 60);
+    let resultado;
+    if (!termo) {
+        resultado = produtos;
+    } else {
+        const palavras = termo.split(/\s+/).filter(Boolean);
+        resultado = produtos.filter(p => {
+            const texto = (String(p.id) + ' ' + (p.codigoExterno || '') + ' ' + p.nome).toUpperCase();
+            return palavras.every(palavra => texto.includes(palavra));
+        });
+    }
+    return ordenarListaEstoque(resultado).slice(0, 60);
 }
+
+document.querySelectorAll('.th-ordenavel-estoque').forEach(th => {
+    th.addEventListener('click', () => {
+        const coluna = th.dataset.ordenarEstoque;
+        if (ordenacaoEstoque.coluna === coluna) {
+            ordenacaoEstoque.direcao = ordenacaoEstoque.direcao === 'asc' ? 'desc' : 'asc';
+        } else {
+            ordenacaoEstoque = { coluna, direcao: 'asc' };
+        }
+        document.querySelectorAll('.th-ordenavel-estoque .seta-ordem').forEach(s => { s.textContent = ''; s.classList.remove('ativa'); });
+        const seta = th.querySelector('.seta-ordem');
+        seta.textContent = ordenacaoEstoque.direcao === 'asc' ? '▲' : '▼';
+        seta.classList.add('ativa');
+        renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+    });
+});
 
 function renderizarTabelaEstoque(lista) {
     const corpo = document.getElementById('corpoTabelaEstoque');
@@ -2544,13 +2581,25 @@ function abrirInfoProduto(produtoId) {
         .filter(m => m.produtoId === produtoId)
         .sort((a, b) => (b.data || '').localeCompare(a.data || ''));
 
+    // mesmo critério da tabela principal: com almoxarifado de trabalho
+    // selecionado, mostra o saldo ESPECÍFICO dele, não a soma de todos
+    const saldo = almoxarifadoTrabalho ? saldoDoProdutoNoAlmoxarifado(produtoId, almoxarifadoTrabalho) : null;
+    const estoqueExibido = almoxarifadoTrabalho ? (saldo ? saldo.estoque : 0) : p.estoque;
+    const estoqueInicialExibido = almoxarifadoTrabalho ? (saldo ? saldo.estoqueInicial : 0) : p.estoqueInicial;
+    const precoMedioExibido = almoxarifadoTrabalho ? (saldo ? saldo.precoMedio : null) : p.precoMedio;
+    const precoUltimaCompraExibido = almoxarifadoTrabalho ? (saldo ? saldo.precoUltimaCompra : null) : p.precoUltimaCompra;
+    const nomeAlmoxTrabalho = almoxarifadoTrabalho ? (catalogosBaixa.almoxarifados || []).find(a => a.id === almoxarifadoTrabalho) : null;
+
     let html = `
         <h4 style="margin-top:0;">${escapeHtml(p.nome)}</h4>
-        <p class="subtitulo" style="margin-bottom:6px;">
-            #${p.id}${p.codigoExterno ? ' · Código externo: ' + escapeHtml(p.codigoExterno) : ''} · Estoque inicial: ${Number(p.estoqueInicial).toLocaleString('pt-BR')} · Estoque atual: ${Number(p.estoque).toLocaleString('pt-BR')} ${escapeHtml(p.un)}
+        <p class="subtitulo" style="margin-bottom:2px;">
+            #${p.id}${p.codigoExterno ? ' · Código externo: ' + escapeHtml(p.codigoExterno) : ''} · Estoque inicial: ${Number(estoqueInicialExibido).toLocaleString('pt-BR')} · Estoque atual: ${Number(estoqueExibido).toLocaleString('pt-BR')} ${escapeHtml(p.un)}
+        </p>
+        <p class="subtitulo" style="margin-bottom:6px; ${almoxarifadoTrabalho ? 'color:#1B4332; font-weight:600;' : 'color:#8A5E12; font-weight:600;'}">
+            ${almoxarifadoTrabalho ? `📍 Só do ${nomeAlmoxTrabalho ? escapeHtml(nomeAlmoxTrabalho.nome) : '#' + almoxarifadoTrabalho}` : '⚠ Total somado de todos os almoxarifados (selecione um "Almoxarifado de trabalho" no topo pra ver separado)'}
         </p>
         <p class="subtitulo" style="margin-bottom:14px;">
-            Valor cadastrado: ${formatarMoeda(p.valor)} · Última compra: ${p.precoUltimaCompra != null ? formatarMoeda(p.precoUltimaCompra) : '-'} · Preço médio de estoque: ${p.precoMedio != null ? formatarMoeda(p.precoMedio) : '-'}
+            Valor cadastrado: ${formatarMoeda(p.valor)} · Última compra: ${precoUltimaCompraExibido != null ? formatarMoeda(precoUltimaCompraExibido) : '-'} · Preço médio de estoque: ${precoMedioExibido != null ? formatarMoeda(precoMedioExibido) : '-'}
         </p>
     `;
 
@@ -4222,8 +4271,12 @@ function adicionarProdutoAoProjeto(p) {
 
     produtoPendenteAdicionar = p;
     document.getElementById('modalQtdInicialProduto').textContent = `#${p.id} — ${p.nome}`;
+    const saldoAlmoxTrabalho = almoxarifadoTrabalho ? saldoDoProdutoNoAlmoxarifado(p.id, almoxarifadoTrabalho) : null;
+    const estoqueDisponivelInfo = almoxarifadoTrabalho
+        ? `${saldoAlmoxTrabalho ? Number(saldoAlmoxTrabalho.estoque).toLocaleString('pt-BR') : '0'} nesse almoxarifado`
+        : `${Number(p.estoque).toLocaleString('pt-BR')} no total (selecione um almoxarifado de trabalho pra ver separado)`;
     document.getElementById('modalQtdInicialInfo').innerHTML =
-        `Estoque disponível: <strong>${Number(p.estoque).toLocaleString('pt-BR')}</strong> · ` +
+        `Estoque disponível: <strong>${estoqueDisponivelInfo}</strong> · ` +
         `Valor cadastrado: <strong>${formatarMoeda(p.valor)}</strong> · ` +
         `Última compra: <strong>${formatarMoeda(p.precoUltimaCompra)}</strong> · ` +
         `Preço médio: <strong>${formatarMoeda(p.precoMedio)}</strong>`;
@@ -4899,6 +4952,12 @@ function definirUnidadeAtiva(vinculo) {
     document.getElementById('unidade-logada').textContent = meuPerfil.unidadeNome ? ('· ' + meuPerfil.unidadeNome) : '';
     document.getElementById('btn-convidar-colaborador').style.display = meuPerfil.ehPrincipal ? '' : 'none';
     document.getElementById('btn-trocar-unidade').style.display = vinculosGlobais.length > 1 ? '' : 'none';
+    // reseta tudo que depende da unidade -- senão os "se já tiver
+    // carregado, não recarrega" espalhados pelo código reaproveitam
+    // dado da unidade ANTERIOR, achando que ainda é válido
+    catalogosBaixa = { setores: [], subsetores: [], veiculos: [], planoContas: [], almoxarifados: [] };
+    saldosAlmoxarifado = [];
+    almoxarifadoTrabalho = null;
 }
 
 function abrirEscolhaUnidade(vinculos) {
