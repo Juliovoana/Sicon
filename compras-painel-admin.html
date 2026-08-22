@@ -1,0 +1,1311 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Servir — Compras</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F6F7F9; --surface:#FFFFFF; --border:#E8EAED;
+    --ink:#171E1A; --muted:#6B7280; --muted-2:#9AA1A9;
+    --brand:#1B4332; --brand-2:#2D6A4F; --brand-soft:#EAF2EE;
+    --accent:#F2A93B; --accent-ink:#8A5E12; --accent-soft:#FEF3E2;
+    --danger:#C0392B; --danger-soft:#FBEAE8;
+    --success-soft:#E8F3EC;
+    --shadow-sm: 0 1px 2px rgba(23,30,26,.05), 0 1px 3px rgba(23,30,26,.06);
+    --shadow-md: 0 8px 24px -8px rgba(23,30,26,.12);
+    --shadow-lg: 0 24px 48px -16px rgba(23,30,26,.22);
+    --radius: 14px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{ font-family:'Inter', -apple-system, sans-serif; background:var(--bg); color:var(--ink); min-height:100vh; -webkit-font-smoothing:antialiased; }
+  .mono{ font-family:'JetBrains Mono', monospace; font-variant-numeric:tabular-nums; }
+
+  /* ---------- LOGIN ---------- */
+  #telaLogin{ min-height:100vh; display:grid; grid-template-columns:1fr 1fr; }
+  @media (max-width:860px){ #telaLogin{ grid-template-columns:1fr; } }
+  .login-visual{ background:linear-gradient(155deg, var(--brand) 0%, #143327 100%); color:#fff; display:flex; flex-direction:column; justify-content:space-between; padding:56px 48px; position:relative; overflow:hidden; }
+  @media (max-width:860px){ .login-visual{ display:none; } }
+  .login-visual::after{ content:""; position:absolute; inset:0; background:radial-gradient(circle at 80% 100%, rgba(242,169,59,.18), transparent 55%); }
+  .login-visual .brand-mark{ font-size:1.3rem; font-weight:700; letter-spacing:-.01em; position:relative; z-index:1; }
+  .login-visual .quote{ font-size:1.5rem; font-weight:600; line-height:1.4; max-width:26ch; position:relative; z-index:1; }
+  .login-visual .foot{ font-size:.82rem; color:rgba(255,255,255,.55); position:relative; z-index:1; }
+  .login-form-side{ display:flex; align-items:center; justify-content:center; padding:32px; }
+  .login-card{ width:100%; max-width:360px; }
+  .login-card h1{ font-size:1.5rem; font-weight:700; margin-bottom:6px; letter-spacing:-.01em; }
+  .login-card .sub{ color:var(--muted); font-size:.9rem; margin-bottom:28px; }
+  .field-group{ margin-bottom:16px; }
+  .field-group label{ display:block; font-size:.8rem; font-weight:600; color:var(--ink); margin-bottom:6px; }
+  .field-group input, .field-group select, .field-group textarea{
+    width:100%; padding:11px 14px; border-radius:10px; border:1.5px solid var(--border);
+    font-family:'Inter', sans-serif; font-size:.92rem; background:var(--surface); color:var(--ink);
+    outline:none; transition:border-color .15s, box-shadow .15s;
+  }
+  .field-group input:focus, .field-group select:focus, .field-group textarea:focus{ border-color:var(--brand-2); box-shadow:0 0 0 3px var(--brand-soft); }
+  .btn-primary{ width:100%; background:var(--brand); color:#fff; border:none; font-weight:600; font-size:.92rem; padding:12px; border-radius:10px; cursor:pointer; transition:background .15s, transform .1s; }
+  .btn-primary:hover{ background:#143327; }
+  .btn-primary:active{ transform:scale(.98); }
+  .btn-primary:disabled{ opacity:.5; cursor:not-allowed; }
+  .login-erro{ display:none; margin-top:14px; font-size:.82rem; color:var(--danger); background:var(--danger-soft); border-radius:8px; padding:10px 12px; }
+  .login-erro.show{ display:block; }
+  .login-msg-ok{ display:none; margin-top:14px; font-size:.82rem; color:var(--brand-2); background:var(--success-soft); border-radius:8px; padding:10px 12px; }
+  .login-msg-ok.show{ display:block; }
+  .toggle-auth{ text-align:center; font-size:.85rem; color:var(--muted); margin-top:18px; }
+  .toggle-auth a{ color:var(--brand); font-weight:600; text-decoration:underline; cursor:pointer; }
+
+  #loadingScreen{ position:fixed; inset:0; background:var(--bg); z-index:100; display:flex; align-items:center; justify-content:center; flex-direction:column; gap:14px; }
+  .spinner{ width:32px; height:32px; border:3px solid var(--border); border-top-color:var(--brand); border-radius:50%; animation:spin .8s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+
+  /* ---------- APP SHELL ---------- */
+  #app{ display:none; }
+  .app-shell{ display:flex; min-height:100vh; }
+  .sidebar{ width:232px; flex-shrink:0; background:var(--brand); color:#fff; display:flex; flex-direction:column; padding:24px 16px; position:sticky; top:0; height:100vh; }
+  .sidebar-brand{ padding:8px 10px 28px; font-weight:700; font-size:1.1rem; letter-spacing:-.01em; }
+  .sidebar-brand small{ display:block; font-weight:400; font-size:.74rem; color:rgba(255,255,255,.55); margin-top:3px; }
+  .nav-item{ display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:none; border:none; color:rgba(255,255,255,.72); font-size:.88rem; font-weight:500; padding:10px 12px; border-radius:9px; cursor:pointer; margin-bottom:2px; transition:background .15s, color .15s; }
+  .nav-item svg{ width:17px; height:17px; flex-shrink:0; }
+  .nav-item:hover{ background:rgba(255,255,255,.06); color:#fff; }
+  .nav-item.active{ background:rgba(255,255,255,.12); color:#fff; }
+  .sidebar-spacer{ flex:1; }
+  .btn-sair{ display:flex; align-items:center; gap:10px; background:none; border:1px solid rgba(255,255,255,.18); color:rgba(255,255,255,.75); font-size:.85rem; padding:10px 12px; border-radius:9px; cursor:pointer; width:100%; }
+  .btn-sair:hover{ background:rgba(255,255,255,.06); color:#fff; }
+  .btn-sair svg{ width:16px; height:16px; }
+
+  .content-area{ flex:1; min-width:0; }
+  .content-header{ background:var(--surface); border-bottom:1px solid var(--border); padding:22px 36px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+  .content-header h1{ font-size:1.3rem; font-weight:700; letter-spacing:-.01em; }
+  .unidade-pill{ font-size:.78rem; color:var(--brand-2); background:var(--brand-soft); padding:6px 12px; border-radius:20px; font-weight:600; }
+  main.app-main{ max-width:1000px; margin:0 auto; padding:32px 36px 60px; }
+  .panel-app{ display:none; }
+  .panel-app.active{ display:block; animation:fadeIn .3s ease; }
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:translateY(0);} }
+
+  /* ---------- FILTROS / TABS DE STATUS ---------- */
+  .status-tabs{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .status-tab{ background:var(--surface); border:1.5px solid var(--border); color:var(--muted); font-size:.8rem; font-weight:600; padding:8px 14px; border-radius:20px; cursor:pointer; display:flex; align-items:center; gap:6px; transition:border-color .15s, color .15s; }
+  .status-tab .n{ background:var(--bg); border-radius:10px; padding:1px 7px; font-size:.72rem; }
+  .status-tab.on{ border-color:var(--brand-2); color:var(--brand-2); background:var(--brand-soft); }
+  .status-tab.on .n{ background:var(--surface); }
+  .filtro-linha{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap; }
+  .check-somente-urgentes{ display:flex; align-items:center; gap:7px; font-size:.82rem; color:var(--accent-ink); font-weight:600; cursor:pointer; }
+  .check-somente-urgentes input{ width:15px; height:15px; accent-color:var(--accent); }
+  .btn-novo{ background:var(--brand); color:#fff; border:none; font-weight:600; font-size:.85rem; padding:10px 16px; border-radius:9px; cursor:pointer; transition:background .15s; white-space:nowrap; }
+  .btn-novo:hover{ background:#143327; }
+
+  /* ---------- LISTA DE SOLICITAÇÕES ---------- */
+  .lista-solic{ display:flex; flex-direction:column; gap:10px; }
+  .solic-row{ background:var(--surface); border:1px solid var(--border); border-left:4px solid var(--border); border-radius:12px; padding:14px 18px; display:flex; align-items:center; gap:16px; cursor:pointer; transition:box-shadow .15s, border-color .15s; }
+  .solic-row:hover{ box-shadow:var(--shadow-md); }
+  .solic-row.urgente{ border-left-color:var(--accent); background:linear-gradient(90deg, var(--accent-soft) 0%, var(--surface) 7%); }
+  .solic-numero{ font-family:'JetBrains Mono', monospace; font-size:.8rem; color:var(--muted); min-width:44px; flex-shrink:0; }
+  .solic-info{ flex:1; min-width:0; display:flex; flex-direction:column; gap:3px; }
+  .solic-info .principal{ font-weight:600; font-size:.92rem; display:flex; align-items:center; gap:7px; }
+  .tag-urgente{ display:inline-flex; align-items:center; gap:4px; background:var(--accent); color:#3d2a06; font-size:.66rem; font-weight:700; padding:2px 8px; border-radius:10px; text-transform:uppercase; letter-spacing:.03em; }
+  .solic-info .meta{ font-size:.78rem; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .solic-right{ display:flex; align-items:center; gap:14px; flex-shrink:0; }
+  .solic-valor{ font-weight:700; font-size:.92rem; }
+  .chevron{ color:var(--muted-2); width:16px; height:16px; }
+  .vazio{ text-align:center; padding:48px 20px; color:var(--muted); font-size:.88rem; }
+
+  .status-tag{ font-size:.72rem; font-weight:600; padding:5px 11px; border-radius:20px; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+  .status-tag::before{ content:""; width:6px; height:6px; border-radius:50%; }
+  .status-tag.pendente{ background:var(--accent-soft); color:var(--accent-ink); }
+  .status-tag.pendente::before{ background:var(--accent); }
+  .status-tag.aprovada{ background:var(--success-soft); color:var(--brand-2); }
+  .status-tag.aprovada::before{ background:var(--brand-2); }
+  .status-tag.reprovada{ background:var(--danger-soft); color:var(--danger); }
+  .status-tag.reprovada::before{ background:var(--danger); }
+  .status-tag.comprada{ background:#EEF1F4; color:#4B5A68; }
+  .status-tag.comprada::before{ background:#7C8EA0; }
+  .status-tag.cancelada{ background:#F1F2F4; color:var(--muted); }
+  .status-tag.cancelada::before{ background:var(--muted-2); }
+
+  /* ---------- APROVADORES ---------- */
+  .lista-aprovadores{ display:flex; flex-direction:column; gap:10px; margin-bottom:18px; }
+  .aprovador-row{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:12px 16px; display:flex; align-items:center; gap:14px; }
+  .aprovador-email{ flex:1; font-weight:600; font-size:.88rem; }
+  .aprovador-toggle{ display:flex; align-items:center; gap:6px; font-size:.78rem; color:var(--muted); }
+  .add-aprovador-box{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 18px; display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+  .add-aprovador-box .field-group{ flex:1; min-width:220px; margin-bottom:0; }
+
+  /* ---------- DRAWERS ---------- */
+  .drawer-overlay{ position:fixed; inset:0; background:rgba(23,30,26,.45); z-index:60; display:none; align-items:stretch; justify-content:flex-end; }
+  .drawer-overlay.show{ display:flex; }
+  .drawer{ background:var(--bg); width:100%; max-width:520px; height:100%; overflow-y:auto; box-shadow:var(--shadow-lg); animation:slideIn .25s ease; }
+  @keyframes slideIn{ from{ transform:translateX(24px); opacity:0; } to{ transform:translateX(0); opacity:1; } }
+  .drawer-head{ background:var(--surface); border-bottom:1px solid var(--border); padding:20px 24px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:2; }
+  .drawer-head h2{ font-size:1.05rem; font-weight:700; }
+  .drawer-close{ background:var(--bg); border:none; width:30px; height:30px; border-radius:8px; color:var(--muted); font-size:1.1rem; cursor:pointer; }
+  .drawer-close:hover{ background:var(--border); }
+  .drawer-body{ padding:22px 24px 24px; }
+  .drawer-section{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 18px; margin-bottom:14px; }
+  .drawer-section-title{ font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:12px; }
+  .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .campo-toggle-urgente{ display:flex; align-items:center; gap:10px; background:var(--accent-soft); border:1.5px solid var(--accent); border-radius:10px; padding:12px 14px; margin-bottom:14px; cursor:pointer; }
+  .campo-toggle-urgente input{ width:18px; height:18px; accent-color:var(--accent); }
+  .campo-toggle-urgente .txt{ font-size:.86rem; font-weight:700; color:var(--accent-ink); }
+  .campo-toggle-urgente .sub{ font-size:.74rem; color:var(--accent-ink); opacity:.8; font-weight:500; }
+
+  .item-row{ background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:9px 10px; margin-bottom:8px; display:grid; grid-template-columns:1.6fr .7fr .9fr .9fr auto; gap:8px; align-items:center; }
+  @media (max-width:480px){ .item-row{ grid-template-columns:1fr 1fr; } }
+  .item-row input{ padding:8px 9px; border-radius:6px; border:1px solid var(--border); font-size:.82rem; background:var(--surface); color:var(--ink); width:100%; }
+  .item-sub{ font-size:.8rem; font-weight:700; color:var(--brand-2); white-space:nowrap; text-align:right; }
+  .btn-remover-item{ background:var(--danger-soft); color:var(--danger); border:none; width:26px; height:26px; border-radius:6px; cursor:pointer; font-size:.85rem; flex-shrink:0; }
+  .btn-remover-item:hover{ background:#f5d6d2; }
+  .btn-add-item{ width:100%; background:none; border:1.5px dashed var(--border); color:var(--muted); font-weight:600; font-size:.82rem; padding:9px; border-radius:8px; cursor:pointer; margin-top:2px; transition:border-color .15s, color .15s; }
+  .btn-add-item:hover{ border-color:var(--brand-2); color:var(--brand-2); }
+  .itens-total-row{ display:flex; justify-content:space-between; align-items:center; margin-top:10px; padding:9px 12px; background:var(--bg); border-radius:8px; border:1px solid var(--border); }
+  .itens-total-row .num{ font-weight:700; color:var(--brand-2); font-size:.95rem; }
+
+  .image-upload-box{ display:flex; align-items:center; gap:14px; }
+  .image-preview-wrap{ width:64px; height:64px; border-radius:10px; overflow:hidden; flex-shrink:0; background:var(--bg); border:1.5px dashed var(--border); display:flex; align-items:center; justify-content:center; }
+  .image-preview-wrap img{ width:100%; height:100%; object-fit:cover; }
+  .image-preview-placeholder{ color:var(--muted-2); }
+  .image-preview-placeholder svg{ width:24px; height:24px; }
+  .btn-upload-imagem{ background:var(--surface); border:1.5px solid var(--border); color:var(--ink); font-weight:600; font-size:.82rem; padding:9px 14px; border-radius:9px; cursor:pointer; transition:border-color .15s, background .15s; }
+  .btn-upload-imagem:hover{ border-color:var(--brand-2); background:var(--brand-soft); }
+  .btn-upload-imagem:disabled{ opacity:.6; cursor:not-allowed; }
+  .link-anexo{ font-size:.82rem; color:var(--brand-2); font-weight:600; text-decoration:underline; }
+
+  .det-linha{ display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+  .det-campo{ flex:1; min-width:130px; }
+  .det-campo label{ display:block; font-size:.68rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; margin-bottom:3px; }
+  .det-campo .val{ font-size:.9rem; font-weight:500; color:var(--ink); }
+
+  .prod-tab{ width:100%; border-collapse:collapse; font-size:.82rem; margin-top:8px; }
+  .prod-tab th{ background:var(--bg); color:var(--muted); font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:7px 10px; text-align:left; border-bottom:1px solid var(--border); }
+  .prod-tab td{ padding:7px 10px; border-bottom:1px solid var(--border); }
+  .prod-tab tr:last-child td{ border-bottom:none; }
+  .prod-tab .r{ text-align:right; }
+
+  .total-row{ display:flex; align-items:center; justify-content:space-between; padding:12px 14px; background:var(--brand-soft); border-radius:8px; margin:12px 0; }
+  .total-row .num{ font-size:1.2rem; font-weight:700; color:var(--brand-2); }
+
+  .historico-tab{ width:100%; border-collapse:collapse; font-size:.78rem; }
+  .historico-tab th{ background:var(--bg); color:var(--muted); font-size:.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:6px 8px; text-align:left; border-bottom:1px solid var(--border); }
+  .historico-tab td{ padding:6px 8px; border-bottom:1px solid var(--border); }
+  .historico-tab tr:last-child td{ border-bottom:none; }
+  .acao-label{ font-weight:700; }
+  .acao-label.solicitada{ color:var(--muted); }
+  .acao-label.aprovada{ color:var(--brand-2); }
+  .acao-label.reprovada{ color:var(--danger); }
+  .acao-label.comprada{ color:#4B5A68; }
+  .acao-label.cancelada{ color:var(--muted); }
+  .acao-label.reaberta{ color:var(--accent-ink); }
+
+  .drawer-actions{ position:sticky; bottom:0; background:var(--surface); border-top:1px solid var(--border); padding:14px 24px; display:flex; gap:8px; flex-wrap:wrap; }
+  .btn-acao{ flex:1; min-width:100px; font-weight:600; font-size:.8rem; padding:11px; border-radius:9px; cursor:pointer; border:none; transition:opacity .15s, background .15s; }
+  .btn-acao:disabled{ opacity:.4; cursor:not-allowed; }
+  .btn-salvar{ background:var(--brand); color:#fff; }
+  .btn-salvar:hover:not(:disabled){ background:#143327; }
+  .btn-aprovar{ background:var(--brand-2); color:#fff; }
+  .btn-aprovar:hover:not(:disabled){ background:#1f4d38; }
+  .btn-reprovar{ background:none; border:1.5px solid var(--danger); color:var(--danger); }
+  .btn-reprovar:hover:not(:disabled){ background:var(--danger-soft); }
+  .btn-cancelar{ background:none; border:1.5px solid var(--muted-2); color:var(--muted); }
+  .btn-cancelar:hover:not(:disabled){ background:var(--bg); }
+  .btn-comprada{ background:var(--accent); color:#3d2a06; }
+  .btn-comprada:hover:not(:disabled){ background:#e5991f; }
+
+  .obs-wrap{ display:none; margin-top:10px; }
+  .obs-wrap textarea{ width:100%; border:1.5px solid var(--border); border-radius:8px; padding:10px; font-family:inherit; font-size:.88rem; resize:vertical; min-height:64px; }
+  .obs-wrap .confirmar-linha{ display:flex; gap:8px; margin-top:8px; }
+
+  .seletor-unidade-card{ background:var(--surface); width:100%; max-width:400px; border-radius:16px; padding:28px; box-shadow:var(--shadow-lg); text-align:center; }
+  .seletor-unidade-card h3{ font-size:1.2rem; font-weight:700; margin-bottom:8px; }
+  .seletor-unidade-card p{ font-size:.85rem; color:var(--muted); margin-bottom:22px; line-height:1.5; }
+  .lista-seletor-unidade{ display:flex; flex-direction:column; gap:10px; }
+  .opcao-unidade{ display:flex; align-items:center; padding:14px 16px; border-radius:12px; border:1.5px solid var(--border); background:var(--surface); cursor:pointer; text-align:left; font-size:.95rem; font-weight:600; color:var(--ink); transition:border-color .15s, background .15s; }
+  .opcao-unidade:hover{ border-color:var(--brand-2); background:var(--brand-soft); }
+  .modal-lista-overlay{ position:fixed; inset:0; background:rgba(23,30,26,.5); z-index:200; display:none; align-items:center; justify-content:center; padding:20px; }
+  .modal-lista-overlay.show{ display:flex; }
+</style>
+</head>
+<body>
+
+  <div id="telaLogin">
+    <div class="login-visual">
+      <div class="brand-mark" style="display:flex; align-items:center; gap:10px;">
+        <svg width="30" height="30" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;">
+          <defs>
+            <linearGradient id="loginG1" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="#1B4332"/><stop offset="100%" stop-color="#0F2B22"/></linearGradient>
+            <linearGradient id="loginG2" x1="0%" y1="100%" x2="100%" y2="0%"><stop offset="0%" stop-color="#E5991F"/><stop offset="100%" stop-color="#F2A93B"/></linearGradient>
+          </defs>
+          <rect width="200" height="200" rx="46" fill="url(#loginG1)"/>
+          <path d="M 58 152 C 58 128, 96 132, 96 108 C 96 84, 60 88, 60 64 C 60 44, 82 34, 106 34" fill="none" stroke="url(#loginG2)" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="58" cy="152" r="8.5" fill="#F0F4EE"/>
+          <path d="M132 20 C145 20 155 30 155 43 C155 58 132 78 132 78 C132 78 109 58 109 43 C109 30 119 20 132 20 Z" fill="#F0F4EE"/>
+          <circle cx="132" cy="43" r="9" fill="#1B4332"/>
+        </svg>
+        Servir
+      </div>
+      <div class="quote">Cada solicitação de compra, com aprovação clara e rastreável.</div>
+      <div class="foot">Módulo de Compras</div>
+    </div>
+    <div class="login-form-side">
+      <div class="login-card">
+        <div id="blocoLoginForm">
+          <h1>Entrar</h1>
+          <p class="sub">Use a mesma conta de qualquer módulo Servir.</p>
+          <div class="field-group">
+            <label>E-mail</label>
+            <input type="email" id="loginEmail" placeholder="voce@empresa.com.br">
+          </div>
+          <div class="field-group">
+            <label>Senha</label>
+            <input type="password" id="loginSenha" placeholder="••••••••">
+          </div>
+          <button class="btn-primary" id="btnEntrar">Entrar</button>
+          <div class="login-erro" id="loginErro"></div>
+          <p class="toggle-auth"><a href="#" id="linkEsqueciSenha">Esqueci minha senha</a></p>
+        </div>
+
+        <div id="blocoRecuperar" style="display:none;">
+          <h1>Recuperar senha</h1>
+          <p class="sub">Enviaremos um link de redefinição para seu e-mail.</p>
+          <div class="field-group">
+            <label>E-mail</label>
+            <input type="email" id="recEmail" placeholder="voce@empresa.com.br">
+          </div>
+          <button class="btn-primary" id="btnRecuperar">Enviar link</button>
+          <div class="login-erro" id="recuperarErro"></div>
+          <div class="login-msg-ok" id="recuperarOk"></div>
+          <p class="toggle-auth"><a href="#" id="linkVoltarLogin">Voltar ao login</a></p>
+        </div>
+
+        <div id="blocoNovaSenha" style="display:none;">
+          <h1>Definir nova senha</h1>
+          <p class="sub">Escolha uma nova senha para sua conta.</p>
+          <div class="field-group">
+            <label>Nova senha</label>
+            <input type="password" id="novaSenhaInput" placeholder="Mínimo 6 caracteres">
+          </div>
+          <button class="btn-primary" id="btnSalvarNovaSenha">Salvar nova senha</button>
+          <div class="login-erro" id="novaSenhaErro"></div>
+          <div class="login-msg-ok" id="novaSenhaOk"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="loadingScreen" style="display:none;">
+    <div class="spinner"></div>
+    <p style="font-size:.85rem; color:var(--muted);">Carregando painel…</p>
+  </div>
+
+  <div id="app">
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="sidebar-brand">Servir<small id="nomeUnidade">Compras</small></div>
+        <button class="nav-item tab-app-btn active" data-app-tab="solicitacoes">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l2 2 4-4"/><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+          Solicitações
+        </button>
+        <button class="nav-item tab-app-btn" data-app-tab="aprovadores" id="navAprovadores" style="display:none;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg>
+          Aprovadores
+        </button>
+        <div class="sidebar-spacer"></div>
+        <button class="btn-sair" id="btnTrocarUnidade" style="display:none; margin-bottom:8px;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          Trocar unidade
+        </button>
+        <button class="btn-sair" id="btnSair">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sair
+        </button>
+      </aside>
+
+      <div class="content-area">
+        <div class="content-header">
+          <h1 id="tituloConteudo">Solicitações</h1>
+          <span class="unidade-pill" id="unidadePill">—</span>
+        </div>
+
+        <main class="app-main">
+          <div class="panel-app active" id="app-panel-solicitacoes">
+            <div class="filtro-linha">
+              <label class="check-somente-urgentes">
+                <input type="checkbox" id="checkSomenteUrgentes"> ⚡ Somente urgentes
+              </label>
+              <button class="btn-novo" id="btnNovaSolicitacao">+ Nova solicitação</button>
+            </div>
+            <div class="status-tabs" id="statusTabs"></div>
+            <div class="lista-solic" id="listaSolicitacoes"></div>
+          </div>
+
+          <div class="panel-app" id="app-panel-aprovadores">
+            <div class="lista-aprovadores" id="listaAprovadores"></div>
+            <div class="add-aprovador-box">
+              <div class="field-group">
+                <label>E-mail do colaborador (precisa já ter conta em algum módulo Servir)</label>
+                <input type="email" id="inputEmailNovoAprovador" placeholder="colaborador@empresa.com.br">
+              </div>
+              <button class="btn-novo" id="btnAdicionarAprovador">Adicionar</button>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= DRAWER: NOVA SOLICITAÇÃO ================= -->
+  <div class="drawer-overlay" id="drawerNovaOverlay">
+    <div class="drawer">
+      <div class="drawer-head">
+        <h2>Nova solicitação de compra</h2>
+        <button class="drawer-close" id="btnFecharDrawerNova">✕</button>
+      </div>
+      <div class="drawer-body">
+        <label class="campo-toggle-urgente">
+          <input type="checkbox" id="n_urgente">
+          <span>
+            <span class="txt">⚡ Urgente</span><br>
+            <span class="sub">Cotar na cidade e solicitar liberação da verba imediatamente</span>
+          </span>
+        </label>
+
+        <div class="drawer-section">
+          <div class="drawer-section-title">Solicitação</div>
+          <div class="field-group"><label>Solicitante</label><input type="text" id="n_solicitante"></div>
+          <div class="field-row">
+            <div class="field-group"><label>Setor</label><input type="text" id="n_setor" placeholder="Ex: Limpeza, Escritório, Manutenção"></div>
+            <div class="field-group"><label>Veículo (placa, opcional)</label><input type="text" id="n_veiculo_placa" placeholder="Ex: ABC-1234" style="text-transform:uppercase;"></div>
+          </div>
+          <div class="field-group"><label>Descrição da necessidade</label><textarea id="n_descricao" rows="3" placeholder="O que precisa ser comprado e para quê"></textarea></div>
+          <div class="field-group"><label>Justificativa (opcional)</label><textarea id="n_justificativa" rows="2"></textarea></div>
+        </div>
+
+        <div class="drawer-section">
+          <div class="drawer-section-title">Como será adquirido</div>
+          <div class="field-group">
+            <label>Forma de aquisição</label>
+            <select id="n_forma_aquisicao">
+              <option value="cotacao_local">Cotação local (urgente)</option>
+              <option value="compra_online">Compra pela internet</option>
+              <option value="fornecedor_recorrente">Fornecedor recorrente</option>
+            </select>
+          </div>
+          <div class="field-group"><label>Fornecedor sugerido (opcional)</label><input type="text" id="n_fornecedor_sugerido"></div>
+          <div class="field-group"><label>Valor estimado (R$)</label><input type="number" step="0.01" id="n_valor_estimado"></div>
+          <div class="field-group">
+            <label>Anexo da cotação (foto/print, opcional)</label>
+            <div class="image-upload-box">
+              <div class="image-preview-wrap">
+                <img id="previewAnexoNovo" style="display:none;">
+                <div class="image-preview-placeholder" id="placeholderAnexoNovo">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+                </div>
+              </div>
+              <button type="button" class="btn-upload-imagem" id="btnEscolherAnexoNovo">Escolher arquivo</button>
+              <input type="file" id="n_anexo_arquivo" accept="image/*" style="display:none;">
+              <input type="hidden" id="n_anexo_url" value="">
+            </div>
+          </div>
+        </div>
+
+        <div class="drawer-section">
+          <div class="drawer-section-title">Itens</div>
+          <div id="listaItensNovo"></div>
+          <button type="button" class="btn-add-item" id="btnAddItemNovo">+ Adicionar item</button>
+          <div class="itens-total-row">
+            <span style="font-size:.82rem; color:var(--muted);">Total dos itens</span>
+            <span class="num mono" id="totalItensNovo">R$ 0,00</span>
+          </div>
+        </div>
+      </div>
+      <div class="drawer-actions">
+        <button class="btn-acao btn-salvar" id="btnSalvarNova" style="flex:2;">Enviar solicitação</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= DRAWER: DETALHE / APROVAÇÃO ================= -->
+  <div class="drawer-overlay" id="drawerDetalheOverlay">
+    <div class="drawer">
+      <div class="drawer-head">
+        <h2 id="detalheTitulo">Solicitação</h2>
+        <button class="drawer-close" id="btnFecharDrawerDetalhe">✕</button>
+      </div>
+      <div class="drawer-body" id="detalheBody"></div>
+    </div>
+  </div>
+
+  <!-- ================= CONFIRMAÇÃO: COMPARTILHAR APÓS ENVIAR ================= -->
+  <div class="modal-lista-overlay" id="modalCompartilharOverlay">
+    <div class="seletor-unidade-card">
+      <h3 id="modalCompartilharTitulo">Solicitação enviada!</h3>
+      <p>Quer compartilhar agora o resumo em PDF por WhatsApp, com o link direto de aprovação?</p>
+      <button class="btn-primary" id="btnCompartilharWhatsapp">📲 Compartilhar por WhatsApp</button>
+      <button id="btnFecharModalCompartilhar" style="margin-top:10px; width:100%; background:none; border:1.5px solid var(--border); color:var(--muted); padding:11px; border-radius:10px; cursor:pointer; font-weight:600; font-size:.85rem;">Agora não</button>
+    </div>
+  </div>
+
+  <!-- ================= SELETOR DE UNIDADE ================= -->
+  <div class="modal-lista-overlay" id="seletorUnidadeOverlay">
+    <div class="seletor-unidade-card">
+      <h3>Escolha a unidade</h3>
+      <p>Seu login está vinculado a mais de uma unidade de negócio. Selecione com qual você quer trabalhar agora.</p>
+      <div class="lista-seletor-unidade" id="listaSeletorUnidade"></div>
+    </div>
+  </div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script>
+  const SUPABASE_URL = 'https://frzvcrcshkpvjdbbqkhz.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_h-JuDyjYgb5YKGYFRKtLEg_8gnJor9w';
+  let sb;
+
+  let unidadeId = null;
+  let unidadeNome = null;
+  let vinculosDoUsuario = [];
+  let usuarioAtual = null;
+  let ehAprovadorAtual = false;
+  let ehPrincipalAtual = false;
+
+  let todasSolicitacoes = [];
+  let todosAprovadores = [];
+  let statusAtualFiltro = '';
+  let solicitacaoSelecionadaId = null;
+
+  const telaLogin = document.getElementById('telaLogin');
+  const loadingScreen = document.getElementById('loadingScreen');
+  const appEl = document.getElementById('app');
+  const loginErro = document.getElementById('loginErro');
+
+  function formatarMoeda(v){ return 'R$ ' + Number(v || 0).toFixed(2).replace('.', ','); }
+
+  // =================================================================
+  // LOGIN (simples — assume conta já criada em outro módulo Servir)
+  // =================================================================
+  function mostrarErroLogin(msg){ loginErro.textContent = msg; loginErro.classList.add('show'); }
+
+  async function fazerLogin(){
+    const email = document.getElementById('loginEmail').value.trim();
+    const senha = document.getElementById('loginSenha').value;
+    if(!email || !senha){ mostrarErroLogin('Preencha e-mail e senha.'); return; }
+    const btn = document.getElementById('btnEntrar');
+    btn.disabled = true; btn.textContent = 'Entrando...';
+    loginErro.classList.remove('show');
+    try{
+      const { data, error } = await sb.auth.signInWithPassword({ email, password: senha });
+      if(error) throw new Error('E-mail ou senha inválidos.');
+      usuarioAtual = data.user;
+      await carregarUnidadeDoUsuario(data.user);
+      telaLogin.style.display = 'none';
+      appEl.style.display = 'block';
+      await carregarTudo();
+    } catch(erro){
+      mostrarErroLogin(erro.message);
+    } finally{
+      btn.disabled = false; btn.textContent = 'Entrar';
+    }
+  }
+  document.getElementById('btnEntrar').addEventListener('click', fazerLogin);
+  document.getElementById('loginSenha').addEventListener('keydown', e => { if(e.key === 'Enter') fazerLogin(); });
+
+  document.getElementById('linkEsqueciSenha').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById('blocoLoginForm').style.display = 'none';
+    document.getElementById('blocoRecuperar').style.display = 'block';
+  });
+  document.getElementById('linkVoltarLogin').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById('blocoRecuperar').style.display = 'none';
+    document.getElementById('blocoLoginForm').style.display = 'block';
+  });
+  document.getElementById('btnRecuperar').addEventListener('click', async () => {
+    const email = document.getElementById('recEmail').value.trim();
+    const erroEl = document.getElementById('recuperarErro');
+    const okEl = document.getElementById('recuperarOk');
+    erroEl.classList.remove('show'); okEl.classList.remove('show');
+    if(!email){ erroEl.textContent = 'Informe o e-mail.'; erroEl.classList.add('show'); return; }
+    const btn = document.getElementById('btnRecuperar');
+    btn.disabled = true; btn.textContent = 'Enviando...';
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: window.location.href.split('?')[0] });
+    btn.disabled = false; btn.textContent = 'Enviar link';
+    if(error){ erroEl.textContent = 'Erro: ' + error.message; erroEl.classList.add('show'); }
+    else{ okEl.textContent = '✓ Link enviado! Verifique seu e-mail.'; okEl.classList.add('show'); }
+  });
+
+  // fluxo de redefinição de senha (link recebido por e-mail)
+  const hashParams = new URLSearchParams(window.location.hash.replace('#',''));
+  const isRecuperacao = hashParams.get('type') === 'recovery';
+  function mostrarNovaSenha(){
+    document.getElementById('blocoLoginForm').style.display = 'none';
+    document.getElementById('blocoRecuperar').style.display = 'none';
+    document.getElementById('blocoNovaSenha').style.display = 'block';
+  }
+  document.getElementById('btnSalvarNovaSenha').addEventListener('click', async () => {
+    const senha = document.getElementById('novaSenhaInput').value;
+    const erroEl = document.getElementById('novaSenhaErro');
+    const okEl = document.getElementById('novaSenhaOk');
+    erroEl.classList.remove('show'); okEl.classList.remove('show');
+    if(!senha || senha.length < 6){ erroEl.textContent = 'Mínimo 6 caracteres.'; erroEl.classList.add('show'); return; }
+    const btn = document.getElementById('btnSalvarNovaSenha');
+    btn.disabled = true; btn.textContent = 'Salvando...';
+    const { error } = await sb.auth.updateUser({ password: senha });
+    btn.disabled = false; btn.textContent = 'Salvar nova senha';
+    if(error){ erroEl.textContent = 'Erro: ' + error.message; erroEl.classList.add('show'); }
+    else{
+      okEl.textContent = '✓ Senha atualizada! Redirecionando...'; okEl.classList.add('show');
+      setTimeout(() => { window.location.href = window.location.pathname; }, 1800);
+    }
+  });
+
+  document.getElementById('btnSair').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    location.reload();
+  });
+
+  // =================================================================
+  // UNIDADE DE NEGÓCIO (via servir_unidade_usuarios)
+  // =================================================================
+  async function carregarUnidadeDoUsuario(user){
+    const { data: vinculos, error } = await sb
+      .from('servir_unidade_usuarios')
+      .select('unidade_negocio_id, eh_principal, servir_unidades_negocio ( nome )')
+      .eq('user_id', user.id);
+    if(error) throw new Error('Erro ao buscar sua unidade: ' + error.message);
+    if(!vinculos || vinculos.length === 0) throw new Error('Este login não está vinculado a nenhuma unidade de negócio ainda.');
+
+    vinculosDoUsuario = vinculos;
+    if(vinculos.length === 1){
+      unidadeId = vinculos[0].unidade_negocio_id;
+      unidadeNome = vinculos[0].servir_unidades_negocio.nome;
+      ehPrincipalAtual = !!vinculos[0].eh_principal;
+      atualizarUiUnidade();
+      return;
+    }
+    await mostrarSeletorUnidade(vinculos);
+  }
+
+  function atualizarUiUnidade(){
+    document.getElementById('nomeUnidade').textContent = unidadeNome;
+    document.getElementById('unidadePill').textContent = unidadeNome;
+    document.getElementById('btnTrocarUnidade').style.display = vinculosDoUsuario.length > 1 ? 'flex' : 'none';
+  }
+
+  function mostrarSeletorUnidade(vinculos){
+    return new Promise((resolve) => {
+      const lista = document.getElementById('listaSeletorUnidade');
+      lista.innerHTML = '';
+      vinculos.forEach(v => {
+        const btn = document.createElement('button');
+        btn.className = 'opcao-unidade';
+        btn.textContent = v.servir_unidades_negocio?.nome || 'Unidade sem nome';
+        btn.addEventListener('click', () => {
+          unidadeId = v.unidade_negocio_id;
+          unidadeNome = v.servir_unidades_negocio?.nome || '';
+          ehPrincipalAtual = !!v.eh_principal;
+          atualizarUiUnidade();
+          document.getElementById('seletorUnidadeOverlay').classList.remove('show');
+          resolve();
+        });
+        lista.appendChild(btn);
+      });
+      document.getElementById('seletorUnidadeOverlay').classList.add('show');
+    });
+  }
+
+  document.getElementById('btnTrocarUnidade').addEventListener('click', async () => {
+    await mostrarSeletorUnidade(vinculosDoUsuario);
+    await carregarTudo();
+  });
+
+  // =================================================================
+  // TABS DO APP
+  // =================================================================
+  const titulosAba = { solicitacoes: 'Solicitações', aprovadores: 'Aprovadores' };
+  document.querySelectorAll('.tab-app-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-app-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.panel-app').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('app-panel-' + btn.dataset.appTab).classList.add('active');
+      document.getElementById('tituloConteudo').textContent = titulosAba[btn.dataset.appTab] || '';
+    });
+  });
+
+  // =================================================================
+  // CARREGAMENTO DE DADOS
+  // =================================================================
+  const idSolicitacaoDireta = new URLSearchParams(window.location.search).get('solicitacao');
+  let jaAbriuSolicitacaoDireta = false;
+
+  async function carregarTudo(){
+    await Promise.all([carregarSolicitacoes(), carregarAprovadores()]);
+    if(idSolicitacaoDireta && !jaAbriuSolicitacaoDireta){
+      const existe = todasSolicitacoes.find(s => s.id === idSolicitacaoDireta);
+      if(existe){
+        jaAbriuSolicitacaoDireta = true;
+        await abrirDrawerDetalhe(idSolicitacaoDireta);
+      } else if(vinculosDoUsuario.length <= 1){
+        // só avisa se não há mais unidades pra tentar (com múltiplas unidades,
+        // pode ser que a solicitação esteja em outra ainda não selecionada)
+        jaAbriuSolicitacaoDireta = true;
+        alert('Solicitação não encontrada nesta unidade, ou você não tem acesso a ela.');
+      }
+    }
+  }
+
+  async function carregarSolicitacoes(){
+    const { data, error } = await sb
+      .from('compras_solicitacoes')
+      .select('*')
+      .eq('unidade_negocio_id', unidadeId)
+      .order('urgente', { ascending: false })
+      .order('created_at', { ascending: false });
+    if(error){ alert('Erro ao carregar solicitações: ' + error.message); return; }
+    todasSolicitacoes = data || [];
+    renderStatusTabs();
+    renderListaSolicitacoes();
+  }
+
+  async function carregarAprovadores(){
+    const { data, error } = await sb
+      .from('compras_aprovadores')
+      .select('*')
+      .eq('unidade_negocio_id', unidadeId)
+      .order('created_at', { ascending: true });
+    if(error){ alert('Erro ao carregar aprovadores: ' + error.message); return; }
+    todosAprovadores = data || [];
+    ehAprovadorAtual = todosAprovadores.some(a => a.user_id === usuarioAtual.id && a.ativo);
+    document.getElementById('navAprovadores').style.display = ehPrincipalAtual ? 'flex' : 'none';
+    await renderListaAprovadores();
+  }
+
+  // =================================================================
+  // STATUS TABS + LISTA
+  // =================================================================
+  const statusLabels = { '': 'Todas', pendente: 'Pendentes', aprovada: 'Aprovadas', reprovada: 'Reprovadas', comprada: 'Compradas', cancelada: 'Canceladas' };
+
+  function renderStatusTabs(){
+    const wrap = document.getElementById('statusTabs');
+    const chaves = ['', 'pendente', 'aprovada', 'reprovada', 'comprada', 'cancelada'];
+    wrap.innerHTML = chaves.map(st => {
+      const qtd = st === '' ? todasSolicitacoes.length : todasSolicitacoes.filter(s => s.status === st).length;
+      return `<button class="status-tab ${statusAtualFiltro === st ? 'on' : ''}" data-status="${st}">${statusLabels[st]} <span class="n">${qtd}</span></button>`;
+    }).join('');
+    wrap.querySelectorAll('.status-tab').forEach(btn => {
+      btn.addEventListener('click', () => { statusAtualFiltro = btn.dataset.status; renderStatusTabs(); renderListaSolicitacoes(); });
+    });
+  }
+
+  document.getElementById('checkSomenteUrgentes').addEventListener('change', renderListaSolicitacoes);
+
+  function renderListaSolicitacoes(){
+    const somenteUrgentes = document.getElementById('checkSomenteUrgentes').checked;
+    let filtradas = todasSolicitacoes.filter(s => !statusAtualFiltro || s.status === statusAtualFiltro);
+    if(somenteUrgentes) filtradas = filtradas.filter(s => s.urgente);
+
+    const lista = document.getElementById('listaSolicitacoes');
+    if(filtradas.length === 0){ lista.innerHTML = '<div class="vazio">Nenhuma solicitação encontrada.</div>'; return; }
+
+    lista.innerHTML = '';
+    filtradas.forEach(s => {
+      const row = document.createElement('div');
+      row.className = 'solic-row' + (s.urgente ? ' urgente' : '');
+      row.innerHTML = `
+        <span class="solic-numero mono">Nº ${s.numero}</span>
+        <div class="solic-info">
+          <span class="principal">${s.urgente ? '<span class="tag-urgente">⚡ Urgente</span>' : ''}${s.descricao_necessidade.slice(0, 60)}${s.descricao_necessidade.length > 60 ? '…' : ''}</span>
+          <span class="meta">${s.setor || 'Sem setor'} · ${s.solicitante}${s.veiculo_placa ? ' · ' + s.veiculo_placa : ''}</span>
+        </div>
+        <div class="solic-right">
+          <span class="solic-valor mono">${s.valor_aprovado != null ? formatarMoeda(s.valor_aprovado) : (s.valor_estimado != null ? formatarMoeda(s.valor_estimado) : '—')}</span>
+          <span class="status-tag ${s.status}">${statusLabels[s.status] || s.status}</span>
+          <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
+      `;
+      row.addEventListener('click', () => abrirDrawerDetalhe(s.id));
+      lista.appendChild(row);
+    });
+  }
+
+  // =================================================================
+  // COMPRESSÃO DE IMAGEM (mesmo padrão do módulo Receptivo)
+  // =================================================================
+  function comprimirImagem(arquivo, maxDimensao = 1600, qualidade = 0.82){
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(arquivo);
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if(width > maxDimensao || height > maxDimensao){
+          if(width > height){ height = Math.round(height * (maxDimensao / width)); width = maxDimensao; }
+          else{ width = Math.round(width * (maxDimensao / height)); height = maxDimensao; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+        URL.revokeObjectURL(url);
+        canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Não foi possível processar a imagem.')), 'image/jpeg', qualidade);
+      };
+      img.onerror = () => reject(new Error('Não foi possível ler o arquivo de imagem.'));
+      img.src = url;
+    });
+  }
+
+  async function enviarAnexoCotacao(arquivo){
+    const btn = document.getElementById('btnEscolherAnexoNovo');
+    const textoOriginal = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Enviando...';
+    try{
+      const blobComprimido = await comprimirImagem(arquivo);
+      const nomeArquivo = `${unidadeId}/${Date.now()}.jpg`;
+      const { error } = await sb.storage.from('compras-anexos').upload(nomeArquivo, blobComprimido, { upsert: true, contentType: 'image/jpeg' });
+      if(error) throw new Error(error.message);
+      const { data } = sb.storage.from('compras-anexos').getPublicUrl(nomeArquivo);
+      document.getElementById('n_anexo_url').value = data.publicUrl;
+      const preview = document.getElementById('previewAnexoNovo');
+      preview.src = data.publicUrl; preview.style.display = 'block';
+      document.getElementById('placeholderAnexoNovo').style.display = 'none';
+      btn.textContent = 'Trocar arquivo';
+    } catch(erro){
+      alert('Erro ao enviar anexo: ' + erro.message);
+      btn.textContent = textoOriginal;
+    } finally{ btn.disabled = false; }
+  }
+
+  document.getElementById('btnEscolherAnexoNovo').addEventListener('click', () => document.getElementById('n_anexo_arquivo').click());
+  document.getElementById('n_anexo_arquivo').addEventListener('change', async (e) => {
+    const arquivo = e.target.files[0];
+    if(arquivo) await enviarAnexoCotacao(arquivo);
+  });
+
+  // =================================================================
+  // ITENS — DRAWER NOVA SOLICITAÇÃO
+  // =================================================================
+  let itensNovo = [];
+
+  function gerarLinhaItem(item){
+    const div = document.createElement('div');
+    div.className = 'item-row';
+    div.innerHTML = `
+      <input type="text" class="it-nome" placeholder="Item" value="${item.item || ''}">
+      <input type="number" class="it-qtd" placeholder="Qtd" min="0" step="0.01" value="${item.quantidade ?? 1}">
+      <input type="number" class="it-valor" placeholder="Vlr unit." min="0" step="0.01" value="${item.valor_unitario ?? ''}">
+      <span class="item-sub mono">R$ 0,00</span>
+      <button type="button" class="btn-remover-item" title="Remover">✕</button>
+    `;
+    const atualizar = () => {
+      const qtd = Number(div.querySelector('.it-qtd').value) || 0;
+      const vu = Number(div.querySelector('.it-valor').value) || 0;
+      div.querySelector('.item-sub').textContent = formatarMoeda(qtd * vu);
+      atualizarTotalItensNovo();
+    };
+    div.querySelector('.it-qtd').addEventListener('input', atualizar);
+    div.querySelector('.it-valor').addEventListener('input', atualizar);
+    div.querySelector('.btn-remover-item').addEventListener('click', () => { div.remove(); atualizarTotalItensNovo(); });
+    atualizar();
+    return div;
+  }
+
+  document.getElementById('btnAddItemNovo').addEventListener('click', () => {
+    document.getElementById('listaItensNovo').appendChild(gerarLinhaItem({ item: '', quantidade: 1, valor_unitario: '' }));
+  });
+
+  function atualizarTotalItensNovo(){
+    let total = 0;
+    document.querySelectorAll('#listaItensNovo .item-row').forEach(row => {
+      const qtd = Number(row.querySelector('.it-qtd').value) || 0;
+      const vu = Number(row.querySelector('.it-valor').value) || 0;
+      total += qtd * vu;
+    });
+    document.getElementById('totalItensNovo').textContent = formatarMoeda(total);
+  }
+
+  // =================================================================
+  // DRAWER: NOVA SOLICITAÇÃO
+  // =================================================================
+  const drawerNovaOverlay = document.getElementById('drawerNovaOverlay');
+
+  function abrirDrawerNova(){
+    document.getElementById('n_urgente').checked = false;
+    document.getElementById('n_solicitante').value = usuarioAtual.user_metadata?.nome || usuarioAtual.user_metadata?.full_name || usuarioAtual.email;
+    document.getElementById('n_setor').value = '';
+    document.getElementById('n_veiculo_placa').value = '';
+    document.getElementById('n_descricao').value = '';
+    document.getElementById('n_justificativa').value = '';
+    document.getElementById('n_forma_aquisicao').value = 'cotacao_local';
+    document.getElementById('n_fornecedor_sugerido').value = '';
+    document.getElementById('n_valor_estimado').value = '';
+    document.getElementById('n_anexo_url').value = '';
+    document.getElementById('previewAnexoNovo').style.display = 'none';
+    document.getElementById('placeholderAnexoNovo').style.display = 'flex';
+    document.getElementById('btnEscolherAnexoNovo').textContent = 'Escolher arquivo';
+    document.getElementById('listaItensNovo').innerHTML = '';
+    atualizarTotalItensNovo();
+    drawerNovaOverlay.classList.add('show');
+  }
+
+  document.getElementById('btnNovaSolicitacao').addEventListener('click', abrirDrawerNova);
+  document.getElementById('btnFecharDrawerNova').addEventListener('click', () => drawerNovaOverlay.classList.remove('show'));
+
+  document.getElementById('btnSalvarNova').addEventListener('click', async () => {
+    const btn = document.getElementById('btnSalvarNova');
+    const descricao = document.getElementById('n_descricao').value.trim();
+    const solicitante = document.getElementById('n_solicitante').value.trim();
+    if(!descricao){ alert('Descreva a necessidade da compra.'); return; }
+    if(!solicitante){ alert('Informe o solicitante.'); return; }
+
+    btn.disabled = true; btn.textContent = 'Enviando...';
+    try{
+      const payload = {
+        unidade_negocio_id: unidadeId,
+        urgente: document.getElementById('n_urgente').checked,
+        setor: document.getElementById('n_setor').value.trim() || null,
+        solicitante,
+        veiculo_placa: document.getElementById('n_veiculo_placa').value.trim() || null,
+        descricao_necessidade: descricao,
+        justificativa: document.getElementById('n_justificativa').value.trim() || null,
+        forma_aquisicao: document.getElementById('n_forma_aquisicao').value,
+        fornecedor_sugerido: document.getElementById('n_fornecedor_sugerido').value.trim() || null,
+        anexo_cotacao_url: document.getElementById('n_anexo_url').value || null,
+        valor_estimado: document.getElementById('n_valor_estimado').value ? Number(document.getElementById('n_valor_estimado').value) : null
+      };
+
+      const { data: novaSolic, error } = await sb.from('compras_solicitacoes').insert(payload).select().single();
+      if(error) throw new Error(error.message);
+
+      const linhasItens = document.querySelectorAll('#listaItensNovo .item-row');
+      for(const linha of linhasItens){
+        const nome = linha.querySelector('.it-nome').value.trim();
+        if(!nome) continue;
+        const qtd = Number(linha.querySelector('.it-qtd').value) || 0;
+        const vu = Number(linha.querySelector('.it-valor').value) || null;
+        const { error: erroItem } = await sb.from('compras_itens').insert({
+          solicitacao_id: novaSolic.id, item: nome, quantidade: qtd || 1,
+          valor_unitario: vu, subtotal: vu != null ? (qtd || 1) * vu : null
+        });
+        if(erroItem) throw new Error('Erro ao salvar item: ' + erroItem.message);
+      }
+
+      drawerNovaOverlay.classList.remove('show');
+      await carregarSolicitacoes();
+      abrirModalCompartilhar(novaSolic.id, novaSolic.numero);
+    } catch(erro){
+      alert('Erro ao enviar solicitação: ' + erro.message);
+    } finally{
+      btn.disabled = false; btn.textContent = 'Enviar solicitação';
+    }
+  });
+
+  // =================================================================
+  // COMPARTILHAMENTO: PDF DA SOLICITAÇÃO + LINK DIRETO DE APROVAÇÃO
+  // =================================================================
+  let solicitacaoParaCompartilharId = null;
+
+  function abrirModalCompartilhar(id, numero){
+    solicitacaoParaCompartilharId = id;
+    document.getElementById('modalCompartilharTitulo').textContent = `Solicitação Nº ${numero} enviada!`;
+    document.getElementById('modalCompartilharOverlay').classList.add('show');
+  }
+  document.getElementById('btnFecharModalCompartilhar').addEventListener('click', () => {
+    document.getElementById('modalCompartilharOverlay').classList.remove('show');
+  });
+
+  function linkAprovacaoDireto(id){
+    const base = window.location.href.split('?')[0].replace(/compras-painel-admin\.html$/, 'compras-aprovacao.html');
+    return base + '?solicitacao=' + id;
+  }
+
+  // Converte uma URL pública (imagem) em base64, para embutir no PDF
+  async function urlParaBase64(url){
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async function gerarPdfSolicitacao(id){
+    const { data: s, error } = await sb.from('compras_solicitacoes').select('*').eq('id', id).single();
+    if(error) throw new Error(error.message);
+    const { data: itens } = await sb.from('compras_itens').select('*').eq('solicitacao_id', id).order('created_at', { ascending: true });
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const verde = [27, 67, 50];
+    const cinza = [107, 114, 128];
+    let y = 20;
+
+    doc.setFontSize(16); doc.setTextColor(...verde); doc.setFont(undefined, 'bold');
+    doc.text('Solicitação de Compra Nº ' + s.numero, 14, y);
+    if(s.urgente){
+      doc.setFontSize(10); doc.setTextColor(230, 126, 34);
+      doc.text('⚡ URGENTE', 160, y);
+    }
+    y += 6;
+    doc.setFontSize(9); doc.setTextColor(...cinza); doc.setFont(undefined, 'normal');
+    doc.text(unidadeNome + ' — ' + new Date(s.created_at).toLocaleString('pt-BR'), 14, y);
+    y += 10;
+
+    function linha(label, valor){
+      if(!valor) return;
+      doc.setFontSize(9); doc.setTextColor(...cinza);
+      doc.text(label, 14, y);
+      doc.setFontSize(10); doc.setTextColor(23, 30, 26);
+      const texto = doc.splitTextToSize(String(valor), 180);
+      doc.text(texto, 14, y + 5);
+      y += 5 + (texto.length * 5) + 4;
+    }
+
+    linha('Solicitante', s.solicitante);
+    linha('Setor', s.setor);
+    linha('Veículo (placa)', s.veiculo_placa);
+    linha('Descrição da necessidade', s.descricao_necessidade);
+    linha('Justificativa', s.justificativa);
+    linha('Forma de aquisição', formaAquisicaoLabel[s.forma_aquisicao]);
+    linha('Fornecedor sugerido', s.fornecedor_sugerido);
+    linha('Valor estimado', s.valor_estimado != null ? formatarMoeda(s.valor_estimado) : null);
+
+    if(itens && itens.length){
+      y += 2;
+      doc.setFontSize(9); doc.setTextColor(...cinza); doc.text('ITENS', 14, y); y += 6;
+      doc.setFontSize(9); doc.setTextColor(23, 30, 26);
+      itens.forEach(i => {
+        const txt = `${i.quantidade}x ${i.item}` + (i.subtotal != null ? '  —  ' + formatarMoeda(i.subtotal) : '');
+        doc.text(txt, 16, y); y += 5.5;
+      });
+    }
+
+    doc.setFontSize(8); doc.setTextColor(...cinza);
+    doc.text('Gerado em ' + new Date().toLocaleString('pt-BR'), 14, 285);
+
+    if(s.anexo_cotacao_url){
+      try{
+        const base64 = await urlParaBase64(s.anexo_cotacao_url);
+        doc.addPage();
+        doc.setFontSize(11); doc.setTextColor(...verde);
+        doc.text('Anexo da cotação', 14, 18);
+        doc.addImage(base64, 'JPEG', 14, 26, 180, 0);
+      } catch(e){ /* segue sem o anexo se não conseguir carregar */ }
+    }
+
+    const nomeArquivo = `Solicitacao_${s.numero}.pdf`;
+    return { doc, nomeArquivo, s };
+  }
+
+  async function compartilharSolicitacaoWhatsapp(id, btn){
+    const textoOriginal = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Gerando PDF...';
+    try{
+      const { doc, nomeArquivo, s } = await gerarPdfSolicitacao(id);
+      const link = linkAprovacaoDireto(id);
+      const textoWpp = `🛒 *SOLICITAÇÃO DE COMPRA Nº ${s.numero}*` + (s.urgente ? ' ⚡ URGENTE' : '')
+        + `\n━━━━━━━━━━━━━━━━━━━━`
+        + `\n👤 *Solicitante:* ${s.solicitante}`
+        + (s.setor ? `\n🏷️ *Setor:* ${s.setor}` : '')
+        + `\n📋 *Necessidade:* ${s.descricao_necessidade}`
+        + (s.valor_estimado ? `\n💰 *Valor estimado:* ${formatarMoeda(s.valor_estimado)}` : '')
+        + `\n━━━━━━━━━━━━━━━━━━━━`
+        + `\n👆 *TOQUE AQUI PARA APROVAR OU REPROVAR:*\n${link}`;
+
+      if(navigator.share && navigator.canShare){
+        try{
+          const blob = doc.output('blob');
+          const file = new File([blob], nomeArquivo, { type: 'application/pdf' });
+          if(navigator.canShare({ files: [file] })){
+            await navigator.share({ files: [file], title: 'Solicitação Nº ' + s.numero, text: textoWpp });
+            document.getElementById('modalCompartilharOverlay').classList.remove('show');
+            return;
+          }
+        }catch(e){
+          if(e.name === 'AbortError'){ document.getElementById('modalCompartilharOverlay').classList.remove('show'); return; }
+        }
+      }
+
+      // Fallback desktop: baixa o PDF e abre o WhatsApp Web com o texto
+      doc.save(nomeArquivo);
+      window.open('https://wa.me/?text=' + encodeURIComponent(textoWpp), '_blank');
+      document.getElementById('modalCompartilharOverlay').classList.remove('show');
+    } catch(erro){
+      alert('Erro ao gerar/compartilhar PDF: ' + erro.message);
+    } finally{
+      btn.disabled = false; btn.textContent = textoOriginal;
+    }
+  }
+
+  document.getElementById('btnCompartilharWhatsapp').addEventListener('click', (e) => {
+    if(solicitacaoParaCompartilharId) compartilharSolicitacaoWhatsapp(solicitacaoParaCompartilharId, e.currentTarget);
+  });
+
+  // =================================================================
+  // DRAWER: DETALHE / EDIÇÃO / APROVAÇÃO
+  // =================================================================
+  const drawerDetalheOverlay = document.getElementById('drawerDetalheOverlay');
+  const formaAquisicaoLabel = { cotacao_local: 'Cotação local', compra_online: 'Compra pela internet', fornecedor_recorrente: 'Fornecedor recorrente' };
+  const acaoHistoricoLabel = { solicitada: '📝 Solicitada', aprovada: '✅ Aprovada', reprovada: '❌ Reprovada', comprada: '🛒 Comprada', cancelada: '🚫 Cancelada', reaberta: '⏳ Reaberta' };
+
+  async function abrirDrawerDetalhe(id){
+    solicitacaoSelecionadaId = id;
+    const s = todasSolicitacoes.find(x => x.id === id);
+    if(!s) return;
+
+    const { data: itens } = await sb.from('compras_itens').select('*').eq('solicitacao_id', id).order('created_at', { ascending: true });
+    const { data: historico } = await sb.from('compras_historico').select('*').eq('solicitacao_id', id).order('created_at', { ascending: true });
+
+    const emailsCache = {};
+    async function nomeUsuario(userId){
+      if(!userId) return '—';
+      if(emailsCache[userId]) return emailsCache[userId];
+      const { data } = await sb.rpc('fn_obter_email_usuario', { p_user_id: userId });
+      emailsCache[userId] = data || '—';
+      return emailsCache[userId];
+    }
+
+    document.getElementById('detalheTitulo').textContent = `Solicitação Nº ${s.numero}`;
+
+    let itensHTML = '';
+    if(itens && itens.length){
+      const totalItens = itens.reduce((acc, i) => acc + (Number(i.subtotal) || 0), 0);
+      itensHTML = `
+        <div class="drawer-section">
+          <div class="drawer-section-title">Itens</div>
+          <table class="prod-tab">
+            <thead><tr><th>Item</th><th class="r">Qtd</th><th class="r">Unit.</th><th class="r">Subtotal</th></tr></thead>
+            <tbody>${itens.map(i => `<tr><td>${i.item}</td><td class="r">${i.quantidade}</td><td class="r">${i.valor_unitario != null ? formatarMoeda(i.valor_unitario) : '—'}</td><td class="r">${i.subtotal != null ? formatarMoeda(i.subtotal) : '—'}</td></tr>`).join('')}</tbody>
+          </table>
+          <div class="total-row"><span style="font-size:.82rem; color:var(--muted);">Total dos itens</span><span class="num mono">${formatarMoeda(totalItens)}</span></div>
+        </div>`;
+    }
+
+    let historicoLinhas = '';
+    if(historico && historico.length){
+      const linhasProntas = await Promise.all(historico.map(async h => {
+        const nome = await nomeUsuario(h.user_id);
+        return `<tr>
+          <td><span class="acao-label ${h.acao}">${acaoHistoricoLabel[h.acao] || h.acao}</span>${h.observacao ? `<div style="font-size:.72rem;color:var(--muted);font-style:italic;margin-top:2px">"${h.observacao}"</div>` : ''}</td>
+          <td>${nome}</td>
+          <td>${new Date(h.created_at).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })}</td>
+        </tr>`;
+      }));
+      historicoLinhas = linhasProntas.join('');
+    }
+    const historicoHTML = `
+      <div class="drawer-section">
+        <div class="drawer-section-title">Histórico</div>
+        <table class="historico-tab">
+          <thead><tr><th>Ação</th><th>Operador</th><th>Data/Hora</th></tr></thead>
+          <tbody>${historicoLinhas || '<tr><td colspan="3" style="color:var(--muted)">Sem registros.</td></tr>'}</tbody>
+        </table>
+      </div>`;
+
+    const editavel = s.status === 'pendente';
+    const podeMarcarComprada = s.status === 'aprovada';
+    const podeAprovarReprovar = s.status === 'pendente' && ehAprovadorAtual;
+
+    document.getElementById('detalheBody').innerHTML = `
+      ${s.urgente ? `<div style="margin-bottom:14px"><span class="tag-urgente">⚡ Urgente</span></div>` : ''}
+      <div class="drawer-section">
+        <div class="drawer-section-title">Status</div>
+        <span class="status-tag ${s.status}">${statusLabels[s.status] || s.status}</span>
+      </div>
+
+      <div class="drawer-section">
+        <div class="drawer-section-title">Solicitação</div>
+        <div class="det-linha">
+          <div class="det-campo"><label>Solicitante</label><div class="val">${s.solicitante}</div></div>
+          <div class="det-campo"><label>Setor</label><div class="val">${s.setor || '—'}</div></div>
+        </div>
+        ${s.veiculo_placa ? `<div class="det-campo" style="margin-bottom:10px"><label>Veículo</label><div class="val">${s.veiculo_placa}</div></div>` : ''}
+        <div class="det-campo" style="margin-bottom:10px"><label>Descrição da necessidade</label><div class="val">${s.descricao_necessidade}</div></div>
+        ${s.justificativa ? `<div class="det-campo"><label>Justificativa</label><div class="val">${s.justificativa}</div></div>` : ''}
+      </div>
+
+      <div class="drawer-section">
+        <div class="drawer-section-title">Aquisição</div>
+        <div class="det-linha">
+          <div class="det-campo"><label>Forma</label><div class="val">${formaAquisicaoLabel[s.forma_aquisicao] || '—'}</div></div>
+          <div class="det-campo"><label>Fornecedor sugerido</label><div class="val">${s.fornecedor_sugerido || '—'}</div></div>
+        </div>
+        <div class="det-linha">
+          <div class="det-campo"><label>Valor estimado</label><div class="val">${s.valor_estimado != null ? formatarMoeda(s.valor_estimado) : '—'}</div></div>
+          <div class="det-campo"><label>Valor aprovado</label><div class="val">${s.valor_aprovado != null ? formatarMoeda(s.valor_aprovado) : '—'}</div></div>
+        </div>
+        ${s.anexo_cotacao_url ? `<a class="link-anexo" href="${s.anexo_cotacao_url}" target="_blank" rel="noopener">Ver anexo da cotação</a>` : ''}
+      </div>
+
+      <div class="drawer-section">
+        <div class="drawer-section-title">Compartilhamento</div>
+        <button type="button" class="btn-upload-imagem" id="btnReenviarWhatsapp" style="width:100%;">📲 Reenviar link por WhatsApp (com PDF anexo)</button>
+      </div>
+
+      ${itensHTML}
+      ${historicoHTML}
+
+      ${editavel ? `
+      <div class="drawer-actions">
+        <button class="btn-acao btn-cancelar" id="btnCancelarSolic">Cancelar</button>
+        ${podeAprovarReprovar ? `
+        <button class="btn-acao btn-reprovar" id="btnReprovarSolic">Reprovar</button>
+        <button class="btn-acao btn-aprovar" id="btnAprovarSolic">Aprovar</button>` : ''}
+      </div>
+      ${podeAprovarReprovar ? `
+      <div class="obs-wrap" id="wrapAprovar">
+        <div style="font-size:.75rem;color:var(--brand-2);font-weight:600;margin-bottom:5px">Observação (opcional)</div>
+        <textarea id="obsAprovar" placeholder="Alguma observação sobre a aprovação..."></textarea>
+        <div class="confirmar-linha">
+          <button class="btn-acao btn-aprovar" id="btnConfirmarAprovar">Confirmar aprovação</button>
+          <button class="btn-acao btn-cancelar" id="btnCancelarObsAprovar">Cancelar</button>
+        </div>
+      </div>
+      <div class="obs-wrap" id="wrapReprovar">
+        <div style="font-size:.75rem;color:var(--danger);font-weight:600;margin-bottom:5px">Motivo da reprovação (opcional)</div>
+        <textarea id="obsReprovar" placeholder="Descreva o motivo..."></textarea>
+        <div class="confirmar-linha">
+          <button class="btn-acao btn-reprovar" id="btnConfirmarReprovar">Confirmar reprovação</button>
+          <button class="btn-acao btn-cancelar" id="btnCancelarObsReprovar">Cancelar</button>
+        </div>
+      </div>` : ''}
+      ` : ''}
+
+      ${podeMarcarComprada ? `
+      <div class="drawer-actions">
+        <button class="btn-acao btn-comprada" id="btnMarcarComprada" style="flex:2;">Marcar como comprada</button>
+      </div>` : ''}
+    `;
+
+    if(editavel){
+      document.getElementById('btnCancelarSolic').addEventListener('click', () => atualizarStatusSimples(id, 'cancelada', 'Tem certeza que deseja cancelar esta solicitação?'));
+      if(podeAprovarReprovar){
+        document.getElementById('btnAprovarSolic').addEventListener('click', () => {
+          document.getElementById('wrapReprovar').style.display = 'none';
+          document.getElementById('wrapAprovar').style.display = 'block';
+        });
+        document.getElementById('btnReprovarSolic').addEventListener('click', () => {
+          document.getElementById('wrapAprovar').style.display = 'none';
+          document.getElementById('wrapReprovar').style.display = 'block';
+        });
+        document.getElementById('btnCancelarObsAprovar').addEventListener('click', () => document.getElementById('wrapAprovar').style.display = 'none');
+        document.getElementById('btnCancelarObsReprovar').addEventListener('click', () => document.getElementById('wrapReprovar').style.display = 'none');
+        document.getElementById('btnConfirmarAprovar').addEventListener('click', () => responderAprovacao(id, 'aprovada', document.getElementById('obsAprovar').value.trim()));
+        document.getElementById('btnConfirmarReprovar').addEventListener('click', () => responderAprovacao(id, 'reprovada', document.getElementById('obsReprovar').value.trim()));
+      }
+    }
+    if(podeMarcarComprada){
+      document.getElementById('btnMarcarComprada').addEventListener('click', () => atualizarStatusSimples(id, 'comprada', 'Confirmar que esta solicitação já foi comprada?'));
+    }
+    document.getElementById('btnReenviarWhatsapp').addEventListener('click', (e) => compartilharSolicitacaoWhatsapp(id, e.currentTarget));
+
+    drawerDetalheOverlay.classList.add('show');
+  }
+
+  document.getElementById('btnFecharDrawerDetalhe').addEventListener('click', () => drawerDetalheOverlay.classList.remove('show'));
+
+  async function atualizarStatusSimples(id, novoStatus, mensagemConfirmacao){
+    if(!confirm(mensagemConfirmacao)) return;
+    const { error } = await sb.from('compras_solicitacoes').update({ status: novoStatus }).eq('id', id);
+    if(error){ alert('Erro: ' + error.message); return; }
+    await carregarSolicitacoes();
+    drawerDetalheOverlay.classList.remove('show');
+  }
+
+  async function responderAprovacao(id, status, observacao){
+    const { error } = await sb.rpc('fn_aprovar_solicitacao_compra', {
+      p_solicitacao_id: id, p_status: status, p_observacao: observacao || null
+    });
+    if(error){ alert('Erro: ' + error.message); return; }
+    await carregarSolicitacoes();
+    drawerDetalheOverlay.classList.remove('show');
+  }
+
+  // =================================================================
+  // APROVADORES (só o principal gerencia)
+  // =================================================================
+  async function renderListaAprovadores(){
+    const lista = document.getElementById('listaAprovadores');
+    if(!todosAprovadores.length){ lista.innerHTML = '<div class="vazio">Nenhum aprovador cadastrado ainda.</div>'; return; }
+
+    const linhas = await Promise.all(todosAprovadores.map(async a => {
+      const { data: email } = await sb.rpc('fn_obter_email_usuario', { p_user_id: a.user_id });
+      return `
+        <div class="aprovador-row" data-id="${a.id}">
+          <span class="aprovador-email">${email || a.user_id}</span>
+          <label class="aprovador-toggle"><input type="checkbox" class="ap-ativo-check" ${a.ativo ? 'checked' : ''}> Ativo</label>
+          <button class="btn-remover-item" title="Remover">✕</button>
+        </div>`;
+    }));
+    lista.innerHTML = linhas.join('');
+
+    lista.querySelectorAll('.aprovador-row').forEach(row => {
+      row.querySelector('.ap-ativo-check').addEventListener('change', async (e) => {
+        const { error } = await sb.from('compras_aprovadores').update({ ativo: e.target.checked }).eq('id', row.dataset.id);
+        if(error){ alert('Erro: ' + error.message); e.target.checked = !e.target.checked; return; }
+        await carregarAprovadores();
+      });
+      row.querySelector('.btn-remover-item').addEventListener('click', async () => {
+        if(!confirm('Remover este aprovador?')) return;
+        const { error } = await sb.from('compras_aprovadores').delete().eq('id', row.dataset.id);
+        if(error){ alert('Erro: ' + error.message); return; }
+        await carregarAprovadores();
+      });
+    });
+  }
+
+  document.getElementById('btnAdicionarAprovador').addEventListener('click', async () => {
+    const email = document.getElementById('inputEmailNovoAprovador').value.trim();
+    if(!email){ alert('Informe o e-mail do colaborador.'); return; }
+    const btn = document.getElementById('btnAdicionarAprovador');
+    btn.disabled = true; btn.textContent = 'Adicionando...';
+    try{
+      const { data: userId, error: erroBusca } = await sb.rpc('fn_obter_user_id_por_email', { p_email: email });
+      if(erroBusca) throw new Error(erroBusca.message);
+      if(!userId) throw new Error('Nenhuma conta encontrada com este e-mail. A pessoa precisa ter feito login em algum módulo Servir antes.');
+
+      const { error } = await sb.from('compras_aprovadores').insert({ unidade_negocio_id: unidadeId, user_id: userId });
+      if(error) throw new Error(error.message);
+
+      document.getElementById('inputEmailNovoAprovador').value = '';
+      await carregarAprovadores();
+    } catch(erro){
+      alert('Erro ao adicionar: ' + erro.message);
+    } finally{
+      btn.disabled = false; btn.textContent = 'Adicionar';
+    }
+  });
+
+  // =================================================================
+  // BOOTSTRAP
+  // =================================================================
+  async function iniciar(){
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    if(isRecuperacao){
+      sb.auth.onAuthStateChange((event) => {
+        if(event === 'PASSWORD_RECOVERY') mostrarNovaSenha();
+      });
+      return;
+    }
+
+    const { data: { session } } = await sb.auth.getSession();
+    if(session){
+      loadingScreen.style.display = 'flex';
+      telaLogin.style.display = 'none';
+      try{
+        usuarioAtual = session.user;
+        await carregarUnidadeDoUsuario(session.user);
+        appEl.style.display = 'block';
+        await carregarTudo();
+      } catch(erro){
+        alert(erro.message);
+        await sb.auth.signOut();
+        location.reload();
+        return;
+      }
+      loadingScreen.style.display = 'none';
+    }
+  }
+  iniciar();
+</script>
+</body>
+</html>
