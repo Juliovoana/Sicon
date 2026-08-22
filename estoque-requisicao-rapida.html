@@ -162,15 +162,15 @@
             <h2>Dados da requisição</h2>
             <div class="grade">
                 <div class="campo">
-                    <label>Almoxarifado</label>
+                    <label>Almoxarifado *</label>
                     <select id="campoAlmoxarifado"><option value="">-- selecione --</option></select>
                 </div>
                 <div class="campo">
-                    <label>Setor</label>
+                    <label>Setor *</label>
                     <select id="campoSetor"><option value="">-- selecione --</option></select>
                 </div>
                 <div class="campo linha-busca">
-                    <label>Evento (opcional)</label>
+                    <label>Evento *</label>
                     <input type="text" id="campoBuscaEvento" placeholder="Buscar evento..." autocomplete="off">
                     <div id="resultadosBuscaEvento" class="resultados-busca"></div>
                     <p class="selecionado-texto" id="eventoSelecionadoTexto"></p>
@@ -180,6 +180,7 @@
                     <input type="text" id="campoSolicitante">
                 </div>
             </div>
+            <p class="subtitulo" style="margin-top:-6px;">* campos obrigatórios</p>
         </div>
 
         <div class="cartao" id="secaoMaterial">
@@ -217,7 +218,10 @@
             <div class="grade">
                 <div class="campo">
                     <label>Veículo / Equipamento</label>
-                    <select id="campoVeiculoServico"><option value="">-- selecione --</option></select>
+                    <div style="display:flex; gap:6px;">
+                        <select id="campoVeiculoServico" style="flex:1;"><option value="">-- selecione --</option></select>
+                        <button type="button" class="btn btn-cinza hidden" id="btnGerenciarVeiculos" title="Criar ou editar veículos/equipamentos" style="padding:10px 12px;">⚙️</button>
+                    </div>
                 </div>
                 <div class="campo">
                     <label>Fornecedor recomendado (opcional)</label>
@@ -312,6 +316,40 @@
             <button class="btn btn-principal" id="btnConfirmarAtender" style="flex:1;">Confirmar</button>
         </div>
         <p class="status-msg status-erro" id="statusAtenderItem"></p>
+    </div>
+</div>
+
+<div id="modal-gerenciar-veiculos" class="modal-overlay">
+    <div class="modal-caixa" style="max-width:520px;">
+        <h3>Veículos e Equipamentos</h3>
+        <p class="subtitulo" style="margin-bottom:14px;">Só administradores e o Principal podem gerenciar essa lista.</p>
+
+        <div id="listaVeiculosGerenciar" style="max-height:220px; overflow-y:auto; margin-bottom:16px;"></div>
+
+        <div style="border-top:1px solid var(--border); padding-top:14px;">
+            <p class="subtitulo" id="tituloFormVeiculo" style="margin-bottom:10px; font-weight:600; color:var(--ink);">Novo veículo/equipamento</p>
+            <div class="grade">
+                <div class="campo"><label>Nome</label><input type="text" id="gvNome" placeholder="Ex: Caminhão Munck, Gerador 1..."></div>
+                <div class="campo">
+                    <label>Tipo</label>
+                    <select id="gvTipo">
+                        <option value="veiculo">Veículo</option>
+                        <option value="gerador">Gerador</option>
+                        <option value="climatizador">Climatizador</option>
+                        <option value="outro">Outro</option>
+                    </select>
+                </div>
+                <div class="campo" id="gvCampoPlaca"><label>Placa</label><input type="text" id="gvPlaca"></div>
+                <div class="campo hidden" id="gvCampoIdentificador"><label>Identificador</label><input type="text" id="gvIdentificador"></div>
+            </div>
+            <div style="display:flex; gap:8px; margin-top:6px;">
+                <button type="button" class="btn btn-cinza" id="btnCancelarEdicaoVeiculo" style="flex:1;">Cancelar edição</button>
+                <button type="button" class="btn btn-principal" id="btnSalvarVeiculo" style="flex:1;">Salvar</button>
+            </div>
+            <p class="status-msg status-erro" id="statusGerenciarVeiculo"></p>
+        </div>
+
+        <button class="btn btn-cinza" id="btnFecharGerenciarVeiculos" style="width:100%; margin-top:14px;">Fechar</button>
     </div>
 </div>
 
@@ -474,6 +512,7 @@ async function definirUnidadeAtiva(vinculo) {
 async function iniciarApp() {
     const podeAtender = meuPerfil.ehPrincipal || PAPEIS_PODEM_ATENDER.includes(meuPerfil.papel);
     document.getElementById('aba-btn-atender').style.display = podeAtender ? '' : 'none';
+    document.getElementById('btnGerenciarVeiculos').classList.toggle('hidden', !(meuPerfil.ehPrincipal || meuPerfil.papel === 'administrador'));
 
     document.getElementById('campoSolicitante').value = meuPerfil.email;
 
@@ -500,9 +539,41 @@ async function iniciarApp() {
     document.getElementById('campoSetor').innerHTML =
         '<option value="">-- selecione --</option>' + setores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
 
+    aplicarUltimaEscolhaSalva();
+
     await carregarProdutosESaldos();
 
     if (podeAtender) await carregarRequisicoesAtender();
+}
+
+function chaveUltimaEscolha() {
+    return `reqrapida_ultima_escolha_${meuPerfil.unidadeId}`;
+}
+
+function salvarUltimaEscolha() {
+    try {
+        localStorage.setItem(chaveUltimaEscolha(), JSON.stringify({
+            almoxarifadoId: document.getElementById('campoAlmoxarifado').value || null,
+            setorId: document.getElementById('campoSetor').value || null
+            // evento NÃO entra aqui de propósito -- sempre exige escolha
+            // nova a cada requisição, nunca fica pré-preenchido
+        }));
+    } catch (e) { /* se não conseguir salvar, só não lembra da próxima vez -- não trava o uso */ }
+}
+
+function aplicarUltimaEscolhaSalva() {
+    try {
+        const salvo = JSON.parse(localStorage.getItem(chaveUltimaEscolha()) || 'null');
+        if (!salvo) return;
+        // só aplica se a opção salva ainda existe hoje (evita deixar
+        // selecionado um almoxarifado/setor que foi desativado/removido)
+        if (salvo.almoxarifadoId && almoxarifados.some(a => String(a.id) === String(salvo.almoxarifadoId))) {
+            document.getElementById('campoAlmoxarifado').value = salvo.almoxarifadoId;
+        }
+        if (salvo.setorId && setores.some(s => String(s.id) === String(salvo.setorId))) {
+            document.getElementById('campoSetor').value = salvo.setorId;
+        }
+    } catch (e) { /* dado salvo corrompido ou navegador bloqueando -- ignora e segue sem pré-preencher */ }
 }
 
 async function carregarProdutosESaldos() {
@@ -730,6 +801,125 @@ function renderizarItensServico() {
 }
 
 // ---------------------------------------------------------------
+// GERENCIAR VEÍCULOS/EQUIPAMENTOS (só admin/principal) -- criar e
+// editar direto aqui, sem precisar abrir o estoque-app.html
+// ---------------------------------------------------------------
+let veiculoEmEdicaoId = null;
+
+document.getElementById('btnGerenciarVeiculos').addEventListener('click', () => {
+    abrirFormVeiculoNovo();
+    renderizarListaVeiculosGerenciar();
+    document.getElementById('modal-gerenciar-veiculos').classList.add('aberto');
+});
+document.getElementById('btnFecharGerenciarVeiculos').addEventListener('click', () => {
+    document.getElementById('modal-gerenciar-veiculos').classList.remove('aberto');
+});
+
+document.getElementById('gvTipo').addEventListener('change', (e) => {
+    document.getElementById('gvCampoPlaca').classList.toggle('hidden', e.target.value !== 'veiculo');
+    document.getElementById('gvCampoIdentificador').classList.toggle('hidden', e.target.value === 'veiculo');
+});
+
+function abrirFormVeiculoNovo() {
+    veiculoEmEdicaoId = null;
+    document.getElementById('tituloFormVeiculo').textContent = 'Novo veículo/equipamento';
+    document.getElementById('gvNome').value = '';
+    document.getElementById('gvTipo').value = 'veiculo';
+    document.getElementById('gvPlaca').value = '';
+    document.getElementById('gvIdentificador').value = '';
+    document.getElementById('gvCampoPlaca').classList.remove('hidden');
+    document.getElementById('gvCampoIdentificador').classList.add('hidden');
+    document.getElementById('statusGerenciarVeiculo').textContent = '';
+}
+
+function renderizarListaVeiculosGerenciar() {
+    const lista = document.getElementById('listaVeiculosGerenciar');
+    if (!veiculosEquipamentos.length) { lista.innerHTML = '<p class="subtitulo">Nenhum cadastrado ainda.</p>'; return; }
+    lista.innerHTML = veiculosEquipamentos.map(v => `
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:0.85rem;">
+            <span>${escapeHtml(v.nome)}${v.placa ? ' — ' + escapeHtml(v.placa) : ''}</span>
+            <div style="display:flex; gap:6px;">
+                <button type="button" class="btn btn-cinza" data-editar-veiculo="${v.id}" style="padding:5px 9px; font-size:0.78rem;">Editar</button>
+                <button type="button" class="btn-desfazer-atendimento" data-excluir-veiculo="${v.id}" style="font-size:0.78rem;">Excluir</button>
+            </div>
+        </div>
+    `).join('');
+    lista.querySelectorAll('[data-editar-veiculo]').forEach(btn => {
+        btn.addEventListener('click', () => abrirFormVeiculoEditar(Number(btn.dataset.editarVeiculo)));
+    });
+    lista.querySelectorAll('[data-excluir-veiculo]').forEach(btn => {
+        btn.addEventListener('click', () => excluirVeiculo(Number(btn.dataset.excluirVeiculo)));
+    });
+}
+
+function abrirFormVeiculoEditar(id) {
+    const v = veiculosEquipamentos.find(x => x.id === id);
+    if (!v) return;
+    veiculoEmEdicaoId = id;
+    document.getElementById('tituloFormVeiculo').textContent = 'Editar veículo/equipamento';
+    document.getElementById('gvNome').value = v.nome || '';
+    document.getElementById('gvTipo').value = v.tipo || 'veiculo';
+    document.getElementById('gvPlaca').value = v.placa || '';
+    document.getElementById('gvIdentificador').value = v.identificador || '';
+    document.getElementById('gvCampoPlaca').classList.toggle('hidden', v.tipo !== 'veiculo');
+    document.getElementById('gvCampoIdentificador').classList.toggle('hidden', v.tipo === 'veiculo');
+    document.getElementById('statusGerenciarVeiculo').textContent = '';
+}
+
+document.getElementById('btnCancelarEdicaoVeiculo').addEventListener('click', abrirFormVeiculoNovo);
+
+document.getElementById('btnSalvarVeiculo').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusGerenciarVeiculo');
+    statusEl.textContent = '';
+    const nome = document.getElementById('gvNome').value.trim();
+    const tipo = document.getElementById('gvTipo').value;
+    if (!nome) { statusEl.textContent = 'Informe o nome.'; return; }
+
+    const registro = {
+        unidade_negocio_id: meuPerfil.unidadeId,
+        nome, tipo,
+        placa: tipo === 'veiculo' ? (document.getElementById('gvPlaca').value.trim() || null) : null,
+        identificador: tipo !== 'veiculo' ? (document.getElementById('gvIdentificador').value.trim() || null) : null,
+        ativo: true
+    };
+
+    const btn = document.getElementById('btnSalvarVeiculo');
+    btn.disabled = true; btn.textContent = 'Salvando...';
+    try {
+        const { error } = veiculoEmEdicaoId
+            ? await sb.from('unidade_equipamentos_veiculos').update(registro).eq('id', veiculoEmEdicaoId)
+            : await sb.from('unidade_equipamentos_veiculos').insert(registro);
+        if (error) throw error;
+
+        const { data: dadosVeiculos } = await sb.from('unidade_equipamentos_veiculos').select('id, nome, placa, tipo, identificador').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome');
+        veiculosEquipamentos = dadosVeiculos || [];
+        document.getElementById('campoVeiculoServico').innerHTML =
+            '<option value="">-- selecione --</option>' + veiculosEquipamentos.map(v => `<option value="${v.id}">${escapeHtml(v.nome)}</option>`).join('');
+
+        renderizarListaVeiculosGerenciar();
+        abrirFormVeiculoNovo();
+    } catch (erro) {
+        statusEl.textContent = 'Erro: ' + erro.message;
+    } finally {
+        btn.disabled = false; btn.textContent = 'Salvar';
+    }
+});
+
+async function excluirVeiculo(id) {
+    if (!confirm('Excluir esse veículo/equipamento? Isso não afeta requisições já feitas com ele, só impede escolher ele em novas.')) return;
+    try {
+        const { error } = await sb.from('unidade_equipamentos_veiculos').update({ ativo: false }).eq('id', id);
+        if (error) throw error;
+        veiculosEquipamentos = veiculosEquipamentos.filter(v => v.id !== id);
+        document.getElementById('campoVeiculoServico').innerHTML =
+            '<option value="">-- selecione --</option>' + veiculosEquipamentos.map(v => `<option value="${v.id}">${escapeHtml(v.nome)}</option>`).join('');
+        renderizarListaVeiculosGerenciar();
+    } catch (erro) {
+        alert('Erro ao excluir: ' + erro.message);
+    }
+}
+
+// ---------------------------------------------------------------
 // ENVIAR NOVA REQUISIÇÃO
 // ---------------------------------------------------------------
 document.getElementById('btnEnviarRequisicao').addEventListener('click', async () => {
@@ -742,6 +932,8 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
     const listaItensAtual = tipoRequisicaoAtual === 'material' ? itensNovaReq : itensServico;
 
     if (!almoxarifadoId) { statusEl.className = 'status-msg status-erro'; statusEl.textContent = 'Escolha o almoxarifado.'; return; }
+    if (!setorId) { statusEl.className = 'status-msg status-erro'; statusEl.textContent = 'Escolha o setor.'; return; }
+    if (!eventoSelecionado) { statusEl.className = 'status-msg status-erro'; statusEl.textContent = 'Escolha o evento.'; return; }
     if (!solicitante) { statusEl.className = 'status-msg status-erro'; statusEl.textContent = 'Informe o solicitante.'; return; }
     if (!listaItensAtual.length) { statusEl.className = 'status-msg status-erro'; statusEl.textContent = 'Adicione pelo menos um item.'; return; }
 
@@ -784,11 +976,13 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
         itensServico = [];
         renderizarItensNovaReq();
         renderizarItensServico();
+        // Almoxarifado/Setor ficam como estavam -- é comum lançar várias
+        // requisições seguidas pro mesmo setor. Evento sempre limpa e
+        // exige escolha nova a cada requisição (continua obrigatório)
         document.getElementById('campoBuscaEvento').value = '';
         document.getElementById('eventoSelecionadoTexto').textContent = '';
         eventoSelecionado = null;
-        document.getElementById('campoAlmoxarifado').value = '';
-        document.getElementById('campoSetor').value = '';
+        salvarUltimaEscolha();
         statusEl.className = 'status-msg';
         statusEl.style.color = 'var(--brand-2)';
         statusEl.textContent = '✓ Requisição enviada com sucesso!';
