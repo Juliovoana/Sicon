@@ -169,7 +169,7 @@
         background: #fff; border-radius: 8px; padding: 22px; width: 90%; max-width: 520px;
         box-shadow: 0 8px 30px rgba(0,0,0,0.25); max-height: 88vh; overflow-y: auto;
     }
-    .modal-caixa.larga { max-width: 980px; }
+    .modal-caixa.larga { max-width: 1180px; }
 
     .aviso-carregando { color:#666; font-style: italic; padding: 20px 0; }
 
@@ -197,7 +197,6 @@
         display: inline-flex; align-items: center; justify-content: center;
     }
     .btn-icone:hover { background: #f0f0f0; }
-    .modal-caixa.larga { max-width: 780px; }
 
     .th-ordenavel, .th-ordenavel-estoque { cursor: pointer; user-select: none; }
     .th-ordenavel:hover, .th-ordenavel-estoque:hover { background: #e4e4e4; }
@@ -631,6 +630,7 @@
         <div style="margin-top:10px; display:flex; gap:8px;">
             <button class="btn btn-azul" id="btnAplicarFiltrosMov">🔍 Buscar</button>
             <button class="btn btn-cinza" id="btnLimparFiltrosMov">Limpar filtros</button>
+            <button class="btn btn-cinza" id="btnFiltrarPendentesDestino" style="background:#FBEAE8; color:#C0392B;">🏷️ Itens avulsos pendentes de destino</button>
         </div>
     </div>
 
@@ -743,6 +743,18 @@
 
 <!-- ===================== ABA RELATÓRIOS ===================== -->
 <div class="conteudo-aba" id="aba-cadastrosgerais">
+    <div class="caixa">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h4 style="margin:0;">Almoxarifados</h4>
+            <button class="btn btn-verde btn-pequeno" id="btnNovoAlmoxarifadoCad" style="display:none;">+ Novo almoxarifado</button>
+        </div>
+        <p class="subtitulo" id="avisoRestricaoAlmoxarifado" style="margin-top:4px;">Só o Principal ou Administradores podem criar/editar almoxarifados.</p>
+        <table class="tabela" style="margin-top:10px;">
+            <thead><tr><th>Nome</th><th class="center">Ativo</th><th>Ações</th></tr></thead>
+            <tbody id="corpoCadAlmoxarifados"></tbody>
+        </table>
+    </div>
+
     <div class="caixa">
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <h4 style="margin:0;">Setores</h4>
@@ -1727,6 +1739,14 @@ async function chamarGet(acao, filtros) {
         if (filtros.tag) query = query.ilike('tag', `%${filtros.tag}%`);
         if (filtros.evento) query = query.eq('evento', filtros.evento);
         if (filtros.fornecedor) query = query.or(`fornecedor_nome.ilike.%${filtros.fornecedor}%,fornecedor_cnpj.ilike.%${filtros.fornecedor}%`);
+        if (filtros.pendentesDestino) {
+            query = query
+                .not('descricao_avulsa', 'is', null)
+                .eq('tipo', 'saida')
+                .is('setor_id', null)
+                .is('equipamento_veiculo_id', null)
+                .eq('evento', '');
+        }
         const { data, error } = await query;
         if (error) throw error;
         return data;
@@ -1909,8 +1929,8 @@ async function chamarPost(acao, d) {
         // entrada) — em vez de deixar em branco, identifica que saiu do
         // almoxarifado
         const fornecedorNomeFinal = m.fornecedorNome || (m.tipo === 'saida' ? 'Almoxarifado' : null);
-        const { error: e1 } = await sb.from('estoque_movimentacoes').insert({
-            data: m.data, produto_id: m.produtoId, tipo: m.tipo, qtd: m.qtd, valor_unit: m.valorUnit,
+        const { data: movInserida, error: e1 } = await sb.from('estoque_movimentacoes').insert({
+            data: m.data, produto_id: m.produtoId || null, descricao_avulsa: m.descricaoAvulsa || null, tipo: m.tipo, qtd: m.qtd, valor_unit: m.valorUnit,
             // quando não vem valor original (lançamento manual, sem rateio de
             // desconto/frete), o original é o próprio valor final
             valor_unit_original: m.valorUnitOriginal != null ? m.valorUnitOriginal : m.valorUnit,
@@ -1922,23 +1942,29 @@ async function chamarPost(acao, d) {
             plano_contas_id: m.planoContasId || null, equipamento_veiculo_id: m.veiculoId || null,
             km_troca: m.km || null, km_proxima_troca: m.kmProximaTroca || null, dt_proxima_troca: m.dtProximaTroca || null,
             almoxarifado: m.almoxarifado || 1,
+            almoxarifado_id: m.almoxarifadoId || null,
+            movimentacao_origem_id: m.movimentacaoOrigemId || null,
             unidade_negocio_id: meuPerfil.unidadeId
-        });
+        }).select().single();
         if (e1) throw e1;
-        if (m.tipo === 'entrada') {
-            // entrada: além de somar no estoque, recalcula preço da última compra e preço médio
-            const { error: e2 } = await sb.rpc('fabrica_registrar_entrada_precos', {
-                p_produto_id: m.produtoId, p_qtd: Number(m.qtd), p_valor_unit: Number(m.valorUnit),
-                p_almoxarifado_id: m.almoxarifadoId || null
-            });
-            if (e2) throw e2;
-        } else {
-            const { error: e2 } = await sb.rpc('fabrica_ajustar_estoque', {
-                p_produto_id: m.produtoId, p_delta: -Number(m.qtd), p_almoxarifado_id: m.almoxarifadoId || null
-            });
-            if (e2) throw e2;
+        // item avulso (sem produto de catálogo) nunca ajusta estoque de
+        // produto nenhum -- não existe produto de verdade pra afetar
+        if (m.produtoId) {
+            if (m.tipo === 'entrada') {
+                // entrada: além de somar no estoque, recalcula preço da última compra e preço médio
+                const { error: e2 } = await sb.rpc('fabrica_registrar_entrada_precos', {
+                    p_produto_id: m.produtoId, p_qtd: Number(m.qtd), p_valor_unit: Number(m.valorUnit),
+                    p_almoxarifado_id: m.almoxarifadoId || null
+                });
+                if (e2) throw e2;
+            } else {
+                const { error: e2 } = await sb.rpc('fabrica_ajustar_estoque', {
+                    p_produto_id: m.produtoId, p_delta: -Number(m.qtd), p_almoxarifado_id: m.almoxarifadoId || null
+                });
+                if (e2) throw e2;
+            }
         }
-        return;
+        return movInserida;
     }
     if (acao === 'registrarMovimentacaoBaixaNota') {
         const m = d.movimentacao;
@@ -1959,6 +1985,18 @@ async function chamarPost(acao, d) {
             p_produto_id: m.produtoId, p_delta: -Number(m.qtd), p_almoxarifado_id: m.almoxarifadoId || null
         });
         if (e2) throw e2;
+        return;
+    }
+    if (acao === 'salvarAlmoxarifado') {
+        const registro = { unidade_negocio_id: meuPerfil.unidadeId, nome: d.nome, ativo: d.ativo };
+        const query = d.id ? sb.from('unidade_almoxarifados').update(registro).eq('id', d.id) : sb.from('unidade_almoxarifados').insert(registro);
+        const { error } = await query;
+        if (error) throw error;
+        return;
+    }
+    if (acao === 'excluirAlmoxarifado') {
+        const { error } = await sb.from('unidade_almoxarifados').delete().eq('id', d.id);
+        if (error) throw error;
         return;
     }
     if (acao === 'salvarSetor') {
@@ -2233,7 +2271,7 @@ async function carregarMovimentacoes() {
     movimentacoes = (lista || []).map(m => ({
         id: Number(m.id),
         data: formatarData(m.data),
-        produtoId: Number(m.produto_id),
+        produtoId: m.produto_id != null ? Number(m.produto_id) : null,
         tipo: m.tipo,
         qtd: Number(m.qtd) || 0,
         valorUnit: Number(m.valor_unit) || 0,
@@ -2246,7 +2284,8 @@ async function carregarMovimentacoes() {
         nfNumero: m.nf_numero || '',
         fornecedorCnpj: m.fornecedor_cnpj || '',
         fornecedorNome: m.fornecedor_nome || '',
-        almoxarifadoId: m.almoxarifado_id != null ? Number(m.almoxarifado_id) : null
+        almoxarifadoId: m.almoxarifado_id != null ? Number(m.almoxarifado_id) : null,
+        descricaoAvulsa: m.descricao_avulsa || null
     }));
 }
 
@@ -2998,7 +3037,8 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
                 temAjusteProprio: ajusteProprioItem !== 0,
                 produtoVinculadoId: match ? match.id : null,
                 criarNovo: !match,
-                almoxarifadoId: almoxarifadoTrabalho || null
+                almoxarifadoId: almoxarifadoTrabalho || null,
+                avulso: false
             };
         });
 
@@ -3075,16 +3115,29 @@ function renderizarTabelaNFe() {
                     ${(catalogosBaixa.almoxarifados || []).map(a => `<option value="${a.id}" ${item.almoxarifadoId === a.id ? 'selected' : ''}>${escapeHtml(a.nome)}</option>`).join('')}
                 </select>
             </td>
-            <td>${item.criarNovo
-                ? `<span class="pill" style="background:#fff3e0;color:#e65100;">+ Novo produto</span>`
-                : `<span class="pill pill-entrada">${prodVinculado ? '#' + prodVinculado.id + ' — ' + escapeHtml(prodVinculado.nome) : '-'}</span>`
+            <td>${item.avulso
+                ? `<span class="pill" style="background:#FBEAE8; color:#C0392B;">Avulso — saída imediata</span>`
+                : (item.criarNovo
+                    ? `<span class="pill" style="background:#fff3e0;color:#e65100;">+ Novo produto</span>`
+                    : `<span class="pill pill-entrada">${prodVinculado ? '#' + prodVinculado.id + ' — ' + escapeHtml(prodVinculado.nome) : '-'}</span>`)
             }</td>
             <td class="center">
-                <button class="btn btn-cinza btn-pequeno" data-nfe-vincular="${idx}">🔍 ${item.criarNovo ? 'Vincular' : 'Trocar'}</button>
-                ${!item.criarNovo ? `<button class="btn btn-cinza btn-pequeno" data-nfe-desfazer="${idx}" title="Desfazer vínculo e tratar como produto novo" style="margin-left:4px;">❌ Desfazer</button>` : ''}
+                <label style="display:flex; align-items:center; gap:4px; font-size:0.78rem; margin-bottom:4px; cursor:pointer;">
+                    <input type="checkbox" data-nfe-avulso="${idx}" ${item.avulso ? 'checked' : ''}> Avulso
+                </label>
+                ${!item.avulso ? `
+                    <button class="btn btn-cinza btn-pequeno" data-nfe-vincular="${idx}">🔍 ${item.criarNovo ? 'Vincular' : 'Trocar'}</button>
+                    ${!item.criarNovo ? `<button class="btn btn-cinza btn-pequeno" data-nfe-desfazer="${idx}" title="Desfazer vínculo e tratar como produto novo" style="margin-left:4px;">❌ Desfazer</button>` : ''}
+                ` : ''}
             </td>
         `;
         corpo.appendChild(tr);
+    });
+    corpo.querySelectorAll('[data-nfe-avulso]').forEach(chk => {
+        chk.addEventListener('change', () => {
+            nfeItensParseados[Number(chk.dataset.nfeAvulso)].avulso = chk.checked;
+            renderizarTabelaNFe();
+        });
     });
     corpo.querySelectorAll('[data-nfe-unidade]').forEach(inp => {
         inp.addEventListener('change', () => { nfeItensParseados[Number(inp.dataset.nfeUnidade)].un = inp.value.trim().toUpperCase() || 'UN'; });
@@ -3248,6 +3301,42 @@ async function processarImportacaoNFe(tipo) {
         for (let idx = 0; idx < nfeItensParseados.length; idx++) {
             const item = nfeItensParseados[idx];
             statusEl.textContent = `Processando item ${idx + 1} de ${nfeItensParseados.length}... Não feche esta janela.`;
+
+            if (item.avulso) {
+                // item avulso: não cria produto de catálogo nenhum -- só
+                // uma entrada (a compra em si) seguida de uma saída
+                // IMEDIATA (já consumido/usado), linkadas entre si. O
+                // destino (setor/evento/veículo) fica em branco de
+                // propósito -- "pendente de destino", pra decidir depois
+                const descricaoItemAvulso = (item.xProdOriginal || ('ITEM NF ' + item.cProd)).toUpperCase();
+                const entradaGerada = await chamarPost('registrarMovimentacao', {
+                    movimentacao: {
+                        data, descricaoAvulsa: descricaoItemAvulso, qtd: item.qtd, valorUnit: item.valorUnit,
+                        valorUnitOriginal: item.valorUnitOriginal, tipo: 'entrada',
+                        tag, evento,
+                        almoxarifadoId: item.almoxarifadoId,
+                        observacao: observacaoBase || `Importado da NF-e (item avulso)`,
+                        responsavel, projetoId: null, itemProjetoId: null,
+                        nfNumero: nfeDadosNota ? nfeDadosNota.nNF : '',
+                        fornecedorCnpj: nfeDadosNota ? nfeDadosNota.emitCnpj : '',
+                        fornecedorNome: nfeDadosNota ? nfeDadosNota.emitNome : '',
+                        estoqueNotaId
+                    }
+                });
+                await chamarPost('registrarMovimentacao', {
+                    movimentacao: {
+                        data, descricaoAvulsa: descricaoItemAvulso, qtd: item.qtd, valorUnit: item.valorUnit,
+                        tipo: 'saida',
+                        almoxarifadoId: item.almoxarifadoId,
+                        movimentacaoOrigemId: entradaGerada.id,
+                        observacao: 'Saída imediata (item avulso, sem cadastro) — pendente de destino (evento/setor/veículo)',
+                        responsavel, projetoId: null, itemProjetoId: null,
+                        estoqueNotaId
+                    }
+                });
+                continue;
+            }
+
             let produtoId = item.produtoVinculadoId;
             if (item.criarNovo || !produtoId) {
                 const criado = await chamarPost('salvarProduto', {
@@ -5382,7 +5471,7 @@ function construirPdfListaMovimentacoes(titulo, subtitulo, linhas, colunaExtra) 
 
     const corpo = linhas.map(l => [
         l.m.data,
-        l.prod ? l.prod.nome : ('#' + l.m.produtoId),
+        l.prod ? l.prod.nome : (l.m.descricaoAvulsa ? l.m.descricaoAvulsa + ' (avulso)' : '#' + l.m.produtoId),
         colunaExtra.getter(l.m) || '-',
         l.proj ? l.proj.descricao : '-',
         Number(l.m.qtd).toLocaleString('pt-BR'),
@@ -5409,7 +5498,7 @@ function construirDadosExcelMovimentacoes(linhas, colunaExtra) {
     const colunas = ['Data', 'Produto', colunaExtra.header, 'Projeto', 'Qtd', 'Valor Unit.', 'Subtotal', 'Responsável', 'Observação'];
     const dados = linhas.map(l => ({
         'Data': l.m.data,
-        'Produto': l.prod ? l.prod.nome : ('#' + l.m.produtoId),
+        'Produto': l.prod ? l.prod.nome : (l.m.descricaoAvulsa ? l.m.descricaoAvulsa + ' (avulso)' : '#' + l.m.produtoId),
         [colunaExtra.header]: colunaExtra.getter(l.m) || '',
         'Projeto': l.proj ? l.proj.descricao : '',
         'Qtd': l.m.qtd,
@@ -5665,6 +5754,7 @@ document.getElementById('movFiltroEventoBusca').addEventListener('input', () => 
 document.getElementById('btnLimparFiltrosMov').addEventListener('click', () => {
     movFiltroProdutoId = null;
     movFiltroEventoCodigo = null;
+    filtroPendentesDestinoAtivo = false;
     document.getElementById('movFiltroProdutoSelecionado').innerHTML = '';
     document.getElementById('movFiltroEventoSelecionado').innerHTML = '';
     document.getElementById('movFiltroProdutoBusca').value = '';
@@ -5674,7 +5764,26 @@ document.getElementById('btnLimparFiltrosMov').addEventListener('click', () => {
     buscarPainelMovimentacoes();
 });
 
-document.getElementById('btnAplicarFiltrosMov').addEventListener('click', buscarPainelMovimentacoes);
+document.getElementById('btnAplicarFiltrosMov').addEventListener('click', () => {
+    filtroPendentesDestinoAtivo = false;
+    buscarPainelMovimentacoes();
+});
+
+let filtroPendentesDestinoAtivo = false;
+document.getElementById('btnFiltrarPendentesDestino').addEventListener('click', () => {
+    // esse filtro é exclusivo -- não combina com produto/tag/evento
+    // (itens avulsos pendentes de destino nunca têm nenhum desses)
+    movFiltroProdutoId = null;
+    movFiltroEventoCodigo = null;
+    document.getElementById('movFiltroProdutoSelecionado').innerHTML = '';
+    document.getElementById('movFiltroEventoSelecionado').innerHTML = '';
+    document.getElementById('movFiltroProdutoBusca').value = '';
+    document.getElementById('movFiltroEventoBusca').value = '';
+    document.getElementById('movFiltroFornecedor').value = '';
+    document.getElementById('movFiltroTag').value = '';
+    filtroPendentesDestinoAtivo = true;
+    buscarPainelMovimentacoes();
+});
 
 let movGeralEmEdicaoId = null;
 
@@ -5817,17 +5926,19 @@ async function buscarPainelMovimentacoes() {
         produtoId: movFiltroProdutoId,
         tag: document.getElementById('movFiltroTag').value.trim(),
         evento: movFiltroEventoCodigo,
-        fornecedor: document.getElementById('movFiltroFornecedor').value.trim()
+        fornecedor: document.getElementById('movFiltroFornecedor').value.trim(),
+        pendentesDestino: filtroPendentesDestinoAtivo
     };
 
     try {
         const dados = await chamarGet('listarMovimentacoesFiltradas', filtros);
         const lista = (dados || []).map(m => ({
-            id: Number(m.id), data: formatarData(m.data), produtoId: Number(m.produto_id), tipo: m.tipo,
+            id: Number(m.id), data: formatarData(m.data), produtoId: m.produto_id != null ? Number(m.produto_id) : null, tipo: m.tipo,
             qtd: Number(m.qtd) || 0, valorUnit: Number(m.valor_unit) || 0, tag: m.tag || '', evento: m.evento || '',
             observacao: m.observacao || '', responsavel: m.responsavel || '', projetoId: m.projeto_id || null,
             nfNumero: m.nf_numero || '', fornecedorCnpj: m.fornecedor_cnpj || '', fornecedorNome: m.fornecedor_nome || '',
-            almoxarifadoId: m.almoxarifado_id != null ? Number(m.almoxarifado_id) : null
+            almoxarifadoId: m.almoxarifado_id != null ? Number(m.almoxarifado_id) : null,
+        descricaoAvulsa: m.descricao_avulsa || null
         }));
 
         corpo.innerHTML = '';
@@ -5840,7 +5951,7 @@ async function buscarPainelMovimentacoes() {
             tr.innerHTML = `
                 <td>${m.data}</td>
                 <td><span class="pill ${m.tipo === 'entrada' ? 'pill-entrada' : 'pill-saida'}">${m.tipo === 'entrada' ? 'Entrada' : 'Saída'}</span></td>
-                <td>${prod ? escapeHtml(prod.nome) : ('#' + m.produtoId)}</td>
+                <td>${prod ? escapeHtml(prod.nome) : (m.descricaoAvulsa ? escapeHtml(m.descricaoAvulsa) + ' <span class="pill" style="background:#FBEAE8; color:#C0392B; font-size:0.65rem;">avulso</span>' : ('#' + m.produtoId))}</td>
                 <td class="num">${Number(m.qtd).toLocaleString('pt-BR')}</td>
                 <td class="num">${formatarMoeda(m.valorUnit)}</td>
                 <td>${(() => { const a = (catalogosBaixa.almoxarifados || []).find(x => x.id === m.almoxarifadoId); return a ? escapeHtml(a.nome) : '-'; })()}</td>
@@ -6336,7 +6447,7 @@ function renderizarItensNota() {
         const temRateio = Math.abs(valorOriginal - Number(m.valor_unit)) > 0.005;
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${prod ? escapeHtml(prod.nome) : ('#' + m.produto_id)}</td>
+            <td>${prod ? escapeHtml(prod.nome) : (m.descricao_avulsa ? escapeHtml(m.descricao_avulsa) + ' (avulso)' : ('#' + m.produto_id))}</td>
             <td class="num">${Number(m.qtd).toLocaleString('pt-BR')}</td>
             <td class="num">${formatarMoeda(valorOriginal)}</td>
             <td class="num">${formatarMoeda(m.valor_unit)}${temRateio ? ' <span title="Já inclui rateio de desconto/frete" style="color:#8A5E12;">✓</span>' : ''}</td>
@@ -7153,7 +7264,7 @@ async function carregarItensJaLancadosReq(notaId) {
         const subtotal = Number(m.qtd) * Number(m.valor_unit);
         return `
             <tr>
-                <td>${prod ? escapeHtml(prod.nome) : '#' + m.produto_id}</td>
+                <td>${prod ? escapeHtml(prod.nome) : (m.descricao_avulsa ? escapeHtml(m.descricao_avulsa) + ' (avulso)' : '#' + m.produto_id)}</td>
                 <td class="num">${m.qtd}</td>
                 <td class="num">${formatarMoeda(m.valor_unit)}</td>
                 <td class="num">${formatarMoeda(subtotal)}</td>
@@ -7447,10 +7558,27 @@ let cadGenericoIdAtual = null;
 
 async function carregarCadastrosGerais() {
     catalogosBaixa = await chamarGet('listarCatalogosBaixa');
+    const podeGerenciarAlmoxarifado = ehAdministradorOuPrincipal();
+    document.getElementById('btnNovoAlmoxarifadoCad').style.display = podeGerenciarAlmoxarifado ? '' : 'none';
+    document.getElementById('avisoRestricaoAlmoxarifado').style.display = podeGerenciarAlmoxarifado ? 'none' : '';
+    renderizarTabelaCadAlmoxarifados(podeGerenciarAlmoxarifado);
     renderizarTabelaCadSetores();
     renderizarTabelaCadSubsetores();
     renderizarTabelaCadPlanoContas();
     renderizarTabelaCadEquipamentos();
+}
+
+function renderizarTabelaCadAlmoxarifados(podeGerenciar) {
+    document.getElementById('corpoCadAlmoxarifados').innerHTML = (catalogosBaixa.almoxarifados || []).map(a => `
+        <tr>
+            <td>${escapeHtml(a.nome)}</td>
+            <td class="center">${a.ativo ? '✅' : '—'}</td>
+            <td class="center">${podeGerenciar ? `<button class="btn btn-cinza btn-pequeno" data-editar-almoxarifado="${a.id}">✏️ Editar</button>` : '-'}</td>
+        </tr>
+    `).join('') || '<tr><td colspan="3" class="vazio">Nenhum almoxarifado cadastrado.</td></tr>';
+    document.querySelectorAll('[data-editar-almoxarifado]').forEach(btn => {
+        btn.addEventListener('click', () => abrirModalCadGenerico('almoxarifado', Number(btn.dataset.editarAlmoxarifado)));
+    });
 }
 
 function renderizarTabelaCadSetores() {
@@ -7529,10 +7657,15 @@ function abrirModalCadGenerico(tipo, id) {
     document.getElementById('campoCadSetorPai').style.display = 'none';
     document.getElementById('camposCadEquipamento').style.display = 'none';
 
-    const titulos = { setor: 'Setor', subsetor: 'Subsetor', planoContas: 'Plano de Contas', equipamento: 'Equipamento/Veículo' };
+    const titulos = { almoxarifado: 'Almoxarifado', setor: 'Setor', subsetor: 'Subsetor', planoContas: 'Plano de Contas', equipamento: 'Equipamento/Veículo' };
     document.getElementById('tituloCadGenerico').textContent = (id ? 'Editar ' : 'Novo ') + titulos[tipo];
 
-    if (tipo === 'setor') {
+    if (tipo === 'almoxarifado') {
+        document.getElementById('campoCadNome').style.display = '';
+        const item = id ? catalogosBaixa.almoxarifados.find(a => a.id === id) : null;
+        document.getElementById('cadGenericoNome').value = item ? item.nome : '';
+        document.getElementById('cadGenericoAtivo').value = item ? String(item.ativo) : 'true';
+    } else if (tipo === 'setor') {
         document.getElementById('campoCadNome').style.display = '';
         const item = id ? catalogosBaixa.setores.find(s => s.id === id) : null;
         document.getElementById('cadGenericoNome').value = item ? item.nome : '';
@@ -7569,6 +7702,7 @@ function abrirModalCadGenerico(tipo, id) {
     document.getElementById('modalCadGenerico').classList.add('aberto');
 }
 
+document.getElementById('btnNovoAlmoxarifadoCad').addEventListener('click', () => abrirModalCadGenerico('almoxarifado', null));
 document.getElementById('btnNovoSetorCad').addEventListener('click', () => abrirModalCadGenerico('setor', null));
 document.getElementById('btnNovoSubsetorCad').addEventListener('click', () => abrirModalCadGenerico('subsetor', null));
 document.getElementById('btnNovoPlanoContasCad').addEventListener('click', () => abrirModalCadGenerico('planoContas', null));
@@ -7585,7 +7719,11 @@ document.getElementById('btnSalvarCadGenerico').addEventListener('click', async 
     statusEl.className = '';
     statusEl.textContent = 'Salvando...';
     try {
-        if (cadGenericoTipoAtual === 'setor') {
+        if (cadGenericoTipoAtual === 'almoxarifado') {
+            const nome = document.getElementById('cadGenericoNome').value.trim();
+            if (!nome) throw new Error('Informe o nome do almoxarifado.');
+            await chamarPost('salvarAlmoxarifado', { id: cadGenericoIdAtual, nome, ativo });
+        } else if (cadGenericoTipoAtual === 'setor') {
             const nome = document.getElementById('cadGenericoNome').value.trim();
             if (!nome) throw new Error('Informe o nome do setor.');
             await chamarPost('salvarSetor', { id: cadGenericoIdAtual, nome, ativo });
@@ -7627,7 +7765,7 @@ document.getElementById('btnSalvarCadGenerico').addEventListener('click', async 
 document.getElementById('btnExcluirCadGenerico').addEventListener('click', async () => {
     if (!cadGenericoIdAtual) return;
     if (!confirm('Excluir esse registro? Não é possível desfazer.')) return;
-    const acoes = { setor: 'excluirSetor', subsetor: 'excluirSubsetor', planoContas: 'excluirPlanoContas', equipamento: 'excluirEquipamento' };
+    const acoes = { almoxarifado: 'excluirAlmoxarifado', setor: 'excluirSetor', subsetor: 'excluirSubsetor', planoContas: 'excluirPlanoContas', equipamento: 'excluirEquipamento' };
     try {
         await chamarPost(acoes[cadGenericoTipoAtual], { id: cadGenericoIdAtual });
         document.getElementById('modalCadGenerico').classList.remove('aberto');

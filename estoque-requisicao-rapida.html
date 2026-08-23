@@ -1219,16 +1219,22 @@ async function desfazerAtendimento(atendimentoId) {
     }
     if (!atendimentoAlvo) return;
 
-    if (!confirm(`Desfazer esse atendimento de ${atendimentoAlvo.qtd}? ${atendimentoAlvo.movimentacao_id ? 'O estoque será devolvido.' : ''}`)) return;
+    if (!confirm(`Desfazer esse atendimento de ${atendimentoAlvo.qtd}? ${atendimentoAlvo.movimentacao_id && itemAlvo.produto_id != null ? 'O estoque será devolvido.' : ''}`)) return;
 
     try {
-        if (atendimentoAlvo.movimentacao_id) {
-            // devolve o estoque (delta positivo) e apaga a movimentação
+        if (atendimentoAlvo.movimentacao_id && itemAlvo.produto_id != null) {
+            // devolve o estoque (delta positivo) -- só faz sentido pra
+            // produto real; item avulso nunca ajustou estoque nenhum
             const { error: eAjuste } = await sb.rpc('fabrica_ajustar_estoque', {
                 p_produto_id: itemAlvo.produto_id, p_delta: Number(atendimentoAlvo.qtd), p_almoxarifado_id: reqAlvo.almoxarifado_id
             });
             if (eAjuste) throw eAjuste;
+        }
 
+        if (atendimentoAlvo.movimentacao_id) {
+            // apaga a movimentação -- vale tanto pra produto real quanto
+            // pro item avulso (esse último só não teve ajuste de estoque
+            // nenhum acima, já que nunca existiu produto pra afetar)
             const { error: eDelMov } = await sb.from('estoque_movimentacoes').delete().eq('id', atendimentoAlvo.movimentacao_id);
             if (eDelMov) throw eDelMov;
         }
@@ -1295,13 +1301,14 @@ document.getElementById('btnConfirmarAtender').addEventListener('click', async (
     try {
         const ehServico = reqAlvo.tipo === 'servico_abastecimento';
         const ehMaterialComProdutoReal = !ehServico && itemAlvo.produto_id != null;
+        const ehMaterialAvulso = !ehServico && itemAlvo.produto_id == null;
         let movimentacaoIdGerada = null;
 
         if (qtd > 0 && ehMaterialComProdutoReal) {
             // registra a baixa de estoque de verdade, no almoxarifado certo,
             // usando o valor que o atendente escolheu (preço médio por
             // padrão, mas pode trocar) -- só faz sentido pra material com
-            // produto cadastrado; serviço e item avulso não mexem no estoque
+            // produto cadastrado; serviço não mexe no estoque
             const { data: movGerada, error: eMov } = await sb.from('estoque_movimentacoes').insert({
                 data: new Date().toISOString().slice(0, 10),
                 produto_id: itemAlvo.produto_id,
@@ -1323,6 +1330,28 @@ document.getElementById('btnConfirmarAtender').addEventListener('click', async (
                 p_produto_id: itemAlvo.produto_id, p_delta: -qtd, p_almoxarifado_id: reqAlvo.almoxarifado_id
             });
             if (eAjuste) throw eAjuste;
+        } else if (qtd > 0 && ehMaterialAvulso) {
+            // item avulso (sem cadastro): grava a movimentação só pra
+            // aparecer em Movimentações/relatórios (auditoria), mas NUNCA
+            // ajusta estoque de produto nenhum -- não existe produto de
+            // verdade pra afetar
+            const { data: movGerada, error: eMov } = await sb.from('estoque_movimentacoes').insert({
+                data: new Date().toISOString().slice(0, 10),
+                produto_id: null,
+                descricao_avulsa: itemAlvo.descricao_livre || 'Item avulso',
+                tipo: 'saida',
+                qtd: qtd,
+                valor_unit: valorUnit,
+                almoxarifado_id: reqAlvo.almoxarifado_id,
+                setor_id: reqAlvo.setor_id,
+                evento: reqAlvo.evento || '',
+                responsavel: reqAlvo.solicitante,
+                fornecedor_nome: 'Requisição Rápida',
+                observacao: 'Requisição rápida (item avulso, sem cadastro)' + (observacao ? ' — ' + observacao : ''),
+                unidade_negocio_id: meuPerfil.unidadeId
+            }).select().single();
+            if (eMov) throw eMov;
+            movimentacaoIdGerada = movGerada.id;
         }
 
         // grava esse atendimento no histórico (permite desfazer depois,
