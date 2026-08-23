@@ -151,6 +151,13 @@
     </div>
 
     <div class="conteudo-aba ativa" id="aba-nova">
+        <div class="cartao hidden" id="bannerModoEdicao" style="background:#FFF3E0; border-color:#F2A93B;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <strong style="color:var(--accent-ink);">✏️ Editando requisição já lançada — as alterações vão atualizar essa mesma requisição.</strong>
+                <button type="button" class="btn btn-cinza" id="btnCancelarEdicaoRequisicao" style="font-size:0.8rem; padding:6px 10px;">Cancelar edição</button>
+            </div>
+        </div>
+
         <div class="cartao" style="padding:10px;">
             <div style="display:flex; gap:8px;">
                 <button type="button" class="btn tipo-req-btn ativa" data-tipo-req="material" style="flex:1;">📦 Material</button>
@@ -178,6 +185,10 @@
                 <div class="campo">
                     <label>Solicitante</label>
                     <input type="text" id="campoSolicitante">
+                </div>
+                <div class="campo">
+                    <label>Nº requisição externa (opcional)</label>
+                    <input type="text" id="campoNumeroExterno" placeholder="Ex: nº da requisição em papel...">
                 </div>
             </div>
             <p class="subtitulo" style="margin-top:-6px;">* campos obrigatórios</p>
@@ -257,11 +268,14 @@
     <div class="conteudo-aba" id="aba-atender">
         <div class="cartao">
             <h2>Filtrar</h2>
-            <select id="filtroStatusAtender">
-                <option value="pendente">Pendentes</option>
-                <option value="atendida">Já atendidas</option>
-                <option value="">Todas</option>
-            </select>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+                <select id="filtroStatusAtender">
+                    <option value="pendente">Pendentes</option>
+                    <option value="atendida">Já atendidas</option>
+                    <option value="">Todas</option>
+                </select>
+                <input type="text" id="filtroNumeroExterno" placeholder="Buscar por nº de requisição externa..." style="flex:1; min-width:200px;">
+            </div>
         </div>
         <div id="listaRequisicoesAtender"></div>
         <div id="vazioRequisicoesAtender" class="vazio hidden">Nenhuma requisição encontrada.</div>
@@ -402,9 +416,10 @@ let setores = [];
 let eventos = [];
 let produtos = [];
 let saldosAlmoxarifado = [];
-let itensNovaReq = []; // [{produtoId, nome, un, qtd}] ou [{descricaoLivre, qtd}] pros avulsos
+let itensNovaReq = []; // [{produtoId, nome, un, qtd, idExistente, qtdAtendida}] ou [{descricaoLivre, qtd}] pros avulsos
 let tipoRequisicaoAtual = 'material';
-let itensServico = []; // [{equipamentoVeiculoId, nomeVeiculo, servicoDescricao, fornecedorRecomendado, qtd, unidadeMedida}]
+let itensServico = []; // [{equipamentoVeiculoId, nomeVeiculo, servicoDescricao, fornecedorRecomendado, qtd, unidadeMedida, idExistente, qtdAtendida}]
+let requisicaoEmEdicaoId = null;
 let veiculosEquipamentos = [];
 let fornecedoresRecomendados = [];
 let eventoSelecionado = null;
@@ -689,14 +704,19 @@ function renderizarItensNovaReq() {
     if (!itensNovaReq.length) { corpo.innerHTML = ''; vazio.style.display = 'block'; return; }
     vazio.style.display = 'none';
     corpo.innerHTML = itensNovaReq.map((item, idx) => {
+        const qtdAtendida = item.qtdAtendida || 0;
+        const jaAtendidoTexto = qtdAtendida > 0 ? `<div style="font-size:0.75em; color:var(--brand-2);">já atendido: ${qtdAtendida}</div>` : '';
+        const btnRemover = qtdAtendida > 0
+            ? `<span title="Não dá pra remover -- esse item já tem atendimento registrado" style="color:var(--muted); font-size:0.8em;">🔒</span>`
+            : `<button type="button" class="btn btn-remover" data-remover="${idx}">×</button>`;
         if (item.produtoId == null) {
             // item avulso, descrito na hora -- não existe no cadastro ainda
             return `
                 <tr>
                     <td>${escapeHtml(item.descricaoLivre)} <span class="pill" style="background:var(--danger-soft); color:var(--danger); font-size:0.65rem;">novo</span></td>
                     <td>-</td>
-                    <td><input type="number" min="0.01" step="0.01" value="${item.qtd}" data-idx="${idx}" class="input-qtd-nova-req"></td>
-                    <td><button type="button" class="btn btn-remover" data-remover="${idx}">×</button></td>
+                    <td><input type="number" min="${qtdAtendida > 0 ? qtdAtendida : 0.01}" step="0.01" value="${item.qtd}" data-idx="${idx}" class="input-qtd-nova-req">${jaAtendidoTexto}</td>
+                    <td>${btnRemover}</td>
                 </tr>`;
         }
         const saldo = almoxSelecionado ? saldoDoProdutoNoAlmoxarifado(item.produtoId, almoxSelecionado) : null;
@@ -705,12 +725,22 @@ function renderizarItensNovaReq() {
             <tr>
                 <td>${escapeHtml(item.nome)} <span style="color:var(--muted); font-size:0.8em;">(${escapeHtml(item.un)})</span></td>
                 <td>${disp}</td>
-                <td><input type="number" min="0.01" step="0.01" value="${item.qtd}" data-idx="${idx}" class="input-qtd-nova-req"></td>
-                <td><button type="button" class="btn btn-remover" data-remover="${idx}">×</button></td>
+                <td><input type="number" min="${qtdAtendida > 0 ? qtdAtendida : 0.01}" step="0.01" value="${item.qtd}" data-idx="${idx}" class="input-qtd-nova-req">${jaAtendidoTexto}</td>
+                <td>${btnRemover}</td>
             </tr>`;
     }).join('');
     corpo.querySelectorAll('.input-qtd-nova-req').forEach(inp => {
-        inp.addEventListener('change', () => { itensNovaReq[Number(inp.dataset.idx)].qtd = parseFloat(inp.value) || 0; });
+        inp.addEventListener('change', () => {
+            const item = itensNovaReq[Number(inp.dataset.idx)];
+            let novoValor = parseFloat(inp.value) || 0;
+            const qtdAtendida = item.qtdAtendida || 0;
+            if (novoValor < qtdAtendida) {
+                alert(`Não dá pra reduzir abaixo de ${qtdAtendida}, que já foi atendido.`);
+                novoValor = qtdAtendida;
+                inp.value = novoValor;
+            }
+            item.qtd = novoValor;
+        });
     });
     corpo.querySelectorAll('[data-remover]').forEach(btn => {
         btn.addEventListener('click', () => { itensNovaReq.splice(Number(btn.dataset.remover), 1); renderizarItensNovaReq(); });
@@ -786,15 +816,21 @@ function renderizarItensServico() {
     const vazio = document.getElementById('vazioItensServico');
     if (!itensServico.length) { corpo.innerHTML = ''; vazio.style.display = 'block'; return; }
     vazio.style.display = 'none';
-    corpo.innerHTML = itensServico.map((item, idx) => `
+    corpo.innerHTML = itensServico.map((item, idx) => {
+        const qtdAtendida = item.qtdAtendida || 0;
+        const btnRemover = qtdAtendida > 0
+            ? `<span title="Não dá pra remover -- esse item já tem atendimento registrado" style="color:var(--muted); font-size:0.8em;">🔒</span>`
+            : `<button type="button" class="btn btn-remover" data-remover-servico="${idx}">×</button>`;
+        return `
         <tr>
             <td>${item.nomeVeiculo ? escapeHtml(item.nomeVeiculo) : '-'}</td>
             <td>${escapeHtml(item.servicoDescricao)}</td>
             <td>${item.fornecedorRecomendado ? escapeHtml(item.fornecedorRecomendado) : '-'}</td>
-            <td>${item.qtd != null ? item.qtd + (item.unidadeMedida ? ' ' + escapeHtml(item.unidadeMedida) : '') : '-'}</td>
-            <td><button type="button" class="btn btn-remover" data-remover-servico="${idx}">×</button></td>
+            <td>${item.qtd != null ? item.qtd + (item.unidadeMedida ? ' ' + escapeHtml(item.unidadeMedida) : '') : '-'} ${qtdAtendida > 0 ? `<div style="font-size:0.75em; color:var(--brand-2);">já atendido: ${qtdAtendida}</div>` : ''}</td>
+            <td>${btnRemover}</td>
         </tr>
-    `).join('');
+    `;
+    }).join('');
     corpo.querySelectorAll('[data-remover-servico]').forEach(btn => {
         btn.addEventListener('click', () => { itensServico.splice(Number(btn.dataset.removerServico), 1); renderizarItensServico(); });
     });
@@ -929,6 +965,7 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
     const almoxarifadoId = document.getElementById('campoAlmoxarifado').value;
     const setorId = document.getElementById('campoSetor').value;
     const solicitante = document.getElementById('campoSolicitante').value.trim();
+    const numeroExterno = document.getElementById('campoNumeroExterno').value.trim();
     const listaItensAtual = tipoRequisicaoAtual === 'material' ? itensNovaReq : itensServico;
 
     if (!almoxarifadoId) { statusEl.className = 'status-msg status-erro'; statusEl.textContent = 'Escolha o almoxarifado.'; return; }
@@ -938,15 +975,82 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
     if (!listaItensAtual.length) { statusEl.className = 'status-msg status-erro'; statusEl.textContent = 'Adicione pelo menos um item.'; return; }
 
     const btn = document.getElementById('btnEnviarRequisicao');
-    btn.disabled = true; btn.textContent = 'Enviando...';
+    btn.disabled = true; btn.textContent = requisicaoEmEdicaoId ? 'Salvando...' : 'Enviando...';
 
     try {
+        if (requisicaoEmEdicaoId) {
+            // ---- modo edição: atualiza cabeçalho + itens da requisição existente ----
+            const { error: eUpd } = await sb.from('estoque_requisicoes_rapidas').update({
+                almoxarifado_id: Number(almoxarifadoId),
+                setor_id: setorId ? Number(setorId) : null,
+                evento: eventoSelecionado ? eventoSelecionado.codigo : null,
+                solicitante,
+                numero_externo: numeroExterno || null
+            }).eq('id', requisicaoEmEdicaoId);
+            if (eUpd) throw eUpd;
+
+            const listaAtual = tipoRequisicaoAtual === 'material' ? itensNovaReq : itensServico;
+            const idsExistentesNaLista = listaAtual.filter(i => i.idExistente).map(i => i.idExistente);
+
+            // descobre quais itens originais foram removidos da lista
+            // (pra apagar do banco -- só é permitido remover os que
+            // nunca foram atendidos, já garantido lá no formulário)
+            const reqOriginal = requisicoesAtender.find(r => r.id === requisicaoEmEdicaoId);
+            const itensOriginais = reqOriginal ? (reqOriginal.estoque_requisicoes_rapidas_itens || []) : [];
+            const idsRemovidos = itensOriginais.filter(io => !idsExistentesNaLista.includes(io.id)).map(io => io.id);
+            if (idsRemovidos.length) {
+                const { error: eDel } = await sb.from('estoque_requisicoes_rapidas_itens').delete().in('id', idsRemovidos);
+                if (eDel) throw eDel;
+            }
+
+            // atualiza os itens que já existiam, insere os novos
+            for (const item of listaAtual) {
+                const payload = tipoRequisicaoAtual === 'material'
+                    ? {
+                        requisicao_id: requisicaoEmEdicaoId,
+                        produto_id: item.produtoId,
+                        descricao_livre: item.produtoId == null ? item.descricaoLivre : null,
+                        qtd_solicitada: item.qtd
+                    }
+                    : {
+                        requisicao_id: requisicaoEmEdicaoId,
+                        equipamento_veiculo_id: item.equipamentoVeiculoId,
+                        fornecedor_recomendado: item.fornecedorRecomendado,
+                        servico_descricao: item.servicoDescricao,
+                        qtd_solicitada: item.qtd,
+                        unidade_medida: item.unidadeMedida
+                    };
+                const { error } = item.idExistente
+                    ? await sb.from('estoque_requisicoes_rapidas_itens').update(payload).eq('id', item.idExistente)
+                    : await sb.from('estoque_requisicoes_rapidas_itens').insert(payload);
+                if (error) throw error;
+            }
+
+            // se a requisição estava "atendida" mas ganhou pendência nova
+            // (item adicionado ou quantidade aumentada), volta pra "pendente"
+            const { data: itensAtualizados } = await sb.from('estoque_requisicoes_rapidas_itens').select('*').eq('requisicao_id', requisicaoEmEdicaoId);
+            const aindaCompleto = (itensAtualizados || []).every(i =>
+                i.qtd_solicitada == null ? Number(i.qtd_atendida || 0) > 0 : Number(i.qtd_atendida || 0) >= Number(i.qtd_solicitada)
+            );
+            await sb.from('estoque_requisicoes_rapidas').update({ status: aindaCompleto ? 'atendida' : 'pendente' }).eq('id', requisicaoEmEdicaoId);
+
+            cancelarEdicaoRequisicao();
+            statusEl.className = 'status-msg';
+            statusEl.style.color = 'var(--brand-2)';
+            statusEl.textContent = '✓ Requisição atualizada com sucesso!';
+            await carregarProdutosESaldos();
+            if (document.getElementById('aba-btn-atender').style.display !== 'none') await carregarRequisicoesAtender();
+            btn.disabled = false; btn.textContent = 'Enviar requisição';
+            return;
+        }
+
         const { data: req, error: e1 } = await sb.from('estoque_requisicoes_rapidas').insert({
             unidade_negocio_id: meuPerfil.unidadeId,
             almoxarifado_id: Number(almoxarifadoId),
             setor_id: setorId ? Number(setorId) : null,
             evento: eventoSelecionado ? eventoSelecionado.codigo : null,
             solicitante,
+            numero_externo: numeroExterno || null,
             tipo: tipoRequisicaoAtual
         }).select().single();
         if (e1) throw e1;
@@ -982,6 +1086,7 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
         document.getElementById('campoBuscaEvento').value = '';
         document.getElementById('eventoSelecionadoTexto').textContent = '';
         eventoSelecionado = null;
+        document.getElementById('campoNumeroExterno').value = '';
         salvarUltimaEscolha();
         statusEl.className = 'status-msg';
         statusEl.style.color = 'var(--brand-2)';
@@ -1003,14 +1108,21 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
 // ATENDER REQUISIÇÕES
 // ---------------------------------------------------------------
 document.getElementById('filtroStatusAtender').addEventListener('change', carregarRequisicoesAtender);
+let debounceFiltroNumeroExterno = null;
+document.getElementById('filtroNumeroExterno').addEventListener('input', () => {
+    clearTimeout(debounceFiltroNumeroExterno);
+    debounceFiltroNumeroExterno = setTimeout(carregarRequisicoesAtender, 400);
+});
 
 async function carregarRequisicoesAtender() {
     const status = document.getElementById('filtroStatusAtender').value;
+    const numeroExternoBusca = document.getElementById('filtroNumeroExterno').value.trim();
     let query = sb.from('estoque_requisicoes_rapidas')
         .select('*, estoque_requisicoes_rapidas_itens(*, estoque_requisicoes_rapidas_atendimentos(*))')
         .eq('unidade_negocio_id', meuPerfil.unidadeId)
         .order('created_at', { ascending: false });
     if (status) query = query.eq('status', status);
+    if (numeroExternoBusca) query = query.ilike('numero_externo', `%${numeroExternoBusca}%`);
     const { data, error } = await query;
     if (error) { console.error(error); return; }
     requisicoesAtender = data || [];
@@ -1074,6 +1186,8 @@ function renderizarRequisicoesAtender() {
                 </div>`;
         }).join('');
 
+        const temItemAtendivelEmMassa = itens.some(i => i.qtd_solicitada != null && (Number(i.qtd_solicitada) - Number(i.qtd_atendida || 0)) > 0);
+
         return `
             <div class="card-requisicao">
                 <div class="cabecalho-req">
@@ -1081,10 +1195,12 @@ function renderizarRequisicoesAtender() {
                         <strong>${escapeHtml(req.solicitante)}</strong>
                         <span class="pill ${req.status === 'atendida' ? 'pill-atendida' : 'pill-pendente'}">${req.status}</span>
                         <span class="pill" style="background:#EEF0F1; color:var(--muted);">${req.tipo === 'servico_abastecimento' ? '⛽ serviço' : '📦 material'}</span>
-                        <div class="meta">${almox ? escapeHtml(almox.nome) : '-'} ${setor ? '· ' + escapeHtml(setor.nome) : ''} ${req.evento ? '· evento ' + escapeHtml(req.evento) : ''}</div>
+                        <div class="meta">${almox ? escapeHtml(almox.nome) : '-'} ${setor ? '· ' + escapeHtml(setor.nome) : ''} ${req.evento ? '· evento ' + escapeHtml(req.evento) : ''} ${req.numero_externo ? '· nº externo ' + escapeHtml(req.numero_externo) : ''}</div>
                         <div class="meta">${new Date(req.created_at).toLocaleString('pt-BR')}</div>
                     </div>
-                    <div style="display:flex; gap:4px;">
+                    <div style="display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end;">
+                        <button type="button" class="btn btn-cinza" data-reabrir-req="${req.id}" style="font-size:0.75rem; padding:6px 10px;">✏️ Reabrir</button>
+                        ${temItemAtendivelEmMassa ? `<button type="button" class="btn btn-principal" data-atender-tudo="${req.id}" style="font-size:0.75rem; padding:6px 10px;">✅ Atender tudo</button>` : ''}
                         <button type="button" class="btn btn-cinza" data-imprimir-req="${req.id}" data-formato="a4" style="font-size:0.75rem; padding:6px 8px;">📄 A4</button>
                         <button type="button" class="btn btn-cinza" data-imprimir-req="${req.id}" data-formato="bobina" style="font-size:0.75rem; padding:6px 8px;">🧾 Bobina</button>
                     </div>
@@ -1101,6 +1217,14 @@ function renderizarRequisicoesAtender() {
         });
     });
 
+    lista.querySelectorAll('[data-reabrir-req]').forEach(el => {
+        el.addEventListener('click', () => reabrirRequisicaoParaEdicao(el.dataset.reabrirReq));
+    });
+
+    lista.querySelectorAll('[data-atender-tudo]').forEach(el => {
+        el.addEventListener('click', () => atenderTudoRequisicao(el.dataset.atenderTudo));
+    });
+
     lista.querySelectorAll('[data-atender-item]').forEach(el => {
         el.addEventListener('click', () => abrirModalAtenderItem(Number(el.dataset.atenderItem)));
     });
@@ -1108,6 +1232,152 @@ function renderizarRequisicoesAtender() {
     lista.querySelectorAll('[data-desfazer]').forEach(el => {
         el.addEventListener('click', () => desfazerAtendimento(Number(el.dataset.desfazer)));
     });
+}
+
+function reabrirRequisicaoParaEdicao(reqId) {
+    const req = requisicoesAtender.find(r => r.id === reqId);
+    if (!req) return;
+
+    requisicaoEmEdicaoId = reqId;
+
+    // muda pra aba "nova requisição"
+    document.querySelectorAll('.aba-btn').forEach(b => b.classList.remove('ativa'));
+    document.querySelectorAll('.conteudo-aba').forEach(c => c.classList.remove('ativa'));
+    document.querySelector('.aba-btn[data-aba="nova"]').classList.add('ativa');
+    document.getElementById('aba-nova').classList.add('ativa');
+
+    // alterna o tipo certo
+    tipoRequisicaoAtual = req.tipo;
+    document.querySelectorAll('.tipo-req-btn').forEach(b => b.classList.toggle('ativa', b.dataset.tipoReq === req.tipo));
+    document.getElementById('secaoMaterial').classList.toggle('hidden', req.tipo !== 'material');
+    document.getElementById('secaoServico').classList.toggle('hidden', req.tipo !== 'servico_abastecimento');
+
+    // preenche o cabeçalho
+    document.getElementById('campoAlmoxarifado').value = req.almoxarifado_id || '';
+    document.getElementById('campoSetor').value = req.setor_id || '';
+    document.getElementById('campoSolicitante').value = req.solicitante || '';
+    document.getElementById('campoNumeroExterno').value = req.numero_externo || '';
+    if (req.evento) {
+        eventoSelecionado = eventos.find(e => e.codigo === req.evento) || { codigo: req.evento, descricao: '' };
+        document.getElementById('eventoSelecionadoTexto').textContent = `Selecionado: ${eventoSelecionado.codigo}${eventoSelecionado.descricao ? ' — ' + eventoSelecionado.descricao : ''}`;
+    } else {
+        eventoSelecionado = null;
+        document.getElementById('eventoSelecionadoTexto').textContent = '';
+    }
+
+    // carrega os itens já existentes, marcando o que já foi atendido
+    // (pra não deixar reduzir abaixo disso nem remover)
+    const itens = req.estoque_requisicoes_rapidas_itens || [];
+    if (req.tipo === 'material') {
+        itensNovaReq = itens.map(i => {
+            if (i.produto_id != null) {
+                const prod = produtos.find(p => p.id === i.produto_id);
+                return { produtoId: i.produto_id, nome: prod ? prod.nome : '#' + i.produto_id, un: prod ? prod.un : '', qtd: Number(i.qtd_solicitada), idExistente: i.id, qtdAtendida: Number(i.qtd_atendida || 0) };
+            }
+            return { produtoId: null, descricaoLivre: i.descricao_livre, qtd: Number(i.qtd_solicitada), idExistente: i.id, qtdAtendida: Number(i.qtd_atendida || 0) };
+        });
+        itensServico = [];
+    } else {
+        itensServico = itens.map(i => {
+            const veiculo = veiculosEquipamentos.find(v => v.id === i.equipamento_veiculo_id);
+            return {
+                equipamentoVeiculoId: i.equipamento_veiculo_id, nomeVeiculo: veiculo ? veiculo.nome : '',
+                servicoDescricao: i.servico_descricao, fornecedorRecomendado: i.fornecedor_recomendado,
+                qtd: i.qtd_solicitada != null ? Number(i.qtd_solicitada) : null, unidadeMedida: i.unidade_medida,
+                idExistente: i.id, qtdAtendida: Number(i.qtd_atendida || 0)
+            };
+        });
+        itensNovaReq = [];
+    }
+    renderizarItensNovaReq();
+    renderizarItensServico();
+
+    document.getElementById('bannerModoEdicao').classList.remove('hidden');
+    document.getElementById('btnEnviarRequisicao').textContent = 'Salvar alterações';
+    document.getElementById('statusEnvioRequisicao').textContent = '';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function cancelarEdicaoRequisicao() {
+    requisicaoEmEdicaoId = null;
+    itensNovaReq = [];
+    itensServico = [];
+    renderizarItensNovaReq();
+    renderizarItensServico();
+    document.getElementById('campoAlmoxarifado').value = '';
+    document.getElementById('campoSetor').value = '';
+    document.getElementById('campoSolicitante').value = meuPerfil.email;
+    document.getElementById('campoNumeroExterno').value = '';
+    document.getElementById('campoBuscaEvento').value = '';
+    document.getElementById('eventoSelecionadoTexto').textContent = '';
+    eventoSelecionado = null;
+    document.getElementById('bannerModoEdicao').classList.add('hidden');
+    document.getElementById('btnEnviarRequisicao').textContent = 'Enviar requisição';
+    document.getElementById('statusEnvioRequisicao').textContent = '';
+}
+document.getElementById('btnCancelarEdicaoRequisicao').addEventListener('click', cancelarEdicaoRequisicao);
+
+async function atenderTudoRequisicao(reqId) {
+    const req = requisicoesAtender.find(r => r.id === reqId);
+    if (!req) return;
+    const itens = req.estoque_requisicoes_rapidas_itens || [];
+
+    // só entram no "atender tudo" os itens com quantidade definida e
+    // ainda pendente -- item sem quantidade (comum em serviço sem
+    // estimativa) não tem como saber "quanto" atender automaticamente,
+    // precisa ser feito individualmente
+    const itensParaAtender = itens.filter(i => i.qtd_solicitada != null && (Number(i.qtd_solicitada) - Number(i.qtd_atendida || 0)) > 0);
+    const itensSemQtdPendentes = itens.filter(i => i.qtd_solicitada == null && Number(i.qtd_atendida || 0) === 0);
+
+    if (!itensParaAtender.length) { alert('Não há itens com quantidade pendente pra atender em massa nessa requisição.'); return; }
+
+    const linhasResumo = itensParaAtender.map(i => {
+        const restante = Number(i.qtd_solicitada) - Number(i.qtd_atendida || 0);
+        const valorPadrao = calcularValorPadraoItem(i, req);
+        let nome;
+        if (req.tipo === 'servico_abastecimento') {
+            nome = i.servico_descricao || '-';
+        } else {
+            const prod = produtos.find(p => p.id === i.produto_id);
+            nome = i.produto_id != null ? (prod ? prod.nome : '#' + i.produto_id) : (i.descricao_livre + ' (novo)');
+        }
+        return `• ${nome}: ${restante}${i.unidade_medida ? ' ' + i.unidade_medida : ''}${valorPadrao ? ' × ' + formatarMoeda(valorPadrao) : ''}`;
+    }).join('\n');
+
+    const avisoSemQtd = itensSemQtdPendentes.length
+        ? `\n\n(${itensSemQtdPendentes.length} item(ns) sem quantidade definida vão continuar pendentes -- precisam ser atendidos individualmente)`
+        : '';
+
+    if (!confirm(`Atender TODOS os itens pendentes dessa requisição, usando os valores padrão?\n\n${linhasResumo}${avisoSemQtd}`)) return;
+
+    try {
+        for (const item of itensParaAtender) {
+            const restante = Number(item.qtd_solicitada) - Number(item.qtd_atendida || 0);
+            const valorPadrao = calcularValorPadraoItem(item, req);
+            await executarAtendimentoItem(item, req, {
+                qtd: restante, valorUnit: valorPadrao, observacao: '', km: null, dataProximaTroca: null,
+                gerarCompra: false, compraUrgente: false, compraQtd: 0
+            });
+        }
+
+        // depois de atender tudo que dava pra atender, confere se a
+        // requisição inteira ficou completa (considerando também os
+        // itens sem quantidade definida, que só contam se já tinham
+        // sido atendidos individualmente antes)
+        const tudoCompleto = itens.every(i => {
+            if (itensParaAtender.some(x => x.id === i.id)) return true; // acabou de ser atendido agora
+            return i.qtd_solicitada == null ? Number(i.qtd_atendida || 0) > 0 : Number(i.qtd_atendida || 0) >= Number(i.qtd_solicitada);
+        });
+        if (tudoCompleto) {
+            await sb.from('estoque_requisicoes_rapidas').update({ status: 'atendida' }).eq('id', reqId);
+        }
+
+        await carregarProdutosESaldos();
+        await carregarRequisicoesAtender();
+    } catch (erro) {
+        alert('Erro ao atender em massa: ' + erro.message);
+        await carregarRequisicoesAtender();
+    }
 }
 
 function abrirModalAtenderItem(itemId) {
@@ -1273,6 +1543,131 @@ document.getElementById('btnCancelarAtender').addEventListener('click', () => {
     document.getElementById('modal-atender-item').classList.remove('aberto');
 });
 
+// ---------------------------------------------------------------
+// LÓGICA CENTRAL DE ATENDIMENTO -- usada tanto pelo atendimento
+// individual quanto pelo "atender tudo" da requisição inteira, pra
+// nunca duplicar a baixa de estoque em dois lugares diferentes
+// ---------------------------------------------------------------
+async function executarAtendimentoItem(itemAlvo, reqAlvo, opcoes) {
+    const { qtd, valorUnit, observacao, km, dataProximaTroca, gerarCompra, compraUrgente, compraQtd } = opcoes;
+    const ehServico = reqAlvo.tipo === 'servico_abastecimento';
+    const ehMaterialComProdutoReal = !ehServico && itemAlvo.produto_id != null;
+    const ehMaterialAvulso = !ehServico && itemAlvo.produto_id == null;
+    let movimentacaoIdGerada = null;
+
+    if (qtd > 0 && ehMaterialComProdutoReal) {
+        // registra a baixa de estoque de verdade, no almoxarifado certo,
+        // usando o valor escolhido (preço médio por padrão, mas pode
+        // trocar) -- só faz sentido pra material com produto cadastrado;
+        // serviço não mexe no estoque
+        const { data: movGerada, error: eMov } = await sb.from('estoque_movimentacoes').insert({
+            data: new Date().toISOString().slice(0, 10),
+            produto_id: itemAlvo.produto_id,
+            tipo: 'saida',
+            qtd: qtd,
+            valor_unit: valorUnit,
+            almoxarifado_id: reqAlvo.almoxarifado_id,
+            setor_id: reqAlvo.setor_id,
+            evento: reqAlvo.evento || '',
+            responsavel: reqAlvo.solicitante,
+            fornecedor_nome: 'Requisição Rápida',
+            observacao: 'Requisição rápida' + (observacao ? ' — ' + observacao : ''),
+            unidade_negocio_id: meuPerfil.unidadeId
+        }).select().single();
+        if (eMov) throw eMov;
+        movimentacaoIdGerada = movGerada.id;
+
+        const { error: eAjuste } = await sb.rpc('fabrica_ajustar_estoque', {
+            p_produto_id: itemAlvo.produto_id, p_delta: -qtd, p_almoxarifado_id: reqAlvo.almoxarifado_id
+        });
+        if (eAjuste) throw eAjuste;
+    } else if (qtd > 0 && ehMaterialAvulso) {
+        // item avulso (sem cadastro): grava a movimentação só pra
+        // aparecer em Movimentações/relatórios (auditoria), mas NUNCA
+        // ajusta estoque de produto nenhum -- não existe produto de
+        // verdade pra afetar
+        const { data: movGerada, error: eMov } = await sb.from('estoque_movimentacoes').insert({
+            data: new Date().toISOString().slice(0, 10),
+            produto_id: null,
+            descricao_avulsa: itemAlvo.descricao_livre || 'Item avulso',
+            tipo: 'saida',
+            qtd: qtd,
+            valor_unit: valorUnit,
+            almoxarifado_id: reqAlvo.almoxarifado_id,
+            setor_id: reqAlvo.setor_id,
+            evento: reqAlvo.evento || '',
+            responsavel: reqAlvo.solicitante,
+            fornecedor_nome: 'Requisição Rápida',
+            observacao: 'Requisição rápida (item avulso, sem cadastro)' + (observacao ? ' — ' + observacao : ''),
+            unidade_negocio_id: meuPerfil.unidadeId
+        }).select().single();
+        if (eMov) throw eMov;
+        movimentacaoIdGerada = movGerada.id;
+    }
+
+    // grava esse atendimento no histórico (permite desfazer depois,
+    // em vez de só acumular um número que não dá pra reverter)
+    const { error: eHist } = await sb.from('estoque_requisicoes_rapidas_atendimentos').insert({
+        item_id: itemAlvo.id,
+        qtd: qtd,
+        valor_unitario: valorUnit || null,
+        km_registrado: ehServico ? km : null,
+        data_proxima_troca: ehServico ? dataProximaTroca : null,
+        observacao: observacao || null,
+        atendido_por: meuPerfil.nomeAtendente,
+        movimentacao_id: movimentacaoIdGerada
+    });
+    if (eHist) throw eHist;
+
+    const novaQtdAtendida = Number(itemAlvo.qtd_atendida || 0) + qtd;
+    const { error: eItem } = await sb.from('estoque_requisicoes_rapidas_itens')
+        .update({ qtd_atendida: novaQtdAtendida, observacao: observacao || null })
+        .eq('id', itemAlvo.id);
+    if (eItem) throw eItem;
+
+    // gera a solicitação de compra pro que não foi atendido, se marcado
+    if (gerarCompra) {
+        const setor = setores.find(s => s.id === reqAlvo.setor_id);
+        const veiculo = ehServico ? veiculosEquipamentos.find(v => v.id === itemAlvo.equipamento_veiculo_id) : null;
+        const nomeItem = ehServico
+            ? (itemAlvo.servico_descricao || '')
+            : (itemAlvo.produto_id != null ? (produtos.find(p => p.id === itemAlvo.produto_id)?.nome || '#' + itemAlvo.produto_id) : (itemAlvo.descricao_livre || ''));
+
+        const { data: novaSolic, error: eCompra } = await sb.from('compras_solicitacoes').insert({
+            unidade_negocio_id: meuPerfil.unidadeId,
+            urgente: compraUrgente,
+            setor: setor ? setor.nome : null,
+            solicitante: meuPerfil.nomeAtendente,
+            veiculo_placa: veiculo ? (veiculo.placa || null) : null,
+            descricao_necessidade: `${nomeItem} — reposição de estoque (via requisição rápida de ${reqAlvo.solicitante})`,
+            justificativa: observacao || null,
+            forma_aquisicao: 'cotacao_local'
+        }).select().single();
+        if (eCompra) throw eCompra;
+
+        const { error: eCompraItem } = await sb.from('compras_itens').insert({
+            solicitacao_id: novaSolic.id,
+            item: nomeItem,
+            quantidade: compraQtd,
+            valor_unitario: valorUnit || null,
+            subtotal: valorUnit ? compraQtd * valorUnit : null
+        });
+        if (eCompraItem) throw eCompraItem;
+    }
+
+    return novaQtdAtendida;
+}
+
+// calcula o valor padrão (mesma lógica do modal individual), reaproveitado
+// pelo "atender tudo"
+function calcularValorPadraoItem(itemAlvo, reqAlvo) {
+    const ehServico = reqAlvo.tipo === 'servico_abastecimento';
+    if (ehServico || itemAlvo.produto_id == null) return 0; // serviço/avulso não tem preço médio pra sugerir
+    const prod = produtos.find(p => p.id === itemAlvo.produto_id);
+    const saldo = saldoDoProdutoNoAlmoxarifado(itemAlvo.produto_id, reqAlvo.almoxarifado_id);
+    return (saldo && saldo.precoMedio) || (prod && prod.precoMedio) || (prod && prod.valor) || 0;
+}
+
 document.getElementById('btnConfirmarAtender').addEventListener('click', async () => {
     const statusEl = document.getElementById('statusAtenderItem');
     statusEl.textContent = '';
@@ -1299,110 +1694,9 @@ document.getElementById('btnConfirmarAtender').addEventListener('click', async (
     btn.disabled = true; btn.textContent = 'Salvando...';
 
     try {
-        const ehServico = reqAlvo.tipo === 'servico_abastecimento';
-        const ehMaterialComProdutoReal = !ehServico && itemAlvo.produto_id != null;
-        const ehMaterialAvulso = !ehServico && itemAlvo.produto_id == null;
-        let movimentacaoIdGerada = null;
-
-        if (qtd > 0 && ehMaterialComProdutoReal) {
-            // registra a baixa de estoque de verdade, no almoxarifado certo,
-            // usando o valor que o atendente escolheu (preço médio por
-            // padrão, mas pode trocar) -- só faz sentido pra material com
-            // produto cadastrado; serviço não mexe no estoque
-            const { data: movGerada, error: eMov } = await sb.from('estoque_movimentacoes').insert({
-                data: new Date().toISOString().slice(0, 10),
-                produto_id: itemAlvo.produto_id,
-                tipo: 'saida',
-                qtd: qtd,
-                valor_unit: valorUnit,
-                almoxarifado_id: reqAlvo.almoxarifado_id,
-                setor_id: reqAlvo.setor_id,
-                evento: reqAlvo.evento || '',
-                responsavel: reqAlvo.solicitante,
-                fornecedor_nome: 'Requisição Rápida',
-                observacao: 'Requisição rápida' + (observacao ? ' — ' + observacao : ''),
-                unidade_negocio_id: meuPerfil.unidadeId
-            }).select().single();
-            if (eMov) throw eMov;
-            movimentacaoIdGerada = movGerada.id;
-
-            const { error: eAjuste } = await sb.rpc('fabrica_ajustar_estoque', {
-                p_produto_id: itemAlvo.produto_id, p_delta: -qtd, p_almoxarifado_id: reqAlvo.almoxarifado_id
-            });
-            if (eAjuste) throw eAjuste;
-        } else if (qtd > 0 && ehMaterialAvulso) {
-            // item avulso (sem cadastro): grava a movimentação só pra
-            // aparecer em Movimentações/relatórios (auditoria), mas NUNCA
-            // ajusta estoque de produto nenhum -- não existe produto de
-            // verdade pra afetar
-            const { data: movGerada, error: eMov } = await sb.from('estoque_movimentacoes').insert({
-                data: new Date().toISOString().slice(0, 10),
-                produto_id: null,
-                descricao_avulsa: itemAlvo.descricao_livre || 'Item avulso',
-                tipo: 'saida',
-                qtd: qtd,
-                valor_unit: valorUnit,
-                almoxarifado_id: reqAlvo.almoxarifado_id,
-                setor_id: reqAlvo.setor_id,
-                evento: reqAlvo.evento || '',
-                responsavel: reqAlvo.solicitante,
-                fornecedor_nome: 'Requisição Rápida',
-                observacao: 'Requisição rápida (item avulso, sem cadastro)' + (observacao ? ' — ' + observacao : ''),
-                unidade_negocio_id: meuPerfil.unidadeId
-            }).select().single();
-            if (eMov) throw eMov;
-            movimentacaoIdGerada = movGerada.id;
-        }
-
-        // grava esse atendimento no histórico (permite desfazer depois,
-        // em vez de só acumular um número que não dá pra reverter)
-        const { error: eHist } = await sb.from('estoque_requisicoes_rapidas_atendimentos').insert({
-            item_id: itemAlvo.id,
-            qtd: qtd,
-            valor_unitario: valorUnit || null,
-            km_registrado: ehServico ? km : null,
-            data_proxima_troca: ehServico ? dataProximaTroca : null,
-            observacao: observacao || null,
-            atendido_por: meuPerfil.nomeAtendente,
-            movimentacao_id: movimentacaoIdGerada
+        const novaQtdAtendida = await executarAtendimentoItem(itemAlvo, reqAlvo, {
+            qtd, valorUnit, observacao, km, dataProximaTroca, gerarCompra, compraUrgente, compraQtd
         });
-        if (eHist) throw eHist;
-
-        const novaQtdAtendida = Number(itemAlvo.qtd_atendida || 0) + qtd;
-        const { error: eItem } = await sb.from('estoque_requisicoes_rapidas_itens')
-            .update({ qtd_atendida: novaQtdAtendida, observacao: observacao || null })
-            .eq('id', itemAlvo.id);
-        if (eItem) throw eItem;
-
-        // gera a solicitação de compra pro que não foi atendido, se marcado
-        if (gerarCompra) {
-            const setor = setores.find(s => s.id === reqAlvo.setor_id);
-            const veiculo = ehServico ? veiculosEquipamentos.find(v => v.id === itemAlvo.equipamento_veiculo_id) : null;
-            const nomeItem = ehServico
-                ? (itemAlvo.servico_descricao || '')
-                : (itemAlvo.produto_id != null ? (produtos.find(p => p.id === itemAlvo.produto_id)?.nome || '#' + itemAlvo.produto_id) : (itemAlvo.descricao_livre || ''));
-
-            const { data: novaSolic, error: eCompra } = await sb.from('compras_solicitacoes').insert({
-                unidade_negocio_id: meuPerfil.unidadeId,
-                urgente: compraUrgente,
-                setor: setor ? setor.nome : null,
-                solicitante: meuPerfil.nomeAtendente,
-                veiculo_placa: veiculo ? (veiculo.placa || null) : null,
-                descricao_necessidade: `${nomeItem} — reposição de estoque (via requisição rápida de ${reqAlvo.solicitante})`,
-                justificativa: observacao || null,
-                forma_aquisicao: 'cotacao_local'
-            }).select().single();
-            if (eCompra) throw eCompra;
-
-            const { error: eCompraItem } = await sb.from('compras_itens').insert({
-                solicitacao_id: novaSolic.id,
-                item: nomeItem,
-                quantidade: compraQtd,
-                valor_unitario: valorUnit || null,
-                subtotal: valorUnit ? compraQtd * valorUnit : null
-            });
-            if (eCompraItem) throw eCompraItem;
-        }
 
         // se todos os itens da requisição já estão completos, marca a
         // requisição inteira como atendida
@@ -1493,6 +1787,7 @@ async function construirPdfRequisicao(req, itens, formato) {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(fonteBase);
     const linhasCabecalho = [
         `Solicitante: ${req.solicitante}`,
+        req.numero_externo ? `Nº requisição externa: ${req.numero_externo}` : null,
         `Almoxarifado: ${almox ? almox.nome : '-'}`,
         setor ? `Setor: ${setor.nome}` : null,
         req.evento ? `Evento: ${req.evento}` : null,
