@@ -484,7 +484,18 @@
             <div class="campo"><label>Unidade</label><input type="text" id="npUn" value="UN"></div>
             <div class="campo"><label>Valor unitário (R$)</label><input type="number" step="0.01" id="npValor"></div>
             <div class="campo"><label>Estoque inicial</label><input type="number" step="0.01" id="npEstoque" value="0"></div>
-            <div class="campo"><label>Grupo</label><input type="number" id="npGrupo" value="1"></div>
+            <div class="campo" style="position:relative;">
+                <label>Grupo</label>
+                <input type="text" id="npGrupoBusca" placeholder="Buscar grupo..." autocomplete="off">
+                <div id="npGrupoResultados" class="dropdown-busca-evento"></div>
+                <p class="subtitulo" id="npGrupoSelecionado" style="margin-top:4px;"></p>
+            </div>
+            <div class="campo" style="position:relative;">
+                <label>Almoxarifado</label>
+                <input type="text" id="npAlmoxBusca" placeholder="Buscar almoxarifado..." autocomplete="off">
+                <div id="npAlmoxResultados" class="dropdown-busca-evento"></div>
+                <p class="subtitulo" id="npAlmoxSelecionado" style="margin-top:4px;"></p>
+            </div>
         </div>
         <div style="margin-top:10px;">
             <button class="btn btn-verde" id="btnSalvarProduto">Salvar produto</button>
@@ -1080,14 +1091,32 @@
         <p class="subtitulo" style="margin-top:4px;">Obrigatório preencher se tem estoque inicial, pra "Reprocessar Estoque" (aba Relatórios) funcionar certo nesse produto.</p>
 
         <div class="grade col2" style="margin-top:10px;">
-            <div class="campo"><label>Grupo</label><input type="number" id="editProdutoGrupo"></div>
-            <div class="campo"><label>Almoxarifado</label><input type="number" id="editProdutoAlmox"></div>
+            <div class="campo" style="position:relative;">
+                <label>Grupo</label>
+                <input type="text" id="editProdutoGrupoBusca" placeholder="Buscar grupo..." autocomplete="off">
+                <div id="editProdutoGrupoResultados" class="dropdown-busca-evento"></div>
+                <p class="subtitulo" id="editProdutoGrupoSelecionado" style="margin-top:4px;"></p>
+            </div>
+            <div class="campo" style="position:relative;">
+                <label>Almoxarifado</label>
+                <input type="text" id="editProdutoAlmoxBusca" placeholder="Buscar almoxarifado..." autocomplete="off">
+                <div id="editProdutoAlmoxResultados" class="dropdown-busca-evento"></div>
+                <p class="subtitulo" id="editProdutoAlmoxSelecionado" style="margin-top:4px;"></p>
+            </div>
         </div>
 
         <div class="campo" style="margin-top:10px; background:#FFF8E1; border:1px solid #F2A93B; border-radius:8px; padding:10px;">
             <label>Preço médio — correção manual (R$)</label>
             <input type="number" step="0.01" id="editProdutoPrecoMedio">
             <p class="subtitulo" style="margin-top:4px; margin-bottom:0;">Normalmente calculado sozinho a cada entrada — só mexe aqui se precisar corrigir um valor que ficou errado por algum motivo.</p>
+            <button type="button" class="btn btn-cinza btn-pequeno" id="btnReprocessarEsteProduto" style="margin-top:8px;">🔄 Reprocessar só este produto (recalcula do histórico de verdade)</button>
+            <p class="subtitulo" id="statusReprocessarEsteProduto" style="margin-top:6px; margin-bottom:0;"></p>
+        </div>
+
+        <div class="campo" style="margin-top:10px; background:#FBEAE8; border:1px solid #C0392B; border-radius:8px; padding:10px;">
+            <label>Ajustes de estoque já lançados nesse produto</label>
+            <p class="subtitulo" style="margin-top:2px;">Só ajustes de estoque podem ser excluídos por aqui (nunca entradas de nota/XML). Excluir devolve a quantidade e fica registrado na auditoria.</p>
+            <div id="listaAjustesEstoqueProduto" style="margin-top:8px;"></div>
         </div>
 
         <div class="campo" id="campoResponsavelAjuste" style="margin-top:10px; display:none;">
@@ -1824,22 +1853,24 @@ async function chamarGet(acao, filtros) {
         return todosSaldos;
     }
     if (acao === 'listarCatalogosBaixa') {
-        const [setores, subsetores, veiculos, planoContas, almoxarifados] = await Promise.all([
+        const [setores, subsetores, veiculos, planoContas, almoxarifados, grupos] = await Promise.all([
             sb.from('unidade_setores').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome'),
             sb.from('unidade_subsetores').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome'),
             sb.from('unidade_equipamentos_veiculos').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome'),
             sb.from('unidade_plano_de_contas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('codigo'),
-            sb.from('unidade_almoxarifados').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome')
+            sb.from('unidade_almoxarifados').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome'),
+            sb.from('unidade_grupos_produtos').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome')
         ]);
         if (setores.error) throw setores.error;
         if (subsetores.error) throw subsetores.error;
         if (veiculos.error) throw veiculos.error;
         if (planoContas.error) throw planoContas.error;
         if (almoxarifados.error) throw almoxarifados.error;
+        if (grupos.error) throw grupos.error;
         return {
             setores: setores.data || [], subsetores: subsetores.data || [],
             veiculos: veiculos.data || [], planoContas: planoContas.data || [],
-            almoxarifados: almoxarifados.data || []
+            almoxarifados: almoxarifados.data || [], grupos: grupos.data || []
         };
     }
     if (acao === 'somaBaixadoPorOrigem') {
@@ -1906,8 +1937,10 @@ async function chamarPost(acao, d) {
     if (acao === 'salvarProduto') {
         const p = d.produto;
         const registro = {
-            nome: p.nome, un: p.un, valor: p.valor, grupo: p.grupo,
+            nome: p.nome, un: p.un, valor: p.valor, grupo: p.grupo || 1,
+            grupo_id: p.grupoId || null,
             estoque_inicial: p.estoqueInicial, estoque: p.estoque, almox: p.almox || 1,
+            almoxarifado_padrao_id: p.almoxarifadoPadraoId || null,
             codigo_externo: p.codigoExterno || null,
             valor_estoque_inicial: p.valorEstoqueInicial,
             preco_medio: p.precoMedio,
@@ -1944,22 +1977,31 @@ async function chamarPost(acao, d) {
             almoxarifado: m.almoxarifado || 1,
             almoxarifado_id: m.almoxarifadoId || null,
             movimentacao_origem_id: m.movimentacaoOrigemId || null,
+            // por padrão toda entrada afeta preço médio (é uma compra de
+            // verdade) -- só fica false quando explicitamente marcado
+            // (ex: ajuste manual de estoque, que só corrige quantidade)
+            afeta_preco_medio: m.afetaPrecoMedio !== false,
             unidade_negocio_id: meuPerfil.unidadeId
         }).select().single();
         if (e1) throw e1;
         // item avulso (sem produto de catálogo) nunca ajusta estoque de
         // produto nenhum -- não existe produto de verdade pra afetar
         if (m.produtoId) {
-            if (m.tipo === 'entrada') {
-                // entrada: além de somar no estoque, recalcula preço da última compra e preço médio
+            if (m.tipo === 'entrada' && m.afetaPrecoMedio !== false) {
+                // entrada de verdade (nota/XML): além de somar no
+                // estoque, recalcula preço da última compra e preço médio
                 const { error: e2 } = await sb.rpc('fabrica_registrar_entrada_precos', {
                     p_produto_id: m.produtoId, p_qtd: Number(m.qtd), p_valor_unit: Number(m.valorUnit),
                     p_almoxarifado_id: m.almoxarifadoId || null
                 });
                 if (e2) throw e2;
             } else {
+                // saída, OU entrada marcada como "não afeta preço médio"
+                // (ajuste manual de estoque) -- só mexe na quantidade,
+                // preço médio fica intocado
+                const delta = m.tipo === 'entrada' ? Number(m.qtd) : -Number(m.qtd);
                 const { error: e2 } = await sb.rpc('fabrica_ajustar_estoque', {
-                    p_produto_id: m.produtoId, p_delta: -Number(m.qtd), p_almoxarifado_id: m.almoxarifadoId || null
+                    p_produto_id: m.produtoId, p_delta: delta, p_almoxarifado_id: m.almoxarifadoId || null
                 });
                 if (e2) throw e2;
             }
@@ -2257,9 +2299,11 @@ async function carregarProdutos() {
         un: String(p.un || 'UN'),
         valor: Number(p.valor) || 0,
         grupo: Number(p.grupo) || 1,
+        grupoId: p.grupo_id != null ? Number(p.grupo_id) : null,
         estoqueInicial: Number(p.estoque_inicial) || 0,
         estoque: Number(p.estoque) || 0,
         almox: Number(p.almox) || 1,
+        almoxarifadoPadraoId: p.almoxarifado_padrao_id != null ? Number(p.almoxarifado_padrao_id) : null,
         precoUltimaCompra: p.preco_ultima_compra != null ? Number(p.preco_ultima_compra) : null,
         precoMedio: p.preco_medio != null ? Number(p.preco_medio) : null,
         valorEstoqueInicial: p.valor_estoque_inicial != null ? Number(p.valor_estoque_inicial) : null
@@ -2469,8 +2513,10 @@ function renderizarTabelaEstoque(lista) {
 }
 
 let produtoIdEmEdicao = null;
+let grupoSelecionadoEditProduto = null;
+let almoxarifadoSelecionadoEditProduto = null;
 
-function editarProdutoPrompt(id) {
+async function editarProdutoPrompt(id) {
     const p = produtos.find(x => x.id === id);
     if (!p) return;
     produtoIdEmEdicao = id;
@@ -2483,14 +2529,190 @@ function editarProdutoPrompt(id) {
     document.getElementById('editProdutoEstoqueInicial').value = p.estoqueInicial ?? 0;
     document.getElementById('editProdutoValorEstoqueInicial').value = p.valorEstoqueInicial ?? '';
     document.getElementById('editProdutoPrecoMedio').value = p.precoMedio ?? '';
-    document.getElementById('editProdutoGrupo').value = p.grupo ?? 1;
-    document.getElementById('editProdutoAlmox').value = p.almox ?? 1;
+
+    if (!catalogosBaixa.grupos || !catalogosBaixa.grupos.length || !catalogosBaixa.almoxarifados || !catalogosBaixa.almoxarifados.length) {
+        catalogosBaixa = await chamarGet('listarCatalogosBaixa');
+    }
+
+    // Grupo: parte do que já está gravado nesse produto
+    grupoSelecionadoEditProduto = p.grupoId != null
+        ? (catalogosBaixa.grupos || []).find(g => g.id === p.grupoId)
+        : null;
+    document.getElementById('editProdutoGrupoBusca').value = '';
+    document.getElementById('editProdutoGrupoSelecionado').textContent = grupoSelecionadoEditProduto ? `Selecionado: ${grupoSelecionadoEditProduto.nome}` : '';
+
+    // Almoxarifado: sempre parte do "Almoxarifado de trabalho" já
+    // escolhido (o principal da sessão) -- ainda dá pra buscar e
+    // trocar, mas já vem preenchido sem precisar escolher de novo.
+    // Se esse produto já tinha um almoxarifado padrão gravado e
+    // nenhum "de trabalho" está selecionado agora, usa o que já tinha.
+    almoxarifadoSelecionadoEditProduto = almoxarifadoTrabalho
+        ? (catalogosBaixa.almoxarifados || []).find(a => a.id === almoxarifadoTrabalho)
+        : (p.almoxarifadoPadraoId != null ? (catalogosBaixa.almoxarifados || []).find(a => a.id === p.almoxarifadoPadraoId) : null);
+    document.getElementById('editProdutoAlmoxBusca').value = '';
+    document.getElementById('editProdutoAlmoxSelecionado').textContent = almoxarifadoSelecionadoEditProduto ? `Selecionado: ${almoxarifadoSelecionadoEditProduto.nome}` : '';
+
     document.getElementById('editProdutoResponsavelAjuste').value = '';
     document.getElementById('campoResponsavelAjuste').style.display = 'none';
     document.getElementById('avisoAjusteEstoque').style.display = 'none';
     document.getElementById('statusEditarProduto').textContent = '';
     document.getElementById('modalEditarProduto').classList.add('aberto');
+    carregarAjustesEstoqueProduto(id);
 }
+
+// busca simples pra listas pequenas de catálogo (grupo, almoxarifado)
+// -- mesmo padrão visual das outras buscas do sistema, só mais
+// direto (não precisa backend, filtra a lista já carregada)
+function configurarBuscaCatalogoSimples(idBusca, idResultados, getLista, aoSelecionar) {
+    const inputBusca = document.getElementById(idBusca);
+    const elResultados = document.getElementById(idResultados);
+    inputBusca.addEventListener('input', () => {
+        const termo = inputBusca.value.trim().toUpperCase();
+        if (!termo) { elResultados.classList.remove('aberto'); elResultados.innerHTML = ''; return; }
+        const lista = getLista().filter(item => item.nome.toUpperCase().includes(termo));
+        elResultados.innerHTML = lista.length
+            ? ''
+            : '<div class="item-resultado">Nenhum resultado encontrado.</div>';
+        elResultados.classList.add('aberto');
+        lista.forEach(item => {
+            const div = document.createElement('div');
+            div.className = 'item-resultado';
+            div.style.cursor = 'pointer';
+            div.textContent = item.nome;
+            div.addEventListener('click', () => {
+                elResultados.classList.remove('aberto');
+                elResultados.innerHTML = '';
+                inputBusca.value = '';
+                aoSelecionar(item);
+            });
+            elResultados.appendChild(div);
+        });
+    });
+    document.addEventListener('click', (e) => {
+        if (e.target !== inputBusca && !elResultados.contains(e.target)) {
+            elResultados.classList.remove('aberto');
+        }
+    });
+}
+
+configurarBuscaCatalogoSimples('editProdutoGrupoBusca', 'editProdutoGrupoResultados', () => catalogosBaixa.grupos || [], (item) => {
+    grupoSelecionadoEditProduto = item;
+    document.getElementById('editProdutoGrupoSelecionado').textContent = `Selecionado: ${item.nome}`;
+});
+
+configurarBuscaCatalogoSimples('editProdutoAlmoxBusca', 'editProdutoAlmoxResultados', () => catalogosBaixa.almoxarifados || [], (item) => {
+    almoxarifadoSelecionadoEditProduto = item;
+    document.getElementById('editProdutoAlmoxSelecionado').textContent = `Selecionado: ${item.nome}`;
+});
+
+async function carregarAjustesEstoqueProduto(produtoId) {
+    const container = document.getElementById('listaAjustesEstoqueProduto');
+    container.innerHTML = '<p class="subtitulo">Carregando...</p>';
+    const { data, error } = await sb.from('estoque_movimentacoes')
+        .select('*')
+        .eq('produto_id', produtoId)
+        .eq('observacao', 'Ajuste de estoque')
+        .order('data', { ascending: false })
+        .order('id', { ascending: false });
+    if (error) { container.innerHTML = `<p class="subtitulo" style="color:var(--danger);">Erro ao carregar: ${error.message}</p>`; return; }
+    if (!data || !data.length) { container.innerHTML = '<p class="subtitulo">Nenhum ajuste de estoque lançado nesse produto.</p>'; return; }
+
+    container.innerHTML = data.map(m => {
+        const almox = (catalogosBaixa.almoxarifados || []).find(a => a.id === m.almoxarifado_id);
+        return `
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid #f3c9c4; font-size:0.82rem;">
+                <span>${formatarData(m.data)} · ${m.tipo === 'entrada' ? '+' : '-'}${m.qtd} · ${almox ? escapeHtml(almox.nome) : '(sem almoxarifado)'} · ${escapeHtml(m.responsavel || '-')}</span>
+                <button type="button" class="btn btn-cinza btn-pequeno" data-excluir-ajuste="${m.id}" style="background:var(--danger-soft, #FBEAE8); color:var(--danger, #C0392B);">🗑️ Excluir</button>
+            </div>
+        `;
+    }).join('');
+
+    container.querySelectorAll('[data-excluir-ajuste]').forEach(btn => {
+        btn.addEventListener('click', () => excluirAjusteEstoque(Number(btn.dataset.excluirAjuste), produtoId));
+    });
+}
+
+async function excluirAjusteEstoque(movimentacaoId, produtoId) {
+    const { data: mov, error: eSel } = await sb.from('estoque_movimentacoes').select('*').eq('id', movimentacaoId).single();
+    if (eSel) { alert('Erro ao buscar a movimentação: ' + eSel.message); return; }
+
+    // trava de segurança: só deixa excluir se for MESMO um ajuste de
+    // estoque -- nunca uma entrada de nota/XML por engano
+    if (mov.observacao !== 'Ajuste de estoque') {
+        alert('Essa opção só exclui movimentações do tipo "Ajuste de estoque". Essa aqui não é uma.');
+        return;
+    }
+
+    const p = produtos.find(x => x.id === produtoId);
+    const almox = (catalogosBaixa.almoxarifados || []).find(a => a.id === mov.almoxarifado_id);
+    if (!confirm(`Excluir esse ajuste de estoque (${mov.tipo === 'entrada' ? '+' : '-'}${mov.qtd} em ${almox ? almox.nome : 'almoxarifado desconhecido'})? A quantidade será devolvida/estornada, e isso fica registrado na auditoria.`)) return;
+
+    try {
+        // devolve o efeito na quantidade (nunca mexeu em preço médio,
+        // já que ajuste de estoque não afeta preço médio)
+        const deltaEstorno = mov.tipo === 'entrada' ? -Number(mov.qtd) : Number(mov.qtd);
+        const { error: eAjuste } = await sb.rpc('fabrica_ajustar_estoque', {
+            p_produto_id: produtoId, p_delta: deltaEstorno, p_almoxarifado_id: mov.almoxarifado_id
+        });
+        if (eAjuste) throw eAjuste;
+
+        const { error: eDel } = await sb.from('estoque_movimentacoes').delete().eq('id', movimentacaoId);
+        if (eDel) throw eDel;
+
+        await registrarSentinela('exclusao_ajuste_estoque',
+            `Excluiu ajuste de estoque de "${p ? p.nome : '#' + produtoId}" (${mov.tipo === 'entrada' ? '+' : '-'}${mov.qtd} em ${almox ? almox.nome : 'almoxarifado desconhecido'}, lançado por ${mov.responsavel || 'desconhecido'} em ${formatarData(mov.data)})`
+        );
+
+        await carregarProdutos();
+        await carregarMovimentacoes();
+        const pAtualizado = produtos.find(x => x.id === produtoId);
+        if (pAtualizado) {
+            document.getElementById('editProdutoEstoque').value = pAtualizado.estoque;
+            document.getElementById('editProdutoPrecoMedio').value = pAtualizado.precoMedio ?? '';
+        }
+        renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+        await carregarAjustesEstoqueProduto(produtoId);
+    } catch (erro) {
+        alert('Erro ao excluir: ' + erro.message);
+    }
+}
+
+document.getElementById('btnReprocessarEsteProduto').addEventListener('click', async () => {
+    if (!produtoIdEmEdicao) return;
+    const statusEl = document.getElementById('statusReprocessarEsteProduto');
+    const btn = document.getElementById('btnReprocessarEsteProduto');
+    if (!almoxarifadoSelecionadoEditProduto) {
+        statusEl.style.color = 'var(--danger)';
+        statusEl.textContent = 'Escolha o almoxarifado acima primeiro.';
+        return;
+    }
+    btn.disabled = true;
+    statusEl.textContent = `Reprocessando (só ${almoxarifadoSelecionadoEditProduto.nome})...`;
+    statusEl.style.color = '';
+    try {
+        const { data, error } = await sb.rpc('fn_estoque_reprocessar_movimentos', {
+            p_unidade_negocio_id: meuPerfil.unidadeId, p_produto_id: produtoIdEmEdicao,
+            p_almoxarifado_id: almoxarifadoSelecionadoEditProduto.id
+        });
+        if (error) throw error;
+        await carregarProdutos();
+        const p = produtos.find(x => x.id === produtoIdEmEdicao);
+        if (p) {
+            document.getElementById('editProdutoEstoque').value = p.estoque;
+            document.getElementById('editProdutoPrecoMedio').value = p.precoMedio ?? '';
+        }
+        statusEl.style.color = 'var(--brand-2)';
+        statusEl.textContent = data && data.length
+            ? `✓ Recalculado no ${almoxarifadoSelecionadoEditProduto.nome} — o campo "Estoque atual" acima é o TOTAL agregado de todos os almoxarifados, pode não bater 1:1 com o que mudou aqui.`
+            : `✓ Recalculado no ${almoxarifadoSelecionadoEditProduto.nome} — já estava tudo certo, nada mudou.`;
+        renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+    } catch (erro) {
+        statusEl.style.color = 'var(--danger)';
+        statusEl.textContent = 'Erro: ' + erro.message;
+    } finally {
+        btn.disabled = false;
+    }
+});
 
 document.getElementById('btnCancelarEditarProduto').addEventListener('click', () => {
     document.getElementById('modalEditarProduto').classList.remove('aberto');
@@ -2528,8 +2750,18 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
     const novoValor = parseFloat(document.getElementById('editProdutoValor').value);
     const novoEstoque = parseFloat(document.getElementById('editProdutoEstoque').value);
     const novoEstoqueInicial = parseFloat(document.getElementById('editProdutoEstoqueInicial').value);
-    const novoGrupo = parseInt(document.getElementById('editProdutoGrupo').value, 10);
-    const novoAlmox = parseInt(document.getElementById('editProdutoAlmox').value, 10);
+    if (!grupoSelecionadoEditProduto) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Escolha o grupo do produto.';
+        return;
+    }
+    if (!almoxarifadoSelecionadoEditProduto) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Escolha o almoxarifado.';
+        return;
+    }
+    const novoGrupoId = grupoSelecionadoEditProduto.id;
+    const novoAlmoxarifadoPadraoId = almoxarifadoSelecionadoEditProduto.id;
     const valorEstoqueInicialTexto = document.getElementById('editProdutoValorEstoqueInicial').value;
     const novoValorEstoqueInicial = valorEstoqueInicialTexto === '' ? null : parseFloat(valorEstoqueInicialTexto);
     const precoMedioTexto = document.getElementById('editProdutoPrecoMedio').value;
@@ -2539,7 +2771,7 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
         statusEl.textContent = 'Informe o nome do produto.';
         return;
     }
-    if (isNaN(novoValor) || isNaN(novoEstoque) || isNaN(novoEstoqueInicial) || isNaN(novoGrupo) || isNaN(novoAlmox)) {
+    if (isNaN(novoValor) || isNaN(novoEstoque) || isNaN(novoEstoqueInicial)) {
         statusEl.className = 'status-msg erro';
         statusEl.textContent = 'Preencha todos os campos numéricos corretamente.';
         return;
@@ -2572,7 +2804,7 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
             produto: {
                 ...p, nome: novoNome, codigoExterno: novoCodigoExterno || null, un: novaUn,
                 valor: novoValor, estoque: delta !== 0 ? estoqueAntigo : novoEstoque,
-                estoqueInicial: novoEstoqueInicial, grupo: novoGrupo, almox: novoAlmox,
+                estoqueInicial: novoEstoqueInicial, grupoId: novoGrupoId, almoxarifadoPadraoId: novoAlmoxarifadoPadraoId,
                 valorEstoqueInicial: novoValorEstoqueInicial,
                 precoMedio: novoPrecoMedio !== null ? novoPrecoMedio : p.precoMedio
             }
@@ -2587,6 +2819,8 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
                     valorUnit: novoValor,
                     tipo: delta > 0 ? 'entrada' : 'saida',
                     tag: '', evento: '',
+                    almoxarifadoId: novoAlmoxarifadoPadraoId,
+                    afetaPrecoMedio: false,
                     observacao: 'Ajuste de estoque',
                     responsavel,
                     projetoId: null, itemProjetoId: null
@@ -2616,8 +2850,11 @@ function abrirInfoProduto(produtoId) {
     const p = produtos.find(x => x.id === produtoId);
     if (!p) return;
 
+    // com almoxarifado de trabalho selecionado, a lista também só
+    // mostra movimentações DAQUELE almoxarifado -- coerente com o
+    // resumo do topo, que já dizia "só do [almoxarifado]"
     const movs = movimentacoes
-        .filter(m => m.produtoId === produtoId)
+        .filter(m => m.produtoId === produtoId && (!almoxarifadoTrabalho || m.almoxarifadoId === almoxarifadoTrabalho))
         .sort((a, b) => (b.data || '').localeCompare(a.data || ''));
 
     // mesmo critério da tabela principal: com almoxarifado de trabalho
@@ -2643,7 +2880,10 @@ function abrirInfoProduto(produtoId) {
     `;
 
     if (!movs.length) {
-        html += '<div class="vazio" style="padding:10px 0;">Nenhuma movimentação registrada para este produto ainda.</div>';
+        const mensagemVazio = almoxarifadoTrabalho
+            ? `Nenhuma movimentação desse produto no ${nomeAlmoxTrabalho ? escapeHtml(nomeAlmoxTrabalho.nome) : 'almoxarifado selecionado'}. (Pode ter movimentação em outro almoxarifado — troque o "Almoxarifado de trabalho" no topo pra ver.)`
+            : 'Nenhuma movimentação registrada para este produto ainda.';
+        html += `<div class="vazio" style="padding:10px 0;">${mensagemVazio}</div>`;
     } else {
         html += `
             <div style="max-height:55vh; overflow:auto;">
@@ -3443,18 +3683,56 @@ document.getElementById('buscaEstoque').addEventListener('input', () => {
     renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
 });
 
-document.getElementById('btnNovoProduto').addEventListener('click', () => {
+let grupoSelecionadoNovoProduto = null;
+let almoxarifadoSelecionadoNovoProduto = null;
+
+document.getElementById('btnNovoProduto').addEventListener('click', async () => {
+    if (!catalogosBaixa.grupos || !catalogosBaixa.grupos.length || !catalogosBaixa.almoxarifados || !catalogosBaixa.almoxarifados.length) {
+        catalogosBaixa = await chamarGet('listarCatalogosBaixa');
+    }
+    // Grupo: sem produto existente pra herdar de onde partir, fica em
+    // branco de propósito, força escolha consciente
+    grupoSelecionadoNovoProduto = null;
+    document.getElementById('npGrupoBusca').value = '';
+    document.getElementById('npGrupoSelecionado').textContent = '';
+    // Almoxarifado: parte do "Almoxarifado de trabalho" já escolhido,
+    // igual acontece em Editar Produto
+    almoxarifadoSelecionadoNovoProduto = almoxarifadoTrabalho
+        ? (catalogosBaixa.almoxarifados || []).find(a => a.id === almoxarifadoTrabalho)
+        : null;
+    document.getElementById('npAlmoxBusca').value = '';
+    document.getElementById('npAlmoxSelecionado').textContent = almoxarifadoSelecionadoNovoProduto ? `Selecionado: ${almoxarifadoSelecionadoNovoProduto.nome}` : '';
     document.getElementById('painelNovoProduto').style.display = 'block';
 });
 document.getElementById('btnCancelarProduto').addEventListener('click', () => {
     document.getElementById('painelNovoProduto').style.display = 'none';
 });
+
+configurarBuscaCatalogoSimples('npGrupoBusca', 'npGrupoResultados', () => catalogosBaixa.grupos || [], (item) => {
+    grupoSelecionadoNovoProduto = item;
+    document.getElementById('npGrupoSelecionado').textContent = `Selecionado: ${item.nome}`;
+});
+configurarBuscaCatalogoSimples('npAlmoxBusca', 'npAlmoxResultados', () => catalogosBaixa.almoxarifados || [], (item) => {
+    almoxarifadoSelecionadoNovoProduto = item;
+    document.getElementById('npAlmoxSelecionado').textContent = `Selecionado: ${item.nome}`;
+});
+
 document.getElementById('btnSalvarProduto').addEventListener('click', async () => {
     const statusEl = document.getElementById('statusNovoProduto');
     const nome = document.getElementById('npNome').value.trim();
     if (!nome) {
         statusEl.className = 'status-msg erro';
         statusEl.textContent = 'Informe o nome do produto.';
+        return;
+    }
+    if (!grupoSelecionadoNovoProduto) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Escolha o grupo do produto.';
+        return;
+    }
+    if (!almoxarifadoSelecionadoNovoProduto) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Escolha o almoxarifado.';
         return;
     }
     const codigo = document.getElementById('npCodigo').value.trim();
@@ -3472,10 +3750,10 @@ document.getElementById('btnSalvarProduto').addEventListener('click', async () =
         nome: nome.toUpperCase(),
         valor: valorDeclarado,
         un: document.getElementById('npUn').value.trim().toUpperCase() || 'UN',
-        grupo: parseInt(document.getElementById('npGrupo').value) || 1,
+        grupoId: grupoSelecionadoNovoProduto.id,
         estoqueInicial: estoqueInicial,
         estoque: estoqueInicial,
-        almox: 1,
+        almoxarifadoPadraoId: almoxarifadoSelecionadoNovoProduto.id,
         // sem nenhuma entrada lançada ainda, o preço médio É o valor do
         // estoque inicial — não tem outra coisa pra ponderar contra
         valorEstoqueInicial: estoqueInicial > 0 ? valorDeclarado : null,
@@ -3712,6 +3990,25 @@ function temPermissaoEstoque(permissao) {
 // decidir status de projeto e, principalmente, quem pode gerenciar
 // permissões -- um usuário recém-convidado, sem papel ainda, não pode
 // ver nem mexer nisso, mesmo que tenha acesso total ao resto do app.
+// grava um registro na sentinela (auditoria global, compartilhada
+// entre módulos) -- não bloqueia a ação principal se falhar, só avisa
+// no console, pra nunca travar o operador por causa de um log
+async function registrarSentinela(tipoAcao, descricao) {
+    try {
+        const { error } = await sb.from('servir_sentinela').insert({
+            unidade_negocio_id: meuPerfil.unidadeId,
+            modulo: 'estoque',
+            tipo_acao: tipoAcao,
+            descricao,
+            operador: meuPerfil.nomeOperador,
+            operador_user_id: meuPerfil.userId
+        });
+        if (error) console.error('Falha ao gravar na sentinela:', error);
+    } catch (e) {
+        console.error('Falha ao gravar na sentinela:', e);
+    }
+}
+
 function ehAdministradorOuPrincipal() {
     return meuPerfil.ehPrincipal || meuPerfil.papel === 'administrador';
 }
@@ -4468,6 +4765,7 @@ document.getElementById('btnConfirmarQtdInicial').addEventListener('click', asyn
                     tipo: 'saida',
                     tag: tagAtual,
                     evento: eventoAtual,
+                    almoxarifadoId: almoxarifadoTrabalho,
                     observacao: 'Atendimento imediato (foi direto pra produção)',
                     responsavel: responsavelAtendeJa,
                     projetoId: projetoAtualId,
@@ -5031,7 +5329,7 @@ async function checkSession() {
 }
 
 // ---------- unidade de negócio ativa ----------
-let meuPerfil = { unidadeId: null, unidadeNome: '', ehPrincipal: false };
+let meuPerfil = { unidadeId: null, unidadeNome: '', ehPrincipal: false, userId: null, nomeOperador: '' };
 let vinculosGlobais = [];
 
 function definirUnidadeAtiva(vinculo) {
@@ -5090,6 +5388,8 @@ async function carregarMeuPerfil() {
     const { data: sessao } = await sb.auth.getUser();
     const userId = sessao?.user?.id;
     if (!userId) return;
+    meuPerfil.userId = userId;
+    meuPerfil.nomeOperador = sessao?.user?.user_metadata?.nome || sessao?.user?.user_metadata?.full_name || sessao?.user?.email || '';
 
     const { data: vinculos, error } = await sb
         .from('servir_unidade_usuarios')
@@ -6825,7 +7125,7 @@ document.getElementById('btnSalvarEditarTitulo').addEventListener('click', async
    permitir baixar aos poucos, em sessões diferentes).
    ========================================================================= */
 let itensBaixaAtual = [];
-let catalogosBaixa = { setores: [], subsetores: [], veiculos: [], planoContas: [], almoxarifados: [] };
+let catalogosBaixa = { setores: [], subsetores: [], veiculos: [], planoContas: [], almoxarifados: [], grupos: [] };
 
 // =====================================================================
 // ALMOXARIFADO DE TRABALHO -- escolhido uma vez, fica salvo (por
