@@ -71,7 +71,7 @@
     }
     #resultadosBuscaProduto.aberto { display: block; }
     #notaItemProdutoResultados {
-        position: absolute; z-index: 20; background: #fff; width: 100%;
+        position: absolute; top: 100%; left: 0; z-index: 20; background: #fff; width: 100%;
         border: 1px solid #ddd; border-radius: 6px; max-height: 220px; overflow-y: auto; display: none;
         box-shadow: 0 4px 14px rgba(0,0,0,0.15);
     }
@@ -83,7 +83,7 @@
     }
     #reqCompletaProdutoResultados.aberto { display: block; }
     .dropdown-busca-evento {
-        position: absolute; z-index: 20; background: #fff; width: 100%;
+        position: absolute; top: 100%; left: 0; z-index: 50; background: #fff; width: 100%;
         border: 1px solid #ddd; border-radius: 6px; max-height: 220px; overflow-y: auto; display: none;
         box-shadow: 0 4px 14px rgba(0,0,0,0.15);
     }
@@ -2233,11 +2233,17 @@ async function chamarPost(acao, d) {
         return { pulados: pulados.map(p => p.nome) };
     }
     if (acao === 'editarMovimentacao') {
-        const { data: antiga, error: eSel } = await sb.from('estoque_movimentacoes').select('produto_id,tipo,qtd').eq('id', d.movId).single();
+        const { data: antiga, error: eSel } = await sb.from('estoque_movimentacoes').select('produto_id,tipo,qtd,almoxarifado_id').eq('id', d.movId).single();
         if (eSel) throw eSel;
         const sinal = antiga.tipo === 'entrada' ? 1 : -1;
-        await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: -sinal * Number(antiga.qtd) });
-        await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: sinal * Number(d.novaQtd) });
+        // reverte o efeito antigo NO ALMOXARIFADO ONDE ELE REALMENTE
+        // ESTAVA (nunca deixa cair no gatilho de auto-criação por
+        // falta de informar isso)
+        await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: -sinal * Number(antiga.qtd), p_almoxarifado_id: antiga.almoxarifado_id });
+        // aplica o novo efeito no almoxarifado que a edição escolheu
+        // (ou no mesmo de antes, se não estiver trocando)
+        const almoxarifadoFinal = d.almoxarifadoId !== undefined ? d.almoxarifadoId : antiga.almoxarifado_id;
+        await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: sinal * Number(d.novaQtd), p_almoxarifado_id: almoxarifadoFinal });
         const upd = { qtd: d.novaQtd };
         if (d.novoValorUnit != null) {
             upd.valor_unit = d.novoValorUnit;
@@ -2261,10 +2267,10 @@ async function chamarPost(acao, d) {
         return;
     }
     if (acao === 'removerMovimentacao') {
-        const { data: antiga, error: eSel } = await sb.from('estoque_movimentacoes').select('produto_id,tipo,qtd').eq('id', d.movId).single();
+        const { data: antiga, error: eSel } = await sb.from('estoque_movimentacoes').select('produto_id,tipo,qtd,almoxarifado_id').eq('id', d.movId).single();
         if (eSel) throw eSel;
         const sinal = antiga.tipo === 'entrada' ? 1 : -1;
-        await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: -sinal * Number(antiga.qtd) });
+        await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: -sinal * Number(antiga.qtd), p_almoxarifado_id: antiga.almoxarifado_id });
         const { error } = await sb.from('estoque_movimentacoes').delete().eq('id', d.movId);
         if (error) throw error;
         return;
@@ -2525,10 +2531,8 @@ async function editarProdutoPrompt(id) {
     document.getElementById('editProdutoCodigoExterno').value = p.codigoExterno || '';
     document.getElementById('editProdutoUn').value = p.un || '';
     document.getElementById('editProdutoValor').value = p.valor;
-    document.getElementById('editProdutoEstoque').value = p.estoque;
     document.getElementById('editProdutoEstoqueInicial').value = p.estoqueInicial ?? 0;
     document.getElementById('editProdutoValorEstoqueInicial').value = p.valorEstoqueInicial ?? '';
-    document.getElementById('editProdutoPrecoMedio').value = p.precoMedio ?? '';
 
     if (!catalogosBaixa.grupos || !catalogosBaixa.grupos.length || !catalogosBaixa.almoxarifados || !catalogosBaixa.almoxarifados.length) {
         catalogosBaixa = await chamarGet('listarCatalogosBaixa');
@@ -2546,11 +2550,17 @@ async function editarProdutoPrompt(id) {
     // trocar, mas já vem preenchido sem precisar escolher de novo.
     // Se esse produto já tinha um almoxarifado padrão gravado e
     // nenhum "de trabalho" está selecionado agora, usa o que já tinha.
+    // PRECISA vir antes de preencher estoque/preço médio -- esses dois
+    // campos mostram o saldo DAQUELE almoxarifado específico, não o
+    // total agregado do produto (senão o "ajuste" calculado depois
+    // fica errado, usando uma base que não bate com o que a tela mostra)
     almoxarifadoSelecionadoEditProduto = almoxarifadoTrabalho
         ? (catalogosBaixa.almoxarifados || []).find(a => a.id === almoxarifadoTrabalho)
         : (p.almoxarifadoPadraoId != null ? (catalogosBaixa.almoxarifados || []).find(a => a.id === p.almoxarifadoPadraoId) : null);
     document.getElementById('editProdutoAlmoxBusca').value = '';
     document.getElementById('editProdutoAlmoxSelecionado').textContent = almoxarifadoSelecionadoEditProduto ? `Selecionado: ${almoxarifadoSelecionadoEditProduto.nome}` : '';
+
+    atualizarCamposEstoqueDoAlmoxarifadoSelecionado(p);
 
     document.getElementById('editProdutoResponsavelAjuste').value = '';
     document.getElementById('campoResponsavelAjuste').style.display = 'none';
@@ -2603,7 +2613,27 @@ configurarBuscaCatalogoSimples('editProdutoGrupoBusca', 'editProdutoGrupoResulta
 configurarBuscaCatalogoSimples('editProdutoAlmoxBusca', 'editProdutoAlmoxResultados', () => catalogosBaixa.almoxarifados || [], (item) => {
     almoxarifadoSelecionadoEditProduto = item;
     document.getElementById('editProdutoAlmoxSelecionado').textContent = `Selecionado: ${item.nome}`;
+    const p = produtos.find(x => x.id === produtoIdEmEdicao);
+    if (p) atualizarCamposEstoqueDoAlmoxarifadoSelecionado(p);
 });
+
+// mostra estoque atual e preço médio do almoxarifado ESPECÍFICO
+// selecionado -- nunca o total agregado do produto, senão o "ajuste"
+// calculado ao salvar fica errado (usaria uma base que não bate com
+// o que a tela realmente mostra)
+function atualizarCamposEstoqueDoAlmoxarifadoSelecionado(p) {
+    if (almoxarifadoSelecionadoEditProduto) {
+        const saldo = saldoDoProdutoNoAlmoxarifado(p.id, almoxarifadoSelecionadoEditProduto.id);
+        document.getElementById('editProdutoEstoque').value = saldo ? saldo.estoque : 0;
+        document.getElementById('editProdutoPrecoMedio').value = saldo && saldo.precoMedio != null ? saldo.precoMedio : '';
+    } else {
+        // sem almoxarifado nenhum selecionado (raro), cai pro total
+        // agregado só pra não deixar o campo vazio -- mas isso não
+        // deveria acontecer no uso normal
+        document.getElementById('editProdutoEstoque').value = p.estoque;
+        document.getElementById('editProdutoPrecoMedio').value = p.precoMedio ?? '';
+    }
+}
 
 async function carregarAjustesEstoqueProduto(produtoId) {
     const container = document.getElementById('listaAjustesEstoqueProduto');
@@ -2782,7 +2812,13 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
         return;
     }
 
-    const estoqueAntigo = p.estoque;
+    // a base do "quanto ajustar" tem que ser o saldo do almoxarifado
+    // ESPECÍFICO que está sendo editado (o mesmo que a tela mostra) --
+    // nunca o total agregado do produto, senão o ajuste sai errado
+    const saldoAntigoDoAlmoxarifado = almoxarifadoSelecionadoEditProduto
+        ? saldoDoProdutoNoAlmoxarifado(p.id, almoxarifadoSelecionadoEditProduto.id)
+        : null;
+    const estoqueAntigo = saldoAntigoDoAlmoxarifado ? saldoAntigoDoAlmoxarifado.estoque : (almoxarifadoSelecionadoEditProduto ? 0 : p.estoque);
     const delta = novoEstoque - estoqueAntigo;
     let responsavel = '';
     if (delta !== 0) {
@@ -2798,17 +2834,50 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
     statusEl.textContent = 'Salvando...';
 
     try {
-        // valor sempre pode ser atualizado direto; o estoque só é tocado aqui se NÃO houve ajuste
-        // (se houve ajuste, quem corrige o estoque é a movimentação registrada abaixo)
+        // valor sempre pode ser atualizado direto; o estoque (total
+        // agregado) só é tocado aqui se NÃO houve ajuste -- se houve,
+        // quem corrige o estoque (do almoxarifado certo) é a
+        // movimentação registrada abaixo, nunca sobrescreve o
+        // agregado direto (senão desincroniza do que a soma real dá)
         await chamarPost('salvarProduto', {
             produto: {
                 ...p, nome: novoNome, codigoExterno: novoCodigoExterno || null, un: novaUn,
-                valor: novoValor, estoque: delta !== 0 ? estoqueAntigo : novoEstoque,
+                valor: novoValor, estoque: delta !== 0 ? p.estoque : novoEstoque,
                 estoqueInicial: novoEstoqueInicial, grupoId: novoGrupoId, almoxarifadoPadraoId: novoAlmoxarifadoPadraoId,
                 valorEstoqueInicial: novoValorEstoqueInicial,
-                precoMedio: novoPrecoMedio !== null ? novoPrecoMedio : p.precoMedio
+                precoMedio: p.precoMedio
             }
         });
+
+        // correção manual de preço médio grava no ALMOXARIFADO
+        // ESPECÍFICO selecionado (é o que a tela mostra e o que a
+        // pessoa está de fato corrigindo), não no agregado do produto.
+        // Só grava se o valor REALMENTE mudou (o campo já vem
+        // pré-preenchido, então salvar sem mexer nele não deve disparar
+        // nada). NUNCA chama o reprocessamento completo aqui -- ele
+        // recalcula tudo do zero a partir do histórico e sobrescreveria
+        // a correção manual na mesma hora que ela foi salva
+        const precoMedioOriginalDoAlmoxarifado = saldoAntigoDoAlmoxarifado ? saldoAntigoDoAlmoxarifado.precoMedio : null;
+        const precoMedioRealmenteMudou = novoPrecoMedio !== null && Math.abs((novoPrecoMedio || 0) - (precoMedioOriginalDoAlmoxarifado || 0)) > 0.001;
+        if (precoMedioRealmenteMudou && almoxarifadoSelecionadoEditProduto) {
+            const { error: eSaldo } = await sb.from('estoque_saldo_almoxarifado')
+                .update({ preco_medio: novoPrecoMedio })
+                .eq('produto_id', p.id)
+                .eq('almoxarifado_id', almoxarifadoSelecionadoEditProduto.id);
+            if (eSaldo) throw eSaldo;
+
+            // só recalcula o AGREGADO (média ponderada entre os
+            // almoxarifados, usando o valor que acabou de ser
+            // corrigido), sem tocar no preço médio de nenhum
+            // almoxarifado individualmente
+            const { data: todosSaldos } = await sb.from('estoque_saldo_almoxarifado')
+                .select('estoque, preco_medio').eq('produto_id', p.id);
+            const somaEstoque = (todosSaldos || []).reduce((soma, s) => soma + Number(s.estoque || 0), 0);
+            const precoMedioAgregado = somaEstoque > 0
+                ? (todosSaldos || []).reduce((soma, s) => soma + Number(s.estoque || 0) * Number(s.preco_medio || 0), 0) / somaEstoque
+                : 0;
+            await sb.from('estoque_produtos').update({ preco_medio: precoMedioAgregado }).eq('id', p.id);
+        }
 
         if (delta !== 0) {
             await chamarPost('registrarMovimentacao', {
@@ -2829,7 +2898,7 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
             await carregarMovimentacoes();
         }
 
-        await carregarProdutos();
+        await Promise.all([carregarProdutos(), carregarSaldosAlmoxarifado()]);
         renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
         atualizarTagContagem();
         statusEl.className = 'status-msg sucesso';
