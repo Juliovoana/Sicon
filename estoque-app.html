@@ -1216,6 +1216,7 @@
             <div class="campo"><label>Chave de acesso (opcional)</label><input type="text" id="notaChaveAcesso"></div>
             <div class="campo" style="align-self:end;"><span class="subtitulo" id="notaValorTotalDica"></span></div>
         </div>
+        <p class="subtitulo" id="statusRateioNotaManual" style="margin-top:4px;"></p>
         <div class="campo" style="margin-top:10px;"><label>Observações</label><input type="text" id="notaObservacoes"></div>
 
         <div style="margin-top:14px; text-align:right;">
@@ -1272,6 +1273,11 @@
                 <tbody id="corpoTitulosNota"></tbody>
             </table>
             <div style="text-align:right; margin-top:6px; font-weight:600;">Total dos títulos: <span id="totalTitulosNota">R$ 0,00</span></div>
+
+            <div style="margin-top:20px; padding-top:14px; border-top:1px solid var(--linha); text-align:right;">
+                <span class="subtitulo" id="statusFinalizarNota" style="margin-right:10px;"></span>
+                <button class="btn btn-verde" id="btnFinalizarAlteracoesNota">✅ Finalizar alterações</button>
+            </div>
         </div>
     </div>
 </div>
@@ -6694,6 +6700,48 @@ document.getElementById('btnFecharNotaEntrada').addEventListener('click', () => 
     carregarListaNotasEntrada();
 });
 
+document.getElementById('btnFinalizarAlteracoesNota').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusFinalizarNota');
+    const btn = document.getElementById('btnFinalizarAlteracoesNota');
+
+    if (!notaEmEdicaoId || !itensNotaAtual || !itensNotaAtual.length) {
+        // nota sem item nenhum (ou nunca salva) -- só fecha, não tem o que reprocessar
+        document.getElementById('modalNotaEntrada').classList.remove('aberto');
+        carregarListaNotasEntrada();
+        return;
+    }
+
+    btn.disabled = true;
+    statusEl.style.color = '';
+    statusEl.textContent = 'Conferindo os valores finais...';
+
+    try {
+        // reprocessa cada produto que teve item nessa nota -- garante
+        // que o preço médio e o saldo refletem certinho o histórico
+        // cronológico completo (a mesma fórmula ponderada de sempre:
+        // estoque anterior × preço anterior + nova qtd × novo valor,
+        // dividido pelo estoque total), depois de qualquer rateio ou
+        // edição feita aqui dentro
+        const produtosDaNota = [...new Set(itensNotaAtual.map(it => it.produto_id))];
+        for (const produtoId of produtosDaNota) {
+            const { error } = await sb.rpc('fn_estoque_reprocessar_movimentos', {
+                p_unidade_negocio_id: meuPerfil.unidadeId, p_produto_id: produtoId
+            });
+            if (error) throw error;
+        }
+
+        await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
+
+        document.getElementById('modalNotaEntrada').classList.remove('aberto');
+        carregarListaNotasEntrada();
+    } catch (erro) {
+        statusEl.style.color = 'var(--danger)';
+        statusEl.textContent = 'Erro ao conferir: ' + erro.message + ' — o formulário não foi fechado.';
+    } finally {
+        btn.disabled = false;
+    }
+});
+
 document.getElementById('btnRemoverNotaEntrada').addEventListener('click', async () => {
     if (!notaEmEdicaoId) return;
     if (!confirm('Isso vai remover a nota, todos os itens (movimentações) e todos os títulos/vencimentos lançados por ela, e recalcular o estoque e os preços dos produtos afetados. Não tem como desfazer. Continuar?')) return;
@@ -6780,6 +6828,7 @@ async function abrirNotaEntradaExistente(notaId) {
         document.getElementById('notaItemAlmoxarifado').value = almoxarifadoTrabalho || '';
 
         document.getElementById('blocoItensTitulosNota').style.display = 'block';
+        document.getElementById('blocoAdicionarItemNota').style.display = '';
         document.getElementById('btnRemoverNotaEntrada').style.display = '';
         // "baixar itens dessa nota" só faz sentido numa nota de entrada
         // (é ela que tem o que "sair" de dentro dela); "adicionar item
@@ -6792,6 +6841,92 @@ async function abrirNotaEntradaExistente(notaId) {
         alert('Erro ao abrir a nota: ' + err.message);
     }
 }
+
+// aplica o rateio de desconto/frete a TODOS os itens já lançados
+// nessa nota, de forma automática -- toda vez que desconto/frete
+// mudar, ou um item novo for adicionado, recalcula a participação de
+// cada item no ajuste total e atualiza o valor unitário final.
+// Nunca mexe em valor_unit_original (a referência "antes do rateio"),
+// só em valor_unit -- senão uma segunda rodada de rateio ficaria
+// rateando em cima de um valor que já tinha rateio aplicado
+async function aplicarRateioNotaManual() {
+    if (!notaEmEdicaoId || !itensNotaAtual || !itensNotaAtual.length) return;
+    const statusEl = document.getElementById('statusRateioNotaManual');
+    const desconto = parseFloat(document.getElementById('notaValorDesconto').value) || 0;
+    const frete = parseFloat(document.getElementById('notaValorFrete').value) || 0;
+    const ajusteTotal = frete - desconto;
+
+    if (ajusteTotal === 0) {
+        // sem desconto nem frete: cada item volta a valer exatamente
+        // o valor original digitado (desfaz rateio de uma rodada anterior)
+        const produtosAfetados = new Set();
+        for (const item of itensNotaAtual) {
+            const valorOriginal = Number(item.valor_unit_original ?? item.valor_unit);
+            if (Math.abs(valorOriginal - Number(item.valor_unit)) > 0.001) {
+                await sb.from('estoque_movimentacoes').update({ valor_unit: valorOriginal }).eq('id', item.id);
+                produtosAfetados.add(item.produto_id);
+            }
+        }
+        if (produtosAfetados.size) {
+            for (const produtoId of produtosAfetados) {
+                await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId, p_produto_id: produtoId });
+            }
+            await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
+            await carregarItensETitulosDaNota(notaEmEdicaoId);
+        }
+        if (statusEl) statusEl.textContent = '';
+        return;
+    }
+
+    const totalProdutos = itensNotaAtual.reduce((acc, it) => acc + Number(it.qtd) * Number(it.valor_unit_original ?? it.valor_unit), 0);
+    if (totalProdutos <= 0) {
+        if (statusEl) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = 'Não foi possível ratear: o total dos itens está zerado.'; }
+        return;
+    }
+
+    if (statusEl) { statusEl.style.color = ''; statusEl.textContent = 'Aplicando rateio de desconto/frete aos itens...'; }
+
+    const produtosAfetados = new Set();
+    try {
+        for (const item of itensNotaAtual) {
+            const valorOriginal = Number(item.valor_unit_original ?? item.valor_unit);
+            const valorTotalOriginal = Number(item.qtd) * valorOriginal;
+            const participacao = valorTotalOriginal / totalProdutos;
+            const ajusteItem = ajusteTotal * participacao;
+            const novoValorTotal = valorTotalOriginal + ajusteItem;
+            const novoValorUnit = Number(item.qtd) > 0 ? Math.round((novoValorTotal / Number(item.qtd)) * 100) / 100 : valorOriginal;
+
+            if (Math.abs(novoValorUnit - Number(item.valor_unit)) > 0.001) {
+                const { error } = await sb.from('estoque_movimentacoes').update({ valor_unit: novoValorUnit }).eq('id', item.id);
+                if (error) throw error;
+                produtosAfetados.add(item.produto_id);
+            }
+        }
+
+        for (const produtoId of produtosAfetados) {
+            await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId, p_produto_id: produtoId });
+        }
+
+        if (produtosAfetados.size) {
+            await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
+            await carregarItensETitulosDaNota(notaEmEdicaoId);
+        }
+        if (statusEl) {
+            statusEl.style.color = 'var(--brand-2)';
+            statusEl.textContent = '✓ Rateio de desconto/frete aplicado automaticamente aos itens.';
+        }
+    } catch (erro) {
+        if (statusEl) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = 'Erro ao aplicar rateio: ' + erro.message; }
+    }
+}
+
+let debounceRateioNotaManual = null;
+['notaValorDesconto', 'notaValorFrete'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+        clearTimeout(debounceRateioNotaManual);
+        debounceRateioNotaManual = setTimeout(aplicarRateioNotaManual, 600);
+    });
+});
 
 async function carregarItensETitulosDaNota(notaId) {
     const [itens, titulos] = await Promise.all([
@@ -6985,6 +7120,10 @@ document.getElementById('btnAdicionarItemNota').addEventListener('click', async 
 
         await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
         await carregarItensETitulosDaNota(notaEmEdicaoId);
+        // um item novo muda a proporção de todo mundo -- reaplica o
+        // rateio (se houver desconto/frete preenchido) já considerando
+        // esse item recém-adicionado
+        await aplicarRateioNotaManual();
         document.getElementById('notaItemProdutoBusca').focus();
     } catch (err) {
         alert('Erro ao adicionar item: ' + err.message);
