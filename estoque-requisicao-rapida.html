@@ -877,7 +877,8 @@ function renderizarItensNovaReq() {
             : `<button type="button" class="btn btn-remover" data-remover="${idx}">×</button>`;
         const pcItem = item.planoContasId ? planoContas.find(pc => pc.id === item.planoContasId) : null;
         const temDetalheProprio = item.setorId || item.evento || item.planoContasId;
-        const btnDetalhes = `<button type="button" class="btn btn-cinza btn-pequeno" data-detalhes-material="${idx}" style="font-size:0.72em; padding:4px 7px;" title="Trocar setor/evento/plano de contas só desse item">${pcItem ? '📋 ' + escapeHtml(pcItem.codigo) : '✏️ Detalhes'}${temDetalheProprio && !pcItem ? ' •' : ''}</button>`;
+        const titleDetalhes = construirTitleDetalhesItem(item, pcItem);
+        const btnDetalhes = `<button type="button" class="btn btn-cinza btn-pequeno" data-detalhes-material="${idx}" style="font-size:0.72em; padding:4px 7px;" title="${titleDetalhes}">${pcItem ? '📋 ' + escapeHtml(pcItem.codigo) : '✏️ Detalhes'}${temDetalheProprio && !pcItem ? ' •' : ''}</button>`;
         if (item.produtoId == null) {
             // item avulso, descrito na hora -- não existe no cadastro ainda
             return `
@@ -998,7 +999,8 @@ function renderizarItensServico() {
             : `<button type="button" class="btn btn-remover" data-remover-servico="${idx}">×</button>`;
         const pcItem = item.planoContasId ? planoContas.find(pc => pc.id === item.planoContasId) : null;
         const temDetalheProprio = item.setorId || item.evento || item.planoContasId;
-        const btnDetalhes = `<button type="button" class="btn btn-cinza btn-pequeno" data-detalhes-servico="${idx}" style="font-size:0.72em; padding:4px 7px;" title="Trocar setor/evento/plano de contas só desse item">${pcItem ? '📋 ' + escapeHtml(pcItem.codigo) : '✏️ Detalhes'}${temDetalheProprio && !pcItem ? ' •' : ''}</button>`;
+        const titleDetalhes = construirTitleDetalhesItem(item, pcItem);
+        const btnDetalhes = `<button type="button" class="btn btn-cinza btn-pequeno" data-detalhes-servico="${idx}" style="font-size:0.72em; padding:4px 7px;" title="${titleDetalhes}">${pcItem ? '📋 ' + escapeHtml(pcItem.codigo) : '✏️ Detalhes'}${temDetalheProprio && !pcItem ? ' •' : ''}</button>`;
         return `
         <tr>
             <td>${item.nomeVeiculo ? escapeHtml(item.nomeVeiculo) : '-'}</td>
@@ -1039,6 +1041,18 @@ function fecharDropdownBusca(elemento) {
 function abrirDropdownBusca(elemento) {
     elemento.classList.add('aberto');
     elemento.style.display = 'block';
+}
+
+// monta o texto do lembrete (tooltip) do botão "Detalhes", descrevendo
+// literalmente o que está valendo pra aquele item -- setor, evento e
+// plano de contas, ou avisando que usa o padrão da requisição quando
+// o item não tem valor próprio
+function construirTitleDetalhesItem(item, pcItem) {
+    const setorItem = item.setorId ? setores.find(s => s.id === item.setorId) : null;
+    const linhaSetor = `Setor: ${setorItem ? setorItem.nome : '(usa o da requisição)'}`;
+    const linhaEvento = `Evento: ${item.evento ? item.evento : '(usa o da requisição)'}`;
+    const linhaPlanoContas = `Plano de Contas: ${pcItem ? pcItem.codigo + ' - ' + pcItem.descricao : '(usa o padrão da requisição)'}`;
+    return escapeHtml(`${linhaSetor}\n${linhaEvento}\n${linhaPlanoContas}\n\nClique pra trocar só nesse item.`);
 }
 
 function abrirModalEditarDetalhesItem(tipo, idx) {
