@@ -119,10 +119,13 @@
     <div class="caixa-login">
         <h1>Requisição Rápida</h1>
         <p class="subtitulo">Entre com seu usuário do Servir</p>
-        <div class="campo"><label>E-mail</label><input type="email" id="login-email"></div>
-        <div class="campo"><label>Senha</label><input type="password" id="login-senha"></div>
+        <div class="campo"><label>E-mail</label><input type="email" id="login-email" autocomplete="email"></div>
+        <div class="campo"><label>Senha</label><input type="password" id="login-senha" autocomplete="current-password"></div>
         <button class="btn btn-principal" id="btn-login">Entrar</button>
         <p class="status-msg status-erro" id="status-login"></p>
+        <p class="subtitulo" style="text-align:center; margin-top:10px;">
+            <a href="#" id="link-esqueci-senha" style="color:var(--brand-2);">Esqueci minha senha</a>
+        </p>
     </div>
 </div>
 
@@ -190,6 +193,13 @@
                     <label>Nº requisição externa (opcional)</label>
                     <input type="text" id="campoNumeroExterno" placeholder="Ex: nº da requisição em papel...">
                 </div>
+                <div class="campo linha-busca" style="position:relative;">
+                    <label>Plano de Contas padrão (opcional)</label>
+                    <input type="text" id="campoBuscaPlanoContas" placeholder="Buscar código ou descrição..." autocomplete="off">
+                    <div id="resultadosBuscaPlanoContas" class="dropdown-busca-evento"></div>
+                    <p class="selecionado-texto" id="planoContasSelecionadoTexto"></p>
+                    <p class="subtitulo" style="margin-top:2px;">Aplicado a todo item novo — pode trocar item por item na lista abaixo.</p>
+                </div>
             </div>
             <p class="subtitulo" style="margin-top:-6px;">* campos obrigatórios</p>
         </div>
@@ -218,7 +228,7 @@
             </div>
 
             <table class="itens">
-                <thead><tr><th>Produto</th><th>Disponível</th><th>Qtd</th><th></th></tr></thead>
+                <thead><tr><th>Produto</th><th>Disponível</th><th>Qtd</th><th>Detalhes</th><th></th></tr></thead>
                 <tbody id="corpoItensNovaReq"></tbody>
             </table>
             <div id="vazioItensNovaReq" class="vazio">Nenhum item adicionado ainda.</div>
@@ -255,7 +265,7 @@
             <button type="button" class="btn btn-principal" id="btnAdicionarItemServico" style="width:100%; margin-top:4px;">+ Adicionar à requisição</button>
 
             <table class="itens" style="margin-top:16px;">
-                <thead><tr><th>Veículo</th><th>Serviço</th><th>Fornecedor</th><th>Qtd</th><th></th></tr></thead>
+                <thead><tr><th>Veículo</th><th>Serviço</th><th>Fornecedor</th><th>Qtd</th><th>Detalhes</th><th></th></tr></thead>
                 <tbody id="corpoItensServico"></tbody>
             </table>
             <div id="vazioItensServico" class="vazio">Nenhum item adicionado ainda.</div>
@@ -333,11 +343,41 @@
     </div>
 </div>
 
+<div id="modal-editar-detalhes-item" class="modal-overlay">
+    <div class="modal-caixa">
+        <h3>Detalhes do item</h3>
+        <p class="subtitulo" id="editarDetalhesItemNome" style="margin-bottom:14px;"></p>
+
+        <div class="campo">
+            <label>Setor (deixe em branco pra usar o da requisição)</label>
+            <select id="editarDetalhesSetor"><option value="">-- usar o da requisição --</option></select>
+        </div>
+        <div class="campo" style="position:relative; margin-top:10px;">
+            <label>Evento (deixe em branco pra usar o da requisição)</label>
+            <input type="text" id="editarDetalhesBuscaEvento" placeholder="Buscar evento..." autocomplete="off">
+            <div id="editarDetalhesResultadosEvento" class="dropdown-busca-evento"></div>
+            <p class="selecionado-texto" id="editarDetalhesEventoTexto"></p>
+        </div>
+        <div class="campo" style="position:relative; margin-top:10px;">
+            <label>Plano de Contas (deixe em branco pra usar o padrão da requisição)</label>
+            <input type="text" id="editarDetalhesBuscaPlanoContas" placeholder="Buscar código ou descrição..." autocomplete="off">
+            <div id="editarDetalhesResultadosPlanoContas" class="dropdown-busca-evento"></div>
+            <p class="selecionado-texto" id="editarDetalhesPlanoContasTexto"></p>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-top:16px;">
+            <button type="button" class="btn btn-cinza" id="btnCancelarEditarDetalhesItem" style="flex:1;">Cancelar</button>
+            <button type="button" class="btn btn-principal" id="btnSalvarEditarDetalhesItem" style="flex:1;">Salvar</button>
+        </div>
+    </div>
+</div>
+
 <div id="modal-gerenciar-veiculos" class="modal-overlay">
     <div class="modal-caixa" style="max-width:520px;">
         <h3>Veículos e Equipamentos</h3>
         <p class="subtitulo" style="margin-bottom:14px;">Só administradores e o Principal podem gerenciar essa lista.</p>
 
+        <input type="text" id="gvBuscaLista" placeholder="🔍 Buscar por nome, placa ou identificador..." style="margin-bottom:8px;">
         <div id="listaVeiculosGerenciar" style="max-height:220px; overflow-y:auto; margin-bottom:16px;"></div>
 
         <div style="border-top:1px solid var(--border); padding-top:14px;">
@@ -355,6 +395,24 @@
                 </div>
                 <div class="campo" id="gvCampoPlaca"><label>Placa</label><input type="text" id="gvPlaca"></div>
                 <div class="campo hidden" id="gvCampoIdentificador"><label>Identificador</label><input type="text" id="gvIdentificador"></div>
+                <div class="campo"><label>Modelo</label><input type="text" id="gvModelo"></div>
+                <div class="campo"><label>Ano</label><input type="text" id="gvAno"></div>
+                <div class="campo"><label>Cor</label><input type="text" id="gvCor"></div>
+                <div class="campo"><label>Setor</label><input type="text" id="gvSetor"></div>
+                <div class="campo">
+                    <label>Status de funcionamento</label>
+                    <select id="gvStatusFuncionamento">
+                        <option value="N/E">Não Especificado</option>
+                        <option value="D">Disponível</option>
+                        <option value="L">Locado</option>
+                        <option value="M">Manutenção</option>
+                    </select>
+                </div>
+                <div class="campo"><label>RENAVAM</label><input type="text" id="gvRenavam"></div>
+                <div class="campo"><label>Chassi</label><input type="text" id="gvChassi"></div>
+                <div class="campo"><label>Documento do proprietário</label><input type="text" id="gvProprietarioDoc"></div>
+                <div class="campo"><label>Alienado a</label><input type="text" id="gvAlienadoA"></div>
+                <div class="campo" style="grid-column:span 2;"><label>Locação atual (se estiver locado)</label><input type="text" id="gvLocacaoAtual"></div>
             </div>
             <div style="display:flex; gap:8px; margin-top:6px;">
                 <button type="button" class="btn btn-cinza" id="btnCancelarEdicaoVeiculo" style="flex:1;">Cancelar edição</button>
@@ -422,6 +480,7 @@ let itensServico = []; // [{equipamentoVeiculoId, nomeVeiculo, servicoDescricao,
 let requisicaoEmEdicaoId = null;
 let veiculosEquipamentos = [];
 let fornecedoresRecomendados = [];
+let planoContas = [];
 let eventoSelecionado = null;
 let requisicoesAtender = [];
 let itemAtenderAtualId = null;
@@ -431,6 +490,25 @@ function saldoDoProdutoNoAlmoxarifado(produtoId, almoxarifadoId) {
 }
 
 const PAPEIS_PODEM_ATENDER = ['administrador', 'almoxarife', 'auxiliar_almoxarifado'];
+
+// grava um registro na sentinela (auditoria global, compartilhada
+// entre módulos) -- não bloqueia a ação principal se falhar, só avisa
+// no console, pra nunca travar o operador por causa de um log
+async function registrarSentinela(tipoAcao, descricao) {
+    try {
+        const { error } = await sb.from('servir_sentinela').insert({
+            unidade_negocio_id: meuPerfil.unidadeId,
+            modulo: 'requisicao_rapida',
+            tipo_acao: tipoAcao,
+            descricao,
+            operador: meuPerfil.nomeAtendente,
+            operador_user_id: meuPerfil.userId
+        });
+        if (error) console.error('Falha ao gravar na sentinela:', error);
+    } catch (e) {
+        console.error('Falha ao gravar na sentinela:', e);
+    }
+}
 
 // ---------------------------------------------------------------
 // LOGIN
@@ -445,10 +523,46 @@ document.getElementById('btn-login').addEventListener('click', async () => {
     btn.disabled = true; btn.textContent = 'Entrando...';
     const { error } = await sb.auth.signInWithPassword({ email, password: senha });
     btn.disabled = false; btn.textContent = 'Entrar';
-    if (error) { statusEl.textContent = 'E-mail ou senha incorretos.'; return; }
+    if (error) {
+        // mensagem específica conforme o problema real -- "senha
+        // incorreta" genérico esconde outros problemas (e-mail não
+        // confirmado, muitas tentativas, sem internet) que não têm
+        // nada a ver com ter digitado errado
+        const msg = (error.message || '').toLowerCase();
+        if (msg.includes('email not confirmed')) {
+            statusEl.textContent = 'Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada.';
+        } else if (msg.includes('invalid login credentials') || msg.includes('invalid_credentials')) {
+            statusEl.textContent = 'E-mail ou senha incorretos.';
+        } else if (msg.includes('rate limit') || msg.includes('too many')) {
+            statusEl.textContent = 'Muitas tentativas seguidas. Aguarde um instante e tente de novo.';
+        } else if (!navigator.onLine) {
+            statusEl.textContent = 'Sem conexão com a internet. Verifique sua rede e tente de novo.';
+        } else {
+            statusEl.textContent = 'Não foi possível entrar: ' + error.message;
+        }
+        return;
+    }
     await onLogin();
 });
 document.getElementById('login-senha').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btn-login').click(); });
+
+document.getElementById('link-esqueci-senha').addEventListener('click', async (e) => {
+    e.preventDefault();
+    const statusEl = document.getElementById('status-login');
+    const email = document.getElementById('login-email').value.trim();
+    if (!email) { statusEl.textContent = 'Digite seu e-mail no campo acima primeiro, depois clique em "Esqueci minha senha".'; statusEl.style.color = ''; return; }
+    statusEl.style.color = '';
+    statusEl.textContent = 'Enviando...';
+    try {
+        const { error } = await sb.auth.resetPasswordForEmail(email);
+        if (error) throw error;
+        statusEl.style.color = 'var(--brand-2)';
+        statusEl.textContent = 'Se esse e-mail estiver cadastrado, você vai receber um link pra redefinir a senha.';
+    } catch (erro) {
+        statusEl.style.color = '';
+        statusEl.textContent = 'Não foi possível enviar: ' + erro.message;
+    }
+});
 
 document.getElementById('btn-sair').addEventListener('click', async () => {
     await sb.auth.signOut();
@@ -468,6 +582,7 @@ async function onLogin() {
     meuPerfil.email = sessao?.user?.email || '';
     meuPerfil.nomeAtendente = sessao?.user?.user_metadata?.nome || sessao?.user?.user_metadata?.full_name || meuPerfil.email;
     const userId = sessao?.user?.id;
+    meuPerfil.userId = userId;
     if (!userId) return;
 
     const { data: vinculos, error } = await sb.from('servir_unidade_usuarios')
@@ -531,18 +646,20 @@ async function iniciarApp() {
 
     document.getElementById('campoSolicitante').value = meuPerfil.email;
 
-    const [{ data: dadosAlmox }, { data: dadosSetores }, { data: dadosEventos }, { data: dadosVeiculos }, { data: dadosFornecedores }] = await Promise.all([
+    const [{ data: dadosAlmox }, { data: dadosSetores }, { data: dadosEventos }, { data: dadosVeiculos }, { data: dadosFornecedores }, { data: dadosPlanoContas }] = await Promise.all([
         sb.from('unidade_almoxarifados').select('id, nome').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome'),
         sb.from('unidade_setores').select('id, nome').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome'),
         sb.from('fabrica_eventos').select('codigo, descricao').eq('unidade_negocio_id', meuPerfil.unidadeId),
-        sb.from('unidade_equipamentos_veiculos').select('id, nome, placa').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome'),
-        sb.from('unidade_fornecedores_recomendados').select('id, nome').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome')
+        sb.from('unidade_equipamentos_veiculos').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome'),
+        sb.from('unidade_fornecedores_recomendados').select('id, nome').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome'),
+        sb.from('unidade_plano_de_contas').select('id, codigo, descricao').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('codigo')
     ]);
     almoxarifados = dadosAlmox || [];
     setores = dadosSetores || [];
     eventos = (dadosEventos || []).map(e => ({ codigo: String(e.codigo ?? ''), descricao: String(e.descricao || '') }));
     veiculosEquipamentos = dadosVeiculos || [];
     fornecedoresRecomendados = dadosFornecedores || [];
+    planoContas = dadosPlanoContas || [];
 
     document.getElementById('campoVeiculoServico').innerHTML =
         '<option value="">-- selecione --</option>' + veiculosEquipamentos.map(v => `<option value="${v.id}">${escapeHtml(v.nome)}</option>`).join('');
@@ -555,6 +672,7 @@ async function iniciarApp() {
         '<option value="">-- selecione --</option>' + setores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
 
     aplicarUltimaEscolhaSalva();
+    aplicarUltimoPlanoContasSalvo();
 
     await carregarProdutosESaldos();
 
@@ -636,6 +754,54 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
 // ---------------------------------------------------------------
 // BUSCA DE EVENTO
 // ---------------------------------------------------------------
+let planoContasSelecionado = null;
+document.getElementById('campoBuscaPlanoContas').addEventListener('input', (e) => {
+    const termo = e.target.value.trim().toUpperCase();
+    const el = document.getElementById('resultadosBuscaPlanoContas');
+    if (!termo) { fecharDropdownBusca(el); return; }
+    const filtrados = planoContas.filter(pc => (pc.codigo || '').toUpperCase().includes(termo) || (pc.descricao || '').toUpperCase().includes(termo)).slice(0, 20);
+    if (!filtrados.length) { el.innerHTML = '<div class="resultado-item">Nenhum plano de contas encontrado.</div>'; abrirDropdownBusca(el); return; }
+    el.innerHTML = filtrados.map(pc => `<div class="resultado-item" data-id="${pc.id}"><span class="cod">${escapeHtml(pc.codigo)}</span> — ${escapeHtml(pc.descricao)}</div>`).join('');
+    abrirDropdownBusca(el);
+    el.querySelectorAll('[data-id]').forEach(item => {
+        item.addEventListener('click', () => {
+            planoContasSelecionado = planoContas.find(pc => pc.id === Number(item.dataset.id));
+            document.getElementById('planoContasSelecionadoTexto').textContent = planoContasSelecionado ? `Selecionado: ${planoContasSelecionado.codigo} — ${planoContasSelecionado.descricao}` : '';
+            document.getElementById('campoBuscaPlanoContas').value = '';
+            fecharDropdownBusca(el);
+            salvarUltimoPlanoContasEscolhido();
+        });
+    });
+});
+document.addEventListener('click', (e) => {
+    const campo = document.getElementById('campoBuscaPlanoContas');
+    const resultados = document.getElementById('resultadosBuscaPlanoContas');
+    if (e.target !== campo && !resultados.contains(e.target)) {
+        fecharDropdownBusca(resultados);
+    }
+});
+
+function chaveUltimoPlanoContas() {
+    return `reqrapida_ultimo_planocontas_${meuPerfil.unidadeId}`;
+}
+function salvarUltimoPlanoContasEscolhido() {
+    try {
+        if (planoContasSelecionado) localStorage.setItem(chaveUltimoPlanoContas(), String(planoContasSelecionado.id));
+        else localStorage.removeItem(chaveUltimoPlanoContas());
+    } catch (e) { /* se não conseguir salvar, só não lembra da próxima vez -- não trava o uso */ }
+}
+function aplicarUltimoPlanoContasSalvo() {
+    try {
+        const salvo = localStorage.getItem(chaveUltimoPlanoContas());
+        if (!salvo) return;
+        const encontrado = planoContas.find(pc => String(pc.id) === salvo);
+        if (encontrado) {
+            planoContasSelecionado = encontrado;
+            document.getElementById('planoContasSelecionadoTexto').textContent = `Selecionado: ${encontrado.codigo} — ${encontrado.descricao}`;
+        }
+    } catch (e) { /* dado salvo corrompido ou navegador bloqueando -- ignora e segue sem pré-preencher */ }
+}
+
 document.getElementById('campoBuscaEvento').addEventListener('input', (e) => {
     const termo = e.target.value.trim().toUpperCase();
     const el = document.getElementById('resultadosBuscaEvento');
@@ -693,7 +859,7 @@ document.getElementById('campoBuscaProduto').addEventListener('input', (e) => {
 function adicionarItemNovaReq(prod) {
     const existente = itensNovaReq.find(i => i.produtoId === prod.id);
     if (existente) existente.qtd += 1;
-    else itensNovaReq.push({ produtoId: prod.id, nome: prod.nome, un: prod.un, qtd: 1 });
+    else itensNovaReq.push({ produtoId: prod.id, nome: prod.nome, un: prod.un, qtd: 1, planoContasId: planoContasSelecionado ? planoContasSelecionado.id : null });
     renderizarItensNovaReq();
 }
 
@@ -709,6 +875,9 @@ function renderizarItensNovaReq() {
         const btnRemover = qtdAtendida > 0
             ? `<span title="Não dá pra remover -- esse item já tem atendimento registrado" style="color:var(--muted); font-size:0.8em;">🔒</span>`
             : `<button type="button" class="btn btn-remover" data-remover="${idx}">×</button>`;
+        const pcItem = item.planoContasId ? planoContas.find(pc => pc.id === item.planoContasId) : null;
+        const temDetalheProprio = item.setorId || item.evento || item.planoContasId;
+        const btnDetalhes = `<button type="button" class="btn btn-cinza btn-pequeno" data-detalhes-material="${idx}" style="font-size:0.72em; padding:4px 7px;" title="Trocar setor/evento/plano de contas só desse item">${pcItem ? '📋 ' + escapeHtml(pcItem.codigo) : '✏️ Detalhes'}${temDetalheProprio && !pcItem ? ' •' : ''}</button>`;
         if (item.produtoId == null) {
             // item avulso, descrito na hora -- não existe no cadastro ainda
             return `
@@ -716,6 +885,7 @@ function renderizarItensNovaReq() {
                     <td>${escapeHtml(item.descricaoLivre)} <span class="pill" style="background:var(--danger-soft); color:var(--danger); font-size:0.65rem;">novo</span></td>
                     <td>-</td>
                     <td><input type="number" min="${qtdAtendida > 0 ? qtdAtendida : 0.01}" step="0.01" value="${item.qtd}" data-idx="${idx}" class="input-qtd-nova-req">${jaAtendidoTexto}</td>
+                    <td>${btnDetalhes}</td>
                     <td>${btnRemover}</td>
                 </tr>`;
         }
@@ -726,9 +896,13 @@ function renderizarItensNovaReq() {
                 <td>${escapeHtml(item.nome)} <span style="color:var(--muted); font-size:0.8em;">(${escapeHtml(item.un)})</span></td>
                 <td>${disp}</td>
                 <td><input type="number" min="${qtdAtendida > 0 ? qtdAtendida : 0.01}" step="0.01" value="${item.qtd}" data-idx="${idx}" class="input-qtd-nova-req">${jaAtendidoTexto}</td>
+                <td>${btnDetalhes}</td>
                 <td>${btnRemover}</td>
             </tr>`;
     }).join('');
+    corpo.querySelectorAll('[data-detalhes-material]').forEach(btn => {
+        btn.addEventListener('click', () => abrirModalEditarDetalhesItem('material', Number(btn.dataset.detalhesMaterial)));
+    });
     corpo.querySelectorAll('.input-qtd-nova-req').forEach(inp => {
         inp.addEventListener('change', () => {
             const item = itensNovaReq[Number(inp.dataset.idx)];
@@ -777,7 +951,7 @@ document.getElementById('btnAdicionarDescricaoLivre').addEventListener('click', 
     const qtd = parseFloat(document.getElementById('campoQtdDescricaoLivre').value) || 0;
     if (!descricao) { alert('Descreva o produto antes de adicionar.'); return; }
     if (qtd <= 0) { alert('Informe uma quantidade maior que zero.'); return; }
-    itensNovaReq.push({ produtoId: null, descricaoLivre: descricao, un: '', qtd });
+    itensNovaReq.push({ produtoId: null, descricaoLivre: descricao, un: '', qtd, planoContasId: planoContasSelecionado ? planoContasSelecionado.id : null });
     renderizarItensNovaReq();
     document.getElementById('blocoDescreverProduto').classList.add('hidden');
 });
@@ -800,7 +974,8 @@ document.getElementById('btnAdicionarItemServico').addEventListener('click', () 
         nomeVeiculo: veiculo ? veiculo.nome : '',
         servicoDescricao: servico,
         fornecedorRecomendado: fornecedor || null,
-        qtd, unidadeMedida: unidade || null
+        qtd, unidadeMedida: unidade || null,
+        planoContasId: planoContasSelecionado ? planoContasSelecionado.id : null
     });
     renderizarItensServico();
 
@@ -821,20 +996,152 @@ function renderizarItensServico() {
         const btnRemover = qtdAtendida > 0
             ? `<span title="Não dá pra remover -- esse item já tem atendimento registrado" style="color:var(--muted); font-size:0.8em;">🔒</span>`
             : `<button type="button" class="btn btn-remover" data-remover-servico="${idx}">×</button>`;
+        const pcItem = item.planoContasId ? planoContas.find(pc => pc.id === item.planoContasId) : null;
+        const temDetalheProprio = item.setorId || item.evento || item.planoContasId;
+        const btnDetalhes = `<button type="button" class="btn btn-cinza btn-pequeno" data-detalhes-servico="${idx}" style="font-size:0.72em; padding:4px 7px;" title="Trocar setor/evento/plano de contas só desse item">${pcItem ? '📋 ' + escapeHtml(pcItem.codigo) : '✏️ Detalhes'}${temDetalheProprio && !pcItem ? ' •' : ''}</button>`;
         return `
         <tr>
             <td>${item.nomeVeiculo ? escapeHtml(item.nomeVeiculo) : '-'}</td>
             <td>${escapeHtml(item.servicoDescricao)}</td>
             <td>${item.fornecedorRecomendado ? escapeHtml(item.fornecedorRecomendado) : '-'}</td>
             <td>${item.qtd != null ? item.qtd + (item.unidadeMedida ? ' ' + escapeHtml(item.unidadeMedida) : '') : '-'} ${qtdAtendida > 0 ? `<div style="font-size:0.75em; color:var(--brand-2);">já atendido: ${qtdAtendida}</div>` : ''}</td>
+            <td>${btnDetalhes}</td>
             <td>${btnRemover}</td>
         </tr>
     `;
     }).join('');
+    corpo.querySelectorAll('[data-detalhes-servico]').forEach(btn => {
+        btn.addEventListener('click', () => abrirModalEditarDetalhesItem('servico', Number(btn.dataset.detalhesServico)));
+    });
     corpo.querySelectorAll('[data-remover-servico]').forEach(btn => {
         btn.addEventListener('click', () => { itensServico.splice(Number(btn.dataset.removerServico), 1); renderizarItensServico(); });
     });
 }
+
+// ---------------------------------------------------------------
+// POPUP DE DETALHES DO ITEM -- deixa trocar setor/evento/plano de
+// contas só daquele item específico, sem afetar os outros. Em branco
+// = usa o padrão da requisição inteira (comportamento de sempre)
+// ---------------------------------------------------------------
+let itemDetalhesEmEdicaoTipo = null; // 'material' | 'servico'
+let itemDetalhesEmEdicaoIdx = null;
+let eventoSelecionadoDetalhesItem = null;
+let planoContasSelecionadoDetalhesItem = null;
+
+// fecha o dropdown de busca de forma reforçada -- remove a classe E
+// também força o estilo inline diretamente, pra nunca depender só de
+// CSS (elimina qualquer possibilidade de alguma regra escondida
+// conflitando e mantendo ele visível por engano)
+function fecharDropdownBusca(elemento) {
+    elemento.classList.remove('aberto');
+    elemento.style.display = 'none';
+}
+function abrirDropdownBusca(elemento) {
+    elemento.classList.add('aberto');
+    elemento.style.display = 'block';
+}
+
+function abrirModalEditarDetalhesItem(tipo, idx) {
+    itemDetalhesEmEdicaoTipo = tipo;
+    itemDetalhesEmEdicaoIdx = idx;
+    const item = tipo === 'material' ? itensNovaReq[idx] : itensServico[idx];
+    if (!item) return;
+
+    const nomeItem = tipo === 'material'
+        ? (item.produtoId != null ? item.nome : item.descricaoLivre)
+        : item.servicoDescricao;
+    document.getElementById('editarDetalhesItemNome').textContent = nomeItem || '';
+
+    document.getElementById('editarDetalhesSetor').innerHTML =
+        '<option value="">-- usar o da requisição --</option>' + setores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+    document.getElementById('editarDetalhesSetor').value = item.setorId || '';
+
+    document.getElementById('editarDetalhesBuscaEvento').value = '';
+    fecharDropdownBusca(document.getElementById('editarDetalhesResultadosEvento'));
+    if (item.evento) {
+        eventoSelecionadoDetalhesItem = eventos.find(e => e.codigo === item.evento) || { codigo: item.evento, descricao: '' };
+        document.getElementById('editarDetalhesEventoTexto').textContent = `Selecionado: ${eventoSelecionadoDetalhesItem.codigo}${eventoSelecionadoDetalhesItem.descricao ? ' — ' + eventoSelecionadoDetalhesItem.descricao : ''}`;
+    } else {
+        eventoSelecionadoDetalhesItem = null;
+        document.getElementById('editarDetalhesEventoTexto').textContent = '';
+    }
+
+    document.getElementById('editarDetalhesBuscaPlanoContas').value = '';
+    fecharDropdownBusca(document.getElementById('editarDetalhesResultadosPlanoContas'));
+    if (item.planoContasId) {
+        planoContasSelecionadoDetalhesItem = planoContas.find(pc => pc.id === item.planoContasId) || null;
+        document.getElementById('editarDetalhesPlanoContasTexto').textContent = planoContasSelecionadoDetalhesItem ? `Selecionado: ${planoContasSelecionadoDetalhesItem.codigo} — ${planoContasSelecionadoDetalhesItem.descricao}` : '';
+    } else {
+        planoContasSelecionadoDetalhesItem = null;
+        document.getElementById('editarDetalhesPlanoContasTexto').textContent = '';
+    }
+
+    document.getElementById('modal-editar-detalhes-item').classList.add('aberto');
+}
+
+document.getElementById('btnCancelarEditarDetalhesItem').addEventListener('click', () => {
+    document.getElementById('modal-editar-detalhes-item').classList.remove('aberto');
+    fecharDropdownBusca(document.getElementById('editarDetalhesResultadosEvento'));
+    fecharDropdownBusca(document.getElementById('editarDetalhesResultadosPlanoContas'));
+});
+
+document.getElementById('btnSalvarEditarDetalhesItem').addEventListener('click', () => {
+    const item = itemDetalhesEmEdicaoTipo === 'material' ? itensNovaReq[itemDetalhesEmEdicaoIdx] : itensServico[itemDetalhesEmEdicaoIdx];
+    if (!item) return;
+    item.setorId = document.getElementById('editarDetalhesSetor').value ? Number(document.getElementById('editarDetalhesSetor').value) : null;
+    item.evento = eventoSelecionadoDetalhesItem ? eventoSelecionadoDetalhesItem.codigo : null;
+    item.planoContasId = planoContasSelecionadoDetalhesItem ? planoContasSelecionadoDetalhesItem.id : null;
+    document.getElementById('modal-editar-detalhes-item').classList.remove('aberto');
+    if (itemDetalhesEmEdicaoTipo === 'material') renderizarItensNovaReq();
+    else renderizarItensServico();
+});
+
+document.getElementById('editarDetalhesBuscaEvento').addEventListener('input', (e) => {
+    const termo = e.target.value.trim().toUpperCase();
+    const el = document.getElementById('editarDetalhesResultadosEvento');
+    if (!termo) { fecharDropdownBusca(el); return; }
+    const filtrados = eventos.filter(ev => (ev.codigo || '').toUpperCase().includes(termo) || (ev.descricao || '').toUpperCase().includes(termo)).slice(0, 20);
+    if (!filtrados.length) { el.innerHTML = '<div class="resultado-item">Nenhum evento encontrado.</div>'; abrirDropdownBusca(el); return; }
+    el.innerHTML = filtrados.map(ev => `<div class="resultado-item" data-codigo="${escapeHtml(ev.codigo)}"><span class="cod">${escapeHtml(ev.codigo)}</span> — ${escapeHtml(ev.descricao)}</div>`).join('');
+    abrirDropdownBusca(el);
+    el.querySelectorAll('[data-codigo]').forEach(opt => {
+        opt.addEventListener('click', () => {
+            eventoSelecionadoDetalhesItem = eventos.find(ev => ev.codigo === opt.dataset.codigo);
+            document.getElementById('editarDetalhesEventoTexto').textContent = eventoSelecionadoDetalhesItem ? `Selecionado: ${eventoSelecionadoDetalhesItem.codigo} — ${eventoSelecionadoDetalhesItem.descricao}` : '';
+            document.getElementById('editarDetalhesBuscaEvento').value = '';
+            fecharDropdownBusca(el);
+        });
+    });
+});
+
+document.getElementById('editarDetalhesBuscaPlanoContas').addEventListener('input', (e) => {
+    const termo = e.target.value.trim().toUpperCase();
+    const el = document.getElementById('editarDetalhesResultadosPlanoContas');
+    if (!termo) { fecharDropdownBusca(el); return; }
+    const filtrados = planoContas.filter(pc => (pc.codigo || '').toUpperCase().includes(termo) || (pc.descricao || '').toUpperCase().includes(termo)).slice(0, 20);
+    if (!filtrados.length) { el.innerHTML = '<div class="resultado-item">Nenhum plano de contas encontrado.</div>'; abrirDropdownBusca(el); return; }
+    el.innerHTML = filtrados.map(pc => `<div class="resultado-item" data-id="${pc.id}"><span class="cod">${escapeHtml(pc.codigo)}</span> — ${escapeHtml(pc.descricao)}</div>`).join('');
+    abrirDropdownBusca(el);
+    el.querySelectorAll('[data-id]').forEach(opt => {
+        opt.addEventListener('click', () => {
+            planoContasSelecionadoDetalhesItem = planoContas.find(pc => pc.id === Number(opt.dataset.id));
+            document.getElementById('editarDetalhesPlanoContasTexto').textContent = planoContasSelecionadoDetalhesItem ? `Selecionado: ${planoContasSelecionadoDetalhesItem.codigo} — ${planoContasSelecionadoDetalhesItem.descricao}` : '';
+            document.getElementById('editarDetalhesBuscaPlanoContas').value = '';
+            fecharDropdownBusca(el);
+        });
+    });
+});
+document.addEventListener('click', (e) => {
+    const camposFechamento = [
+        ['editarDetalhesBuscaEvento', 'editarDetalhesResultadosEvento'],
+        ['editarDetalhesBuscaPlanoContas', 'editarDetalhesResultadosPlanoContas']
+    ];
+    camposFechamento.forEach(([idCampo, idResultado]) => {
+        const campo = document.getElementById(idCampo);
+        const resultados = document.getElementById(idResultado);
+        if (e.target !== campo && !resultados.contains(e.target)) fecharDropdownBusca(resultados);
+    });
+});
 
 // ---------------------------------------------------------------
 // GERENCIAR VEÍCULOS/EQUIPAMENTOS (só admin/principal) -- criar e
@@ -844,6 +1151,7 @@ let veiculoEmEdicaoId = null;
 
 document.getElementById('btnGerenciarVeiculos').addEventListener('click', () => {
     abrirFormVeiculoNovo();
+    document.getElementById('gvBuscaLista').value = '';
     renderizarListaVeiculosGerenciar();
     document.getElementById('modal-gerenciar-veiculos').classList.add('aberto');
 });
@@ -863,15 +1171,44 @@ function abrirFormVeiculoNovo() {
     document.getElementById('gvTipo').value = 'veiculo';
     document.getElementById('gvPlaca').value = '';
     document.getElementById('gvIdentificador').value = '';
+    document.getElementById('gvModelo').value = '';
+    document.getElementById('gvAno').value = '';
+    document.getElementById('gvCor').value = '';
+    document.getElementById('gvSetor').value = '';
+    document.getElementById('gvStatusFuncionamento').value = 'N/E';
+    document.getElementById('gvRenavam').value = '';
+    document.getElementById('gvChassi').value = '';
+    document.getElementById('gvProprietarioDoc').value = '';
+    document.getElementById('gvAlienadoA').value = '';
+    document.getElementById('gvLocacaoAtual').value = '';
     document.getElementById('gvCampoPlaca').classList.remove('hidden');
     document.getElementById('gvCampoIdentificador').classList.add('hidden');
     document.getElementById('statusGerenciarVeiculo').textContent = '';
 }
 
+const LIMITE_LISTA_VEICULOS = 15;
+
 function renderizarListaVeiculosGerenciar() {
     const lista = document.getElementById('listaVeiculosGerenciar');
     if (!veiculosEquipamentos.length) { lista.innerHTML = '<p class="subtitulo">Nenhum cadastrado ainda.</p>'; return; }
-    lista.innerHTML = veiculosEquipamentos.map(v => `
+
+    const termo = document.getElementById('gvBuscaLista').value.trim().toUpperCase();
+    const filtrados = termo
+        ? veiculosEquipamentos.filter(v =>
+            (v.nome || '').toUpperCase().includes(termo) ||
+            (v.placa || '').toUpperCase().includes(termo) ||
+            (v.identificador || '').toUpperCase().includes(termo))
+        : veiculosEquipamentos;
+
+    if (!filtrados.length) { lista.innerHTML = '<p class="subtitulo">Nenhum resultado pra essa busca.</p>'; return; }
+
+    // com uma base grande (100+ cadastrados), renderizar tudo de uma vez
+    // fica pesado e a lista vira uma rolagem infinita difícil de usar --
+    // mostra só os primeiros da vez, e pede pra digitar mais pra achar o resto
+    const visiveis = filtrados.slice(0, LIMITE_LISTA_VEICULOS);
+    const restantes = filtrados.length - visiveis.length;
+
+    lista.innerHTML = visiveis.map(v => `
         <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px solid var(--border); font-size:0.85rem;">
             <span>${escapeHtml(v.nome)}${v.placa ? ' — ' + escapeHtml(v.placa) : ''}</span>
             <div style="display:flex; gap:6px;">
@@ -879,7 +1216,8 @@ function renderizarListaVeiculosGerenciar() {
                 <button type="button" class="btn-desfazer-atendimento" data-excluir-veiculo="${v.id}" style="font-size:0.78rem;">Excluir</button>
             </div>
         </div>
-    `).join('');
+    `).join('') + (restantes > 0 ? `<p class="subtitulo" style="margin-top:8px; text-align:center;">+ ${restantes} outro(s) — digite pra encontrar</p>` : '');
+
     lista.querySelectorAll('[data-editar-veiculo]').forEach(btn => {
         btn.addEventListener('click', () => abrirFormVeiculoEditar(Number(btn.dataset.editarVeiculo)));
     });
@@ -887,6 +1225,8 @@ function renderizarListaVeiculosGerenciar() {
         btn.addEventListener('click', () => excluirVeiculo(Number(btn.dataset.excluirVeiculo)));
     });
 }
+
+document.getElementById('gvBuscaLista').addEventListener('input', renderizarListaVeiculosGerenciar);
 
 function abrirFormVeiculoEditar(id) {
     const v = veiculosEquipamentos.find(x => x.id === id);
@@ -897,6 +1237,16 @@ function abrirFormVeiculoEditar(id) {
     document.getElementById('gvTipo').value = v.tipo || 'veiculo';
     document.getElementById('gvPlaca').value = v.placa || '';
     document.getElementById('gvIdentificador').value = v.identificador || '';
+    document.getElementById('gvModelo').value = v.modelo || '';
+    document.getElementById('gvAno').value = v.ano || '';
+    document.getElementById('gvCor').value = v.cor || '';
+    document.getElementById('gvSetor').value = v.setor || '';
+    document.getElementById('gvStatusFuncionamento').value = v.status_funcionamento || 'N/E';
+    document.getElementById('gvRenavam').value = v.renavam || '';
+    document.getElementById('gvChassi').value = v.chassi || '';
+    document.getElementById('gvProprietarioDoc').value = v.proprietario_doc || '';
+    document.getElementById('gvAlienadoA').value = v.alienado_a || '';
+    document.getElementById('gvLocacaoAtual').value = v.locacao_atual || '';
     document.getElementById('gvCampoPlaca').classList.toggle('hidden', v.tipo !== 'veiculo');
     document.getElementById('gvCampoIdentificador').classList.toggle('hidden', v.tipo === 'veiculo');
     document.getElementById('statusGerenciarVeiculo').textContent = '';
@@ -916,6 +1266,16 @@ document.getElementById('btnSalvarVeiculo').addEventListener('click', async () =
         nome, tipo,
         placa: tipo === 'veiculo' ? (document.getElementById('gvPlaca').value.trim() || null) : null,
         identificador: tipo !== 'veiculo' ? (document.getElementById('gvIdentificador').value.trim() || null) : null,
+        modelo: document.getElementById('gvModelo').value.trim() || null,
+        cor: document.getElementById('gvCor').value.trim() || null,
+        ano: document.getElementById('gvAno').value.trim() || null,
+        setor: document.getElementById('gvSetor').value.trim() || null,
+        status_funcionamento: document.getElementById('gvStatusFuncionamento').value,
+        renavam: document.getElementById('gvRenavam').value.trim() || null,
+        chassi: document.getElementById('gvChassi').value.trim() || null,
+        proprietario_doc: document.getElementById('gvProprietarioDoc').value.trim() || null,
+        alienado_a: document.getElementById('gvAlienadoA').value.trim() || null,
+        locacao_atual: document.getElementById('gvLocacaoAtual').value.trim() || null,
         ativo: true
     };
 
@@ -927,7 +1287,7 @@ document.getElementById('btnSalvarVeiculo').addEventListener('click', async () =
             : await sb.from('unidade_equipamentos_veiculos').insert(registro);
         if (error) throw error;
 
-        const { data: dadosVeiculos } = await sb.from('unidade_equipamentos_veiculos').select('id, nome, placa, tipo, identificador').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome');
+        const { data: dadosVeiculos } = await sb.from('unidade_equipamentos_veiculos').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome');
         veiculosEquipamentos = dadosVeiculos || [];
         document.getElementById('campoVeiculoServico').innerHTML =
             '<option value="">-- selecione --</option>' + veiculosEquipamentos.map(v => `<option value="${v.id}">${escapeHtml(v.nome)}</option>`).join('');
@@ -1010,7 +1370,10 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
                         requisicao_id: requisicaoEmEdicaoId,
                         produto_id: item.produtoId,
                         descricao_livre: item.produtoId == null ? item.descricaoLivre : null,
-                        qtd_solicitada: item.qtd
+                        qtd_solicitada: item.qtd,
+                        plano_contas_id: item.planoContasId || null,
+                        setor_id: item.setorId || null,
+                        evento: item.evento || null
                     }
                     : {
                         requisicao_id: requisicaoEmEdicaoId,
@@ -1018,7 +1381,10 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
                         fornecedor_recomendado: item.fornecedorRecomendado,
                         servico_descricao: item.servicoDescricao,
                         qtd_solicitada: item.qtd,
-                        unidade_medida: item.unidadeMedida
+                        unidade_medida: item.unidadeMedida,
+                        plano_contas_id: item.planoContasId || null,
+                        setor_id: item.setorId || null,
+                        evento: item.evento || null
                     };
                 const { error } = item.idExistente
                     ? await sb.from('estoque_requisicoes_rapidas_itens').update(payload).eq('id', item.idExistente)
@@ -1051,7 +1417,8 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
             evento: eventoSelecionado ? eventoSelecionado.codigo : null,
             solicitante,
             numero_externo: numeroExterno || null,
-            tipo: tipoRequisicaoAtual
+            tipo: tipoRequisicaoAtual,
+            criado_por: meuPerfil.userId
         }).select().single();
         if (e1) throw e1;
 
@@ -1061,7 +1428,10 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
                 requisicao_id: req.id,
                 produto_id: i.produtoId,
                 descricao_livre: i.produtoId == null ? i.descricaoLivre : null,
-                qtd_solicitada: i.qtd
+                qtd_solicitada: i.qtd,
+                plano_contas_id: i.planoContasId || null,
+                setor_id: i.setorId || null,
+                evento: i.evento || null
             }));
         } else {
             itensParaInserir = itensServico.map(i => ({
@@ -1070,7 +1440,10 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
                 fornecedor_recomendado: i.fornecedorRecomendado,
                 servico_descricao: i.servicoDescricao,
                 qtd_solicitada: i.qtd,
-                unidade_medida: i.unidadeMedida
+                unidade_medida: i.unidadeMedida,
+                plano_contas_id: i.planoContasId || null,
+                setor_id: i.setorId || null,
+                evento: i.evento || null
             }));
         }
         const { error: e2 } = await sb.from('estoque_requisicoes_rapidas_itens').insert(itensParaInserir);
@@ -1187,6 +1560,9 @@ function renderizarRequisicoesAtender() {
         }).join('');
 
         const temItemAtendivelEmMassa = itens.some(i => i.qtd_solicitada != null && (Number(i.qtd_solicitada) - Number(i.qtd_atendida || 0)) > 0);
+        const temAlgumItemAtendido = itens.some(i => (i.estoque_requisicoes_rapidas_atendimentos || []).length > 0);
+        const podeGerenciarComoAdmin = meuPerfil.ehPrincipal || meuPerfil.papel === 'administrador';
+        const podeExcluir = !temAlgumItemAtendido && (req.criado_por === meuPerfil.userId || podeGerenciarComoAdmin);
 
         return `
             <div class="card-requisicao">
@@ -1203,6 +1579,7 @@ function renderizarRequisicoesAtender() {
                         ${temItemAtendivelEmMassa ? `<button type="button" class="btn btn-principal" data-atender-tudo="${req.id}" style="font-size:0.75rem; padding:6px 10px;">✅ Atender tudo</button>` : ''}
                         <button type="button" class="btn btn-cinza" data-imprimir-req="${req.id}" data-formato="a4" style="font-size:0.75rem; padding:6px 8px;">📄 A4</button>
                         <button type="button" class="btn btn-cinza" data-imprimir-req="${req.id}" data-formato="bobina" style="font-size:0.75rem; padding:6px 8px;">🧾 Bobina</button>
+                        ${podeExcluir ? `<button type="button" class="btn btn-cinza" data-excluir-req="${req.id}" style="font-size:0.75rem; padding:6px 8px; background:var(--danger-soft); color:var(--danger);">🗑️ Excluir</button>` : ''}
                     </div>
                 </div>
                 ${linhasItens}
@@ -1215,6 +1592,10 @@ function renderizarRequisicoesAtender() {
             if (!req) return;
             gerarEAbrirPopupPdf(req, req.estoque_requisicoes_rapidas_itens || [], el.dataset.formato);
         });
+    });
+
+    lista.querySelectorAll('[data-excluir-req]').forEach(el => {
+        el.addEventListener('click', () => excluirRequisicaoCompleta(el.dataset.excluirReq));
     });
 
     lista.querySelectorAll('[data-reabrir-req]').forEach(el => {
@@ -1232,6 +1613,31 @@ function renderizarRequisicoesAtender() {
     lista.querySelectorAll('[data-desfazer]').forEach(el => {
         el.addEventListener('click', () => desfazerAtendimento(Number(el.dataset.desfazer)));
     });
+}
+
+async function excluirRequisicaoCompleta(reqId) {
+    const req = requisicoesAtender.find(r => r.id === reqId);
+    if (!req) return;
+
+    if (!confirm(`Excluir completamente a requisição de "${req.solicitante}"? Essa ação não pode ser desfeita.`)) return;
+
+    try {
+        // usa .select() depois do delete pra saber se REALMENTE excluiu
+        // (a política de segurança do banco pode bloquear silenciosamente,
+        // sem erro nenhum -- só retornando zero linhas)
+        const { data, error } = await sb.from('estoque_requisicoes_rapidas').delete().eq('id', reqId).select();
+        if (error) throw error;
+        if (!data || !data.length) {
+            alert('Não foi possível excluir -- ou você não tem permissão, ou algum item já foi atendido.');
+            return;
+        }
+
+        await registrarSentinela('exclusao', `Excluiu a requisição de "${req.solicitante}" (${req.tipo === 'servico_abastecimento' ? 'serviço/abastecimento' : 'material'}, ${(req.estoque_requisicoes_rapidas_itens || []).length} item(ns))`);
+
+        await carregarRequisicoesAtender();
+    } catch (erro) {
+        alert('Não foi possível excluir: ' + erro.message);
+    }
 }
 
 function reabrirRequisicaoParaEdicao(reqId) {
@@ -1272,9 +1678,9 @@ function reabrirRequisicaoParaEdicao(reqId) {
         itensNovaReq = itens.map(i => {
             if (i.produto_id != null) {
                 const prod = produtos.find(p => p.id === i.produto_id);
-                return { produtoId: i.produto_id, nome: prod ? prod.nome : '#' + i.produto_id, un: prod ? prod.un : '', qtd: Number(i.qtd_solicitada), idExistente: i.id, qtdAtendida: Number(i.qtd_atendida || 0) };
+                return { produtoId: i.produto_id, nome: prod ? prod.nome : '#' + i.produto_id, un: prod ? prod.un : '', qtd: Number(i.qtd_solicitada), idExistente: i.id, qtdAtendida: Number(i.qtd_atendida || 0), planoContasId: i.plano_contas_id || null, setorId: i.setor_id || null, evento: i.evento || null };
             }
-            return { produtoId: null, descricaoLivre: i.descricao_livre, qtd: Number(i.qtd_solicitada), idExistente: i.id, qtdAtendida: Number(i.qtd_atendida || 0) };
+            return { produtoId: null, descricaoLivre: i.descricao_livre, qtd: Number(i.qtd_solicitada), idExistente: i.id, qtdAtendida: Number(i.qtd_atendida || 0), planoContasId: i.plano_contas_id || null, setorId: i.setor_id || null, evento: i.evento || null };
         });
         itensServico = [];
     } else {
@@ -1284,7 +1690,8 @@ function reabrirRequisicaoParaEdicao(reqId) {
                 equipamentoVeiculoId: i.equipamento_veiculo_id, nomeVeiculo: veiculo ? veiculo.nome : '',
                 servicoDescricao: i.servico_descricao, fornecedorRecomendado: i.fornecedor_recomendado,
                 qtd: i.qtd_solicitada != null ? Number(i.qtd_solicitada) : null, unidadeMedida: i.unidade_medida,
-                idExistente: i.id, qtdAtendida: Number(i.qtd_atendida || 0)
+                idExistente: i.id, qtdAtendida: Number(i.qtd_atendida || 0), planoContasId: i.plano_contas_id || null,
+                setorId: i.setor_id || null, evento: i.evento || null
             };
         });
         itensNovaReq = [];
@@ -1311,6 +1718,7 @@ function cancelarEdicaoRequisicao() {
     document.getElementById('campoBuscaEvento').value = '';
     document.getElementById('eventoSelecionadoTexto').textContent = '';
     eventoSelecionado = null;
+    fecharDropdownBusca(document.getElementById('resultadosBuscaPlanoContas'));
     document.getElementById('bannerModoEdicao').classList.add('hidden');
     document.getElementById('btnEnviarRequisicao').textContent = 'Enviar requisição';
     document.getElementById('statusEnvioRequisicao').textContent = '';
@@ -1532,6 +1940,12 @@ async function desfazerAtendimento(atendimentoId) {
             }
         }
 
+        const ehServicoParaLog = reqAlvo.tipo === 'servico_abastecimento';
+        const nomeItemParaLog = ehServicoParaLog
+            ? (itemAlvo.servico_descricao || '')
+            : (itemAlvo.produto_id != null ? (produtos.find(p => p.id === itemAlvo.produto_id)?.nome || '#' + itemAlvo.produto_id) : (itemAlvo.descricao_livre || ''));
+        await registrarSentinela('desfazer_atendimento', `Desfez atendimento de ${atendimentoAlvo.qtd} de "${nomeItemParaLog}" na requisição de "${reqAlvo.solicitante}"${atendimentoAlvo.movimentacao_id && itemAlvo.produto_id != null ? ' (estoque devolvido)' : ''}`);
+
         await carregarProdutosESaldos();
         await carregarRequisicoesAtender();
     } catch (erro) {
@@ -1567,11 +1981,12 @@ async function executarAtendimentoItem(itemAlvo, reqAlvo, opcoes) {
             qtd: qtd,
             valor_unit: valorUnit,
             almoxarifado_id: reqAlvo.almoxarifado_id,
-            setor_id: reqAlvo.setor_id,
-            evento: reqAlvo.evento || '',
+            setor_id: itemAlvo.setor_id || reqAlvo.setor_id,
+            evento: itemAlvo.evento || reqAlvo.evento || '',
             responsavel: reqAlvo.solicitante,
             fornecedor_nome: 'Requisição Rápida',
             observacao: 'Requisição rápida' + (observacao ? ' — ' + observacao : ''),
+            plano_contas_id: itemAlvo.plano_contas_id || null,
             unidade_negocio_id: meuPerfil.unidadeId
         }).select().single();
         if (eMov) throw eMov;
@@ -1594,11 +2009,12 @@ async function executarAtendimentoItem(itemAlvo, reqAlvo, opcoes) {
             qtd: qtd,
             valor_unit: valorUnit,
             almoxarifado_id: reqAlvo.almoxarifado_id,
-            setor_id: reqAlvo.setor_id,
-            evento: reqAlvo.evento || '',
+            setor_id: itemAlvo.setor_id || reqAlvo.setor_id,
+            evento: itemAlvo.evento || reqAlvo.evento || '',
             responsavel: reqAlvo.solicitante,
             fornecedor_nome: 'Requisição Rápida',
             observacao: 'Requisição rápida (item avulso, sem cadastro)' + (observacao ? ' — ' + observacao : ''),
+            plano_contas_id: itemAlvo.plano_contas_id || null,
             unidade_negocio_id: meuPerfil.unidadeId
         }).select().single();
         if (eMov) throw eMov;

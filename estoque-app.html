@@ -448,6 +448,24 @@
         <option value="">-- selecione --</option>
     </select>
     <span class="subtitulo" style="margin:0;">Fica salvo como padrão pra você — todas as telas de entrada/saída já vêm com ele selecionado, sem precisar escolher de novo toda vez.</span>
+    <button class="btn btn-cinza btn-pequeno" id="btnAbrirInventario" style="margin-left:auto;">📋 Inventário</button>
+</div>
+
+<div class="modal-overlay" id="modalInventario">
+    <div class="modal-caixa">
+        <h4 style="margin:0 0 10px;">Gerar relatório de inventário</h4>
+        <p class="subtitulo" id="inventarioAlmoxarifadoTexto" style="margin-bottom:14px;"></p>
+        <label style="display:flex; align-items:center; gap:8px; font-weight:500; cursor:pointer;">
+            <input type="checkbox" id="inventarioMostrarSemEstoque"> Mostrar também itens sem estoque (0 unidades)
+        </label>
+        <p class="status-msg erro" id="statusInventario" style="margin-top:10px;"></p>
+        <div class="linha-ferramentas-relatorio" style="margin-top:16px;">
+            <button class="btn-icone" id="inventarioVer" title="Visualizar">👁️</button>
+            <button class="btn-icone" id="inventarioCompartilhar" title="Compartilhar">📤</button>
+            <button class="btn-icone" id="inventarioSalvar" title="Salvar">💾</button>
+            <button class="btn btn-cinza" id="btnFecharInventario" style="margin-left:auto;">Fechar</button>
+        </div>
+    </div>
 </div>
 
 <div class="abas">
@@ -562,6 +580,8 @@
                     <th class="th-ordenavel" data-ordenar="tag">Tag <span class="seta-ordem"></span></th>
                     <th class="th-ordenavel" data-ordenar="evento">Evento <span class="seta-ordem"></span></th>
                     <th>Setor</th>
+                    <th class="num">Estoque no momento</th>
+                    <th class="num">Estoque atual</th>
                     <th class="num">Valor Unit.</th>
                     <th class="num">Qtd. Pedida</th>
                     <th class="center">Qtd. Atendida</th>
@@ -843,6 +863,37 @@
             <div class="grade col2" style="margin-top:10px;">
                 <div class="campo"><label>Último KM (veículo)</label><input type="number" step="1" id="cadGenericoUltimoKm"></div>
                 <div class="campo"><label>Último horímetro (gerador/equip.)</label><input type="number" step="1" id="cadGenericoUltimoHorimetro"></div>
+            </div>
+            <div class="grade col2" style="margin-top:10px;">
+                <div class="campo"><label>Modelo</label><input type="text" id="cadGenericoModelo"></div>
+                <div class="campo"><label>Ano</label><input type="text" id="cadGenericoAno"></div>
+            </div>
+            <div class="grade col2" style="margin-top:10px;">
+                <div class="campo"><label>Cor</label><input type="text" id="cadGenericoCor"></div>
+                <div class="campo"><label>Setor</label><input type="text" id="cadGenericoSetor"></div>
+            </div>
+            <div class="grade col2" style="margin-top:10px;">
+                <div class="campo">
+                    <label>Status de funcionamento</label>
+                    <select id="cadGenericoStatusFuncionamento">
+                        <option value="N/E">Não Especificado</option>
+                        <option value="D">Disponível</option>
+                        <option value="L">Locado</option>
+                        <option value="M">Manutenção</option>
+                    </select>
+                </div>
+                <div class="campo"><label>RENAVAM</label><input type="text" id="cadGenericoRenavam"></div>
+            </div>
+            <div class="grade col2" style="margin-top:10px;">
+                <div class="campo"><label>Chassi</label><input type="text" id="cadGenericoChassi"></div>
+                <div class="campo"><label>Documento do proprietário</label><input type="text" id="cadGenericoProprietarioDoc"></div>
+            </div>
+            <div class="grade col2" style="margin-top:10px;">
+                <div class="campo"><label>Alienado a</label><input type="text" id="cadGenericoAlienadoA"></div>
+                <div class="campo">
+                    <label>Locação atual (se estiver locado)</label>
+                    <input type="text" id="cadGenericoLocacaoAtual">
+                </div>
             </div>
         </div>
 
@@ -1488,7 +1539,7 @@
         </div>
 
         <table class="tabela" style="margin-top:14px; font-size:0.85em;">
-            <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th>Tag</th><th>Setor</th><th>Almoxarifado</th><th class="num">Subtotal</th><th>Ações</th></tr></thead>
+            <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th>Tag</th><th>Setor</th><th>Almoxarifado</th><th>Plano de Contas</th><th class="num">Subtotal</th><th>Ações</th></tr></thead>
             <tbody id="corpoItensReqCompleta"></tbody>
         </table>
         <div style="text-align:right; margin-top:6px; font-weight:600;">Total: <span id="totalItensReqCompleta">R$ 0,00</span></div>
@@ -1497,7 +1548,7 @@
             <hr style="margin-bottom:16px; border:none; border-top:1px solid #eee;">
             <h4 style="margin-bottom:8px;">Itens já lançados nessa requisição</h4>
             <table class="tabela">
-                <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th class="num">Subtotal</th><th>Ações</th></tr></thead>
+                <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th>Plano de Contas</th><th class="num">Subtotal</th><th>Ações</th></tr></thead>
                 <tbody id="corpoItensJaLancadosReq"></tbody>
             </table>
         </div>
@@ -1865,6 +1916,9 @@ async function chamarGet(acao, filtros) {
             sb.from('unidade_equipamentos_veiculos').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome'),
             sb.from('unidade_plano_de_contas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('codigo'),
             sb.from('unidade_almoxarifados').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome'),
+            // "grupos" é opcional/mais recente -- se a tabela ainda não
+            // existir nessa base (migração não rodada), não pode travar
+            // o carregamento de TUDO o resto por causa disso
             sb.from('unidade_grupos_produtos').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome')
         ]);
         if (setores.error) throw setores.error;
@@ -1872,11 +1926,11 @@ async function chamarGet(acao, filtros) {
         if (veiculos.error) throw veiculos.error;
         if (planoContas.error) throw planoContas.error;
         if (almoxarifados.error) throw almoxarifados.error;
-        if (grupos.error) throw grupos.error;
+        if (grupos.error) console.warn('Catálogo de grupos indisponível (migração pendente?):', grupos.error);
         return {
             setores: setores.data || [], subsetores: subsetores.data || [],
             veiculos: veiculos.data || [], planoContas: planoContas.data || [],
-            almoxarifados: almoxarifados.data || [], grupos: grupos.data || []
+            almoxarifados: almoxarifados.data || [], grupos: (grupos && !grupos.error) ? (grupos.data || []) : []
         };
     }
     if (acao === 'somaBaixadoPorOrigem') {
@@ -2087,7 +2141,12 @@ async function chamarPost(acao, d) {
         const registro = {
             unidade_negocio_id: meuPerfil.unidadeId, nome: d.nome, tipo: d.tipo,
             placa: d.placa || null, identificador: d.identificador || null,
-            ultimo_km: d.ultimoKm || null, ultimo_horimetro: d.ultimoHorimetro || null, ativo: d.ativo
+            ultimo_km: d.ultimoKm || null, ultimo_horimetro: d.ultimoHorimetro || null, ativo: d.ativo,
+            modelo: d.modelo || null, ano: d.ano || null, setor: d.setor || null, cor: d.cor || null,
+            status_funcionamento: d.statusFuncionamento || 'N/E',
+            renavam: d.renavam || null, chassi: d.chassi || null,
+            proprietario_doc: d.proprietarioDoc || null, alienado_a: d.alienadoA || null,
+            locacao_atual: d.locacaoAtual || null
         };
         const query = d.id ? sb.from('unidade_equipamentos_veiculos').update(registro).eq('id', d.id) : sb.from('unidade_equipamentos_veiculos').insert(registro);
         const { error } = await query;
@@ -2209,6 +2268,8 @@ async function chamarPost(acao, d) {
             projeto_id: it.projetoId, produto_id: it.produtoId, qtd_requisitada: it.qtdRequisitada,
             responsavel: it.responsavel || '', observacao: it.observacao || '', tag: it.tag || '', evento: it.evento || '',
             valor_unitario: it.valorUnitario != null ? it.valorUnitario : null,
+            pos_aprovacao: it.posAprovacao || false,
+            estoque_disponivel_no_momento: it.estoqueDisponivelNoMomento != null ? it.estoqueDisponivelNoMomento : null,
             unidade_negocio_id: meuPerfil.unidadeId
         }).select().single();
         if (error) throw error;
@@ -2363,7 +2424,9 @@ async function carregarProjetos() {
             tag: i.tag || '',
             evento: i.evento || '',
             setorId: i.setor_id != null ? Number(i.setor_id) : null,
-            valorUnitario: i.valor_unitario != null ? Number(i.valor_unitario) : null
+            valorUnitario: i.valor_unitario != null ? Number(i.valor_unitario) : null,
+            posAprovacao: !!i.pos_aprovacao,
+            estoqueDisponivelNoMomento: i.estoque_disponivel_no_momento != null ? Number(i.estoque_disponivel_no_momento) : null
         }))
     }));
 }
@@ -2537,8 +2600,6 @@ async function editarProdutoPrompt(id) {
     document.getElementById('editProdutoCodigoExterno').value = p.codigoExterno || '';
     document.getElementById('editProdutoUn').value = p.un || '';
     document.getElementById('editProdutoValor').value = p.valor;
-    document.getElementById('editProdutoEstoqueInicial').value = p.estoqueInicial ?? 0;
-    document.getElementById('editProdutoValorEstoqueInicial').value = p.valorEstoqueInicial ?? '';
 
     if (!catalogosBaixa.grupos || !catalogosBaixa.grupos.length || !catalogosBaixa.almoxarifados || !catalogosBaixa.almoxarifados.length) {
         catalogosBaixa = await chamarGet('listarCatalogosBaixa');
@@ -2632,12 +2693,16 @@ function atualizarCamposEstoqueDoAlmoxarifadoSelecionado(p) {
         const saldo = saldoDoProdutoNoAlmoxarifado(p.id, almoxarifadoSelecionadoEditProduto.id);
         document.getElementById('editProdutoEstoque').value = saldo ? saldo.estoque : 0;
         document.getElementById('editProdutoPrecoMedio').value = saldo && saldo.precoMedio != null ? saldo.precoMedio : '';
+        document.getElementById('editProdutoEstoqueInicial').value = saldo ? saldo.estoqueInicial : 0;
+        document.getElementById('editProdutoValorEstoqueInicial').value = saldo && saldo.valorEstoqueInicial != null ? saldo.valorEstoqueInicial : '';
     } else {
         // sem almoxarifado nenhum selecionado (raro), cai pro total
         // agregado só pra não deixar o campo vazio -- mas isso não
         // deveria acontecer no uso normal
         document.getElementById('editProdutoEstoque').value = p.estoque;
         document.getElementById('editProdutoPrecoMedio').value = p.precoMedio ?? '';
+        document.getElementById('editProdutoEstoqueInicial').value = p.estoqueInicial ?? 0;
+        document.getElementById('editProdutoValorEstoqueInicial').value = p.valorEstoqueInicial ?? '';
     }
 }
 
@@ -2844,16 +2909,44 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
         // agregado) só é tocado aqui se NÃO houve ajuste -- se houve,
         // quem corrige o estoque (do almoxarifado certo) é a
         // movimentação registrada abaixo, nunca sobrescreve o
-        // agregado direto (senão desincroniza do que a soma real dá)
+        // agregado direto (senão desincroniza do que a soma real dá).
+        // Estoque inicial e seu valor NÃO vão mais pro agregado do
+        // produto -- são só do almoxarifado selecionado, gravados
+        // separadamente logo abaixo
         await chamarPost('salvarProduto', {
             produto: {
                 ...p, nome: novoNome, codigoExterno: novoCodigoExterno || null, un: novaUn,
                 valor: novoValor, estoque: delta !== 0 ? p.estoque : novoEstoque,
-                estoqueInicial: novoEstoqueInicial, grupoId: novoGrupoId, almoxarifadoPadraoId: novoAlmoxarifadoPadraoId,
-                valorEstoqueInicial: novoValorEstoqueInicial,
+                grupoId: novoGrupoId, almoxarifadoPadraoId: novoAlmoxarifadoPadraoId,
+                estoqueInicial: p.estoqueInicial, valorEstoqueInicial: p.valorEstoqueInicial,
                 precoMedio: p.precoMedio
             }
         });
+
+        // estoque inicial e seu valor são do ALMOXARIFADO ESPECÍFICO
+        // selecionado -- gravar isso no agregado do produto não tinha
+        // efeito nenhum no cálculo de verdade, que usa o inicial de
+        // CADA almoxarifado (estoque_saldo_almoxarifado). Se mudou,
+        // já reprocessa esse almoxarifado na hora, pro efeito aparecer
+        // sem precisar de outro clique
+        if (almoxarifadoSelecionadoEditProduto && (saldoAntigoDoAlmoxarifado
+            ? (Number(saldoAntigoDoAlmoxarifado.estoqueInicial) !== novoEstoqueInicial || (saldoAntigoDoAlmoxarifado.valorEstoqueInicial ?? null) !== novoValorEstoqueInicial)
+            : (novoEstoqueInicial !== 0 || novoValorEstoqueInicial !== null))) {
+            const { error: eSaldoInicial } = await sb.from('estoque_saldo_almoxarifado')
+                .update({ estoque_inicial: novoEstoqueInicial, valor_estoque_inicial: novoValorEstoqueInicial })
+                .eq('produto_id', p.id)
+                .eq('almoxarifado_id', almoxarifadoSelecionadoEditProduto.id);
+            if (eSaldoInicial) throw eSaldoInicial;
+
+            const { error: eReproc } = await sb.rpc('fn_estoque_reprocessar_movimentos', {
+                p_unidade_negocio_id: meuPerfil.unidadeId, p_produto_id: p.id, p_almoxarifado_id: almoxarifadoSelecionadoEditProduto.id
+            });
+            if (eReproc) throw eReproc;
+
+            await registrarSentinela('alteracao_estoque_inicial',
+                `Alterou estoque inicial de "${novoNome}" no ${almoxarifadoSelecionadoEditProduto.nome}: ${saldoAntigoDoAlmoxarifado ? saldoAntigoDoAlmoxarifado.estoqueInicial : 0} → ${novoEstoqueInicial}` +
+                (novoValorEstoqueInicial != null ? `, valor unit. ${formatarMoeda(novoValorEstoqueInicial)}` : ''));
+        }
 
         // correção manual de preço médio grava no ALMOXARIFADO
         // ESPECÍFICO selecionado (é o que a tela mostra e o que a
@@ -2883,6 +2976,9 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
                 ? (todosSaldos || []).reduce((soma, s) => soma + Number(s.estoque || 0) * Number(s.preco_medio || 0), 0) / somaEstoque
                 : 0;
             await sb.from('estoque_produtos').update({ preco_medio: precoMedioAgregado }).eq('id', p.id);
+
+            await registrarSentinela('correcao_manual_preco_medio',
+                `Corrigiu manualmente o preço médio de "${novoNome}" no ${almoxarifadoSelecionadoEditProduto.nome}: ${formatarMoeda(precoMedioOriginalDoAlmoxarifado || 0)} → ${formatarMoeda(novoPrecoMedio)}`);
         }
 
         if (delta !== 0) {
@@ -2902,6 +2998,8 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
                 }
             });
             await carregarMovimentacoes();
+            await registrarSentinela('ajuste_estoque_produto',
+                `Ajustou estoque de "${novoNome}" no ${almoxarifadoSelecionadoEditProduto.nome}: ${estoqueAntigo} → ${novoEstoque} (${delta > 0 ? '+' : ''}${delta}), responsável: ${responsavel}`);
         }
 
         await Promise.all([carregarProdutos(), carregarSaldosAlmoxarifado()]);
@@ -4236,6 +4334,8 @@ function renderizarStatusProjeto(proj) {
             if (!confirm(AVISO_AVANCAR_PROJETO[proximoStatus])) return;
             try {
                 await chamarPost('atualizarStatusProjeto', { projetoId: proj.id, status: proximoStatus });
+                await registrarSentinela('avancar_status_projeto',
+                    `Avançou status do projeto "${proj.descricao}": ${LABEL_STATUS_PROJETO[status]} → ${LABEL_STATUS_PROJETO[proximoStatus]}`);
                 await carregarProjetos();
                 renderizarRequisicao(proj.id);
             } catch (err) { alert('Erro ao atualizar status: ' + err.message); }
@@ -4251,6 +4351,8 @@ function renderizarStatusProjeto(proj) {
             if (!confirm(`Voltar o status desse projeto pra "${LABEL_STATUS_PROJETO[statusAnterior]}"? Isso libera alteração dos materiais de novo.`)) return;
             try {
                 await chamarPost('atualizarStatusProjeto', { projetoId: proj.id, status: statusAnterior });
+                await registrarSentinela('retorno_status_projeto',
+                    `Voltou status do projeto "${proj.descricao}": ${LABEL_STATUS_PROJETO[status]} → ${LABEL_STATUS_PROJETO[statusAnterior]} (libera alteração dos materiais de novo)`);
                 await carregarProjetos();
                 renderizarRequisicao(proj.id);
             } catch (err) { alert('Erro ao voltar status: ' + err.message); }
@@ -4369,10 +4471,14 @@ function renderizarRequisicao(id) {
             totalPedido += subtotal;
             let classeBadge = '';
             if (ent >= item.qtdRequisitada && item.qtdRequisitada > 0) classeBadge = ent > item.qtdRequisitada ? 'excedido' : 'completo';
+            const saldoAtualItem = almoxarifadoTrabalho ? saldoDoProdutoNoAlmoxarifado(item.produtoId, almoxarifadoTrabalho) : null;
+            const estoqueAtualNum = almoxarifadoTrabalho ? (saldoAtualItem ? Number(saldoAtualItem.estoque) : 0) : (prod ? Number(prod.estoque) : null);
+            const diferencaEstoque = (item.estoqueDisponivelNoMomento != null && estoqueAtualNum != null) ? estoqueAtualNum - Number(item.estoqueDisponivelNoMomento) : null;
+            const corDiferenca = diferencaEstoque == null ? '' : (diferencaEstoque < 0 ? 'color:var(--danger);' : (diferencaEstoque > 0 ? 'color:var(--brand-2);' : ''));
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${prod ? prod.id : item.produtoId}</td>
-                <td>${prod ? escapeHtml(prod.nome) : ('#' + item.produtoId)}</td>
+                <td>${prod ? escapeHtml(prod.nome) : ('#' + item.produtoId)}${item.posAprovacao ? ' <span class="pill" style="background:#FFF3E0; color:#E65100; font-size:0.65rem;" title="Adicionado depois que o projeto já estava aprovado">pós-aprovação</span>' : ''}</td>
                 <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.tag)}" data-tag-item="${item.id}"></td>
                 <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.evento)}" data-evento-item="${item.id}"></td>
                 <td>
@@ -4381,6 +4487,8 @@ function renderizarRequisicao(id) {
                         ${(catalogosBaixa.setores || []).map(s => `<option value="${s.id}" ${item.setorId === s.id ? 'selected' : ''}>${escapeHtml(s.nome)}</option>`).join('')}
                     </select>
                 </td>
+                <td class="num">${item.estoqueDisponivelNoMomento != null ? Number(item.estoqueDisponivelNoMomento).toLocaleString('pt-BR') : '-'}</td>
+                <td class="num" style="${corDiferenca}" title="${diferencaEstoque != null ? (diferencaEstoque > 0 ? '+' : '') + diferencaEstoque.toLocaleString('pt-BR') + ' em relação ao momento do provisionamento' : (almoxarifadoTrabalho ? '' : 'Selecione um almoxarifado de trabalho pra ver separado por local')}">${estoqueAtualNum != null ? estoqueAtualNum.toLocaleString('pt-BR') : '-'}</td>
                 <td class="num">${formatarMoeda(valorReferencia)}</td>
                 <td class="num"><input type="number" step="0.01" class="input-qtd-pedida" value="${item.qtdRequisitada}" data-qtd-item="${item.id}" ${travado ? 'disabled title="Projeto não está mais em construção"' : ''}></td>
                 <td class="center"><span class="badge-atendido ${classeBadge}" data-atender="${item.id}" style="${travadoAtender ? 'opacity:0.5; cursor:not-allowed;' : 'cursor:pointer;'}" title="${travadoAtender ? 'Projeto finalizado — não é mais possível lançar baixa' : ''}">${ent}</span></td>
@@ -4392,10 +4500,16 @@ function renderizarRequisicao(id) {
         corpo.querySelectorAll('[data-remover-item]').forEach(btn => {
             btn.addEventListener('click', async () => {
                 if (!confirm('Remover este item da requisição? (Movimentações já registradas não serão apagadas.)')) return;
+                const itemRemovido = proj.itens.find(i => i.id === Number(btn.dataset.removerItem));
                 await chamarPost('removerItemProjeto', { itemId: Number(btn.dataset.removerItem) });
                 await carregarProjetos();
                 renderizarRequisicao(id);
                 renderizarListaProjetos();
+                if (itemRemovido) {
+                    const prodItem = produtos.find(p => p.id === itemRemovido.produtoId);
+                    await registrarSentinela('exclusao_item_projeto',
+                        `Excluiu item "${prodItem ? prodItem.nome : '#' + itemRemovido.produtoId}" (${itemRemovido.qtdRequisitada} un.) do projeto "${proj.descricao}"`);
+                }
             });
         });
         corpo.querySelectorAll('[data-atender]').forEach(btn => {
@@ -4705,6 +4819,7 @@ document.getElementById('buscaItemProjeto').addEventListener('input', () => {
 });
 
 let produtoPendenteAdicionar = null;
+let estoqueDisponivelNoMomentoPendente = null;
 
 function adicionarProdutoAoProjeto(p) {
     const statusEl = document.getElementById('statusItemProjeto');
@@ -4712,6 +4827,11 @@ function adicionarProdutoAoProjeto(p) {
     if (!proj) {
         statusEl.className = 'status-msg erro';
         statusEl.textContent = 'Selecione um projeto antes de adicionar produtos.';
+        return;
+    }
+    if ((proj.status || 'em_construcao') === 'finalizado') {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Esse projeto está finalizado — não é mais possível adicionar itens.';
         return;
     }
     const existente = proj.itens.find(i => i.produtoId === p.id);
@@ -4733,9 +4853,15 @@ function adicionarProdutoAoProjeto(p) {
     produtoPendenteAdicionar = p;
     document.getElementById('modalQtdInicialProduto').textContent = `#${p.id} — ${p.nome}`;
     const saldoAlmoxTrabalho = almoxarifadoTrabalho ? saldoDoProdutoNoAlmoxarifado(p.id, almoxarifadoTrabalho) : null;
+    // guarda o número puro (não só o texto pra exibição) -- vai ser
+    // salvo junto do item, pra comparar depois com o estoque real na
+    // hora de atender
+    estoqueDisponivelNoMomentoPendente = almoxarifadoTrabalho
+        ? (saldoAlmoxTrabalho ? Number(saldoAlmoxTrabalho.estoque) : 0)
+        : Number(p.estoque);
     const estoqueDisponivelInfo = almoxarifadoTrabalho
-        ? `${saldoAlmoxTrabalho ? Number(saldoAlmoxTrabalho.estoque).toLocaleString('pt-BR') : '0'} nesse almoxarifado`
-        : `${Number(p.estoque).toLocaleString('pt-BR')} no total (selecione um almoxarifado de trabalho pra ver separado)`;
+        ? `${estoqueDisponivelNoMomentoPendente.toLocaleString('pt-BR')} nesse almoxarifado`
+        : `${estoqueDisponivelNoMomentoPendente.toLocaleString('pt-BR')} no total (selecione um almoxarifado de trabalho pra ver separado)`;
     document.getElementById('modalQtdInicialInfo').innerHTML =
         `Estoque disponível: <strong>${estoqueDisponivelInfo}</strong> · ` +
         `Valor cadastrado: <strong>${formatarMoeda(p.valor)}</strong> · ` +
@@ -4791,6 +4917,7 @@ document.getElementById('btnConfirmarQtdInicial').addEventListener('click', asyn
     const statusEl = document.getElementById('statusItemProjeto');
     const p = produtoPendenteAdicionar;
     if (!p) return;
+    const proj = projetos.find(x => x.id === projetoAtualId);
     const qtd = parseFloat(document.getElementById('modalQtdInicialValor').value);
     if (!qtd || qtd <= 0) {
         statusModalEl.className = 'status-msg erro';
@@ -4826,7 +4953,9 @@ document.getElementById('btnConfirmarQtdInicial').addEventListener('click', asyn
                 observacao: '',
                 tag: tagAtual,
                 evento: eventoAtual,
-                valorUnitario: valorUnitAtendeJa
+                valorUnitario: valorUnitAtendeJa,
+                posAprovacao: proj && (proj.status || 'em_construcao') === 'aprovado',
+                estoqueDisponivelNoMomento: estoqueDisponivelNoMomentoPendente
             }
         });
 
@@ -4884,9 +5013,16 @@ async function abrirModalAtender(itemId) {
     const restante = item.qtdRequisitada - ent;
 
     itemAtualAtendimentoId = itemId;
+    if (!catalogosBaixa.almoxarifados || !catalogosBaixa.almoxarifados.length) catalogosBaixa = await chamarGet('listarCatalogosBaixa');
+    const almoxAtual = almoxarifadoTrabalho ? (catalogosBaixa.almoxarifados || []).find(a => a.id === almoxarifadoTrabalho) : null;
+    const saldoAgora = almoxarifadoTrabalho ? saldoDoProdutoNoAlmoxarifado(item.produtoId, almoxarifadoTrabalho) : null;
+    const estoqueAgoraTexto = almoxarifadoTrabalho
+        ? `${saldoAgora ? Number(saldoAgora.estoque).toLocaleString('pt-BR') : '0'} no ${almoxAtual ? escapeHtml(almoxAtual.nome) : 'almoxarifado selecionado'}`
+        : `${prod ? Number(prod.estoque).toLocaleString('pt-BR') : '0'} no total (selecione um almoxarifado de trabalho pra ver separado)`;
     document.getElementById('modalAtenderProduto').innerHTML =
         `<strong>${escapeHtml(prod ? prod.nome : '#' + item.produtoId)}</strong><br>
-         Requisitado: ${item.qtdRequisitada} · já entregue: ${ent} · restante: ${restante}`;
+         Requisitado: ${item.qtdRequisitada} · já entregue: ${ent} · restante: ${restante}<br>
+         Estoque disponível agora: <strong>${estoqueAgoraTexto}</strong>${item.estoqueDisponivelNoMomento != null ? ` <span style="color:var(--muted); font-size:0.85em;">(era ${Number(item.estoqueDisponivelNoMomento).toLocaleString('pt-BR')} quando o item foi provisionado)</span>` : ''}`;
     document.getElementById('modalAtenderTag').value = item.tag || '';
     document.getElementById('modalAtenderEventoBusca').value = '';
     eventoSelecionadoModalAtender = preencherEventoSelecionadoUI('modalAtenderEventoSelecionado', item.evento || '');
@@ -5050,9 +5186,16 @@ async function excluirAtendimento(movId, itemId) {
     statusEl.className = '';
     statusEl.textContent = 'Excluindo...';
     try {
+        // busca os dados antes de excluir, já que depois a linha não existe mais
+        const { data: movAntiga } = await sb.from('estoque_movimentacoes').select('*').eq('id', movId).single();
         await chamarPost('removerMovimentacao', { movId });
         await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
         atualizarTagContagem();
+        if (movAntiga) {
+            const prodExcluido = produtos.find(p => p.id === movAntiga.produto_id);
+            await registrarSentinela('exclusao_atendimento_projeto',
+                `Excluiu atendimento de "${prodExcluido ? prodExcluido.nome : '#' + movAntiga.produto_id}" (${movAntiga.qtd} un., ${formatarMoeda(movAntiga.valor_unit)}) do item de projeto #${itemId}`);
+        }
         statusEl.className = 'status-msg sucesso';
         statusEl.textContent = '✅ Atendimento excluído.';
         renderizarListaAtendimentosItem(itemId);
@@ -6161,6 +6304,7 @@ document.getElementById('btnFiltrarPendentesDestino').addEventListener('click', 
 });
 
 let movGeralEmEdicaoId = null;
+let movGeralOriginal = null;
 
 async function abrirModalEditarMovimentacaoGeral(movId) {
     try {
@@ -6168,6 +6312,7 @@ async function abrirModalEditarMovimentacaoGeral(movId) {
         if (error) throw error;
 
         movGeralEmEdicaoId = movId;
+        movGeralOriginal = { ...mov, nomeProduto: prod ? prod.nome : '#' + mov.produto_id };
         const prod = produtos.find(p => p.id === mov.produto_id);
         document.getElementById('editMovGeralInfo').textContent =
             `${mov.tipo === 'entrada' ? 'Entrada' : 'Saída'} · ${prod ? prod.nome : '#' + mov.produto_id} · ${formatarData(mov.data)}`;
@@ -6271,6 +6416,17 @@ document.getElementById('btnSalvarEditarMovGeral').addEventListener('click', asy
         // do produto continuam batendo com o histórico real
         const { error: erroReprocessar } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId });
         if (erroReprocessar) throw erroReprocessar;
+
+        if (movGeralOriginal) {
+            const mudancas = [];
+            if (Number(movGeralOriginal.qtd) !== novaQtd) mudancas.push(`qtd ${movGeralOriginal.qtd} → ${novaQtd}`);
+            if (Number(movGeralOriginal.valor_unit) !== novoValorUnit) mudancas.push(`valor unit. ${formatarMoeda(movGeralOriginal.valor_unit)} → ${formatarMoeda(novoValorUnit)}`);
+            if ((movGeralOriginal.almoxarifado_id || null) !== novoAlmoxarifadoId) mudancas.push('almoxarifado alterado');
+            if (mudancas.length) {
+                await registrarSentinela('edicao_movimentacao',
+                    `Editou movimentação #${movGeralEmEdicaoId} de "${movGeralOriginal.nomeProduto}" (${movGeralOriginal.tipo}, ${formatarData(movGeralOriginal.data)}): ${mudancas.join(', ')}`);
+            }
+        }
 
         document.getElementById('modalEditarMovGeral').classList.remove('aberto');
         movGeralEmEdicaoId = null;
@@ -6750,12 +6906,18 @@ document.getElementById('btnRemoverNotaEntrada').addEventListener('click', async
     btn.disabled = true;
     const textoOriginal = btn.textContent;
     btn.textContent = 'Removendo...';
+    // identificação da nota, capturada ANTES de remover (depois não existe mais pra consultar)
+    const nfNumero = document.getElementById('notaNumeroNf').value.trim();
+    const fornecedorNome = document.getElementById('notaFornecedorNome').value.trim();
+    const qtdItensNota = (itensNotaAtual || []).length;
     try {
         const resultado = await chamarPost('removerNota', { estoqueNotaId: notaEmEdicaoId });
         document.getElementById('modalNotaEntrada').classList.remove('aberto');
         await Promise.all([carregarProdutos(), carregarListaNotasEntrada()]);
         atualizarTagContagem();
         renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+        await registrarSentinela('exclusao_nota_entrada',
+            `Removeu a nota${nfNumero ? ' NF ' + nfNumero : ''}${fornecedorNome ? ' — ' + fornecedorNome : ''} (${qtdItensNota} item(ns), com títulos/vencimentos vinculados)`);
         if (resultado && resultado.pulados && resultado.pulados.length > 0) {
             alert(`Nota removida, mas ${resultado.pulados.length} produto(s) não puderam ter o estoque recalculado automaticamente (falta informar "valor do estoque inicial" na tela de editar produto):\n\n${resultado.pulados.join(', ')}`);
         }
@@ -7370,6 +7532,7 @@ async function carregarSaldosAlmoxarifado() {
         almoxarifadoId: Number(s.almoxarifado_id),
         estoque: Number(s.estoque) || 0,
         estoqueInicial: Number(s.estoque_inicial) || 0,
+        valorEstoqueInicial: s.valor_estoque_inicial != null ? Number(s.valor_estoque_inicial) : null,
         precoMedio: s.preco_medio != null ? Number(s.preco_medio) : null,
         precoUltimaCompra: s.preco_ultima_compra != null ? Number(s.preco_ultima_compra) : null
     }));
@@ -7394,8 +7557,166 @@ async function popularSelectAlmoxarifadoTrabalho() {
 document.getElementById('almoxarifadoTrabalhoSelect').addEventListener('change', (e) => {
     salvarAlmoxarifadoTrabalho(e.target.value ? Number(e.target.value) : null);
     renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+    if (projetoAtualId != null) renderizarRequisicao(projetoAtualId);
 });
 let proximoIdLinhaBaixa = 1;
+
+/* ---------- Inventário: PDF agrupado por grupo, com 3 totais de valor ---------- */
+document.getElementById('btnAbrirInventario').addEventListener('click', () => {
+    const statusEl = document.getElementById('statusInventario');
+    statusEl.textContent = '';
+    if (!almoxarifadoTrabalho) {
+        statusEl.textContent = 'Escolha um "Almoxarifado de trabalho" antes de gerar o inventário.';
+        document.getElementById('modalInventario').classList.add('aberto');
+        return;
+    }
+    const almox = (catalogosBaixa.almoxarifados || []).find(a => a.id === almoxarifadoTrabalho);
+    document.getElementById('inventarioAlmoxarifadoTexto').textContent = `Inventário do ${almox ? almox.nome : 'almoxarifado selecionado'}, agrupado por grupo de produto.`;
+    document.getElementById('modalInventario').classList.add('aberto');
+});
+document.getElementById('btnFecharInventario').addEventListener('click', () => {
+    document.getElementById('modalInventario').classList.remove('aberto');
+});
+
+function construirDadosInventario(mostrarSemEstoque) {
+    const semGrupoNome = 'Sem grupo definido';
+    const gruposMap = {}; // nome do grupo -> array de linhas
+
+    produtos.forEach(p => {
+        const saldo = saldoDoProdutoNoAlmoxarifado(p.id, almoxarifadoTrabalho);
+        const estoque = saldo ? Number(saldo.estoque) : 0;
+        if (estoque <= 0 && !mostrarSemEstoque) return;
+        // produto sem NENHUM registro de saldo nesse almoxarifado
+        // (nunca teve movimento ali) não entra de jeito nenhum, mesmo
+        // marcando "mostrar sem estoque" -- não pertence a esse
+        // almoxarifado, então não faz sentido aparecer no inventário dele
+        if (!saldo) return;
+
+        const grupo = p.grupoId != null ? (catalogosBaixa.grupos || []).find(g => g.id === p.grupoId) : null;
+        const nomeGrupo = grupo ? grupo.nome : semGrupoNome;
+
+        const valorCadastrado = Number(p.valor) || 0;
+        const precoMedio = saldo.precoMedio != null ? Number(saldo.precoMedio) : 0;
+        const precoUltimaCompra = saldo.precoUltimaCompra != null ? Number(saldo.precoUltimaCompra) : 0;
+
+        if (!gruposMap[nomeGrupo]) gruposMap[nomeGrupo] = [];
+        gruposMap[nomeGrupo].push({
+            produto: p, estoque,
+            valorCadastrado, precoMedio, precoUltimaCompra,
+            totalCadastrado: estoque * valorCadastrado,
+            totalPrecoMedio: estoque * precoMedio,
+            totalUltimaCompra: estoque * precoUltimaCompra
+        });
+    });
+
+    // ordena grupos alfabeticamente, e produtos alfabeticamente DENTRO de cada grupo
+    const nomesGrupos = Object.keys(gruposMap).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const grupos = nomesGrupos.map(nome => {
+        const itens = gruposMap[nome].sort((a, b) => a.produto.nome.localeCompare(b.produto.nome, 'pt-BR'));
+        const subtotal = itens.reduce((acc, it) => ({
+            cadastrado: acc.cadastrado + it.totalCadastrado,
+            precoMedio: acc.precoMedio + it.totalPrecoMedio,
+            ultimaCompra: acc.ultimaCompra + it.totalUltimaCompra
+        }), { cadastrado: 0, precoMedio: 0, ultimaCompra: 0 });
+        return { nome, itens, subtotal };
+    });
+
+    const totalGeral = grupos.reduce((acc, g) => ({
+        cadastrado: acc.cadastrado + g.subtotal.cadastrado,
+        precoMedio: acc.precoMedio + g.subtotal.precoMedio,
+        ultimaCompra: acc.ultimaCompra + g.subtotal.ultimaCompra
+    }), { cadastrado: 0, precoMedio: 0, ultimaCompra: 0 });
+
+    return { grupos, totalGeral };
+}
+
+function construirPdfInventario(dados, nomeAlmoxarifado) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text('Inventário de Estoque', 14, 18);
+    doc.setFontSize(10);
+    doc.text(`Almoxarifado: ${nomeAlmoxarifado}`, 14, 26);
+    doc.text(`Relatório emitido em: ${hojeISO()}`, 14, 32);
+
+    let y = 40;
+    dados.grupos.forEach(grupo => {
+        if (y > 265) { doc.addPage(); y = 20; }
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.text(grupo.nome, 14, y);
+        doc.setFont('helvetica', 'normal');
+        y += 4;
+
+        const corpo = grupo.itens.map(it => [
+            it.produto.nome,
+            it.produto.un || 'UN',
+            Number(it.estoque).toLocaleString('pt-BR'),
+            formatarMoeda(it.valorCadastrado),
+            formatarMoeda(it.precoMedio),
+            formatarMoeda(it.precoUltimaCompra),
+            formatarMoeda(it.totalCadastrado)
+        ]);
+
+        doc.autoTable({
+            startY: y,
+            head: [['Produto', 'Un.', 'Estoque', 'Vlr. Cadastrado', 'Preço Médio', 'Última Compra', 'Total (cadastrado)']],
+            body: corpo,
+            styles: { fontSize: 8 },
+            headStyles: { fillColor: [27, 67, 50] },
+            margin: { left: 14, right: 14 }
+        });
+        y = doc.lastAutoTable.finalY + 4;
+
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text(
+            `Subtotal ${grupo.nome} — Cadastrado: ${formatarMoeda(grupo.subtotal.cadastrado)}  ·  Preço médio: ${formatarMoeda(grupo.subtotal.precoMedio)}  ·  Última compra: ${formatarMoeda(grupo.subtotal.ultimaCompra)}`,
+            14, y
+        );
+        doc.setFont('helvetica', 'normal');
+        y += 10;
+    });
+
+    if (y > 260) { doc.addPage(); y = 20; }
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('TOTAL GERAL DO INVENTÁRIO', 14, y);
+    y += 7;
+    doc.setFontSize(10);
+    doc.text(`Pelo valor cadastrado: ${formatarMoeda(dados.totalGeral.cadastrado)}`, 14, y); y += 6;
+    doc.text(`Pelo preço médio: ${formatarMoeda(dados.totalGeral.precoMedio)}`, 14, y); y += 6;
+    doc.text(`Pela última compra: ${formatarMoeda(dados.totalGeral.ultimaCompra)}`, 14, y);
+    doc.setFont('helvetica', 'normal');
+
+    return doc;
+}
+
+function gerarPdfInventario() {
+    const almox = (catalogosBaixa.almoxarifados || []).find(a => a.id === almoxarifadoTrabalho);
+    const mostrarSemEstoque = document.getElementById('inventarioMostrarSemEstoque').checked;
+    const dados = construirDadosInventario(mostrarSemEstoque);
+    if (!dados.grupos.length) {
+        document.getElementById('statusInventario').textContent = 'Nenhum item encontrado com esses filtros nesse almoxarifado.';
+        return null;
+    }
+    document.getElementById('statusInventario').textContent = '';
+    return { doc: construirPdfInventario(dados, almox ? almox.nome : 'Almoxarifado selecionado'), nomeAlmox: almox ? almox.nome : 'almoxarifado' };
+}
+
+document.getElementById('inventarioVer').addEventListener('click', () => {
+    const r = gerarPdfInventario();
+    if (r) executarAcaoPdf('ver', r.doc, `inventario-${slugArquivo(r.nomeAlmox)}.pdf`);
+});
+document.getElementById('inventarioCompartilhar').addEventListener('click', () => {
+    const r = gerarPdfInventario();
+    if (r) executarAcaoPdf('compartilhar', r.doc, `inventario-${slugArquivo(r.nomeAlmox)}.pdf`);
+});
+document.getElementById('inventarioSalvar').addEventListener('click', () => {
+    const r = gerarPdfInventario();
+    if (r) executarAcaoPdf('salvar', r.doc, `inventario-${slugArquivo(r.nomeAlmox)}.pdf`);
+});
 
 async function abrirModalBaixaItensNota() {
     if (!notaEmEdicaoId) return;
@@ -7727,9 +8048,9 @@ async function abrirModalRequisicaoCompleta(notaIdExistente) {
 
 async function carregarItensJaLancadosReq(notaId) {
     const corpo = document.getElementById('corpoItensJaLancadosReq');
-    corpo.innerHTML = '<tr><td colspan="5" class="vazio">Carregando...</td></tr>';
+    corpo.innerHTML = '<tr><td colspan="6" class="vazio">Carregando...</td></tr>';
     const { data, error } = await sb.from('estoque_movimentacoes').select('*').eq('estoque_nota_id', notaId).order('id');
-    if (error) { corpo.innerHTML = `<tr><td colspan="5" class="vazio">Erro: ${escapeHtml(error.message)}</td></tr>`; return; }
+    if (error) { corpo.innerHTML = `<tr><td colspan="6" class="vazio">Erro: ${escapeHtml(error.message)}</td></tr>`; return; }
 
     // pré-preenche o cabeçalho com os valores do ÚLTIMO item lançado —
     // evita ter que escolher setor/subsetor/veículo/evento/plano de
@@ -7770,11 +8091,13 @@ async function carregarItensJaLancadosReq(notaId) {
     corpo.innerHTML = (data || []).map(m => {
         const prod = produtos.find(p => p.id === m.produto_id);
         const subtotal = Number(m.qtd) * Number(m.valor_unit);
+        const pc = m.plano_contas_id ? (catalogosBaixa.planoContas || []).find(x => x.id === m.plano_contas_id) : null;
         return `
             <tr>
                 <td>${prod ? escapeHtml(prod.nome) : (m.descricao_avulsa ? escapeHtml(m.descricao_avulsa) + ' (avulso)' : '#' + m.produto_id)}</td>
                 <td class="num">${m.qtd}</td>
                 <td class="num">${formatarMoeda(m.valor_unit)}</td>
+                <td>${pc ? escapeHtml(pc.codigo) + ' - ' + escapeHtml(pc.descricao) : '-'}</td>
                 <td class="num">${formatarMoeda(subtotal)}</td>
                 <td class="center">
                     <button class="btn btn-cinza btn-pequeno" data-editar-item-req="${m.id}">✏️</button>
@@ -7782,7 +8105,7 @@ async function carregarItensJaLancadosReq(notaId) {
                 </td>
             </tr>
         `;
-    }).join('') || '<tr><td colspan="5" class="vazio">Nenhum item lançado ainda.</td></tr>';
+    }).join('') || '<tr><td colspan="6" class="vazio">Nenhum item lançado ainda.</td></tr>';
 
     corpo.querySelectorAll('[data-editar-item-req]').forEach(btn => {
         btn.addEventListener('click', () => abrirModalEditarMovimentacaoGeral(Number(btn.dataset.editarItemReq)));
@@ -7886,7 +8209,10 @@ document.getElementById('btnAdicionarItemReqCompleta').addEventListener('click',
         produtoId: produtoSelecionadoReqCompleta.id, produtoNome: produtoSelecionadoReqCompleta.nome, qtd, valorUnit,
         tag: document.getElementById('reqCompletaTag').value.trim(),
         setorId: document.getElementById('reqCompletaSetor').value ? Number(document.getElementById('reqCompletaSetor').value) : null,
-        almoxarifadoId: document.getElementById('reqCompletaAlmoxarifado').value ? Number(document.getElementById('reqCompletaAlmoxarifado').value) : null
+        almoxarifadoId: document.getElementById('reqCompletaAlmoxarifado').value ? Number(document.getElementById('reqCompletaAlmoxarifado').value) : null,
+        // já entra com o plano de contas padrão escolhido no
+        // cabeçalho -- dá pra mudar depois, item por item, na lista
+        planoContasId: planoContasSelecionadoReqCompleta ? planoContasSelecionadoReqCompleta.id : null
     });
 
     document.getElementById('reqCompletaProdutoBusca').value = '';
@@ -7904,6 +8230,7 @@ function renderizarItensReqCompleta() {
     let total = 0;
     const optSetorLinha = '<option value="">-</option>' + (catalogosBaixa.setores || []).map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
     const optAlmoxarifadoLinha = '<option value="">-- selecione --</option>' + (catalogosBaixa.almoxarifados || []).map(a => `<option value="${a.id}">${escapeHtml(a.nome)}</option>`).join('');
+    const optPlanoContasLinha = '<option value="">-</option>' + (catalogosBaixa.planoContas || []).map(pc => `<option value="${pc.id}">${escapeHtml(pc.codigo)} - ${escapeHtml(pc.descricao)}</option>`).join('');
     corpo.innerHTML = itensReqCompleta.map((item, idx) => {
         const subtotal = item.qtd * item.valorUnit;
         total += subtotal;
@@ -7915,6 +8242,7 @@ function renderizarItensReqCompleta() {
                 <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.tag || '')}" data-tag-item-req="${idx}" style="width:80px;"></td>
                 <td><select class="input-tag-evento" data-setor-item-req="${idx}" style="padding:6px;">${optSetorLinha}</select></td>
                 <td><select class="input-tag-evento" data-almoxarifado-item-req="${idx}" style="padding:6px;">${optAlmoxarifadoLinha}</select></td>
+                <td><select class="input-tag-evento" data-planocontas-item-req="${idx}" style="padding:6px; max-width:160px;">${optPlanoContasLinha}</select></td>
                 <td class="num">${formatarMoeda(subtotal)}</td>
                 <td class="center"><button type="button" class="btn btn-vermelho btn-pequeno" data-remover-item-req="${idx}">🗑️</button></td>
             </tr>
@@ -7922,9 +8250,9 @@ function renderizarItensReqCompleta() {
     }).join('');
     document.getElementById('totalItensReqCompleta').textContent = formatarMoeda(total);
 
-    // pré-seleciona setor/almoxarifado de cada linha (não dá pra fazer
-    // isso direto no template acima porque teria que casar valor
-    // dentro de outro template)
+    // pré-seleciona setor/almoxarifado/plano de contas de cada linha
+    // (não dá pra fazer isso direto no template acima porque teria
+    // que casar valor dentro de outro template)
     corpo.querySelectorAll('[data-setor-item-req]').forEach(sel => {
         const idx = Number(sel.dataset.setorItemReq);
         sel.value = itensReqCompleta[idx].setorId || '';
@@ -7932,6 +8260,10 @@ function renderizarItensReqCompleta() {
     corpo.querySelectorAll('[data-almoxarifado-item-req]').forEach(sel => {
         const idx = Number(sel.dataset.almoxarifadoItemReq);
         sel.value = itensReqCompleta[idx].almoxarifadoId || '';
+    });
+    corpo.querySelectorAll('[data-planocontas-item-req]').forEach(sel => {
+        const idx = Number(sel.dataset.planocontasItemReq);
+        sel.value = itensReqCompleta[idx].planoContasId || '';
     });
 
     corpo.querySelectorAll('[data-tag-item-req]').forEach(inp => {
@@ -7942,6 +8274,11 @@ function renderizarItensReqCompleta() {
     corpo.querySelectorAll('[data-setor-item-req]').forEach(sel => {
         sel.addEventListener('change', () => {
             itensReqCompleta[Number(sel.dataset.setorItemReq)].setorId = sel.value ? Number(sel.value) : null;
+        });
+    });
+    corpo.querySelectorAll('[data-planocontas-item-req]').forEach(sel => {
+        sel.addEventListener('change', () => {
+            itensReqCompleta[Number(sel.dataset.planocontasItemReq)].planoContasId = sel.value ? Number(sel.value) : null;
         });
     });
     corpo.querySelectorAll('[data-almoxarifado-item-req]').forEach(sel => {
@@ -8015,7 +8352,9 @@ document.getElementById('btnConfirmarRequisicaoCompleta').addEventListener('clic
                     observacao: 'Requisição de saída',
                     estoqueNotaId: notaId,
                     almoxarifadoId: item.almoxarifadoId != null ? item.almoxarifadoId : almoxarifadoIdCabecalho,
-                    setorId: item.setorId != null ? item.setorId : setorId, subsetorId, veiculoId, planoContasId, km, kmProximaTroca, dtProximaTroca
+                    setorId: item.setorId != null ? item.setorId : setorId, subsetorId, veiculoId,
+                    planoContasId: item.planoContasId != null ? item.planoContasId : planoContasId,
+                    km, kmProximaTroca, dtProximaTroca
                 }
             });
         }
@@ -8204,6 +8543,16 @@ function abrirModalCadGenerico(tipo, id) {
         document.getElementById('cadGenericoIdentificador').value = item ? (item.identificador || '') : '';
         document.getElementById('cadGenericoUltimoKm').value = item ? (item.ultimo_km ?? '') : '';
         document.getElementById('cadGenericoUltimoHorimetro').value = item ? (item.ultimo_horimetro ?? '') : '';
+        document.getElementById('cadGenericoModelo').value = item ? (item.modelo || '') : '';
+        document.getElementById('cadGenericoAno').value = item ? (item.ano || '') : '';
+        document.getElementById('cadGenericoCor').value = item ? (item.cor || '') : '';
+        document.getElementById('cadGenericoSetor').value = item ? (item.setor || '') : '';
+        document.getElementById('cadGenericoStatusFuncionamento').value = item ? (item.status_funcionamento || 'N/E') : 'N/E';
+        document.getElementById('cadGenericoRenavam').value = item ? (item.renavam || '') : '';
+        document.getElementById('cadGenericoChassi').value = item ? (item.chassi || '') : '';
+        document.getElementById('cadGenericoProprietarioDoc').value = item ? (item.proprietario_doc || '') : '';
+        document.getElementById('cadGenericoAlienadoA').value = item ? (item.alienado_a || '') : '';
+        document.getElementById('cadGenericoLocacaoAtual').value = item ? (item.locacao_atual || '') : '';
         document.getElementById('cadGenericoAtivo').value = item ? String(item.ativo) : 'true';
     }
 
@@ -8257,6 +8606,16 @@ document.getElementById('btnSalvarCadGenerico').addEventListener('click', async 
                 identificador: document.getElementById('cadGenericoIdentificador').value.trim() || null,
                 ultimoKm: document.getElementById('cadGenericoUltimoKm').value || null,
                 ultimoHorimetro: document.getElementById('cadGenericoUltimoHorimetro').value || null,
+                modelo: document.getElementById('cadGenericoModelo').value.trim() || null,
+                ano: document.getElementById('cadGenericoAno').value.trim() || null,
+                cor: document.getElementById('cadGenericoCor').value.trim() || null,
+                setor: document.getElementById('cadGenericoSetor').value.trim() || null,
+                statusFuncionamento: document.getElementById('cadGenericoStatusFuncionamento').value,
+                renavam: document.getElementById('cadGenericoRenavam').value.trim() || null,
+                chassi: document.getElementById('cadGenericoChassi').value.trim() || null,
+                proprietarioDoc: document.getElementById('cadGenericoProprietarioDoc').value.trim() || null,
+                alienadoA: document.getElementById('cadGenericoAlienadoA').value.trim() || null,
+                locacaoAtual: document.getElementById('cadGenericoLocacaoAtual').value.trim() || null,
                 ativo
             });
         }
