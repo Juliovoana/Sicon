@@ -579,6 +579,7 @@
                     <th class="th-ordenavel" data-ordenar="descricao">Descrição <span class="seta-ordem"></span></th>
                     <th class="th-ordenavel" data-ordenar="tag">Tag <span class="seta-ordem"></span></th>
                     <th class="th-ordenavel" data-ordenar="evento">Evento <span class="seta-ordem"></span></th>
+                    <th>Segmento</th>
                     <th>Setor</th>
                     <th class="num">Estoque no momento</th>
                     <th class="num">Estoque atual</th>
@@ -595,11 +596,18 @@
         <div style="text-align:right; margin-top:10px; font-size:1.1em;">
             Total pedido: <strong id="totalPedidoProjeto">R$ 0,00</strong>
         </div>
-        <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
-            <button class="btn btn-azul" id="btnPdfResumo">📄 PDF Resumido</button>
-            <button class="btn btn-azul" id="btnPdfDetalhado">📄 PDF Detalhado</button>
-            <button class="btn btn-verde" id="btnExcelResumo">📊 Excel Resumido</button>
-            <button class="btn btn-verde" id="btnExcelDetalhado">📊 Excel Detalhado</button>
+        <div class="linha-ferramentas-relatorio" style="margin-top:14px; justify-content:flex-end;">
+            <select id="projetoRelatorioTipo">
+                <option value="resumo">Resumido</option>
+                <option value="detalhado">Detalhado</option>
+            </select>
+            <select id="projetoRelatorioFormato">
+                <option value="pdf">PDF</option>
+                <option value="xlsx">Excel</option>
+            </select>
+            <button class="btn-icone" id="projetoRelatorioVer" title="Visualizar">👁️</button>
+            <button class="btn-icone" id="projetoRelatorioCompartilhar" title="Compartilhar">📤</button>
+            <button class="btn-icone" id="projetoRelatorioSalvar" title="Salvar">💾</button>
         </div>
     </div>
 </div>
@@ -2350,7 +2358,9 @@ async function chamarPost(acao, d) {
         return;
     }
     if (acao === 'atualizarTagEventoItem') {
-        const { error } = await sb.from('fabrica_itens_projeto').update({ tag: d.tag || '', evento: d.evento || '' }).eq('id', d.itemId);
+        const upd = { tag: d.tag || '', evento: d.evento || '' };
+        if (d.segmento !== undefined) upd.segmento = d.segmento || '';
+        const { error } = await sb.from('fabrica_itens_projeto').update(upd).eq('id', d.itemId);
         if (error) throw error;
         return;
     }
@@ -2423,6 +2433,7 @@ async function carregarProjetos() {
             observacao: i.observacao || '',
             tag: i.tag || '',
             evento: i.evento || '',
+            segmento: i.segmento || '',
             setorId: i.setor_id != null ? Number(i.setor_id) : null,
             valorUnitario: i.valor_unitario != null ? Number(i.valor_unitario) : null,
             posAprovacao: !!i.pos_aprovacao,
@@ -4481,6 +4492,7 @@ function renderizarRequisicao(id) {
                 <td>${prod ? escapeHtml(prod.nome) : ('#' + item.produtoId)}${item.posAprovacao ? ' <span class="pill" style="background:#FFF3E0; color:#E65100; font-size:0.65rem;" title="Adicionado depois que o projeto já estava aprovado">pós-aprovação</span>' : ''}</td>
                 <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.tag)}" data-tag-item="${item.id}"></td>
                 <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.evento)}" data-evento-item="${item.id}"></td>
+                <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.segmento || '')}" data-segmento-item="${item.id}" placeholder="Ex: Estrutura, Gesso..." style="min-width:110px;"></td>
                 <td>
                     <select class="input-tag-evento" data-setor-item="${item.id}" style="padding:6px;">
                         <option value="">-- sem setor --</option>
@@ -4531,7 +4543,7 @@ function renderizarRequisicao(id) {
             inp.addEventListener('change', async () => {
                 const itemId = Number(inp.dataset.tagItem);
                 const itemAtual = proj.itens.find(i => i.id === itemId);
-                await chamarPost('atualizarTagEventoItem', { itemId, tag: inp.value.trim(), evento: itemAtual ? itemAtual.evento : '' });
+                await chamarPost('atualizarTagEventoItem', { itemId, tag: inp.value.trim(), evento: itemAtual ? itemAtual.evento : '', segmento: itemAtual ? itemAtual.segmento : '' });
                 await carregarProjetos();
                 renderizarRequisicao(id);
             });
@@ -4550,7 +4562,16 @@ function renderizarRequisicao(id) {
                     }
                     inp.value = eventoEncontrado.codigo;
                 }
-                await chamarPost('atualizarTagEventoItem', { itemId, tag: itemAtual ? itemAtual.tag : '', evento: inp.value.trim() });
+                await chamarPost('atualizarTagEventoItem', { itemId, tag: itemAtual ? itemAtual.tag : '', evento: inp.value.trim(), segmento: itemAtual ? itemAtual.segmento : '' });
+                await carregarProjetos();
+                renderizarRequisicao(id);
+            });
+        });
+        corpo.querySelectorAll('[data-segmento-item]').forEach(inp => {
+            inp.addEventListener('change', async () => {
+                const itemId = Number(inp.dataset.segmentoItem);
+                const itemAtual = proj.itens.find(i => i.id === itemId);
+                await chamarPost('atualizarTagEventoItem', { itemId, tag: itemAtual ? itemAtual.tag : '', evento: itemAtual ? itemAtual.evento : '', segmento: inp.value.trim() });
                 await carregarProjetos();
                 renderizarRequisicao(id);
             });
@@ -5755,29 +5776,69 @@ function construirPdfProjetoResumo(proj) {
     const startY = cabecalhoRelatorio(doc, proj, 'Resumo');
 
     const linhas = itensComDadosProjeto(proj);
-    const corpo = linhas.map(l => [
-        l.prod ? l.prod.id : l.item.produtoId,
-        l.prod ? l.prod.nome : '-',
-        l.item.tag || '-',
-        l.item.evento || '-',
-        formatarMoeda(l.valorReferencia),
-        Number(l.item.qtdRequisitada).toLocaleString('pt-BR'),
-        Number(l.entregue).toLocaleString('pt-BR'),
-        formatarMoeda(l.subtotal)
-    ]);
-    const totalPedido = linhas.reduce((s, l) => s + l.subtotal, 0);
 
-    doc.autoTable({
-        startY,
-        head: [['Código', 'Descrição', 'Tag', 'Evento', 'Valor Unit.', 'Qtd. Pedida', 'Qtd. Atendida', 'Subtotal']],
-        body: corpo,
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [21, 101, 192] }
+    // agrupa por segmento (texto livre) -- itens sem segmento definido
+    // caem num grupo à parte, sempre por último
+    const semSegmentoNome = 'Sem segmento definido';
+    const gruposMap = {};
+    linhas.forEach(l => {
+        const nomeSegmento = (l.item.segmento || '').trim() || semSegmentoNome;
+        if (!gruposMap[nomeSegmento]) gruposMap[nomeSegmento] = [];
+        gruposMap[nomeSegmento].push(l);
+    });
+    const nomesGrupos = Object.keys(gruposMap).sort((a, b) => {
+        if (a === semSegmentoNome) return 1;
+        if (b === semSegmentoNome) return -1;
+        return a.localeCompare(b, 'pt-BR');
     });
 
-    const finalY = doc.lastAutoTable.finalY || startY;
-    doc.setFontSize(11);
-    doc.text(`Total pedido: ${formatarMoeda(totalPedido)}`, 14, finalY + 10);
+    let y = startY;
+    let totalGeral = 0;
+    nomesGrupos.forEach(nomeSegmento => {
+        if (y > 265) { doc.addPage(); y = 20; }
+        doc.setFontSize(11);
+        doc.setFont(undefined, 'bold');
+        doc.text(nomeSegmento, 14, y);
+        doc.setFont(undefined, 'normal');
+        y += 4;
+
+        const itensDoGrupo = gruposMap[nomeSegmento];
+        const corpo = itensDoGrupo.map(l => [
+            l.prod ? l.prod.id : l.item.produtoId,
+            l.prod ? l.prod.nome : '-',
+            l.item.tag || '-',
+            l.item.evento || '-',
+            formatarMoeda(l.valorReferencia),
+            Number(l.item.qtdRequisitada).toLocaleString('pt-BR'),
+            Number(l.entregue).toLocaleString('pt-BR'),
+            formatarMoeda(l.subtotal)
+        ]);
+        const subtotalGrupo = itensDoGrupo.reduce((s, l) => s + l.subtotal, 0);
+        totalGeral += subtotalGrupo;
+
+        doc.autoTable({
+            startY: y,
+            head: [['Código', 'Descrição', 'Tag', 'Evento', 'Valor Unit.', 'Qtd. Pedida', 'Qtd. Atendida', 'Subtotal']],
+            body: corpo,
+            styles: { fontSize: 7 },
+            headStyles: { fillColor: [21, 101, 192], fontSize: 7.5 },
+            margin: { left: 14, right: 14 }
+        });
+        y = doc.lastAutoTable.finalY + 6;
+
+        if (y > 270) { doc.addPage(); y = 20; }
+        doc.setFontSize(9);
+        doc.setFont(undefined, 'bold');
+        doc.text(`Subtotal ${nomeSegmento}: ${formatarMoeda(subtotalGrupo)}`, 14, y);
+        doc.setFont(undefined, 'normal');
+        y += 10;
+    });
+
+    if (y > 260) { doc.addPage(); y = 20; }
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text(`Total pedido: ${formatarMoeda(totalGeral)}`, 14, y);
+    doc.setFont(undefined, 'normal');
     return doc;
 }
 
@@ -5924,36 +5985,26 @@ function executarAcaoExcel(acao, dados, nomeAba, nomeArquivo, titulo) {
     if (acao === 'compartilhar') { compartilharOuBaixarArquivo(blobExcel(wb), nomeArquivo, blobExcel(wb).type, nomeArquivo); return; }
 }
 
-/* ---------- Requisição de Saída: botões existentes (sempre "compartilhar") ---------- */
-function gerarPdfResumo() {
+/* ---------- Requisição de Saída: agora com escolha de tipo/formato/ação (ver, baixar, compartilhar) ---------- */
+function executarRelatorioProjetoAtual(acao) {
     const proj = exigirProjetoParaRelatorio();
     if (!proj) return;
-    const doc = construirPdfProjetoResumo(proj);
-    executarAcaoPdf('compartilhar', doc, `requisicao-${slugArquivo(proj.descricao)}-resumo.pdf`);
-}
-function gerarPdfDetalhado() {
-    const proj = exigirProjetoParaRelatorio();
-    if (!proj) return;
-    const doc = construirPdfProjetoDetalhado(proj);
-    executarAcaoPdf('compartilhar', doc, `requisicao-${slugArquivo(proj.descricao)}-detalhado.pdf`);
-}
-function gerarExcelResumo() {
-    const proj = exigirProjetoParaRelatorio();
-    if (!proj) return;
-    const dados = construirDadosExcelProjetoResumo(proj);
-    executarAcaoExcel('compartilhar', dados, 'Resumo', `requisicao-${slugArquivo(proj.descricao)}-resumo.xlsx`, proj.descricao);
-}
-function gerarExcelDetalhado() {
-    const proj = exigirProjetoParaRelatorio();
-    if (!proj) return;
-    const dados = construirDadosExcelProjetoDetalhado(proj);
-    executarAcaoExcel('compartilhar', dados, 'Detalhado', `requisicao-${slugArquivo(proj.descricao)}-detalhado.xlsx`, proj.descricao);
+    const tipo = document.getElementById('projetoRelatorioTipo').value;
+    const formato = document.getElementById('projetoRelatorioFormato').value;
+    const sufixo = tipo === 'resumo' ? 'resumo' : 'detalhado';
+
+    if (formato === 'pdf') {
+        const doc = tipo === 'resumo' ? construirPdfProjetoResumo(proj) : construirPdfProjetoDetalhado(proj);
+        executarAcaoPdf(acao, doc, `requisicao-${slugArquivo(proj.descricao)}-${sufixo}.pdf`);
+    } else {
+        const dados = tipo === 'resumo' ? construirDadosExcelProjetoResumo(proj) : construirDadosExcelProjetoDetalhado(proj);
+        executarAcaoExcel(acao, dados, tipo === 'resumo' ? 'Resumo' : 'Detalhado', `requisicao-${slugArquivo(proj.descricao)}-${sufixo}.xlsx`, proj.descricao);
+    }
 }
 
-document.getElementById('btnPdfResumo').addEventListener('click', gerarPdfResumo);
-document.getElementById('btnPdfDetalhado').addEventListener('click', gerarPdfDetalhado);
-document.getElementById('btnExcelResumo').addEventListener('click', gerarExcelResumo);
-document.getElementById('btnExcelDetalhado').addEventListener('click', gerarExcelDetalhado);
+document.getElementById('projetoRelatorioVer').addEventListener('click', () => executarRelatorioProjetoAtual('ver'));
+document.getElementById('projetoRelatorioCompartilhar').addEventListener('click', () => executarRelatorioProjetoAtual('compartilhar'));
+document.getElementById('projetoRelatorioSalvar').addEventListener('click', () => executarRelatorioProjetoAtual('salvar'));
 
 /* ============================================================
    ABA RELATÓRIOS (por Evento, por Tag, por Projeto)

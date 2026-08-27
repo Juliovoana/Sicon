@@ -1445,6 +1445,16 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
             await carregarProdutosESaldos();
             if (document.getElementById('aba-btn-atender').style.display !== 'none') await carregarRequisicoesAtender();
             btn.disabled = false; btn.textContent = 'Enviar requisição';
+
+            // mesmo popup de imprimir/compartilhar que aparece ao criar
+            // uma requisição nova -- busca ela já atualizada, com os
+            // itens certos, direto do banco
+            const { data: reqAtualizada } = await sb.from('estoque_requisicoes_rapidas')
+                .select('*, estoque_requisicoes_rapidas_itens(*)')
+                .eq('id', requisicaoEmEdicaoId).single();
+            if (reqAtualizada) {
+                await gerarEAbrirPopupPdf(reqAtualizada, reqAtualizada.estoque_requisicoes_rapidas_itens || [], 'a4');
+            }
             return;
         }
 
