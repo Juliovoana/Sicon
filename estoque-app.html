@@ -562,6 +562,9 @@
     <div class="vazio" id="avisoSemProjeto">Selecione um projeto acima (ou crie um novo na aba Projetos) para montar a requisição de saída.</div>
 
     <div id="blocoRequisicao" style="display:none;">
+        <div style="text-align:right; margin-bottom:10px;">
+            <button class="btn btn-cinza" id="btnAbrirCopiarProjeto">📋 Copiar itens de outro projeto</button>
+        </div>
         <div style="position:relative;">
             <div class="linha-busca">
                 <input type="text" id="buscaItemProjeto" placeholder="Digite código ou descrição do produto...">
@@ -1656,6 +1659,43 @@
 
 <!-- ===================== MODAL / POPUP: Configurações ===================== -->
 <!-- ===================== MODAL / POPUP: Quantidade ao adicionar produto ===================== -->
+<div class="modal-overlay" id="modalCopiarProjeto">
+    <div class="modal-caixa larga">
+        <h4 style="margin:0 0 4px;">Copiar itens de outro projeto</h4>
+        <p class="subtitulo" style="margin-bottom:14px;">Escolha o projeto de origem, marque os materiais que quer trazer, e ajuste as quantidades depois — os itens entram com a mesma quantidade e valor do projeto original.</p>
+
+        <div class="campo" style="position:relative;">
+            <label>Projeto de origem</label>
+            <input type="text" id="copiarProjetoOrigemBusca" placeholder="Digite qualquer parte do nome do projeto..." autocomplete="off">
+            <div id="copiarProjetoOrigemResultados" class="dropdown-busca-evento"></div>
+            <p class="subtitulo" id="copiarProjetoOrigemSelecionadoTexto" style="margin-top:4px;"></p>
+        </div>
+
+        <div id="copiarProjetoSemItens" class="vazio hidden" style="margin-top:14px;">Esse projeto não tem itens.</div>
+
+        <div id="copiarProjetoBlocoItens" class="hidden" style="margin-top:14px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                <label style="display:flex; align-items:center; gap:6px; font-weight:500; cursor:pointer;">
+                    <input type="checkbox" id="copiarProjetoMarcarTodos"> Marcar todos
+                </label>
+                <span class="subtitulo" id="copiarProjetoContagem"></span>
+            </div>
+            <div style="max-height:320px; overflow-y:auto; border:1px solid var(--linha); border-radius:8px;">
+                <table class="tabela" style="margin:0;">
+                    <thead><tr><th class="center" style="width:36px;"></th><th>Produto</th><th class="num">Qtd</th><th class="num">Valor Unit.</th><th>Segmento</th></tr></thead>
+                    <tbody id="corpoCopiarProjetoItens"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <p class="status-msg" id="statusCopiarProjeto" style="margin-top:10px;"></p>
+        <div style="display:flex; gap:8px; margin-top:16px;">
+            <button class="btn btn-cinza" id="btnFecharCopiarProjeto" style="flex:1;">Fechar</button>
+            <button class="btn btn-verde" id="btnConfirmarCopiarProjeto" style="flex:1;">Copiar selecionados</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal-overlay" id="modalQtdInicial">
     <div class="modal-caixa">
         <h4 style="margin-top:0;">Quantidade solicitada</h4>
@@ -2275,6 +2315,7 @@ async function chamarPost(acao, d) {
         const { data, error } = await sb.from('fabrica_itens_projeto').insert({
             projeto_id: it.projetoId, produto_id: it.produtoId, qtd_requisitada: it.qtdRequisitada,
             responsavel: it.responsavel || '', observacao: it.observacao || '', tag: it.tag || '', evento: it.evento || '',
+            segmento: it.segmento || '',
             valor_unitario: it.valorUnitario != null ? it.valorUnitario : null,
             pos_aprovacao: it.posAprovacao || false,
             estoque_disponivel_no_momento: it.estoqueDisponivelNoMomento != null ? it.estoqueDisponivelNoMomento : null,
@@ -4841,6 +4882,194 @@ document.getElementById('buscaItemProjeto').addEventListener('input', () => {
 
 let produtoPendenteAdicionar = null;
 let estoqueDisponivelNoMomentoPendente = null;
+
+// ---------------------------------------------------------------
+// COPIAR ITENS DE OUTRO PROJETO -- abre um projeto de origem, marca
+// quais materiais trazer, e copia com a mesma quantidade/valor (só
+// ajusta depois). Respeita pós-aprovação do projeto de DESTINO, igual
+// qualquer outro item adicionado manualmente.
+// ---------------------------------------------------------------
+document.getElementById('btnAbrirCopiarProjeto').addEventListener('click', () => {
+    const projDestino = projetos.find(p => p.id === projetoAtualId);
+    if (!projDestino) return;
+
+    document.getElementById('copiarProjetoOrigemBusca').value = '';
+    document.getElementById('copiarProjetoOrigemSelecionadoTexto').textContent = '';
+    document.getElementById('copiarProjetoOrigemResultados').classList.remove('aberto');
+    projetoOrigemSelecionadoParaCopia = null;
+    document.getElementById('copiarProjetoBlocoItens').classList.add('hidden');
+    document.getElementById('copiarProjetoSemItens').classList.add('hidden');
+    document.getElementById('statusCopiarProjeto').textContent = '';
+    document.getElementById('copiarProjetoMarcarTodos').checked = false;
+    document.getElementById('modalCopiarProjeto').classList.add('aberto');
+});
+document.getElementById('btnFecharCopiarProjeto').addEventListener('click', () => {
+    document.getElementById('modalCopiarProjeto').classList.remove('aberto');
+});
+
+let projetoOrigemSelecionadoParaCopia = null;
+
+document.getElementById('copiarProjetoOrigemBusca').addEventListener('input', (e) => {
+    const termo = e.target.value.trim().toUpperCase();
+    const el = document.getElementById('copiarProjetoOrigemResultados');
+    if (!termo) { el.classList.remove('aberto'); return; }
+    // busca por qualquer parte do nome -- não trava a lista mesmo com
+    // muitos projetos cadastrados no futuro
+    const filtrados = projetos.filter(p =>
+        p.id !== projetoAtualId && (p.itens || []).length && p.descricao.toUpperCase().includes(termo)
+    ).slice(0, 20);
+    if (!filtrados.length) { el.innerHTML = '<div class="resultado-item">Nenhum projeto encontrado com itens pra copiar.</div>'; el.classList.add('aberto'); return; }
+    el.innerHTML = filtrados.map(p => `<div class="resultado-item" data-id="${p.id}">${escapeHtml(p.descricao)} <span style="color:var(--muted);">(${p.itens.length} item(ns))</span></div>`).join('');
+    el.classList.add('aberto');
+    el.querySelectorAll('[data-id]').forEach(opt => {
+        opt.addEventListener('click', () => {
+            selecionarProjetoOrigemParaCopia(Number(opt.dataset.id));
+            document.getElementById('copiarProjetoOrigemBusca').value = '';
+            el.classList.remove('aberto');
+        });
+    });
+});
+document.addEventListener('click', (e) => {
+    const campo = document.getElementById('copiarProjetoOrigemBusca');
+    const resultados = document.getElementById('copiarProjetoOrigemResultados');
+    if (campo && resultados && e.target !== campo && !resultados.contains(e.target)) {
+        resultados.classList.remove('aberto');
+    }
+});
+
+function selecionarProjetoOrigemParaCopia(projId) {
+    const projOrigem = projetos.find(p => p.id === projId);
+    const corpo = document.getElementById('corpoCopiarProjetoItens');
+    const blocoItens = document.getElementById('copiarProjetoBlocoItens');
+    const semItens = document.getElementById('copiarProjetoSemItens');
+
+    projetoOrigemSelecionadoParaCopia = projOrigem || null;
+    document.getElementById('copiarProjetoOrigemSelecionadoTexto').textContent = projOrigem ? `Selecionado: ${projOrigem.descricao}` : '';
+
+    if (!projOrigem || !(projOrigem.itens || []).length) {
+        blocoItens.classList.add('hidden');
+        semItens.classList.toggle('hidden', !projOrigem);
+        return;
+    }
+    semItens.classList.add('hidden');
+    blocoItens.classList.remove('hidden');
+
+    // ordena por segmento primeiro (sem segmento sempre por último,
+    // igual já fazemos no relatório), depois por nome do produto A-Z
+    // dentro de cada segmento
+    const itensOrdenados = [...projOrigem.itens].sort((a, b) => {
+        const segA = (a.segmento || '').trim();
+        const segB = (b.segmento || '').trim();
+        if (segA !== segB) {
+            if (!segA) return 1;
+            if (!segB) return -1;
+            return segA.localeCompare(segB, 'pt-BR');
+        }
+        const nomeA = (produtos.find(p => p.id === a.produtoId)?.nome) || '';
+        const nomeB = (produtos.find(p => p.id === b.produtoId)?.nome) || '';
+        return nomeA.localeCompare(nomeB, 'pt-BR');
+    });
+
+    corpo.innerHTML = itensOrdenados.map(item => {
+        const prod = produtos.find(p => p.id === item.produtoId);
+        const valorRef = item.valorUnitario != null ? item.valorUnitario : (prod ? prod.valor : 0);
+        return `
+            <tr>
+                <td class="center"><input type="checkbox" class="check-copiar-item" data-item-id="${item.id}"></td>
+                <td>${prod ? escapeHtml(prod.nome) : '#' + item.produtoId}</td>
+                <td class="num">${item.qtdRequisitada}</td>
+                <td class="num">${formatarMoeda(valorRef)}</td>
+                <td>${item.segmento ? escapeHtml(item.segmento) : '-'}</td>
+            </tr>
+        `;
+    }).join('');
+    atualizarContagemCopiarProjeto();
+    corpo.querySelectorAll('.check-copiar-item').forEach(chk => {
+        chk.addEventListener('change', atualizarContagemCopiarProjeto);
+    });
+}
+
+function atualizarContagemCopiarProjeto() {
+    const total = document.querySelectorAll('.check-copiar-item').length;
+    const marcados = document.querySelectorAll('.check-copiar-item:checked').length;
+    document.getElementById('copiarProjetoContagem').textContent = `${marcados} de ${total} selecionado(s)`;
+}
+
+document.getElementById('copiarProjetoMarcarTodos').addEventListener('change', (e) => {
+    document.querySelectorAll('.check-copiar-item').forEach(chk => { chk.checked = e.target.checked; });
+    atualizarContagemCopiarProjeto();
+});
+
+document.getElementById('btnConfirmarCopiarProjeto').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusCopiarProjeto');
+    const projOrigem = projetoOrigemSelecionadoParaCopia;
+    const projDestino = projetos.find(p => p.id === projetoAtualId);
+    if (!projOrigem || !projDestino) return;
+
+    if ((projDestino.status || 'em_construcao') === 'finalizado') {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Esse projeto está finalizado — não é mais possível adicionar itens.';
+        return;
+    }
+
+    const idsMarcados = Array.from(document.querySelectorAll('.check-copiar-item:checked')).map(chk => Number(chk.dataset.itemId));
+    if (!idsMarcados.length) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Marque pelo menos um item pra copiar.';
+        return;
+    }
+
+    const btn = document.getElementById('btnConfirmarCopiarProjeto');
+    btn.disabled = true;
+    statusEl.className = '';
+    statusEl.textContent = 'Copiando...';
+
+    // tag e evento vêm do que já está escolhido no cabeçalho da janela
+    // de lançamentos -- não faz sentido copiar em branco se a pessoa
+    // já está lançando tudo pra uma tag/evento específico
+    const tagCabecalho = document.getElementById('cabTag').value.trim();
+    const eventoCabecalho = eventoSelecionadoAtual ? eventoSelecionadoAtual.codigo : '';
+
+    try {
+        const itensParaCopiar = projOrigem.itens.filter(i => idsMarcados.includes(i.id));
+        for (const item of itensParaCopiar) {
+            const prod = produtos.find(p => p.id === item.produtoId);
+            const saldoAlmoxTrabalho = almoxarifadoTrabalho ? saldoDoProdutoNoAlmoxarifado(item.produtoId, almoxarifadoTrabalho) : null;
+            const estoqueSnapshot = almoxarifadoTrabalho
+                ? (saldoAlmoxTrabalho ? Number(saldoAlmoxTrabalho.estoque) : 0)
+                : (prod ? Number(prod.estoque) : null);
+
+            await chamarPost('adicionarItemProjeto', {
+                item: {
+                    projetoId: projDestino.id,
+                    produtoId: item.produtoId,
+                    qtdRequisitada: item.qtdRequisitada,
+                    responsavel: '',
+                    observacao: '',
+                    tag: tagCabecalho,
+                    evento: eventoCabecalho,
+                    segmento: item.segmento || '',
+                    valorUnitario: item.valorUnitario,
+                    posAprovacao: (projDestino.status || 'em_construcao') === 'aprovado',
+                    estoqueDisponivelNoMomento: estoqueSnapshot
+                }
+            });
+        }
+
+        await registrarSentinela('copia_itens_projeto',
+            `Copiou ${itensParaCopiar.length} item(ns) do projeto "${projOrigem.descricao}" pro projeto "${projDestino.descricao}"`);
+
+        await carregarProjetos();
+        renderizarRequisicao(projDestino.id);
+        renderizarListaProjetos();
+        document.getElementById('modalCopiarProjeto').classList.remove('aberto');
+    } catch (err) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Erro ao copiar: ' + err.message;
+    } finally {
+        btn.disabled = false;
+    }
+});
 
 function adicionarProdutoAoProjeto(p) {
     const statusEl = document.getElementById('statusItemProjeto');
