@@ -6792,6 +6792,7 @@ async function buscarPainelMovimentacoes() {
    vieram de importação de XML), itens e títulos de pagamento.
    ========================================================================= */
 let notaEmEdicaoId = null;
+let fornecedoresConhecidosCnpj = {};
 let notaTipoEmEdicao = 'entrada';
 let itensNotaAtual = [];
 let titulosNotaAtual = [];
@@ -7118,9 +7119,15 @@ async function carregarListaNotasEntrada() {
             });
         });
 
-        // datalist de fornecedores já usados, pra sugestão rápida
+        // datalist de fornecedores já usados, pra sugestão rápida --
+        // também guarda o CNPJ de cada um, pra preencher sozinho quando
+        // o nome escolhido bater exatamente com um fornecedor conhecido
         const nomes = [...new Set((notas || []).map(n => n.nome_fornecedor).filter(Boolean))];
         document.getElementById('notaListaFornecedores').innerHTML = nomes.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
+        fornecedoresConhecidosCnpj = {};
+        (notas || []).forEach(n => {
+            if (n.nome_fornecedor && n.cnpj_fornecedor) fornecedoresConhecidosCnpj[n.nome_fornecedor] = n.cnpj_fornecedor;
+        });
     } catch (err) {
         console.error(err);
         corpo.innerHTML = '';
@@ -7466,6 +7473,15 @@ function renderizarTitulosNota() {
         });
     });
 }
+
+// preenche o CNPJ sozinho quando o nome digitado/escolhido bate
+// exatamente com um fornecedor já usado antes em alguma nota
+document.getElementById('notaFornecedorNome').addEventListener('input', (e) => {
+    const cnpjConhecido = fornecedoresConhecidosCnpj[e.target.value];
+    if (cnpjConhecido) {
+        document.getElementById('notaFornecedorCnpj').value = cnpjConhecido;
+    }
+});
 
 document.getElementById('btnSalvarCabecalhoNota').addEventListener('click', async () => {
     const statusEl = document.getElementById('statusNotaEntrada');
