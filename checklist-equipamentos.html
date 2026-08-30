@@ -189,6 +189,11 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 .fmodal img{max-width:95vw;max-height:80vh;border-radius:8px;object-fit:contain}
 .fmodal-close{background:#fff;border:none;border-radius:20px;padding:8px 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:var(--fn)}
 
+/* popup de cadastro (veículo, item de checklist, tipo de manutenção) */
+.modal-cad-overlay{display:none;position:fixed;inset:0;background:rgba(20,30,50,.55);z-index:90;align-items:center;justify-content:center;padding:16px}
+.modal-cad-overlay.on{display:flex}
+.modal-cad-caixa{background:var(--sf);border-radius:12px;padding:20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+
 /* MANUTENÇÃO */
 .man-sec{background:var(--sf);border-bottom:1px solid var(--bd);padding:0}
 .man-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;user-select:none}
@@ -300,7 +305,7 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
   <div class="tabs">
     <button class="tab on" data-tab="cl" onclick="goTab('cl',this)"><i class="ti ti-clipboard-list"></i> Novo</button>
     <button class="tab" data-tab="rec" onclick="goTab('rec',this)"><i class="ti ti-search"></i> Recuperar</button>
-    <button class="tab" data-tab="fr" onclick="goTab('fr',this)"><i class="ti ti-bus"></i> Frota</button>
+    <button class="tab" data-tab="fr" onclick="goTab('fr',this)"><i class="ti ti-tools"></i> Veículos e Equipamentos</button>
     <button class="tab" data-tab="man" onclick="goTab('man',this)"><i class="ti ti-tool"></i> Manutenção</button>
   </div>
 
@@ -325,7 +330,7 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
     </div>
     <div class="card" style="padding:10px 16px">
       <div style="display:flex;gap:8px;align-items:center">
-        <input class="inp" type="text" id="mot" placeholder="Motorista" style="flex:1">
+        <input class="inp" type="text" id="mot" placeholder="Motorista/Responsável" style="flex:1">
         <input class="inp" type="date" id="dt" style="flex:.85;width:auto">
       </div>
       <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
@@ -396,13 +401,26 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
   <!-- ── FROTA ── -->
   <div id="s-fr" class="screen">
     <div class="subtabs">
-      <button class="stab on" onclick="goSubFrota('ver',this)"><i class="ti ti-list"></i> Ver frota</button>
+      <button class="stab on" onclick="goSubFrota('ver',this)"><i class="ti ti-list"></i> Ver lista</button>
       <button class="stab" onclick="goSubFrota('ger',this)" id="stab-gerenciar"><i class="ti ti-settings"></i> Gerenciar</button>
     </div>
     <div id="sub-fr-ver" class="subscreen on">
       <div class="sbar">
         <span style="font-size:12px;color:var(--tx2)" id="frst">—</span>
         <button class="sbtn" onclick="carregarFrota()"><i class="ti ti-refresh"></i> Atualizar</button>
+      </div>
+      <div class="hbusca" style="padding-top:8px;padding-bottom:10px">
+        <div class="sw">
+          <i class="ti ti-search sic"></i>
+          <input class="inp" id="fr-busca-texto" placeholder="Buscar por nome, placa ou identificador..." oninput="renderizarListaFrota()">
+        </div>
+        <select class="inp" id="fr-filtro-tipo" onchange="renderizarListaFrota()">
+          <option value="">Todos os tipos</option>
+          <option value="veiculo">Veículo</option>
+          <option value="gerador">Gerador</option>
+          <option value="climatizador">Climatizador</option>
+          <option value="outro">Outro</option>
+        </select>
       </div>
       <div id="frlist"><div class="empty"><i class="ti ti-bus"></i>Carregando frota...</div></div>
     </div>
@@ -412,13 +430,27 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
         <div class="subtabs" style="border-top:1px solid var(--bd)">
           <button class="stab on" onclick="goAdminTab('veic',this)"><i class="ti ti-bus"></i> Veículos</button>
           <button class="stab" onclick="goAdminTab('itens',this)"><i class="ti ti-list-check"></i> Itens do checklist</button>
+          <button class="stab" onclick="goAdminTab('man',this)"><i class="ti ti-tool"></i> Tipos de manutenção</button>
         </div>
         <div id="admin-veic" class="subscreen on">
           <div class="sbar">
             <span style="font-size:12px;color:var(--tx2)">Cadastro de veículos/equipamentos</span>
             <button class="sbtn" onclick="abrirFormVeiculoNovo()"><i class="ti ti-plus"></i> Novo</button>
           </div>
-          <div id="admin-veic-form" class="card hidden"></div>
+          <div class="hbusca" style="padding-top:8px;padding-bottom:10px">
+            <div class="sw">
+              <i class="ti ti-search sic"></i>
+              <input class="inp" id="admin-busca-texto" placeholder="Buscar por nome, placa ou identificador..." oninput="renderizarListaVeiculosAdmin()">
+            </div>
+            <select class="inp" id="admin-filtro-tipo" onchange="renderizarListaVeiculosAdmin()">
+              <option value="">Todos os tipos</option>
+              <option value="veiculo">Veículo</option>
+              <option value="gerador">Gerador</option>
+              <option value="climatizador">Climatizador</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div class="modal-cad-overlay" id="modal-cad-veic"><div class="modal-cad-caixa" id="admin-veic-form"></div></div>
           <div id="admin-veic-lista"></div>
         </div>
         <div id="admin-itens" class="subscreen">
@@ -426,8 +458,16 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
             <span style="font-size:12px;color:var(--tx2)">Itens do modelo de checklist</span>
             <button class="sbtn" onclick="abrirFormItemModeloNovo()"><i class="ti ti-plus"></i> Novo item</button>
           </div>
-          <div id="admin-item-form" class="card hidden"></div>
+          <div class="modal-cad-overlay" id="modal-cad-item"><div class="modal-cad-caixa" id="admin-item-form"></div></div>
           <div id="admin-item-lista"></div>
+        </div>
+        <div id="admin-man" class="subscreen">
+          <div class="sbar">
+            <span style="font-size:12px;color:var(--tx2)">Tipos de manutenção (catálogo)</span>
+            <button class="sbtn" onclick="abrirFormTipoManutencaoNovo()"><i class="ti ti-plus"></i> Novo tipo</button>
+          </div>
+          <div class="modal-cad-overlay" id="modal-cad-man"><div class="modal-cad-caixa" id="admin-man-form"></div></div>
+          <div id="admin-man-lista"></div>
         </div>
       </div>
     </div>
@@ -607,6 +647,15 @@ function labelMedida(v){ return ehVeiculo(v) ? 'KM' : 'Horímetro'; }
 function unidadeMedidaCurta(v){ return ehVeiculo(v) ? 'km' : 'h'; }
 function ultimaMedidaConhecida(v){ return ehVeiculo(v) ? v.ultimoKm : v.ultimoHorimetro; }
 
+// categoria específica pro checklist (Caminhão, Ônibus, Van,
+// Utilitário, Motocicleta, etc.) -- se ainda não foi definida pro
+// equipamento, cai pro "tipo" genérico (veiculo/gerador/climatizador/
+// outro), pra continuar funcionando com o que já foi cadastrado antes
+// dessa categoria mais fina existir
+function categoriaParaChecklist(v){
+  return (v.categoriaChecklist && v.categoriaChecklist.trim()) ? v.categoriaChecklist.trim() : v.tipo;
+}
+
 let frota = [];          // lista de equipamentos/veículos da unidade
 let itensCache = {};     // { tipo: [{g:'grupo', i:['item',...]}] } -- carregado do banco
 let itensModeloRaw = {}; // { tipo: [{id, grupo, item}] } -- com IDs, pra referenciar depois
@@ -659,7 +708,8 @@ async function carregarFrota(){
   if (error) { toast('Erro ao carregar frota: ' + error.message); return; }
   frota = (data || []).map(v => ({
     id: v.id, nome: v.nome, placa: v.placa || '', identificador: v.identificador || '',
-    tipo: v.tipo || 'outro', modelo: v.modelo || '', ano: v.ano || '', cor: v.cor || '',
+    tipo: v.tipo || 'outro', categoriaChecklist: v.categoria_checklist || '',
+    modelo: v.modelo || '', ano: v.ano || '', cor: v.cor || '',
     setor: v.setor || '', statusFuncionamento: v.status_funcionamento || 'N/E',
     renavam: v.renavam || '', chassi: v.chassi || '', proprietarioDoc: v.proprietario_doc || '',
     alienadoA: v.alienado_a || '', locacaoAtual: v.locacao_atual || '',
@@ -672,13 +722,21 @@ async function carregarFrota(){
 function renderizarListaFrota(){
   const lista = document.getElementById('frlist');
   const status = document.getElementById('frst');
-  status.textContent = frota.length + ' cadastrado(s)';
+  const filtroTipo = document.getElementById('fr-filtro-tipo').value;
+  const termo = document.getElementById('fr-busca-texto').value.trim().toLowerCase();
+  const listaFiltrada = frota.filter(v =>
+    (!filtroTipo || v.tipo === filtroTipo) &&
+    (!termo || v.nome.toLowerCase().includes(termo) || v.placa.toLowerCase().includes(termo) || v.identificador.toLowerCase().includes(termo))
+  );
+
+  status.textContent = listaFiltrada.length + ' de ' + frota.length + ' cadastrado(s)';
   if (!frota.length) { lista.innerHTML = '<div class="empty"><i class="ti ti-bus"></i>Nenhum veículo/equipamento cadastrado ainda.</div>'; return; }
-  lista.innerHTML = frota.map(v => `
+  if (!listaFiltrada.length) { lista.innerHTML = '<div class="empty"><i class="ti ti-filter"></i>Nenhum equipamento encontrado com esses filtros.</div>'; return; }
+  lista.innerHTML = listaFiltrada.map(v => `
     <div class="fi">
       <div class="fiic"><i class="ti ${TPI[v.tipo] || 'ti-tool'}"></i></div>
       <div style="flex:1"><div class="fipl">${escapeHtml(v.nome)}${v.placa ? ' — ' + escapeHtml(v.placa) : ''}</div>
-        <div class="fisb">${escapeHtml(LABEL_TIPO[v.tipo] || v.tipo)}${v.modelo ? ' · ' + escapeHtml(v.modelo) : ''}${v.ano ? ' · ' + escapeHtml(v.ano) : ''}</div></div>
+        <div class="fisb">${escapeHtml(v.categoriaChecklist || LABEL_TIPO[v.tipo] || v.tipo)}${v.modelo ? ' · ' + escapeHtml(v.modelo) : ''}${v.ano ? ' · ' + escapeHtml(v.ano) : ''}</div></div>
     </div>
   `).join('');
 }
@@ -713,7 +771,7 @@ function filtrarVeiculos(){
   dd.innerHTML = res.length
     ? res.map(v => `<div class="ddi" data-id="${v.id}">
         <div class="ddic"><i class="ti ${TPI[v.tipo] || 'ti-tool'}"></i></div>
-        <div><div class="ddpl">${escapeHtml(v.nome)}${v.placa ? ' — ' + escapeHtml(v.placa) : ''}</div><div class="ddsb">${escapeHtml(v.modelo)} · ${escapeHtml(LABEL_TIPO[v.tipo] || v.tipo)}</div></div>
+        <div><div class="ddpl">${escapeHtml(v.nome)}${v.placa ? ' — ' + escapeHtml(v.placa) : ''}</div><div class="ddsb">${escapeHtml(v.modelo)} · ${escapeHtml(v.categoriaChecklist || LABEL_TIPO[v.tipo] || v.tipo)}</div></div>
       </div>`).join('')
     : '<div class="ddem">Nenhum veículo encontrado</div>';
   dd.classList.add('on');
@@ -741,13 +799,13 @@ async function selecionarVeiculo(id){
   document.getElementById('dd').classList.remove('on');
   document.getElementById('vcn').textContent = v.nome;
   document.getElementById('vcs').textContent = (v.placa ? 'Placa: ' + v.placa + ' · ' : '') + 'Modelo: ' + (v.modelo || '-');
-  const p = document.getElementById('vcp'); p.textContent = LABEL_TIPO[v.tipo] || v.tipo; p.className = 'pill ' + (TPC[v.tipo] || 'pu');
+  const p = document.getElementById('vcp'); p.textContent = v.categoriaChecklist || LABEL_TIPO[v.tipo] || v.tipo; p.className = 'pill ' + (TPC[v.tipo] || 'pu');
   document.getElementById('vcic').innerHTML = '<i class="ti ' + (TPI[v.tipo] || 'ti-tool') + '"></i>';
   document.getElementById('vc').className = 'vc on';
   document.getElementById('benv').disabled = false;
 
   await carregarManutencaoVeiculo(v.id);
-  buildChecklist(v.tipo);
+  buildChecklist(categoriaParaChecklist(v));
   const campoMedida = document.getElementById('km');
   campoMedida.value = '';
   campoMedida.placeholder = labelMedida(v) + ' atual *';
@@ -805,7 +863,7 @@ function buildChecklist(tipo){
   body.innerHTML = ''; est = {};
 
   if (!grupos.length) {
-    body.innerHTML = '<div class="empty"><i class="ti ti-list-check"></i>Nenhum item de checklist cadastrado pro tipo "' + escapeHtml(LABEL_TIPO[tipo] || tipo) + '" ainda.<br>Cadastre em Frota → Gerenciar → Itens do checklist.</div>';
+    body.innerHTML = '<div class="empty"><i class="ti ti-list-check"></i>Nenhum item de checklist cadastrado pra categoria "' + escapeHtml(LABEL_TIPO[tipo] || tipo) + '" ainda.<br>Cadastre em Equipamentos → Gerenciar → Itens do checklist.</div>';
     updCnt();
     return;
   }
@@ -906,7 +964,10 @@ async function carregarManutencaoVeiculo(equipamentoId){
   const { data: tipos, error: errTipos } = await sb.from('checklist_tipos_manutencao')
     .select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('tipo');
   if (errTipos) { toast('Erro ao carregar tipos de manutenção: ' + errTipos.message); return; }
-  tiposManCache = tipos || [];
+  // só mostra os tipos que valem pra "Todos" (categoria em branco) ou
+  // que batem exatamente com a categoria desse equipamento específico
+  const categoriaEquipamento = categoriaParaChecklist(vSel);
+  tiposManCache = (tipos || []).filter(t => !t.categoria_checklist || t.categoria_checklist === categoriaEquipamento);
 
   const { data: historico, error: errHist } = await sb.from('checklist_manutencoes')
     .select('*').eq('equipamento_veiculo_id', equipamentoId);
@@ -941,7 +1002,7 @@ function renderManItens(){
   }
 
   if (!tiposManCache.length) {
-    body.innerHTML += '<div style="padding:16px;font-size:13px;color:var(--tx3);text-align:center">Nenhum tipo de manutenção cadastrado ainda.<br>Cadastre em Frota → Gerenciar.</div>';
+    body.innerHTML += '<div style="padding:16px;font-size:13px;color:var(--tx3);text-align:center">Nenhum tipo de manutenção aplicável a essa categoria ainda.<br>Cadastre em Veículos e Equipamentos → Gerenciar (deixe a categoria em branco pra valer pra "Todos").</div>';
     document.getElementById('man-badge').textContent = '—';
     document.getElementById('man-badge').className = 'man-hdr-badge';
     return;
@@ -1080,9 +1141,11 @@ async function carregarManutencaoGeral(){
 
   const hoje = new Date();
   lista.innerHTML = frota.map(v => {
+    const categoriaEquipamento = categoriaParaChecklist(v);
+    const tiposAplicaveis = tipos.filter(t => !t.categoria_checklist || t.categoria_checklist === categoriaEquipamento);
     const registrosVeiculo = (historico || []).filter(h => h.equipamento_veiculo_id === v.id);
     let alertas = 0, emDia = 0, semRegistro = 0;
-    tipos.forEach(t => {
+    tiposAplicaveis.forEach(t => {
       const reg = registrosVeiculo.find(h => h.tipo_manutencao_id === t.id);
       if (!reg || (!reg.data_ultima && !reg.medicao_ultima)) { semRegistro++; return; }
       let vencido = false;
@@ -1091,13 +1154,13 @@ async function carregarManutencaoGeral(){
       if (reg.medicao_proxima && medidaAtual != null && medidaAtual >= reg.medicao_proxima) vencido = true;
       if (vencido) alertas++; else emDia++;
     });
-    const badgeClasse = alertas > 0 ? 'alert' : (semRegistro === tipos.length ? '' : 'ok');
-    const badgeTexto = alertas > 0 ? alertas + ' vencido(s)' : (semRegistro === tipos.length ? 'sem registro' : emDia + ' em dia');
+    const badgeClasse = !tiposAplicaveis.length ? '' : (alertas > 0 ? 'alert' : (semRegistro === tiposAplicaveis.length ? '' : 'ok'));
+    const badgeTexto = !tiposAplicaveis.length ? 'sem tipo aplicável' : (alertas > 0 ? alertas + ' vencido(s)' : (semRegistro === tiposAplicaveis.length ? 'sem registro' : emDia + ' em dia'));
     return `
       <div class="fi">
         <div class="fiic"><i class="ti ${TPI[v.tipo] || 'ti-tool'}"></i></div>
         <div style="flex:1"><div class="fipl">${escapeHtml(v.nome)}${v.placa ? ' — ' + escapeHtml(v.placa) : ''}</div>
-          <div class="fisb">${escapeHtml(LABEL_TIPO[v.tipo] || v.tipo)}${v.statusFuncionamento === 'L' && v.locacaoAtual ? ' · <i class="ti ti-map-pin" style="font-size:11px"></i> ' + escapeHtml(v.locacaoAtual) : ''}</div></div>
+          <div class="fisb">${escapeHtml(v.categoriaChecklist || LABEL_TIPO[v.tipo] || v.tipo)}${v.statusFuncionamento === 'L' && v.locacaoAtual ? ' · <i class="ti ti-map-pin" style="font-size:11px"></i> ' + escapeHtml(v.locacaoAtual) : ''}</div></div>
         <span class="man-hdr-badge ${badgeClasse}">${badgeTexto}</span>
       </div>
     `;
@@ -1161,7 +1224,7 @@ function renderChecklistsRecuperados(checklists, body){
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">
         <div>
           <div style="font-size:14px;font-weight:600;color:var(--tx)">${escapeHtml(v ? v.nome : '#' + ck.equipamento_veiculo_id)}${v && v.placa ? ' · ' + escapeHtml(v.placa) : ''}</div>
-          <div style="font-size:12px;color:var(--tx2);margin-top:2px">${escapeHtml(ck.data)} ${escapeHtml((ck.hora||'').slice(0,5))} · ${escapeHtml(ck.motorista||'—')} · ${Number(ck.km).toLocaleString('pt-BR')} ${unidadeMedidaCurta(v)}</div>
+          <div style="font-size:12px;color:var(--tx2);margin-top:2px">${escapeHtml(ck.data)} ${escapeHtml((ck.hora||'').slice(0,5))} · ${escapeHtml(ck.motorista_responsavel||'—')} · ${Number(ck.km).toLocaleString('pt-BR')} ${unidadeMedidaCurta(v)}</div>
           <div style="font-size:12px;margin-top:4px">
             <span style="color:#16a34a;font-weight:500">${okCount} OK</span>
             ${nokCount ? `<span style="color:#dc2626;font-weight:500;margin-left:8px">${nokCount} NOK</span>` : ''}
@@ -1213,7 +1276,7 @@ async function excluirChecklistRecuperado(id){
 async function enviarChecklist(){
   if (!vSel) { toast('Selecione um veículo'); return; }
   const motorista = document.getElementById('mot').value.trim();
-  if (!motorista) { toast('Informe o nome do motorista'); document.getElementById('mot').focus(); return; }
+  if (!motorista) { toast('Informe o nome do motorista/responsável'); document.getElementById('mot').focus(); return; }
   const kmVal = document.getElementById('km').value.trim();
   if (!kmVal) { toast(labelMedida(vSel) + ' é obrigatório'); document.getElementById('km').focus(); return; }
   if (!kmValido()) { toast(labelMedida(vSel) + ' não pode ser menor que o último registrado — verifique'); document.getElementById('km').focus(); return; }
@@ -1227,7 +1290,7 @@ async function enviarChecklist(){
     const { data: checklist, error: errCab } = await sb.from('checklist_realizados').insert({
       unidade_negocio_id: meuPerfil.unidadeId,
       equipamento_veiculo_id: vSel.id,
-      motorista,
+      motorista_responsavel: motorista,
       usuario_id: meuPerfil.userId,
       km: Number(kmVal),
       data: document.getElementById('dt').value,
@@ -1297,6 +1360,7 @@ function goAdminTab(id, btn){
   btn.classList.add('on');
   if (id === 'veic') carregarVeiculosAdmin();
   if (id === 'itens') carregarItensAdmin();
+  if (id === 'man') carregarTiposManutencaoAdmin();
 }
 
 /* ── Gerenciar: Veículos/Equipamentos ── */
@@ -1304,12 +1368,23 @@ let veiculoEmEdicaoId = null;
 
 async function carregarVeiculosAdmin(){
   await carregarFrota();
+  renderizarListaVeiculosAdmin();
+}
+function renderizarListaVeiculosAdmin(){
   const lista = document.getElementById('admin-veic-lista');
-  lista.innerHTML = frota.map(v => `
+  const filtroTipo = document.getElementById('admin-filtro-tipo').value;
+  const termo = document.getElementById('admin-busca-texto').value.trim().toLowerCase();
+  const listaFiltrada = frota.filter(v =>
+    (!filtroTipo || v.tipo === filtroTipo) &&
+    (!termo || v.nome.toLowerCase().includes(termo) || v.placa.toLowerCase().includes(termo) || v.identificador.toLowerCase().includes(termo))
+  );
+
+  if (!listaFiltrada.length) { lista.innerHTML = '<div class="empty"><i class="ti ti-filter"></i>Nenhum equipamento encontrado com esses filtros.</div>'; return; }
+  lista.innerHTML = listaFiltrada.map(v => `
     <div class="fi">
       <div class="fiic"><i class="ti ${TPI[v.tipo] || 'ti-tool'}"></i></div>
       <div style="flex:1"><div class="fipl">${escapeHtml(v.nome)}${v.placa ? ' — ' + escapeHtml(v.placa) : ''}</div>
-        <div class="fisb">${escapeHtml(LABEL_TIPO[v.tipo] || v.tipo)}${v.modelo ? ' · ' + escapeHtml(v.modelo) : ''}</div></div>
+        <div class="fisb">${escapeHtml(v.categoriaChecklist || LABEL_TIPO[v.tipo] || v.tipo)}${v.modelo ? ' · ' + escapeHtml(v.modelo) : ''}</div></div>
       <div class="fi-actions">
         <button class="fi-btn" data-editar-veic="${v.id}" title="Editar"><i class="ti ti-edit"></i></button>
         <button class="fi-btn danger" data-excluir-veic="${v.id}" title="Excluir"><i class="ti ti-trash"></i></button>
@@ -1322,7 +1397,7 @@ async function carregarVeiculosAdmin(){
 
 function abrirFormVeiculoNovo(){
   veiculoEmEdicaoId = null;
-  renderizarFormVeiculo({ nome:'', tipo:'veiculo', placa:'', identificador:'', modelo:'', ano:'', cor:'', setor:'', statusFuncionamento:'N/E', renavam:'', chassi:'', proprietarioDoc:'', alienadoA:'', locacaoAtual:'', ativo:true });
+  renderizarFormVeiculo({ nome:'', tipo:'veiculo', categoriaChecklist:'', placa:'', identificador:'', modelo:'', ano:'', cor:'', setor:'', statusFuncionamento:'N/E', renavam:'', chassi:'', proprietarioDoc:'', alienadoA:'', locacaoAtual:'', ativo:true });
 }
 function abrirFormVeiculoEditar(id){
   const v = frota.find(x => x.id === id); if (!v) return;
@@ -1331,7 +1406,7 @@ function abrirFormVeiculoEditar(id){
 }
 function renderizarFormVeiculo(v){
   const form = document.getElementById('admin-veic-form');
-  form.classList.remove('hidden');
+  document.getElementById('modal-cad-veic').classList.add('on');
   form.innerHTML = `
     <div class="lbl">${veiculoEmEdicaoId ? 'Editar' : 'Novo'} veículo/equipamento</div>
     <div class="man-grid" style="margin-top:8px">
@@ -1343,6 +1418,14 @@ function renderizarFormVeiculo(v){
           <option value="climatizador" ${v.tipo==='climatizador'?'selected':''}>Climatizador (acompanha horímetro)</option>
           <option value="outro" ${v.tipo==='outro'?'selected':''}>Outro (acompanha horímetro)</option>
         </select>
+      </div>
+      <div class="man-field">
+        <label>Categoria (define os itens do checklist)</label>
+        <input class="inp" id="fv-categoria" list="lista-categorias-checklist" value="${escapeHtml(v.categoriaChecklist||'')}" placeholder="Ex: Caminhão, Ônibus, Van...">
+        <datalist id="lista-categorias-checklist">
+          <option value="Caminhão"></option><option value="Ônibus"></option><option value="Van"></option>
+          <option value="Utilitário"></option><option value="Motocicleta"></option>
+        </datalist>
       </div>
     </div>
     <div class="man-grid" style="margin-top:8px">
@@ -1374,7 +1457,7 @@ function renderizarFormVeiculo(v){
     <div class="man-field" style="margin-top:8px"><label>Locação atual (se estiver locado)</label><input class="inp" id="fv-locacao" value="${escapeHtml(v.locacaoAtual||'')}"></div>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn-buscar" onclick="salvarVeiculoAdmin()"><i class="ti ti-device-floppy"></i> Salvar</button>
-      <button class="btn-buscar" style="background:var(--tx3)" onclick="document.getElementById('admin-veic-form').classList.add('hidden')">Cancelar</button>
+      <button class="btn-buscar" style="background:var(--tx3)" onclick="document.getElementById('modal-cad-veic').classList.remove('on')">Cancelar</button>
     </div>`;
 }
 function alternarCampoPlacaIdentificador(){
@@ -1389,6 +1472,7 @@ async function salvarVeiculoAdmin(){
   const registro = {
     unidade_negocio_id: meuPerfil.unidadeId,
     nome, tipo,
+    categoria_checklist: document.getElementById('fv-categoria').value.trim() || null,
     placa: tipo === 'veiculo' ? (document.getElementById('fv-placa').value.trim() || null) : null,
     identificador: tipo !== 'veiculo' ? (document.getElementById('fv-identificador').value.trim() || null) : null,
     modelo: document.getElementById('fv-modelo').value.trim() || null,
@@ -1408,7 +1492,7 @@ async function salvarVeiculoAdmin(){
     : await sb.from('unidade_equipamentos_veiculos').insert(registro);
   if (error) { toast('Erro ao salvar: ' + error.message); return; }
   toast('✓ Salvo com sucesso.');
-  document.getElementById('admin-veic-form').classList.add('hidden');
+  document.getElementById('modal-cad-veic').classList.remove('on');
   carregarVeiculosAdmin();
 }
 async function excluirVeiculoAdmin(id){
@@ -1454,7 +1538,7 @@ async function carregarItensAdmin(){
 
 function abrirFormItemModeloNovo(){
   itemModeloEmEdicaoId = null;
-  renderizarFormItemModelo({ tipo_veiculo:'veiculo', grupo:'', item:'', ordem:0 });
+  renderizarFormItemModelo({ tipo_veiculo:'', grupo:'', item:'', ordem:0 });
 }
 function abrirFormItemModeloEditar(id){
   const it = todosItensModelo.find(x => x.id === id); if (!it) return;
@@ -1463,17 +1547,20 @@ function abrirFormItemModeloEditar(id){
 }
 function renderizarFormItemModelo(it){
   const form = document.getElementById('admin-item-form');
-  form.classList.remove('hidden');
+  document.getElementById('modal-cad-item').classList.add('on');
+  // sugestões: categorias fixas + qualquer categoria/tipo já usado em
+  // algum equipamento cadastrado, pra não desalinhar do que a pessoa
+  // já digitou no cadastro
+  const categoriasUsadas = [...new Set(frota.map(v => categoriaParaChecklist(v)).filter(Boolean))];
+  const sugestoes = [...new Set(['Caminhão', 'Ônibus', 'Van', 'Utilitário', 'Motocicleta', 'Gerador', 'Climatizador', 'Outro', ...categoriasUsadas])];
   form.innerHTML = `
     <div class="lbl">${itemModeloEmEdicaoId ? 'Editar' : 'Novo'} item de checklist</div>
     <div class="man-grid" style="margin-top:8px">
-      <div class="man-field"><label>Tipo de equipamento *</label>
-        <select class="inp" id="fi-tipo">
-          <option value="veiculo" ${it.tipo_veiculo==='veiculo'?'selected':''}>Veículo</option>
-          <option value="gerador" ${it.tipo_veiculo==='gerador'?'selected':''}>Gerador</option>
-          <option value="climatizador" ${it.tipo_veiculo==='climatizador'?'selected':''}>Climatizador</option>
-          <option value="outro" ${it.tipo_veiculo==='outro'?'selected':''}>Outro</option>
-        </select>
+      <div class="man-field"><label>Categoria do equipamento *</label>
+        <input class="inp" id="fi-tipo" list="lista-sugestao-categoria" value="${escapeHtml(it.tipo_veiculo||'')}" placeholder="Ex: Caminhão, Ônibus, Van...">
+        <datalist id="lista-sugestao-categoria">
+          ${sugestoes.map(s => `<option value="${escapeHtml(s)}"></option>`).join('')}
+        </datalist>
       </div>
       <div class="man-field"><label>Grupo/Seção *</label><input class="inp" id="fi-grupo" placeholder="Ex: Pneus, Freios..." value="${escapeHtml(it.grupo)}"></div>
     </div>
@@ -1481,16 +1568,17 @@ function renderizarFormItemModelo(it){
     <div class="man-field" style="margin-top:8px"><label>Ordem de exibição</label><input class="inp" type="number" id="fi-ordem" value="${it.ordem||0}"></div>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn-buscar" onclick="salvarItemModeloAdmin()"><i class="ti ti-device-floppy"></i> Salvar</button>
-      <button class="btn-buscar" style="background:var(--tx3)" onclick="document.getElementById('admin-item-form').classList.add('hidden')">Cancelar</button>
+      <button class="btn-buscar" style="background:var(--tx3)" onclick="document.getElementById('modal-cad-item').classList.remove('on')">Cancelar</button>
     </div>`;
 }
 async function salvarItemModeloAdmin(){
+  const categoria = document.getElementById('fi-tipo').value.trim();
   const grupo = document.getElementById('fi-grupo').value.trim();
   const item = document.getElementById('fi-item').value.trim();
-  if (!grupo || !item) { toast('Preencha grupo e item'); return; }
+  if (!categoria || !grupo || !item) { toast('Preencha categoria, grupo e item'); return; }
   const registro = {
     unidade_negocio_id: meuPerfil.unidadeId,
-    tipo_veiculo: document.getElementById('fi-tipo').value,
+    tipo_veiculo: categoria,
     grupo, item,
     ordem: Number(document.getElementById('fi-ordem').value) || 0,
     ativo: true
@@ -1500,7 +1588,7 @@ async function salvarItemModeloAdmin(){
     : await sb.from('checklist_itens_modelo').insert(registro);
   if (error) { toast('Erro ao salvar: ' + error.message); return; }
   toast('✓ Item salvo.');
-  document.getElementById('admin-item-form').classList.add('hidden');
+  document.getElementById('modal-cad-item').classList.remove('on');
   await carregarItensModelo();
   carregarItensAdmin();
 }
@@ -1512,6 +1600,106 @@ async function excluirItemModeloAdmin(id){
   await carregarItensModelo();
   carregarItensAdmin();
 }
+
+/* ── Gerenciar: Tipos de manutenção (catálogo) ── */
+let tipoManutencaoEmEdicaoId = null;
+let todosTiposManutencao = [];
+
+async function carregarTiposManutencaoAdmin(){
+  const { data, error } = await sb.from('checklist_tipos_manutencao')
+    .select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('tipo');
+  if (error) { toast('Erro ao carregar tipos de manutenção: ' + error.message); return; }
+  todosTiposManutencao = data || [];
+
+  const lista = document.getElementById('admin-man-lista');
+  if (!todosTiposManutencao.length) { lista.innerHTML = '<div class="empty"><i class="ti ti-tool"></i>Nenhum tipo de manutenção cadastrado ainda.</div>'; return; }
+
+  lista.innerHTML = todosTiposManutencao.map(t => `
+    <div class="fi">
+      <div class="fiic"><i class="ti ti-tool"></i></div>
+      <div style="flex:1"><div class="fipl">${escapeHtml(t.tipo)} <span class="pill pu" style="font-size:10px;padding:1px 7px;margin-left:2px">${escapeHtml(t.categoria_checklist || 'Todos')}</span></div>
+        <div class="fisb">${t.interv_medicao ? 'a cada ' + Number(t.interv_medicao).toLocaleString('pt-BR') + ' km/h' : 'sem intervalo por medição'}${t.interv_dias ? ' · a cada ' + t.interv_dias + ' dias' : ''}</div></div>
+      <div class="fi-actions">
+        <button class="fi-btn" data-editar-man="${t.id}" title="Editar"><i class="ti ti-edit"></i></button>
+        <button class="fi-btn danger" data-excluir-man="${t.id}" title="Excluir"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>
+  `).join('');
+  lista.querySelectorAll('[data-editar-man]').forEach(btn => btn.addEventListener('click', () => abrirFormTipoManutencaoEditar(Number(btn.dataset.editarMan))));
+  lista.querySelectorAll('[data-excluir-man]').forEach(btn => btn.addEventListener('click', () => excluirTipoManutencaoAdmin(Number(btn.dataset.excluirMan))));
+}
+
+function abrirFormTipoManutencaoNovo(){
+  tipoManutencaoEmEdicaoId = null;
+  renderizarFormTipoManutencao({ tipo:'', interv_medicao:'', interv_dias:'', categoria_checklist:'' });
+}
+function abrirFormTipoManutencaoEditar(id){
+  const t = todosTiposManutencao.find(x => x.id === id); if (!t) return;
+  tipoManutencaoEmEdicaoId = id;
+  renderizarFormTipoManutencao(t);
+}
+function renderizarFormTipoManutencao(t){
+  const form = document.getElementById('admin-man-form');
+  document.getElementById('modal-cad-man').classList.add('on');
+  const categoriasUsadas = [...new Set(frota.map(v => categoriaParaChecklist(v)).filter(Boolean))];
+  const sugestoes = [...new Set(['Caminhão', 'Ônibus', 'Van', 'Utilitário', 'Motocicleta', 'Gerador', 'Climatizador', 'Outro', ...categoriasUsadas])];
+  form.innerHTML = `
+    <div class="lbl">${tipoManutencaoEmEdicaoId ? 'Editar' : 'Novo'} tipo de manutenção</div>
+    <div class="man-field" style="margin-top:8px"><label>Nome *</label><input class="inp" id="fm-tipo" placeholder="Ex: Troca de Óleo, Pneus, Filtro de Ar..." value="${escapeHtml(t.tipo||'')}"></div>
+    <div class="man-field" style="margin-top:8px">
+      <label>Categoria (deixe em branco pra aplicar a "Todos")</label>
+      <input class="inp" id="fm-categoria" list="lista-sugestao-categoria-man" value="${escapeHtml(t.categoria_checklist||'')}" placeholder="Ex: Caminhão -- ou deixe vazio pra Todos">
+      <datalist id="lista-sugestao-categoria-man">
+        <option value="Todos"></option>
+        ${sugestoes.map(s => `<option value="${escapeHtml(s)}"></option>`).join('')}
+      </datalist>
+    </div>
+    <div class="man-grid" style="margin-top:8px">
+      <div class="man-field"><label>Intervalo por KM/Horímetro</label><input class="inp" type="number" id="fm-interv-medicao" placeholder="Ex: 10000" value="${t.interv_medicao||''}"></div>
+      <div class="man-field"><label>Intervalo por dias</label><input class="inp" type="number" id="fm-interv-dias" placeholder="Ex: 180" value="${t.interv_dias||''}"></div>
+    </div>
+    <p class="subtitulo" style="font-size:11px;color:var(--tx3);margin-top:6px">Preencha um ou os dois — o que vencer primeiro conta. Deixe em branco o que não se aplicar.</p>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn-buscar" onclick="salvarTipoManutencaoAdmin()"><i class="ti ti-device-floppy"></i> Salvar</button>
+      <button class="btn-buscar" style="background:var(--tx3)" onclick="document.getElementById('modal-cad-man').classList.remove('on')">Cancelar</button>
+    </div>`;
+}
+async function salvarTipoManutencaoAdmin(){
+  const tipo = document.getElementById('fm-tipo').value.trim();
+  if (!tipo) { toast('Informe o nome do tipo de manutenção'); return; }
+  const categoriaDigitada = document.getElementById('fm-categoria').value.trim();
+  const registro = {
+    unidade_negocio_id: meuPerfil.unidadeId,
+    tipo,
+    // "Todos" digitado por extenso também vira vazio (mesmo
+    // significado: aplica a qualquer categoria)
+    categoria_checklist: (categoriaDigitada && categoriaDigitada.toLowerCase() !== 'todos') ? categoriaDigitada : null,
+    interv_medicao: document.getElementById('fm-interv-medicao').value !== '' ? Number(document.getElementById('fm-interv-medicao').value) : null,
+    interv_dias: document.getElementById('fm-interv-dias').value !== '' ? Number(document.getElementById('fm-interv-dias').value) : null,
+    ativo: true
+  };
+  const { error } = tipoManutencaoEmEdicaoId
+    ? await sb.from('checklist_tipos_manutencao').update(registro).eq('id', tipoManutencaoEmEdicaoId)
+    : await sb.from('checklist_tipos_manutencao').insert(registro);
+  if (error) { toast('Erro ao salvar: ' + error.message); return; }
+  toast('✓ Tipo de manutenção salvo.');
+  document.getElementById('modal-cad-man').classList.remove('on');
+  carregarTiposManutencaoAdmin();
+}
+async function excluirTipoManutencaoAdmin(id){
+  if (!confirm('Excluir esse tipo de manutenção? (O histórico já registrado com ele não é apagado.)')) return;
+  const { error } = await sb.from('checklist_tipos_manutencao').update({ ativo: false }).eq('id', id);
+  if (error) { toast('Erro ao excluir: ' + error.message); return; }
+  toast('Tipo de manutenção removido.');
+  carregarTiposManutencaoAdmin();
+}
+
+// fecha os popups de cadastro clicando fora da caixa (no fundo escurecido)
+['modal-cad-veic', 'modal-cad-item', 'modal-cad-man'].forEach(idModal => {
+  document.getElementById(idModal).addEventListener('click', (e) => {
+    if (e.target.id === idModal) e.target.classList.remove('on');
+  });
+});
 </script>
 
 </body>
