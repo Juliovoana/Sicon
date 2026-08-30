@@ -9,6 +9,8 @@
 <title>Checklist Equipamentos</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
 :root{
   --bg:#f5f6fa;--sf:#fff;--bd:#e2e5ec;--bdl:#f0f2f7;
@@ -371,6 +373,9 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
         </div>
         <div class="man-body" id="man-body">
           <div id="man-itens"></div>
+          <div style="padding:12px 16px;border-top:1px solid var(--bd)">
+            <button class="btn-buscar" style="width:100%;justify-content:center" onclick="salvarManutencaoAgora()"><i class="ti ti-device-floppy"></i> Salvar manutenção</button>
+          </div>
         </div>
       </div>
     </div>
@@ -421,6 +426,14 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
           <option value="climatizador">Climatizador</option>
           <option value="outro">Outro</option>
         </select>
+      </div>
+      <div class="sbar" style="border-top:none">
+        <span style="font-size:11px;color:var(--tx3)">PDF ordenado por tipo, status e categoria, com os filtros acima</span>
+        <div style="display:flex;gap:4px">
+          <button class="fi-btn" onclick="gerarPdfEquipamentos('lista','ver')" title="Visualizar"><i class="ti ti-eye"></i></button>
+          <button class="fi-btn" onclick="gerarPdfEquipamentos('lista','compartilhar')" title="Compartilhar"><i class="ti ti-share"></i></button>
+          <button class="fi-btn" onclick="gerarPdfEquipamentos('lista','salvar')" title="Baixar"><i class="ti ti-download"></i></button>
+        </div>
       </div>
       <div id="frlist"><div class="empty"><i class="ti ti-bus"></i>Carregando frota...</div></div>
     </div>
@@ -478,6 +491,27 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
     <div class="sbar">
       <span style="font-size:12px;color:var(--tx2)">Situação de manutenção de toda a frota</span>
       <button class="sbtn" onclick="carregarManutencaoGeral()"><i class="ti ti-refresh"></i> Atualizar</button>
+    </div>
+    <div class="hbusca" style="padding-top:8px;padding-bottom:10px">
+      <div class="sw">
+        <i class="ti ti-search sic"></i>
+        <input class="inp" id="man-busca-texto" placeholder="Buscar por nome, placa ou identificador..." oninput="carregarManutencaoGeral()">
+      </div>
+      <select class="inp" id="man-filtro-tipo" onchange="carregarManutencaoGeral()">
+        <option value="">Todos os tipos</option>
+        <option value="veiculo">Veículo</option>
+        <option value="gerador">Gerador</option>
+        <option value="climatizador">Climatizador</option>
+        <option value="outro">Outro</option>
+      </select>
+    </div>
+    <div class="sbar" style="border-top:none">
+      <span style="font-size:11px;color:var(--tx3)">PDF ordenado por tipo, status e categoria, com os filtros acima</span>
+      <div style="display:flex;gap:4px">
+        <button class="fi-btn" onclick="gerarPdfEquipamentos('man','ver')" title="Visualizar"><i class="ti ti-eye"></i></button>
+        <button class="fi-btn" onclick="gerarPdfEquipamentos('man','compartilhar')" title="Compartilhar"><i class="ti ti-share"></i></button>
+        <button class="fi-btn" onclick="gerarPdfEquipamentos('man','salvar')" title="Baixar"><i class="ti ti-download"></i></button>
+      </div>
     </div>
     <div id="man-geral-lista"><div class="empty"><i class="ti ti-tool"></i>Carregando...</div></div>
   </div>
@@ -647,6 +681,20 @@ function labelMedida(v){ return ehVeiculo(v) ? 'KM' : 'Horímetro'; }
 function unidadeMedidaCurta(v){ return ehVeiculo(v) ? 'km' : 'h'; }
 function ultimaMedidaConhecida(v){ return ehVeiculo(v) ? v.ultimoKm : v.ultimoHorimetro; }
 
+const LABEL_STATUS = { 'N/E': 'Não Especificado', 'D': 'Disponível', 'L': 'Locado', 'M': 'Manutenção' };
+const ORDEM_STATUS = { 'M': 0, 'L': 1, 'D': 2, 'N/E': 3 };
+
+// linha combinada de medida atual + status + local (locado), usada na
+// listagem, na manutenção geral e no PDF
+function infoMedidaStatusLocal(v){
+  const medida = ultimaMedidaConhecida(v);
+  const partes = [];
+  partes.push((medida != null ? medida.toLocaleString('pt-BR') : '—') + ' ' + unidadeMedidaCurta(v));
+  partes.push(LABEL_STATUS[v.statusFuncionamento] || 'Não Especificado');
+  if (v.statusFuncionamento === 'L' && v.locacaoAtual) partes.push('📍 ' + v.locacaoAtual);
+  return partes.join(' · ');
+}
+
 // categoria específica pro checklist (Caminhão, Ônibus, Van,
 // Utilitário, Motocicleta, etc.) -- se ainda não foi definida pro
 // equipamento, cai pro "tipo" genérico (veiculo/gerador/climatizador/
@@ -736,7 +784,8 @@ function renderizarListaFrota(){
     <div class="fi">
       <div class="fiic"><i class="ti ${TPI[v.tipo] || 'ti-tool'}"></i></div>
       <div style="flex:1"><div class="fipl">${escapeHtml(v.nome)}${v.placa ? ' — ' + escapeHtml(v.placa) : ''}</div>
-        <div class="fisb">${escapeHtml(v.categoriaChecklist || LABEL_TIPO[v.tipo] || v.tipo)}${v.modelo ? ' · ' + escapeHtml(v.modelo) : ''}${v.ano ? ' · ' + escapeHtml(v.ano) : ''}</div></div>
+        <div class="fisb">${escapeHtml(v.categoriaChecklist || LABEL_TIPO[v.tipo] || v.tipo)}${v.modelo ? ' · ' + escapeHtml(v.modelo) : ''}${v.ano ? ' · ' + escapeHtml(v.ano) : ''}</div>
+        <div class="fisb" style="margin-top:2px">${infoMedidaStatusLocal(v)}</div></div>
     </div>
   `).join('');
 }
@@ -1104,6 +1153,20 @@ function toggleMan(){
   chevron.style.transform = aberto ? '' : 'rotate(180deg)';
 }
 
+// botão próprio de salvar manutenção -- grava na hora (não precisa
+// esperar enviar o checklist inteiro) e fecha a seção. O botão
+// "Enviar checklist" continua gravando a manutenção também, como
+// segurança -- então mesmo que a pessoa esqueça de clicar aqui, nada
+// se perde ao enviar o checklist no final
+async function salvarManutencaoAgora(){
+  if (!vSel) return;
+  await salvarManutencaoAlterada();
+  toast('✓ Manutenção salva.');
+  document.getElementById('man-body').classList.remove('on');
+  document.getElementById('man-chevron').style.transform = '';
+  await carregarManutencaoVeiculo(vSel.id);
+}
+
 // só grava no banco os tipos que tiveram algum campo preenchido --
 // igual ao comportamento original, evita criar registro vazio pra
 // manutenção que a pessoa nem tocou
@@ -1139,8 +1202,16 @@ async function carregarManutencaoGeral(){
   if (!frota.length) { lista.innerHTML = '<div class="empty"><i class="ti ti-bus"></i>Nenhum veículo/equipamento cadastrado.</div>'; return; }
   if (!tipos || !tipos.length) { lista.innerHTML = '<div class="empty"><i class="ti ti-tool"></i>Nenhum tipo de manutenção cadastrado ainda.</div>'; return; }
 
+  const filtroTipo = document.getElementById('man-filtro-tipo').value;
+  const termo = document.getElementById('man-busca-texto').value.trim().toLowerCase();
+  const frotaFiltrada = frota.filter(v =>
+    (!filtroTipo || v.tipo === filtroTipo) &&
+    (!termo || v.nome.toLowerCase().includes(termo) || v.placa.toLowerCase().includes(termo) || v.identificador.toLowerCase().includes(termo))
+  );
+  if (!frotaFiltrada.length) { lista.innerHTML = '<div class="empty"><i class="ti ti-filter"></i>Nenhum equipamento encontrado com esses filtros.</div>'; return; }
+
   const hoje = new Date();
-  lista.innerHTML = frota.map(v => {
+  lista.innerHTML = frotaFiltrada.map(v => {
     const categoriaEquipamento = categoriaParaChecklist(v);
     const tiposAplicaveis = tipos.filter(t => !t.categoria_checklist || t.categoria_checklist === categoriaEquipamento);
     const registrosVeiculo = (historico || []).filter(h => h.equipamento_veiculo_id === v.id);
@@ -1160,7 +1231,8 @@ async function carregarManutencaoGeral(){
       <div class="fi">
         <div class="fiic"><i class="ti ${TPI[v.tipo] || 'ti-tool'}"></i></div>
         <div style="flex:1"><div class="fipl">${escapeHtml(v.nome)}${v.placa ? ' — ' + escapeHtml(v.placa) : ''}</div>
-          <div class="fisb">${escapeHtml(v.categoriaChecklist || LABEL_TIPO[v.tipo] || v.tipo)}${v.statusFuncionamento === 'L' && v.locacaoAtual ? ' · <i class="ti ti-map-pin" style="font-size:11px"></i> ' + escapeHtml(v.locacaoAtual) : ''}</div></div>
+          <div class="fisb">${escapeHtml(v.categoriaChecklist || LABEL_TIPO[v.tipo] || v.tipo)}</div>
+          <div class="fisb" style="margin-top:2px">${infoMedidaStatusLocal(v)}</div></div>
         <span class="man-hdr-badge ${badgeClasse}">${badgeTexto}</span>
       </div>
     `;
@@ -1700,6 +1772,193 @@ async function excluirTipoManutencaoAdmin(id){
     if (e.target.id === idModal) e.target.classList.remove('on');
   });
 });
+
+/* ── PDF de equipamentos, ordenado por status de funcionamento -- usa
+   o mesmo filtro (busca + tipo) já aplicado na tela de onde foi
+   chamado ("lista" = Ver lista, "man" = Manutenção geral) ── */
+function slugArquivo(s){
+  return String(s || 'arquivo').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
+}
+
+async function compartilharOuBaixarArquivo(blob, nomeArquivo, mimeType, titulo){
+  try {
+    const file = new File([blob], nomeArquivo, { type: mimeType });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: titulo || nomeArquivo });
+      return;
+    }
+  } catch (err) {
+    if (err && err.name === 'AbortError') return;
+    console.warn('Compartilhamento não disponível, baixando arquivo:', err);
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = nomeArquivo;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+function executarAcaoPdf(acao, doc, nomeArquivo){
+  if (acao === 'ver') { window.open(doc.output('bloburl'), '_blank'); return; }
+  if (acao === 'salvar') { doc.save(nomeArquivo); return; }
+  if (acao === 'compartilhar') { compartilharOuBaixarArquivo(doc.output('blob'), nomeArquivo, 'application/pdf', nomeArquivo); return; }
+}
+
+function gerarPdfEquipamentos(contexto, acao){
+  const filtroTipo = document.getElementById(contexto === 'lista' ? 'fr-filtro-tipo' : 'man-filtro-tipo').value;
+  const termo = document.getElementById(contexto === 'lista' ? 'fr-busca-texto' : 'man-busca-texto').value.trim().toLowerCase();
+  const listaFiltrada = frota.filter(v =>
+    (!filtroTipo || v.tipo === filtroTipo) &&
+    (!termo || v.nome.toLowerCase().includes(termo) || v.placa.toLowerCase().includes(termo) || v.identificador.toLowerCase().includes(termo))
+  );
+  if (!listaFiltrada.length) { toast('Nenhum equipamento encontrado com esses filtros pra gerar o PDF.'); return; }
+
+  // 3 níveis: Tipo (cabeçalho principal) > Status (sub-cabeçalho) >
+  // Categoria (coluna da tabela, e critério de ordenação dentro do
+  // status). Quando a categoria não foi preenchida, ela já cai pro
+  // próprio tipo genérico (mesma lógica usada na tela)
+  const ORDEM_TIPO = ['veiculo', 'gerador', 'climatizador', 'outro'];
+  const gruposTipo = {};
+  listaFiltrada.forEach(v => {
+    if (!gruposTipo[v.tipo]) gruposTipo[v.tipo] = [];
+    gruposTipo[v.tipo].push(v);
+  });
+  const tiposPresentes = ORDEM_TIPO.filter(t => gruposTipo[t] && gruposTipo[t].length);
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  doc.setFontSize(15);
+  doc.text('Veículos e Equipamentos — por Tipo, Status e Categoria', 14, 16);
+  doc.setFontSize(9);
+  doc.setTextColor(110);
+  const filtrosTexto = [filtroTipo ? 'Tipo: ' + (LABEL_TIPO[filtroTipo] || filtroTipo) : null, termo ? 'Busca: "' + termo + '"' : null].filter(Boolean).join(' · ') || 'Sem filtro aplicado';
+  doc.text(filtrosTexto + ' · Emitido em ' + new Date().toLocaleDateString('pt-BR'), 14, 22);
+  doc.setTextColor(0);
+
+  let y = 30;
+  tiposPresentes.forEach(tipo => {
+    const itensDoTipo = gruposTipo[tipo];
+    if (y > 260) { doc.addPage(); y = 20; }
+    doc.setFontSize(13);
+    doc.setFont(undefined, 'bold');
+    doc.setTextColor(26, 58, 92);
+    doc.text((LABEL_TIPO[tipo] || tipo) + ' (' + itensDoTipo.length + ')', 14, y);
+    doc.setTextColor(0);
+    doc.setFont(undefined, 'normal');
+    y += 6;
+
+    // dentro do tipo, agrupa por status
+    const gruposStatus = {};
+    itensDoTipo.forEach(v => {
+      const st = v.statusFuncionamento || 'N/E';
+      if (!gruposStatus[st]) gruposStatus[st] = [];
+      gruposStatus[st].push(v);
+    });
+    const statusOrdenados = Object.keys(gruposStatus).sort((a, b) => (ORDEM_STATUS[a] ?? 9) - (ORDEM_STATUS[b] ?? 9));
+
+    statusOrdenados.forEach(st => {
+      const itensDoStatus = gruposStatus[st];
+      if (y > 265) { doc.addPage(); y = 20; }
+      doc.setFontSize(10.5);
+      doc.setFont(undefined, 'bold');
+      doc.text((LABEL_STATUS[st] || 'Não Especificado') + ' (' + itensDoStatus.length + ')', 16, y);
+      doc.setFont(undefined, 'normal');
+      y += 4;
+
+      // dentro do status, ordena por categoria e depois nome
+      const itensOrdenados = [...itensDoStatus].sort((a, b) => {
+        const catA = a.categoriaChecklist || LABEL_TIPO[a.tipo] || a.tipo;
+        const catB = b.categoriaChecklist || LABEL_TIPO[b.tipo] || b.tipo;
+        const diffCat = catA.localeCompare(catB, 'pt-BR');
+        return diffCat !== 0 ? diffCat : a.nome.localeCompare(b.nome, 'pt-BR');
+      });
+      const corpo = itensOrdenados.map(v => [
+        v.categoriaChecklist || LABEL_TIPO[v.tipo] || v.tipo,
+        v.nome,
+        v.placa || v.identificador || '-',
+        (ultimaMedidaConhecida(v) != null ? ultimaMedidaConhecida(v).toLocaleString('pt-BR') : '—') + ' ' + unidadeMedidaCurta(v),
+        v.statusFuncionamento === 'L' && v.locacaoAtual ? v.locacaoAtual : '-'
+      ]);
+
+      doc.autoTable({
+        startY: y,
+        head: [['Categoria', 'Nome', 'Placa/Identificador', 'Medida atual', 'Local (se locado)']],
+        body: corpo,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [45, 90, 142] },
+        margin: { left: 18, right: 14 }
+      });
+      y = doc.lastAutoTable.finalY + 6;
+    });
+    y += 3;
+  });
+
+  // rodapé: 3 contagens -- por tipo, por status de funcionamento, e
+  // por categoria (todas considerando o total filtrado)
+  if (y > 230) { doc.addPage(); y = 20; }
+  doc.setFontSize(11);
+  doc.setFont(undefined, 'bold');
+  doc.text('Total por tipo', 14, y);
+  doc.setFont(undefined, 'normal');
+  y += 6;
+  doc.setFontSize(9);
+  tiposPresentes.forEach(tipo => {
+    if (y > 280) { doc.addPage(); y = 20; }
+    doc.text((LABEL_TIPO[tipo] || tipo) + ': ' + gruposTipo[tipo].length, 16, y);
+    y += 5;
+  });
+
+  y += 4;
+  if (y > 260) { doc.addPage(); y = 20; }
+  const contagemStatus = {};
+  listaFiltrada.forEach(v => {
+    const label = LABEL_STATUS[v.statusFuncionamento] || 'Não Especificado';
+    contagemStatus[label] = (contagemStatus[label] || 0) + 1;
+  });
+  doc.setFontSize(11);
+  doc.setFont(undefined, 'bold');
+  doc.text('Total por status de funcionamento', 14, y);
+  doc.setFont(undefined, 'normal');
+  y += 6;
+  doc.setFontSize(9);
+  ['Manutenção', 'Locado', 'Disponível', 'Não Especificado'].forEach(label => {
+    if (contagemStatus[label] == null) return;
+    if (y > 280) { doc.addPage(); y = 20; }
+    doc.text(label + ': ' + contagemStatus[label], 16, y);
+    y += 5;
+  });
+
+  y += 4;
+  if (y > 250) { doc.addPage(); y = 20; }
+  const contagemCategoria = {};
+  listaFiltrada.forEach(v => {
+    const cat = v.categoriaChecklist || LABEL_TIPO[v.tipo] || v.tipo;
+    contagemCategoria[cat] = (contagemCategoria[cat] || 0) + 1;
+  });
+  const nomesCategorias = Object.keys(contagemCategoria).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  doc.setFontSize(11);
+  doc.setFont(undefined, 'bold');
+  doc.text('Total por categoria', 14, y);
+  doc.setFont(undefined, 'normal');
+  y += 6;
+  doc.setFontSize(9);
+  nomesCategorias.forEach(cat => {
+    if (y > 280) { doc.addPage(); y = 20; }
+    doc.text(cat + ': ' + contagemCategoria[cat], 16, y);
+    y += 5;
+  });
+
+  y += 3;
+  doc.setFont(undefined, 'bold');
+  doc.text('Total geral: ' + listaFiltrada.length, 14, y);
+  doc.setFont(undefined, 'normal');
+
+  const nomeArquivo = 'equipamentos-por-tipo-status-categoria-' + slugArquivo(new Date().toISOString().slice(0, 10)) + '.pdf';
+  executarAcaoPdf(acao, doc, nomeArquivo);
+}
 </script>
 
 </body>
