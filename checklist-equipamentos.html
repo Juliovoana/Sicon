@@ -204,6 +204,19 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 .man-hdr-badge{font-size:11px;padding:2px 8px;border-radius:10px;background:#fef9c3;color:#854d0e;border:1px solid #fde047;font-weight:500}
 .man-hdr-badge.ok{background:#dcfce7;color:#166534;border-color:#86efac}
 .man-hdr-badge.alert{background:#fee2e2;color:#991b1b;border-color:#fca5a5}
+
+/* dashboard */
+.dash-card-tipo{flex:1;min-width:90px;padding:12px 8px;text-align:center;border-right:1px solid var(--bd)}
+.dash-card-tipo:last-child{border-right:none}
+.dash-card-tipo .n{font-size:22px;font-weight:700;color:var(--nv)}
+.dash-card-tipo .l{font-size:11px;color:var(--tx3);margin-top:2px}
+.dash-status-pill{flex:1;min-width:100px;padding:12px;border-radius:var(--r);text-align:center;border:1px solid var(--bd)}
+.dash-status-pill .n{font-size:20px;font-weight:700}
+.dash-status-pill .l{font-size:11px;color:var(--tx2);margin-top:2px}
+.dash-man-row{display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid var(--bdl);gap:10px}
+.dash-man-row .info{flex:1}
+.dash-man-row .nome{font-size:13px;font-weight:600;color:var(--tx)}
+.dash-man-row .detalhe{font-size:11px;color:var(--tx2);margin-top:2px}
 .man-body{display:none;border-top:1px solid var(--bd)}
 .man-body.on{display:block}
 .man-item{border-bottom:1px solid var(--bdl);padding:12px 16px;display:flex;flex-direction:column;gap:10px}
@@ -305,14 +318,32 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
   </div>
 
   <div class="tabs">
-    <button class="tab on" data-tab="cl" onclick="goTab('cl',this)"><i class="ti ti-clipboard-list"></i> Novo</button>
+    <button class="tab on" data-tab="dash" onclick="goTab('dash',this)"><i class="ti ti-layout-dashboard"></i> Painel</button>
+    <button class="tab" data-tab="cl" onclick="goTab('cl',this)"><i class="ti ti-clipboard-list"></i> Novo</button>
     <button class="tab" data-tab="rec" onclick="goTab('rec',this)"><i class="ti ti-search"></i> Recuperar</button>
     <button class="tab" data-tab="fr" onclick="goTab('fr',this)"><i class="ti ti-tools"></i> Veículos e Equipamentos</button>
     <button class="tab" data-tab="man" onclick="goTab('man',this)"><i class="ti ti-tool"></i> Manutenção</button>
   </div>
 
   <!-- ── NOVO CHECKLIST ── -->
-  <div id="s-cl" class="screen on">
+  <!-- ── PAINEL (dashboard inicial) ── -->
+  <div id="s-dash" class="screen on">
+    <div class="sbar">
+      <span style="font-size:12px;color:var(--tx2)">Equipamento / Frota</span>
+      <button class="sbtn" onclick="carregarDashboard()"><i class="ti ti-refresh"></i> Atualizar</button>
+    </div>
+    <div id="dash-cards-tipo" class="ctr" style="flex-wrap:wrap"></div>
+    <div class="sec">Status de funcionamento</div>
+    <div id="dash-cards-status" style="display:flex;gap:10px;padding:12px 16px;flex-wrap:wrap"></div>
+    <div class="sec">Manutenção — vencidas</div>
+    <div id="dash-man-vencidas"><div class="empty" style="padding:16px"><i class="ti ti-loader"></i> Carregando...</div></div>
+    <div class="sec">Manutenção — a vencer nos próximos 15 dias</div>
+    <div id="dash-man-avencer"></div>
+    <div class="sec">Manutenção — em dia</div>
+    <div id="dash-man-emdia"></div>
+  </div>
+
+  <div id="s-cl" class="screen">
     <div class="card" style="border:2px solid var(--nv);background:var(--nvl)">
       <div class="lbl" style="color:var(--nv);font-size:13px;display:flex;align-items:center;gap:6px">
         <i class="ti ti-bus"></i> Selecione o veículo para iniciar o checklist
@@ -518,6 +549,14 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 
   <div class="toast" id="toast"></div>
   <div class="fmodal" id="fmodal"><img id="fmodal-img" src=""><button class="fmodal-close" onclick="fecharFoto()">Fechar</button></div>
+
+  <div class="modal-cad-overlay" id="modal-detalhe-categoria">
+    <div class="modal-cad-caixa" style="max-width:520px">
+      <div class="lbl" id="detalhe-categoria-titulo" style="font-size:14px">Equipamentos</div>
+      <div id="detalhe-categoria-lista" style="margin-top:10px"></div>
+      <button class="btn-buscar" style="width:100%;justify-content:center;margin-top:12px;background:var(--tx3)" onclick="document.getElementById('modal-detalhe-categoria').classList.remove('on')">Fechar</button>
+    </div>
+  </div>
 </div>
 </div>
 
@@ -730,6 +769,7 @@ async function iniciarAppChecklist(){
 
   await carregarFrota();
   await carregarItensModelo();
+  await carregarDashboard();
 }
 
 function goTab(id, btn){
@@ -739,6 +779,7 @@ function goTab(id, btn){
   document.getElementById('s-'+id).classList.add('on');
   if (id === 'fr') carregarFrota();
   if (id === 'man') carregarManutencaoGeral();
+  if (id === 'dash') carregarDashboard();
 }
 
 function toast(msg){
@@ -1184,14 +1225,167 @@ async function salvarManutencaoAlterada(){
       observacao: v.obs || null
     };
     if (v.registroId) {
-      await sb.from('checklist_manutencoes').update(payload).eq('id', v.registroId);
+      const { error: errMan } = await sb.from('checklist_manutencoes').update(payload).eq('id', v.registroId);
+      if (errMan) throw new Error('Falha ao atualizar manutenção (' + tipoId + '): ' + errMan.message);
     } else {
-      await sb.from('checklist_manutencoes').insert(payload);
+      const { error: errMan } = await sb.from('checklist_manutencoes').insert(payload);
+      if (errMan) throw new Error('Falha ao gravar manutenção (' + tipoId + '): ' + errMan.message);
     }
   }
 }
 
 /* ── Manutenção: visão geral de toda a frota ── */
+/* ── Painel (dashboard inicial) ── */
+async function carregarDashboard(){
+  if (!frota.length) await carregarFrota();
+
+  // cartões por tipo -> categoria (dois níveis), cada cartão clicável
+  const ORDEM_TIPO = ['veiculo', 'gerador', 'climatizador', 'outro'];
+  const gruposPorTipo = {};
+  frota.forEach(v => {
+    const cat = categoriaParaChecklist(v);
+    if (!gruposPorTipo[v.tipo]) gruposPorTipo[v.tipo] = {};
+    gruposPorTipo[v.tipo][cat] = (gruposPorTipo[v.tipo][cat] || 0) + 1;
+  });
+  const tiposPresentes = ORDEM_TIPO.filter(t => gruposPorTipo[t]);
+  const containerTipos = document.getElementById('dash-cards-tipo');
+  containerTipos.innerHTML = tiposPresentes.length ? tiposPresentes.map(tipo => {
+    const categorias = Object.keys(gruposPorTipo[tipo]).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    return `
+      <div style="width:100%">
+        <div class="sec" style="padding:8px 16px"><i class="ti ${TPI[tipo] || 'ti-tool'}" style="margin-right:5px"></i>${escapeHtml(LABEL_TIPO[tipo] || tipo)}</div>
+        <div class="ctr" style="flex-wrap:wrap">
+          ${categorias.map(cat => `
+            <div class="dash-card-tipo" style="cursor:pointer" data-tipo="${escapeHtml(tipo)}" data-categoria="${escapeHtml(cat)}">
+              <div class="n">${gruposPorTipo[tipo][cat]}</div><div class="l">${escapeHtml(cat)}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+  }).join('') : '<div class="empty">Nenhum equipamento cadastrado ainda.</div>';
+  containerTipos.querySelectorAll('[data-categoria]').forEach(el => {
+    el.addEventListener('click', () => abrirDetalheCategoria(el.dataset.tipo, el.dataset.categoria));
+  });
+
+  // cartões por status
+  const coresStatus = { 'D': '#166534', 'L': '#0C447C', 'M': '#991b1b', 'N/E': '#5A6478' };
+  const fundosStatus = { 'D': '#dcfce7', 'L': '#E6F1FB', 'M': '#fee2e2', 'N/E': '#F0F2F7' };
+  const porStatus = {};
+  frota.forEach(v => {
+    const st = v.statusFuncionamento || 'N/E';
+    porStatus[st] = (porStatus[st] || 0) + 1;
+  });
+  document.getElementById('dash-cards-status').innerHTML = ['D', 'L', 'M', 'N/E'].filter(st => porStatus[st]).map(st => `
+    <div class="dash-status-pill" style="background:${fundosStatus[st]};color:${coresStatus[st]};border-color:transparent">
+      <div class="n">${porStatus[st]}</div><div class="l" style="color:inherit;opacity:.85">${escapeHtml(LABEL_STATUS[st])}</div>
+    </div>
+  `).join('') || '<div class="empty">—</div>';
+
+  // manutenções: busca tudo de uma vez e classifica em 3 baldes
+  const { data: tipos } = await sb.from('checklist_tipos_manutencao').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true);
+  const { data: historico } = await sb.from('checklist_manutencoes').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId);
+  const hoje = new Date();
+  const em15dias = new Date(); em15dias.setDate(em15dias.getDate() + 15);
+
+  const vencidas = [], aVencer = [], emDia = [];
+  frota.forEach(v => {
+    const categoriaEquipamento = categoriaParaChecklist(v);
+    const tiposAplicaveis = (tipos || []).filter(t => !t.categoria_checklist || t.categoria_checklist === categoriaEquipamento);
+    const registrosVeiculo = (historico || []).filter(h => h.equipamento_veiculo_id === v.id);
+    tiposAplicaveis.forEach(t => {
+      const reg = registrosVeiculo.find(h => h.tipo_manutencao_id === t.id);
+      if (!reg || (!reg.data_ultima && !reg.medicao_ultima)) return; // sem registro -- não entra em nenhum balde
+      const dataProx = reg.data_proxima ? new Date(reg.data_proxima + 'T00:00:00') : null;
+      const medidaAtual = ultimaMedidaConhecida(v);
+      const vencidaPorMedida = reg.medicao_proxima && medidaAtual != null && medidaAtual >= reg.medicao_proxima;
+      const item = { equipamento: v, tipo: t, reg, dataProx };
+      if ((dataProx && dataProx < hoje) || vencidaPorMedida) {
+        vencidas.push(item);
+      } else if (dataProx && dataProx <= em15dias) {
+        aVencer.push(item);
+      } else {
+        emDia.push(item);
+      }
+    });
+  });
+  vencidas.sort((a, b) => (a.dataProx || 0) - (b.dataProx || 0));
+  aVencer.sort((a, b) => (a.dataProx || 0) - (b.dataProx || 0));
+
+  function linhaMan(item, corBadge){
+    const dias = item.dataProx ? Math.round((item.dataProx - hoje) / 86400000) : null;
+    let detalhe = item.dataProx ? 'Previsto: ' + item.dataProx.toLocaleDateString('pt-BR') : '';
+    if (dias != null && dias < 0) detalhe += ' · venceu há ' + Math.abs(dias) + ' dia(s)';
+    else if (dias != null && dias >= 0) detalhe += ' · em ' + dias + ' dia(s)';
+    return `
+      <div class="dash-man-row">
+        <span class="rdot" style="background:${corBadge}"></span>
+        <div class="info">
+          <div class="nome">${escapeHtml(item.equipamento.nome)} — ${escapeHtml(item.tipo.tipo)}</div>
+          <div class="detalhe">${escapeHtml(detalhe)}</div>
+        </div>
+      </div>`;
+  }
+
+  document.getElementById('dash-man-vencidas').innerHTML = vencidas.length
+    ? vencidas.map(i => linhaMan(i, 'var(--nk)')).join('')
+    : '<div class="empty" style="padding:16px"><i class="ti ti-check"></i> Nenhuma manutenção vencida.</div>';
+  document.getElementById('dash-man-avencer').innerHTML = aVencer.length
+    ? aVencer.map(i => linhaMan(i, '#f59e0b')).join('')
+    : '<div class="empty" style="padding:16px">Nada previsto pros próximos 15 dias.</div>';
+  document.getElementById('dash-man-emdia').innerHTML = emDia.length
+    ? emDia.map(i => linhaMan(i, 'var(--ok)')).join('')
+    : '<div class="empty" style="padding:16px">—</div>';
+}
+
+async function abrirDetalheCategoria(tipo, categoria){
+  const equipamentosDaCategoria = frota.filter(v => v.tipo === tipo && categoriaParaChecklist(v) === categoria);
+  document.getElementById('detalhe-categoria-titulo').textContent = categoria + ' (' + equipamentosDaCategoria.length + ')';
+  document.getElementById('detalhe-categoria-lista').innerHTML = '<div class="empty" style="padding:12px"><i class="ti ti-loader"></i> Carregando...</div>';
+  document.getElementById('modal-detalhe-categoria').classList.add('on');
+
+  const ids = equipamentosDaCategoria.map(v => v.id);
+  const ultimoChecklistPorEquipamento = {};
+  if (ids.length) {
+    const { data: checklists } = await sb.from('checklist_realizados')
+      .select('equipamento_veiculo_id, data')
+      .eq('unidade_negocio_id', meuPerfil.unidadeId)
+      .in('equipamento_veiculo_id', ids)
+      .order('data', { ascending: false });
+    (checklists || []).forEach(c => {
+      if (!ultimoChecklistPorEquipamento[c.equipamento_veiculo_id]) ultimoChecklistPorEquipamento[c.equipamento_veiculo_id] = c.data;
+    });
+  }
+
+  document.getElementById('detalhe-categoria-lista').innerHTML = equipamentosDaCategoria.length
+    ? equipamentosDaCategoria.map(v => {
+      const ultimaData = ultimoChecklistPorEquipamento[v.id];
+      const textoUltimoChecklist = ultimaData
+        ? 'Último checklist: ' + new Date(ultimaData + 'T00:00:00').toLocaleDateString('pt-BR')
+        : 'Nunca fez checklist';
+      return `
+      <div class="fi">
+        <div class="fiic"><i class="ti ${TPI[v.tipo] || 'ti-tool'}"></i></div>
+        <div style="flex:1">
+          <div class="fipl">${escapeHtml(v.nome)}${v.placa || v.identificador ? ' — ' + escapeHtml(v.placa || v.identificador) : ''}</div>
+          <div class="fisb">${infoMedidaStatusLocal(v)}</div>
+          <div class="fisb" style="margin-top:2px;${ultimaData ? '' : 'color:var(--nk)'}">${escapeHtml(textoUltimoChecklist)}</div>
+        </div>
+        <button class="fi-btn" data-iniciar-checklist="${v.id}" title="Fazer checklist"><i class="ti ti-clipboard-list"></i></button>
+      </div>
+    `;
+    }).join('')
+    : '<div class="empty">Nenhum equipamento encontrado.</div>';
+  document.getElementById('detalhe-categoria-lista').querySelectorAll('[data-iniciar-checklist]').forEach(btn => {
+    btn.addEventListener('click', () => iniciarChecklistDoEquipamento(Number(btn.dataset.iniciarChecklist)));
+  });
+}
+
+function iniciarChecklistDoEquipamento(equipamentoId){
+  document.getElementById('modal-detalhe-categoria').classList.remove('on');
+  goTab('cl', document.querySelector('[data-tab="cl"]'));
+  selecionarVeiculo(equipamentoId);
+}
+
 async function carregarManutencaoGeral(){
   const lista = document.getElementById('man-geral-lista');
   lista.innerHTML = '<div class="empty"><i class="ti ti-tool"></i>Carregando...</div>';
@@ -1386,7 +1580,8 @@ async function enviarChecklist(){
         const { error: errUpload } = await sb.storage.from('checklist-fotos').upload(nomeArquivo, blob, { contentType: 'image/jpeg' });
         if (errUpload) throw errUpload;
         const { data: urlPublica } = sb.storage.from('checklist-fotos').getPublicUrl(nomeArquivo);
-        await sb.from('checklist_realizados_itens_fotos').insert({ item_id: itemSalvo.id, url: urlPublica.publicUrl });
+        const { error: errFoto } = await sb.from('checklist_realizados_itens_fotos').insert({ item_id: itemSalvo.id, url: urlPublica.publicUrl });
+        if (errFoto) throw new Error('Falha ao salvar registro da foto: ' + errFoto.message);
       }
     }
 
@@ -1395,11 +1590,12 @@ async function enviarChecklist(){
     const campoMedidaBanco = ehVeiculo(vSel) ? 'ultimo_km' : 'ultimo_horimetro';
     const statusFunc = document.getElementById('status-func').value;
     const localLocado = statusFunc === 'L' ? (document.getElementById('local-locado').value.trim() || null) : null;
-    await sb.from('unidade_equipamentos_veiculos').update({
+    const { error: errEquipamento } = await sb.from('unidade_equipamentos_veiculos').update({
       [campoMedidaBanco]: Number(kmVal),
       status_funcionamento: statusFunc,
       locacao_atual: localLocado
     }).eq('id', vSel.id);
+    if (errEquipamento) throw new Error('Checklist salvo, mas falhou ao atualizar o equipamento: ' + errEquipamento.message);
 
     // grava as alterações de manutenção feitas durante esse checklist
     // (só os tipos que a pessoa realmente preencheu algo)
@@ -1767,7 +1963,7 @@ async function excluirTipoManutencaoAdmin(id){
 }
 
 // fecha os popups de cadastro clicando fora da caixa (no fundo escurecido)
-['modal-cad-veic', 'modal-cad-item', 'modal-cad-man'].forEach(idModal => {
+['modal-cad-veic', 'modal-cad-item', 'modal-cad-man', 'modal-detalhe-categoria'].forEach(idModal => {
   document.getElementById(idModal).addEventListener('click', (e) => {
     if (e.target.id === idModal) e.target.classList.remove('on');
   });
