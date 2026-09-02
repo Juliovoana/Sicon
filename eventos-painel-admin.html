@@ -613,7 +613,11 @@
 
           <!-- ================= EVENTOS ================= -->
           <div class="panel-app" id="app-panel-eventos">
-            <div class="filtros-notas" style="justify-content:flex-end;">
+            <div class="filtros-notas">
+              <div class="field-group" style="margin:0; flex:1; min-width:200px;">
+                <label>Buscar</label>
+                <input type="text" id="evFiltroBusca" placeholder="Nome do evento, nº do evento ou cliente...">
+              </div>
               <button class="btn-novo" id="btnNovoEvento">+ Novo evento</button>
             </div>
             <div class="lista-cadastro" id="listaEventos"></div>
@@ -1419,6 +1423,45 @@
   }
 
   // =================================================================
+  // PERSONALIZAÇÃO VISUAL DA UNIDADE (cor principal + imagem de fundo
+  // do sidebar) -- mesmo esquema usado no Staff e no Servir Central,
+  // os dados vêm de servir_unidades_negocio (editados em "Dados da
+  // unidade", no Servir Central).
+  // =================================================================
+  function clarearCor(hex, percentual){
+    hex = (hex || '').replace('#', '');
+    if(hex.length !== 6) return hex;
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const misturar = (canal) => Math.round(canal + (255 - canal) * percentual);
+    return '#' + [misturar(r), misturar(g), misturar(b)].map(v => v.toString(16).padStart(2, '0')).join('');
+  }
+
+  function aplicarPersonalizacao(corPrincipal, imagemFundoUrl){
+    if(corPrincipal){
+      const raiz = document.documentElement.style;
+      raiz.setProperty('--brand', corPrincipal);
+      raiz.setProperty('--brand-2', clarearCor(corPrincipal, 0.2));
+      raiz.setProperty('--brand-soft', clarearCor(corPrincipal, 0.92));
+    }
+    if(imagemFundoUrl){
+      const sidebar = document.querySelector('.sidebar');
+      if(sidebar){
+        sidebar.style.backgroundImage = `linear-gradient(180deg, rgba(15,43,34,.82) 0%, rgba(15,43,34,.7) 100%), url('${imagemFundoUrl}')`;
+        sidebar.style.backgroundSize = 'cover';
+        sidebar.style.backgroundPosition = 'center';
+      }
+    }
+  }
+
+  async function carregarPersonalizacao(){
+    const { data, error } = await sb.from('servir_unidades_negocio').select('cor_principal, imagem_fundo_url').eq('id', agenciaId).single();
+    if(error || !data) return;
+    aplicarPersonalizacao(data.cor_principal, data.imagem_fundo_url);
+  }
+
+  // =================================================================
   // CARREGAMENTO GERAL
   // =================================================================
   let todosEventos = [];
@@ -1430,6 +1473,7 @@
   let despesaIdAtual = null;
 
   async function carregarTudo(){
+    await carregarPersonalizacao();
     await Promise.all([
       carregarEventos(), carregarSetores(), carregarClientesEventos(), carregarSolicitantes(),
       carregarTiposEvento(), carregarStatusCaptacao(), carregarAndamentos(), carregarEmpresasFinanceiras(),
@@ -1481,11 +1525,20 @@
   }
 
   function renderListaEventos(){
+    const busca = (document.getElementById('evFiltroBusca').value || '').toLowerCase().trim();
+    const filtrados = todosEventos.filter(e => {
+      if(!busca) return true;
+      return (e.nome || '').toLowerCase().includes(busca)
+        || String(e.numero_evento || '').includes(busca)
+        || (e.cliente || '').toLowerCase().includes(busca);
+    });
+
     const lista = document.getElementById('listaEventos');
     if(todosEventos.length === 0){ lista.innerHTML = '<div class="vazio">Nenhum evento cadastrado ainda.</div>'; return; }
+    if(filtrados.length === 0){ lista.innerHTML = '<div class="vazio">Nenhum evento encontrado.</div>'; return; }
 
     lista.innerHTML = '';
-    todosEventos.forEach(e => {
+    filtrados.forEach(e => {
       const periodo = (e.data_inicio || e.data_fim)
         ? `${e.data_inicio ? formatarDataSemFuso(e.data_inicio) : '—'}${e.data_fim && e.data_fim !== e.data_inicio ? ' a ' + formatarDataSemFuso(e.data_fim) : ''}`
         : '';
@@ -1514,6 +1567,7 @@
     });
   }
 
+  document.getElementById('evFiltroBusca').addEventListener('input', renderListaEventos);
   document.getElementById('btnNovoEvento').addEventListener('click', () => abrirDrawerEvento(null));
   document.getElementById('btnFecharDrawerEvento').addEventListener('click', () => document.getElementById('drawerEventoOverlay').classList.remove('show'));
 
@@ -1522,6 +1576,12 @@
     const e = id ? todosEventos.find(x => x.id === id) : {};
     setorSelecionadoEvento = e.setor_id ? todosSetoresUnidade.find(s => s.id === e.setor_id) || null : null;
     planoContasSelecionadoEvento = e.plano_contas_id ? todosPlanosContas.find(p => p.id === e.plano_contas_id) || null : null;
+
+    // ao criar um evento novo, já sugere o próximo número sequencial
+    // (maior número já usado nessa unidade + 1) -- dá pra trocar antes
+    // de salvar, mas nunca vai deixar duplicar (checagem no salvar +
+    // trava no banco)
+    const proximoNumeroSugerido = id ? '' : (Math.max(0, ...todosEventos.map(x => Number(x.numero_evento) || 0)) + 1);
 
     document.getElementById('drawerEventoTitulo').textContent = id ? (e.nome || 'Editar evento') : 'Novo evento';
     document.getElementById('btnExcluirEvento').style.display = id ? 'block' : 'none';
@@ -1532,7 +1592,7 @@
         <div class="drawer-section-title">Dados do evento</div>
         <div class="field-row">
           <div class="field-group"><label>Nome do evento</label><input type="text" id="ev_nome" value="${e.nome || ''}"></div>
-          <div class="field-group"><label>Nº do evento</label><input type="text" id="ev_numero_evento" value="${e.numero_evento || ''}" placeholder="Ex: 2832"></div>
+          <div class="field-group"><label>Nº do evento</label><input type="number" id="ev_numero_evento" value="${e.numero_evento ?? proximoNumeroSugerido}" placeholder="Ex: 2832"></div>
         </div>
         <div class="field-row">
           <div class="field-group"><label>Solicitante</label><input type="text" id="ev_solicitante" value="${e.solicitante || ''}"></div>
@@ -1627,6 +1687,17 @@
     const nome = document.getElementById('ev_nome').value.trim();
     if(!nome){ alert('Informe o nome do evento.'); return; }
 
+    const numeroEventoTexto = document.getElementById('ev_numero_evento').value.trim();
+    const numeroEvento = numeroEventoTexto ? Number(numeroEventoTexto) : null;
+    if(numeroEventoTexto && (!Number.isInteger(numeroEvento) || numeroEvento <= 0)){
+      alert('O nº do evento precisa ser um número inteiro positivo.');
+      return;
+    }
+    if(numeroEvento != null){
+      const jaExiste = todosEventos.some(x => x.id !== eventoIdAtual && Number(x.numero_evento) === numeroEvento);
+      if(jaExiste){ alert('Já existe um evento com esse número nessa unidade. Escolha outro.'); return; }
+    }
+
     const btn = document.getElementById('btnSalvarEvento');
     btn.disabled = true;
     btn.textContent = 'Salvando...';
@@ -1634,7 +1705,7 @@
       const payload = {
         unidade_negocio_id: agenciaId,
         nome,
-        numero_evento: document.getElementById('ev_numero_evento').value.trim() || null,
+        numero_evento: numeroEvento,
         solicitante: document.getElementById('ev_solicitante').value.trim() || null,
         setor_id: setorSelecionadoEvento ? setorSelecionadoEvento.id : null,
         plano_contas_id: planoContasSelecionadoEvento ? planoContasSelecionadoEvento.id : null,
