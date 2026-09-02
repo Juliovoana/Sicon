@@ -122,6 +122,11 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 .ddic{width:30px;height:30px;border-radius:6px;background:var(--nvl);display:flex;align-items:center;justify-content:center;color:var(--nv);font-size:14px;flex-shrink:0}
 .ddpl{font-size:13px;font-weight:600;color:var(--tx)}.ddsb{font-size:12px;color:var(--tx2)}
 .ddem{padding:12px;font-size:13px;color:var(--tx3);text-align:center}
+.lista-sugestoes-autocomplete{position:absolute;top:100%;left:0;right:0;background:var(--sf);border:1px solid var(--bd);border-radius:var(--rs);z-index:30;max-height:200px;overflow-y:auto;display:none;box-shadow:0 4px 16px rgba(0,0,0,.15)}
+.lista-sugestoes-autocomplete.show{display:block}
+.sugestao-autocomplete{padding:10px 13px;cursor:pointer;border-bottom:1px solid var(--bdl);font-size:13px}
+.sugestao-autocomplete:last-child{border-bottom:none}
+.sugestao-autocomplete:hover{background:var(--bg)}
 /* vcard */
 .vc{margin-top:10px;padding:10px 12px;background:var(--bg);border-radius:var(--r);border:1px solid var(--bd);display:none;gap:12px;align-items:center}
 .vc.on{display:flex}
@@ -1398,9 +1403,10 @@ async function carregarDashboard(){
   const containerTipos = document.getElementById('dash-cards-tipo');
   containerTipos.innerHTML = tiposPresentes.length ? tiposPresentes.map(tipo => {
     const categorias = Object.keys(gruposPorTipo[tipo]).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const totalDoTipo = Object.values(gruposPorTipo[tipo]).reduce((soma, n) => soma + n, 0);
     return `
       <div style="width:100%">
-        <div class="sec" style="padding:8px 16px"><i class="ti ${TPI[tipo] || 'ti-tool'}" style="margin-right:5px"></i>${escapeHtml(LABEL_TIPO[tipo] || tipo)}</div>
+        <div class="sec" style="padding:8px 16px"><i class="ti ${TPI[tipo] || 'ti-tool'}" style="margin-right:5px"></i>${escapeHtml(LABEL_TIPO[tipo] || tipo)} <span style="color:var(--nv);font-weight:700">(${totalDoTipo})</span></div>
         <div class="ctr" style="flex-wrap:wrap">
           ${categorias.map(cat => `
             <div class="dash-card-tipo" style="cursor:pointer" data-tipo="${escapeHtml(tipo)}" data-categoria="${escapeHtml(cat)}">
@@ -2134,7 +2140,15 @@ async function excluirTipoManutencaoAdmin(id){
    ══════════════════════════════════════════════════════════ */
 const LABEL_STATUS_REQ = { pendente: 'Pendente', atendida: 'Atendida', reprovada: 'Reprovada', cancelada: 'Cancelada' };
 let almoxarifadosCache = null;
+let setoresUnidadeCache = null;
+let planoContasUnidadeCache = null;
 let tipoSolicitacaoAtual = null;
+let solicitacoesInfoCache = {}; // item.id -> {equipamento, fornecedor, descricao} -- pro popup de atender mostrar contexto
+
+/* ── memória do último valor escolhido (por unidade) ── */
+function chaveLS(campo){ return 'checklist_padrao_' + campo + '_' + meuPerfil.unidadeId; }
+function salvarPadrao(campo, valor){ try { localStorage.setItem(chaveLS(campo), valor == null ? '' : String(valor)); } catch (e) {} }
+function lerPadrao(campo){ try { return localStorage.getItem(chaveLS(campo)) || ''; } catch (e) { return ''; } }
 
 async function carregarAlmoxarifados(){
   if (almoxarifadosCache) return almoxarifadosCache;
@@ -2142,6 +2156,54 @@ async function carregarAlmoxarifados(){
   if (error) { toast('Erro ao carregar almoxarifados: ' + error.message); return []; }
   almoxarifadosCache = data || [];
   return almoxarifadosCache;
+}
+
+async function carregarSetoresParaSolicitacao(){
+  if (setoresUnidadeCache) return setoresUnidadeCache;
+  const { data, error } = await sb.from('unidade_setores').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId);
+  if (error) { toast('Erro ao carregar setores: ' + error.message); return []; }
+  setoresUnidadeCache = data || [];
+  return setoresUnidadeCache;
+}
+
+async function carregarPlanoContasParaSolicitacao(){
+  if (planoContasUnidadeCache) return planoContasUnidadeCache;
+  const { data, error } = await sb.from('unidade_plano_de_contas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId);
+  if (error) { toast('Erro ao carregar plano de contas: ' + error.message); return []; }
+  planoContasUnidadeCache = data || [];
+  return planoContasUnidadeCache;
+}
+
+let eventosUnidadeCache = null;
+async function carregarEventosParaSolicitacao(){
+  const { data, error } = await sb.from('eventos').select('id, numero_evento, nome').eq('unidade_negocio_id', meuPerfil.unidadeId).order('data_inicio', { ascending: false }).limit(300);
+  if (error) { toast('Erro ao carregar eventos: ' + error.message); return []; }
+  eventosUnidadeCache = data || [];
+  return eventosUnidadeCache;
+}
+
+// busca genérica reutilizável (equipamento, setor, plano de contas...)
+function configurarBuscaSolicitacao(inputId, sugestoesId, lista, camposTexto, aoSelecionar){
+  const input = document.getElementById(inputId);
+  const sugestoes = document.getElementById(sugestoesId);
+  input.addEventListener('input', () => {
+    const termo = input.value.trim().toLowerCase();
+    delete input.dataset.selecionadoId;
+    if (!termo) { sugestoes.classList.remove('show'); return; }
+    const encontrados = lista.filter(item => camposTexto.some(campo => (item[campo] || '').toLowerCase().includes(termo))).slice(0, 8);
+    sugestoes.innerHTML = encontrados.length
+      ? encontrados.map(item => `<div class="sugestao-autocomplete" data-id="${item.id}">${escapeHtml(camposTexto.map(c => item[c]).filter(Boolean).join(' — '))}</div>`).join('')
+      : '<div class="sugestao-autocomplete" style="opacity:.6">Nada encontrado</div>';
+    sugestoes.classList.add('show');
+    sugestoes.querySelectorAll('[data-id]').forEach(el => el.addEventListener('click', () => {
+      const item = lista.find(x => String(x.id) === el.dataset.id);
+      input.value = camposTexto.map(c => item[c]).filter(Boolean).join(' — ');
+      input.dataset.selecionadoId = item.id;
+      sugestoes.classList.remove('show');
+      if (aoSelecionar) aoSelecionar(item);
+    }));
+  });
+  input.addEventListener('blur', () => setTimeout(() => sugestoes.classList.remove('show'), 200));
 }
 
 /* ── Listar solicitações ── */
@@ -2165,6 +2227,7 @@ async function carregarSolicitacoes(tipo, aba, statusFiltro){
     const descricao = tipo === 'servico_abastecimento'
       ? (item.qtd_solicitada ? Number(item.qtd_solicitada).toLocaleString('pt-BR') + ' ' + (item.unidade_medida || 'L') : '—') + (item.fornecedor_recomendado ? ' · ' + escapeHtml(item.fornecedor_recomendado) : '')
       : escapeHtml(item.servico_descricao || item.descricao_livre || '—');
+    solicitacoesInfoCache[item.id] = { nomeEquip, fornecedor: item.fornecedor_recomendado || '', descricaoServico: item.servico_descricao || item.descricao_livre || '' };
     const botoesAdmin = souAdmin() && statusFiltro === 'pendente' ? `
       <div style="display:flex;gap:6px;margin-top:8px">
         <button class="btn-buscar" style="flex:1;justify-content:center;padding:8px" data-atender="${item.id}" data-req="${req.id}">Atender</button>
@@ -2204,8 +2267,18 @@ function filtrarSolicitacoes(aba, status, btn){
 /* ── Nova solicitação ── */
 async function abrirFormSolicitacao(tipo){
   tipoSolicitacaoAtual = tipo;
-  const almoxarifados = await carregarAlmoxarifados();
+  const [almoxarifados, setores] = await Promise.all([carregarAlmoxarifados(), carregarSetoresParaSolicitacao()]);
   if (!almoxarifados.length) { toast('Nenhum almoxarifado cadastrado pra essa unidade — fale com o administrador.'); return; }
+
+  const almoxarifadoPadraoId = lerPadrao('almoxarifado_id');
+  const almoxarifadoInicial = almoxarifados.find(a => String(a.id) === almoxarifadoPadraoId) || almoxarifados[0];
+  const setorPadraoId = lerPadrao('setor_id');
+  const setorPadraoTexto = lerPadrao('setor_texto');
+  const solicitantePadrao = lerPadrao('solicitante') || meuPerfil.email || '';
+  const eventoPadraoTexto = lerPadrao('evento_texto');
+  const eventoPadraoId = lerPadrao('evento_id');
+  const planoPadraoId = lerPadrao('plano_contas_id');
+  const planoPadraoTexto = lerPadrao('plano_contas_texto');
 
   const form = document.getElementById('form-solicitacao');
   const ehAbastecimento = tipo === 'servico_abastecimento';
@@ -2216,10 +2289,38 @@ async function abrirFormSolicitacao(tipo){
       <input type="text" class="inp" id="sol-equip-busca" placeholder="Buscar por nome, placa ou identificador..." autocomplete="off">
       <div class="lista-sugestoes-autocomplete" id="sol-equip-sugestoes"></div>
     </div>
-    ${almoxarifados.length > 1 ? `
-      <div class="field-group"><label>Almoxarifado *</label>
-        <select class="inp" id="sol-almoxarifado">${almoxarifados.map(a => `<option value="${a.id}">${escapeHtml(a.nome || 'Almoxarifado ' + a.id)}</option>`).join('')}</select>
-      </div>` : `<input type="hidden" id="sol-almoxarifado" value="${almoxarifados[0].id}">`}
+    <div class="man-grid" style="margin-top:8px">
+      <div class="man-field" style="position:relative">
+        <label>Almoxarifado *</label>
+        <input class="inp" type="text" id="sol-almoxarifado-busca" placeholder="Buscar almoxarifado..." autocomplete="off" data-selecionado-id="${escapeHtml(almoxarifadoInicial ? String(almoxarifadoInicial.id) : '')}" data-selecionado-texto="${escapeHtml(almoxarifadoInicial ? (almoxarifadoInicial.nome || almoxarifadoInicial.descricao || ('Almoxarifado ' + almoxarifadoInicial.id)) : '')}">
+        <div class="lista-sugestoes-autocomplete" id="sol-almoxarifado-sugestoes"></div>
+        <div id="sol-almoxarifado-confirmacao" style="font-size:12px;color:var(--ok);margin-top:4px">${almoxarifadoInicial ? 'Selecionado: ' + escapeHtml(almoxarifadoInicial.nome || almoxarifadoInicial.descricao || ('Almoxarifado ' + almoxarifadoInicial.id)) : ''}</div>
+      </div>
+      <div class="man-field" style="position:relative">
+        <label>Setor *</label>
+        <input class="inp" type="text" id="sol-setor-busca" placeholder="Buscar setor..." autocomplete="off" data-selecionado-id="${escapeHtml(setorPadraoId)}" data-selecionado-texto="${escapeHtml(setorPadraoTexto)}">
+        <div class="lista-sugestoes-autocomplete" id="sol-setor-sugestoes"></div>
+        <div id="sol-setor-confirmacao" style="font-size:12px;color:var(--ok);margin-top:4px">${setorPadraoTexto ? 'Selecionado: ' + escapeHtml(setorPadraoTexto) : ''}</div>
+      </div>
+    </div>
+    <div class="man-grid" style="margin-top:8px">
+      <div class="man-field" style="position:relative">
+        <label>Evento *</label>
+        <input class="inp" type="text" id="sol-evento-busca" placeholder="Buscar evento..." autocomplete="off" data-selecionado-id="${escapeHtml(eventoPadraoId)}" data-selecionado-texto="${escapeHtml(eventoPadraoTexto)}">
+        <div class="lista-sugestoes-autocomplete" id="sol-evento-sugestoes"></div>
+        <div id="sol-evento-confirmacao" style="font-size:12px;color:var(--ok);margin-top:4px">${eventoPadraoTexto ? 'Selecionado: ' + escapeHtml(eventoPadraoTexto) : ''}</div>
+      </div>
+      <div class="man-field"><label>Solicitante</label><input class="inp" type="text" id="sol-solicitante" value="${escapeHtml(solicitantePadrao)}"></div>
+    </div>
+    <div class="man-grid" style="margin-top:8px">
+      <div class="man-field"><label>Nº requisição externa (opcional)</label><input class="inp" type="text" id="sol-numero-externo" placeholder="Ex: nº da requisição em papel..."></div>
+      <div class="man-field" style="position:relative">
+        <label>Plano de Contas (opcional)</label>
+        <input class="inp" type="text" id="sol-plano-busca" placeholder="Buscar código ou descrição..." autocomplete="off" data-selecionado-id="${escapeHtml(planoPadraoId)}" data-selecionado-texto="${escapeHtml(planoPadraoTexto)}">
+        <div class="lista-sugestoes-autocomplete" id="sol-plano-sugestoes"></div>
+        <div id="sol-plano-confirmacao" style="font-size:12px;color:var(--ok);margin-top:4px">${planoPadraoTexto ? 'Selecionado: ' + escapeHtml(planoPadraoTexto) : ''}</div>
+      </div>
+    </div>
     ${ehAbastecimento ? `
       <div class="man-grid" style="margin-top:8px">
         <div class="man-field"><label>Litros *</label><input class="inp" type="number" step="0.01" id="sol-litros" placeholder="Ex: 45.5"></div>
@@ -2239,33 +2340,72 @@ async function abrirFormSolicitacao(tipo){
       <button class="btn-buscar" style="background:var(--tx3)" onclick="document.getElementById('modal-cad-solicitacao').classList.remove('on')">Cancelar</button>
     </div>`;
 
-  let equipamentoSelecionadoSolicitacao = null;
-  document.getElementById('sol-equip-busca').addEventListener('input', () => {
-    const termo = document.getElementById('sol-equip-busca').value.trim().toLowerCase();
-    equipamentoSelecionadoSolicitacao = null;
-    const sugestoes = document.getElementById('sol-equip-sugestoes');
-    if (!termo) { sugestoes.classList.remove('show'); return; }
-    const encontrados = frota.filter(v => v.nome.toLowerCase().includes(termo) || v.placa.toLowerCase().includes(termo) || v.identificador.toLowerCase().includes(termo)).slice(0, 8);
-    sugestoes.innerHTML = encontrados.length
-      ? encontrados.map(v => `<div class="sugestao-autocomplete" data-id="${v.id}">${escapeHtml(v.nome)}${v.placa || v.identificador ? ' — ' + escapeHtml(v.placa || v.identificador) : ''}</div>`).join('')
-      : '<div class="sugestao-autocomplete" style="opacity:.6">Nenhum equipamento encontrado</div>';
-    sugestoes.classList.add('show');
-    sugestoes.querySelectorAll('[data-id]').forEach(el => el.addEventListener('click', () => {
-      equipamentoSelecionadoSolicitacao = frota.find(v => v.id === Number(el.dataset.id));
-      document.getElementById('sol-equip-busca').value = equipamentoSelecionadoSolicitacao.nome;
-      document.getElementById('sol-equip-busca').dataset.equipId = equipamentoSelecionadoSolicitacao.id;
-      sugestoes.classList.remove('show');
-    }));
-  });
-  document.getElementById('sol-equip-busca').addEventListener('blur', () => setTimeout(() => document.getElementById('sol-equip-sugestoes').classList.remove('show'), 200));
+  configurarBuscaSolicitacao('sol-equip-busca', 'sol-equip-sugestoes', frota, ['nome', 'placa', 'identificador']);
+
+  // busca com confirmação em verde (Almoxarifado, Setor, Evento, Plano de Contas)
+  function configurarBuscaComConfirmacao(inputId, sugestoesId, confirmacaoId, lista, filtro, formatarTexto){
+    const input = document.getElementById(inputId);
+    const sugestoes = document.getElementById(sugestoesId);
+    const confirmacao = document.getElementById(confirmacaoId);
+    input.addEventListener('input', () => {
+      const termo = input.value.trim().toLowerCase();
+      delete input.dataset.selecionadoId;
+      confirmacao.textContent = '';
+      if (!termo) { sugestoes.classList.remove('show'); return; }
+      const encontrados = lista.filter(item => filtro(item, termo)).slice(0, 8);
+      sugestoes.innerHTML = encontrados.length
+        ? encontrados.map(item => `<div class="sugestao-autocomplete" data-id="${item.id}">${escapeHtml(formatarTexto(item))}</div>`).join('')
+        : '<div class="sugestao-autocomplete" style="opacity:.6">Nada encontrado</div>';
+      sugestoes.classList.add('show');
+      sugestoes.querySelectorAll('[data-id]').forEach(el => el.addEventListener('click', () => {
+        const item = lista.find(x => String(x.id) === el.dataset.id);
+        const texto = formatarTexto(item);
+        input.value = '';
+        input.dataset.selecionadoId = item.id;
+        input.dataset.selecionadoTexto = texto;
+        confirmacao.textContent = 'Selecionado: ' + texto;
+        sugestoes.classList.remove('show');
+      }));
+    });
+    input.addEventListener('blur', () => setTimeout(() => sugestoes.classList.remove('show'), 200));
+  }
+
+  configurarBuscaComConfirmacao('sol-almoxarifado-busca', 'sol-almoxarifado-sugestoes', 'sol-almoxarifado-confirmacao', almoxarifados,
+    (item, termo) => (item.nome || item.descricao || '').toLowerCase().includes(termo),
+    (item) => item.nome || item.descricao || ('Almoxarifado ' + item.id));
+
+  configurarBuscaComConfirmacao('sol-setor-busca', 'sol-setor-sugestoes', 'sol-setor-confirmacao', setores,
+    (item, termo) => (item.nome || item.descricao || '').toLowerCase().includes(termo),
+    (item) => item.nome || item.descricao || ('Setor ' + item.id));
+
+  const eventos = await carregarEventosParaSolicitacao();
+  configurarBuscaComConfirmacao('sol-evento-busca', 'sol-evento-sugestoes', 'sol-evento-confirmacao', eventos,
+    (item, termo) => (item.nome || '').toLowerCase().includes(termo) || String(item.numero_evento || '').includes(termo),
+    (item) => (item.numero_evento || '') + ' — ' + (item.nome || ''));
+
+  const planosContas = await carregarPlanoContasParaSolicitacao();
+  configurarBuscaComConfirmacao('sol-plano-busca', 'sol-plano-sugestoes', 'sol-plano-confirmacao', planosContas,
+    (item, termo) => (item.nome || item.descricao || '').toLowerCase().includes(termo) || (item.codigo || '').toLowerCase().includes(termo),
+    (item) => (item.codigo || '') + ' — ' + (item.nome || item.descricao || ''));
 
   document.getElementById('modal-cad-solicitacao').classList.add('on');
 }
 
 async function salvarSolicitacao(){
-  const equipId = Number(document.getElementById('sol-equip-busca').dataset.equipId);
+  const equipId = Number(document.getElementById('sol-equip-busca').dataset.selecionadoId);
   if (!equipId) { toast('Escolha o equipamento'); return; }
-  const almoxarifadoId = Number(document.getElementById('sol-almoxarifado').value);
+  const almoxarifadoId = document.getElementById('sol-almoxarifado-busca').dataset.selecionadoId ? Number(document.getElementById('sol-almoxarifado-busca').dataset.selecionadoId) : null;
+  if (!almoxarifadoId) { toast('Escolha o almoxarifado'); return; }
+  const setorId = document.getElementById('sol-setor-busca').dataset.selecionadoId ? Number(document.getElementById('sol-setor-busca').dataset.selecionadoId) : null;
+  if (!setorId) { toast('Escolha o setor'); return; }
+  const setorTexto = document.getElementById('sol-setor-busca').dataset.selecionadoTexto || '';
+  const eventoTexto = document.getElementById('sol-evento-busca').dataset.selecionadoTexto || '';
+  const eventoId = document.getElementById('sol-evento-busca').dataset.selecionadoId || '';
+  if (!eventoTexto) { toast('Escolha o evento'); return; }
+  const solicitante = document.getElementById('sol-solicitante').value.trim() || meuPerfil.email;
+  const numeroExterno = document.getElementById('sol-numero-externo').value.trim() || null;
+  const planoContasId = document.getElementById('sol-plano-busca').dataset.selecionadoId ? Number(document.getElementById('sol-plano-busca').dataset.selecionadoId) : null;
+  const planoContasTexto = document.getElementById('sol-plano-busca').dataset.selecionadoTexto || '';
   const ehAbastecimento = tipoSolicitacaoAtual === 'servico_abastecimento';
 
   let itemPayload = {};
@@ -2280,7 +2420,8 @@ async function salvarSolicitacao(){
       descricao_livre: 'Abastecimento',
       fornecedor_recomendado: document.getElementById('sol-posto').value.trim() || null,
       km_registrado: document.getElementById('sol-km').value ? Number(document.getElementById('sol-km').value) : null,
-      observacao: document.getElementById('sol-obs').value.trim() || null
+      observacao: document.getElementById('sol-obs').value.trim() || null,
+      setor_id: setorId, evento: eventoTexto, plano_contas_id: planoContasId
     };
   } else {
     const descricao = document.getElementById('sol-descricao').value.trim();
@@ -2291,7 +2432,8 @@ async function salvarSolicitacao(){
       fornecedor_recomendado: document.getElementById('sol-fornecedor').value.trim() || null,
       valor_unitario_atendido: document.getElementById('sol-valor-estimado').value ? Number(document.getElementById('sol-valor-estimado').value) : null,
       qtd_solicitada: 1,
-      observacao: document.getElementById('sol-obs').value.trim() || null
+      observacao: document.getElementById('sol-obs').value.trim() || null,
+      setor_id: setorId, evento: eventoTexto, plano_contas_id: planoContasId
     };
   }
 
@@ -2299,7 +2441,10 @@ async function salvarSolicitacao(){
     const { data: req, error: errReq } = await sb.from('estoque_requisicoes_rapidas').insert({
       unidade_negocio_id: meuPerfil.unidadeId,
       almoxarifado_id: almoxarifadoId,
-      solicitante: meuPerfil.nomeOperador,
+      setor_id: setorId,
+      evento: eventoTexto,
+      numero_externo: numeroExterno,
+      solicitante: solicitante,
       criado_por: meuPerfil.userId,
       tipo: tipoSolicitacaoAtual,
       status: 'pendente'
@@ -2309,20 +2454,147 @@ async function salvarSolicitacao(){
     const { error: errItem } = await sb.from('estoque_requisicoes_rapidas_itens').insert({ requisicao_id: req.id, ...itemPayload });
     if (errItem) throw errItem;
 
+    // guarda os valores escolhidos como padrão pra próxima vez
+    salvarPadrao('almoxarifado_id', almoxarifadoId);
+    salvarPadrao('solicitante', solicitante);
+    salvarPadrao('setor_id', setorId);
+    salvarPadrao('setor_texto', setorTexto);
+    salvarPadrao('evento_id', eventoId);
+    salvarPadrao('evento_texto', eventoTexto);
+    if (planoContasId) { salvarPadrao('plano_contas_id', planoContasId); salvarPadrao('plano_contas_texto', planoContasTexto); }
+
     toast('✓ Solicitação enviada.');
     document.getElementById('modal-cad-solicitacao').classList.remove('on');
     carregarSolicitacoes(tipoSolicitacaoAtual, ehAbastecimento ? 'abast' : 'corr', 'pendente');
+
+    const equipamento = frota.find(v => v.id === equipId);
+    gerarPdfSolicitacao(req, itemPayload, equipamento, solicitante, almoxarifadoId, setorTexto);
   } catch (erro) {
     toast('Erro ao enviar: ' + erro.message);
   }
 }
 
+/* ── PDF da solicitação (mesmo padrão 3-botões usado no resto do Servir) ── */
+function gerarPdfSolicitacao(req, item, equipamento, solicitante, almoxarifadoId, setorTexto){
+  const almoxarifado = (almoxarifadosCache || []).find(a => a.id === almoxarifadoId);
+  const almoxarifadoTexto = almoxarifado ? (almoxarifado.nome || almoxarifado.descricao || ('#' + almoxarifado.id)) : '—';
+  const ehAbastecimento = req.tipo === 'servico_abastecimento';
+  const nomeEquip = equipamento ? (equipamento.nome + (equipamento.placa || equipamento.identificador ? ' ' + (equipamento.placa || equipamento.identificador) : '')) : '—';
+  const servicoTexto = ehAbastecimento ? 'ABASTECIMENTO' : 'MANUTENÇÃO CORRETIVA';
+  const fornecedorTexto = item.fornecedor_recomendado || '—';
+  const qtdTexto = ehAbastecimento ? (item.qtd_solicitada || '—') + ' L' : '1';
+  const tituloDoc = 'REQUISIÇÃO — SERVIÇO/ABASTECIMENTO';
+  const dataTexto = new Date(req.created_at).toLocaleString('pt-BR');
+
+  function construirPdfA4(){
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    doc.setFont(undefined, 'bold'); doc.setFontSize(15);
+    doc.text(tituloDoc, 105, 18, { align: 'center' });
+    doc.setFont(undefined, 'normal');
+    doc.setDrawColor(200); doc.line(14, 24, 196, 24);
+
+    doc.setFontSize(10);
+    let y = 32;
+    [['Solicitante', solicitante], ['Almoxarifado', almoxarifadoTexto], ['Setor', setorTexto],
+     ['Evento', req.evento], ['Data', dataTexto]].forEach(([rotulo, valor]) => {
+      doc.text(rotulo + ': ' + (valor || '—'), 14, y);
+      y += 6;
+    });
+    y += 2;
+    doc.setDrawColor(200); doc.line(14, y, 196, y);
+    y += 2;
+
+    doc.autoTable({
+      startY: y,
+      head: [['Serviço', 'Veículo', 'Fornecedor', 'Qtd']],
+      body: [[servicoTexto, nomeEquip, fornecedorTexto, qtdTexto]],
+      theme: 'plain',
+      headStyles: { fontStyle: 'bold', textColor: 0 },
+      styles: { fontSize: 10, cellPadding: 3 }
+    });
+
+    const yAssinatura = doc.lastAutoTable.finalY + 25;
+    doc.setDrawColor(200); doc.line(14, yAssinatura - 20, 196, yAssinatura - 20);
+    doc.text('Assinatura: _______________________________', 14, yAssinatura);
+    return doc;
+  }
+
+  function construirPdfBobina(){
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: [80, 150] });
+    const larguraUtil = 72;
+    doc.setFont(undefined, 'bold'); doc.setFontSize(11);
+    const linhasTitulo = doc.splitTextToSize(tituloDoc, larguraUtil);
+    let y = 10;
+    linhasTitulo.forEach(linha => { doc.text(linha, 40, y, { align: 'center' }); y += 5; });
+    doc.setFont(undefined, 'normal');
+    y += 2;
+    doc.setDrawColor(200); doc.line(4, y, 76, y); y += 5;
+
+    doc.setFontSize(8.5);
+    [['Solicitante', solicitante], ['Almoxarifado', almoxarifadoTexto], ['Setor', setorTexto],
+     ['Evento', req.evento], ['Data', dataTexto]].forEach(([rotulo, valor]) => {
+      const linhasTexto = doc.splitTextToSize(rotulo + ': ' + (valor || '—'), larguraUtil);
+      linhasTexto.forEach(linha => { doc.text(linha, 4, y); y += 4; });
+    });
+    y += 1;
+    doc.setDrawColor(200); doc.line(4, y, 76, y); y += 6;
+
+    doc.setFont(undefined, 'bold'); doc.text('1. ' + servicoTexto, 4, y); y += 5;
+    doc.setFont(undefined, 'normal');
+    [['Veículo', nomeEquip], ['Fornecedor', fornecedorTexto], ['Qtd', qtdTexto]].forEach(([rotulo, valor]) => {
+      const linhasTexto = doc.splitTextToSize(rotulo + ': ' + valor, larguraUtil - 4);
+      linhasTexto.forEach(linha => { doc.text(linha, 6, y); y += 4; });
+    });
+    y += 2;
+    doc.setDrawColor(200); doc.line(4, y, 76, y); y += 10;
+    doc.setFontSize(8);
+    doc.text('Assinatura: ________________', 4, y);
+    return doc;
+  }
+
+  const nomeArquivo = 'requisicao-' + (ehAbastecimento ? 'abastecimento' : 'manutencao-corretiva') + '-' + req.id;
+  let formatoAtual = 'a4'; // 'a4' | 'bobina'
+
+  function renderizarPopupImpressao(){
+    const doc = formatoAtual === 'a4' ? construirPdfA4() : construirPdfBobina();
+    const conteudoModal = document.getElementById('form-atender-solicitacao');
+    conteudoModal.innerHTML = `
+      <div class="lbl" style="color:var(--nv)">Imprimir requisição</div>
+      <p style="font-size:13px;color:var(--tx2);margin-top:6px">Formato: ${formatoAtual === 'a4' ? 'Folha A4' : 'Bobina'}</p>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn-buscar" style="flex:1;justify-content:center" data-pdf-acao="ver"><i class="ti ti-eye"></i> Visualizar</button>
+        <button class="btn-buscar" style="flex:1;justify-content:center" data-pdf-acao="salvar"><i class="ti ti-download"></i> Baixar</button>
+        <button class="btn-buscar" style="flex:1;justify-content:center" data-pdf-acao="compartilhar"><i class="ti ti-share"></i> Compartilhar</button>
+      </div>
+      <button class="btn-buscar" style="width:100%;justify-content:center;margin-top:8px;background:var(--tx3)" id="btn-trocar-formato-pdf">← Trocar formato (${formatoAtual === 'a4' ? 'Bobina' : 'Folha A4'})</button>
+      <button class="btn-buscar" style="width:100%;justify-content:center;margin-top:8px;background:var(--tx3)" onclick="document.getElementById('modal-atender-solicitacao').classList.remove('on')">Fechar</button>`;
+    conteudoModal.querySelectorAll('[data-pdf-acao]').forEach(btn => {
+      btn.addEventListener('click', () => executarAcaoPdf(btn.dataset.pdfAcao, doc, nomeArquivo + '-' + formatoAtual + '.pdf'));
+    });
+    conteudoModal.querySelector('#btn-trocar-formato-pdf').addEventListener('click', () => {
+      formatoAtual = formatoAtual === 'a4' ? 'bobina' : 'a4';
+      renderizarPopupImpressao();
+    });
+  }
+
+  renderizarPopupImpressao();
+  document.getElementById('modal-atender-solicitacao').classList.add('on');
+}
+
 /* ── Atender (aprovar) ── só admin ── */
 function abrirFormAtender(itemId, requisicaoId, tipo){
   const ehAbastecimento = tipo === 'servico_abastecimento';
+  const info = solicitacoesInfoCache[itemId] || {};
   const form = document.getElementById('form-atender-solicitacao');
   form.innerHTML = `
     <div class="lbl">Atender solicitação</div>
+    <div style="background:var(--bg);border-radius:var(--rs);padding:10px 12px;margin-top:8px;font-size:13px">
+      <div><strong>Equipamento:</strong> ${escapeHtml(info.nomeEquip || '—')}</div>
+      <div style="margin-top:3px"><strong>${ehAbastecimento ? 'Posto' : 'Prestador de serviço'}:</strong> ${escapeHtml(info.fornecedor || '—')}</div>
+      ${!ehAbastecimento && info.descricaoServico ? `<div style="margin-top:3px"><strong>Problema:</strong> ${escapeHtml(info.descricaoServico)}</div>` : ''}
+    </div>
     <div class="man-grid" style="margin-top:8px">
       <div class="man-field"><label>${ehAbastecimento ? 'Litros atendidos' : 'Quantidade'} *</label><input class="inp" type="number" step="0.01" id="at-qtd" value="${ehAbastecimento ? '' : '1'}"></div>
       <div class="man-field"><label>Valor unitário (R$) *</label><input class="inp" type="number" step="0.01" id="at-valor"></div>
@@ -2405,12 +2677,8 @@ async function reprovarSolicitacao(requisicaoId, tipo, aba){
   carregarSolicitacoes(tipo, aba, 'pendente');
 }
 
-// fecha os popups de cadastro clicando fora da caixa (no fundo escurecido)
-['modal-cad-veic', 'modal-cad-item', 'modal-cad-man', 'modal-detalhe-categoria', 'modal-cad-solicitacao', 'modal-atender-solicitacao'].forEach(idModal => {
-  document.getElementById(idModal).addEventListener('click', (e) => {
-    if (e.target.id === idModal) e.target.classList.remove('on');
-  });
-});
+// os popups só fecham pelo botão "Fechar"/"Cancelar"/"Concluir" — não
+// clicando fora, pra evitar perder preenchimento sem querer
 
 /* ── PDF de equipamentos, ordenado por status de funcionamento -- usa
    o mesmo filtro (busca + tipo) já aplicado na tela de onde foi
