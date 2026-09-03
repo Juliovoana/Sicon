@@ -1011,6 +1011,19 @@
 <!-- ===================== MODAL / POPUP: Histórico do produto ===================== -->
 <!-- ===================== MODAL / POPUP: Baixa direta (sem projeto) ===================== -->
 <!-- ===================== MODAL / POPUP: Importar NF-e (XML) ===================== -->
+<div class="modal-overlay" id="modalVincularNotasParciais">
+    <div class="modal-caixa" style="max-width:560px;">
+        <h3>Vincular a notas já lançadas</h3>
+        <p style="font-size:0.85em; color:var(--muted); margin:6px 0 12px;">Notas de entrada lançadas manualmente (sem XML) desse mesmo produto, que ainda não estão ligadas a nenhuma NF-e. Marque as que correspondem ao recebimento parcial já feito — elas continuam contando pro estoque normalmente, só a quantidade delas deixa de ser lançada de novo por essa NF-e.</p>
+        <div id="listaNotasParciaisDisponiveis" style="max-height:45vh; overflow:auto;"></div>
+        <p id="statusVincularNotasParciais" style="font-size:0.85em; margin-top:10px;"></p>
+        <div style="text-align:right; margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
+            <button class="btn btn-cinza" id="btnFecharModalVincularNotasParciais">Fechar</button>
+            <button class="btn btn-verde" id="btnConfirmarVincularNotasParciais">Confirmar vínculo</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal-overlay" id="modalImportarNFe">
     <div class="modal-caixa larga">
         <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -2250,6 +2263,41 @@ async function chamarPost(acao, d) {
         if (error) throw error;
         return;
     }
+    if (acao === 'buscarNotasParciaisDoProduto') {
+        // acha notas de entrada SEM xml (lançadas manualmente, aos poucos)
+        // que ainda não foram ligadas a nenhuma NF-e definitiva, e que têm
+        // pelo menos um item desse produto
+        const { data: movs, error: eMov } = await sb.from('estoque_movimentacoes')
+            .select('estoque_nota_id, qtd')
+            .eq('produto_id', d.produtoId)
+            .eq('tipo', 'entrada')
+            .not('estoque_nota_id', 'is', null);
+        if (eMov) throw eMov;
+        const notaIds = [...new Set((movs || []).map(m => m.estoque_nota_id))];
+        if (!notaIds.length) return [];
+
+        const { data: notas, error: eNotas } = await sb.from('estoque_notas')
+            .select('id, numero_nf, nome_fornecedor, data_entrada, xml_original, nota_definitiva_id')
+            .in('id', notaIds)
+            .is('xml_original', null)
+            .is('nota_definitiva_id', null);
+        if (eNotas) throw eNotas;
+
+        return notas.map(n => ({
+            id: n.id,
+            numeroNf: n.numero_nf,
+            nomeFornecedor: n.nome_fornecedor,
+            dataEntrada: n.data_entrada,
+            qtdDesseProduto: movs.filter(m => m.estoque_nota_id === n.id).reduce((acc, m) => acc + Number(m.qtd), 0)
+        }));
+    }
+    if (acao === 'vincularNotasParciaisNfe') {
+        const { error } = await sb.from('estoque_notas')
+            .update({ nota_definitiva_id: d.notaDefinitivaId })
+            .in('id', d.notasParciaisIds);
+        if (error) throw error;
+        return;
+    }
     if (acao === 'salvarNotaFiscal') {
         const n = d.nota;
         const registro = {
@@ -2726,7 +2774,7 @@ async function editarProdutoPrompt(id) {
 
     atualizarCamposEstoqueDoAlmoxarifadoSelecionado(p);
 
-    document.getElementById('editProdutoResponsavelAjuste').value = '';
+    document.getElementById('editProdutoResponsavelAjuste').value = meuPerfil.email || '';
     document.getElementById('campoResponsavelAjuste').style.display = 'none';
     document.getElementById('avisoAjusteEstoque').style.display = 'none';
     document.getElementById('statusEditarProduto').textContent = '';
@@ -3548,7 +3596,9 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
                 produtoVinculadoId: match ? match.id : null,
                 criarNovo: !match,
                 almoxarifadoId: almoxarifadoTrabalho || null,
-                avulso: false
+                avulso: false,
+                notasParciaisVinculadas: [], // ids das notas já lançadas manualmente que cobrem parte dessa quantidade
+                qtdJaCoberta: 0
             };
         });
 
@@ -3613,7 +3663,10 @@ function renderizarTabelaNFe() {
             <td>${escapeHtml(item.cProd)}</td>
             <td>${escapeHtml(item.xProdOriginal)}</td>
             <td><input type="text" class="input-qtd-pedida" value="${escapeHtml(item.un)}" data-nfe-unidade="${idx}" style="width:70px;"></td>
-            <td class="num"><input type="number" step="0.01" class="input-qtd-pedida" value="${item.qtd}" data-nfe-qtd="${idx}"></td>
+            <td class="num">
+                <input type="number" step="0.01" class="input-qtd-pedida" value="${item.qtd}" data-nfe-qtd="${idx}">
+                ${item.notasParciaisVinculadas.length ? `<div style="font-size:0.72em; color:#1565c0; margin-top:2px;">🔗 ${item.qtdJaCoberta} já coberto — entra só ${Math.max(0, item.qtd - item.qtdJaCoberta)}</div>` : ''}
+            </td>
             <td class="num">
                 <input type="number" step="0.01" class="input-qtd-pedida" value="${item.valorUnit}" data-nfe-valor="${idx}">
                 ${item.temAjusteProprio ? `<div style="font-size:0.75em; color:#2D6A4F; margin-top:2px;">✓ já inclui desc./frete do item</div>` : ''}
@@ -3638,6 +3691,7 @@ function renderizarTabelaNFe() {
                 ${!item.avulso ? `
                     <button class="btn btn-cinza btn-pequeno" data-nfe-vincular="${idx}">🔍 ${item.criarNovo ? 'Vincular' : 'Trocar'}</button>
                     ${!item.criarNovo ? `<button class="btn btn-cinza btn-pequeno" data-nfe-desfazer="${idx}" title="Desfazer vínculo e tratar como produto novo" style="margin-left:4px;">❌ Desfazer</button>` : ''}
+                    ${!item.criarNovo ? `<br><button class="btn btn-cinza btn-pequeno" data-nfe-vincular-notas="${idx}" style="margin-top:4px;" title="Vincular a notas de entrada já lançadas manualmente pra esse produto">🔗 Notas parciais</button>` : ''}
                 ` : ''}
             </td>
         `;
@@ -3648,6 +3702,9 @@ function renderizarTabelaNFe() {
             nfeItensParseados[Number(chk.dataset.nfeAvulso)].avulso = chk.checked;
             renderizarTabelaNFe();
         });
+    });
+    corpo.querySelectorAll('[data-nfe-vincular-notas]').forEach(btn => {
+        btn.addEventListener('click', () => abrirModalVincularNotasParciais(Number(btn.dataset.nfeVincularNotas)));
     });
     corpo.querySelectorAll('[data-nfe-unidade]').forEach(inp => {
         inp.addEventListener('change', () => { nfeItensParseados[Number(inp.dataset.nfeUnidade)].un = inp.value.trim().toUpperCase() || 'UN'; });
@@ -3695,6 +3752,56 @@ function renderizarTabelaNFe() {
         });
     });
 }
+
+let nfeIndiceVincularNotasAtual = null;
+
+async function abrirModalVincularNotasParciais(idx) {
+    const item = nfeItensParseados[idx];
+    if (!item.produtoVinculadoId) { alert('Vincule esse item a um produto do sistema primeiro.'); return; }
+    nfeIndiceVincularNotasAtual = idx;
+    const lista = document.getElementById('listaNotasParciaisDisponiveis');
+    lista.innerHTML = '<p class="subtitulo">Carregando...</p>';
+    document.getElementById('statusVincularNotasParciais').textContent = '';
+    document.getElementById('modalVincularNotasParciais').classList.add('aberto');
+
+    try {
+        const notas = await chamarPost('buscarNotasParciaisDoProduto', { produtoId: item.produtoVinculadoId });
+        if (!notas.length) {
+            lista.innerHTML = '<p class="subtitulo">Nenhuma nota manual (sem XML) desse produto disponível pra vincular.</p>';
+            return;
+        }
+        lista.innerHTML = notas.map(n => `
+            <label style="display:flex; align-items:flex-start; gap:8px; padding:8px; border-bottom:1px solid #eee; cursor:pointer;">
+                <input type="checkbox" data-nota-parcial-id="${n.id}" ${item.notasParciaisVinculadas.includes(n.id) ? 'checked' : ''} style="margin-top:3px;">
+                <span>
+                    <strong>${n.numeroNf ? 'Nota nº ' + escapeHtml(n.numeroNf) : 'Sem número'}</strong> — ${escapeHtml(n.nomeFornecedor || 'Fornecedor não informado')}<br>
+                    <span class="subtitulo">Data: ${n.dataEntrada ? formatarData(n.dataEntrada) : '-'} · Qtd desse produto nessa nota: ${n.qtdDesseProduto}</span>
+                </span>
+            </label>
+        `).join('');
+    } catch (err) {
+        lista.innerHTML = `<p class="status-msg erro">Erro ao buscar: ${escapeHtml(err.message)}</p>`;
+    }
+}
+
+document.getElementById('btnFecharModalVincularNotasParciais').addEventListener('click', () => {
+    document.getElementById('modalVincularNotasParciais').classList.remove('aberto');
+});
+
+document.getElementById('btnConfirmarVincularNotasParciais').addEventListener('click', () => {
+    const item = nfeItensParseados[nfeIndiceVincularNotasAtual];
+    const marcadas = Array.from(document.querySelectorAll('#listaNotasParciaisDisponiveis [data-nota-parcial-id]:checked'));
+    item.notasParciaisVinculadas = marcadas.map(chk => Number(chk.dataset.notaParcialId));
+    // soma a quantidade das notas marcadas, lendo do texto que já está
+    // na tela (evita precisar buscar tudo de novo no banco)
+    item.qtdJaCoberta = marcadas.reduce((acc, chk) => {
+        const textoQtd = chk.closest('label').querySelector('.subtitulo').textContent;
+        const match = textoQtd.match(/Qtd desse produto nessa nota: ([\d.,]+)/);
+        return acc + (match ? Number(match[1].replace(',', '.')) : 0);
+    }, 0);
+    document.getElementById('modalVincularNotasParciais').classList.remove('aberto');
+    renderizarTabelaNFe();
+});
 
 function abrirVinculoProdutoNFe(idx) {
     nfeIndiceVinculoAtual = idx;
@@ -3878,21 +3985,35 @@ async function processarImportacaoNFe(tipo) {
                 });
             }
 
-            await chamarPost('registrarMovimentacao', {
-                movimentacao: {
-                    data, produtoId, qtd: item.qtd, valorUnit: item.valorUnit,
-                    valorUnitOriginal: item.valorUnitOriginal, tipo,
-                    tag, evento,
-                    almoxarifadoId: item.almoxarifadoId,
-                    observacao: observacaoBase || `Importado da NF-e`,
-                    responsavel, projetoId: null, itemProjetoId: null,
-                    nfNumero: nfeDadosNota ? nfeDadosNota.nNF : '',
-                    fornecedorCnpj: nfeDadosNota ? nfeDadosNota.emitCnpj : '',
-                    fornecedorNome: nfeDadosNota ? nfeDadosNota.emitNome : '',
-                    estoqueNotaId,
-                    ...destinacao
-                }
-            });
+            // se essa nota tem notas parciais vinculadas (recebimento já
+            // lançado manualmente aos poucos), liga elas à nota definitiva
+            // e só lança a diferença -- evita duplicar estoque
+            let qtdALancar = item.qtd;
+            if (tipo === 'entrada' && item.notasParciaisVinculadas.length && estoqueNotaId) {
+                await chamarPost('vincularNotasParciaisNfe', {
+                    notaDefinitivaId: estoqueNotaId,
+                    notasParciaisIds: item.notasParciaisVinculadas
+                });
+                qtdALancar = Math.max(0, item.qtd - item.qtdJaCoberta);
+            }
+
+            if (qtdALancar > 0) {
+                await chamarPost('registrarMovimentacao', {
+                    movimentacao: {
+                        data, produtoId, qtd: qtdALancar, valorUnit: item.valorUnit,
+                        valorUnitOriginal: item.valorUnitOriginal, tipo,
+                        tag, evento,
+                        almoxarifadoId: item.almoxarifadoId,
+                        observacao: observacaoBase || `Importado da NF-e`,
+                        responsavel, projetoId: null, itemProjetoId: null,
+                        nfNumero: nfeDadosNota ? nfeDadosNota.nNF : '',
+                        fornecedorCnpj: nfeDadosNota ? nfeDadosNota.emitCnpj : '',
+                        fornecedorNome: nfeDadosNota ? nfeDadosNota.emitNome : '',
+                        estoqueNotaId,
+                        ...destinacao
+                    }
+                });
+            }
         }
 
         // 3) títulos de pagamento (duplicatas), só se o XML tinha (senão fica
@@ -5952,7 +6073,7 @@ async function checkSession() {
 }
 
 // ---------- unidade de negócio ativa ----------
-let meuPerfil = { unidadeId: null, unidadeNome: '', ehPrincipal: false, userId: null, nomeOperador: '' };
+let meuPerfil = { unidadeId: null, unidadeNome: '', ehPrincipal: false, userId: null, nomeOperador: '', email: '' };
 let vinculosGlobais = [];
 
 function definirUnidadeAtiva(vinculo) {
@@ -6013,6 +6134,7 @@ async function carregarMeuPerfil() {
     if (!userId) return;
     meuPerfil.userId = userId;
     meuPerfil.nomeOperador = sessao?.user?.user_metadata?.nome || sessao?.user?.user_metadata?.full_name || sessao?.user?.email || '';
+    meuPerfil.email = sessao?.user?.email || '';
 
     const { data: vinculos, error } = await sb
         .from('servir_unidade_usuarios')
