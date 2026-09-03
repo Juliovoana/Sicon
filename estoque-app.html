@@ -1520,10 +1520,6 @@
             </div>
             <div class="campo"><label>Responsável pela retirada</label><input type="text" id="reqCompletaResponsavel"></div>
         </div>
-        <div class="campo" style="margin-top:10px;">
-            <label>Tag padrão (código na obra/reforma — opcional, dá pra trocar por item depois)</label>
-            <input type="text" id="reqCompletaTag" placeholder="ex: 112">
-        </div>
 
         <hr style="margin:16px 0; border:none; border-top:1px solid #eee;">
 
@@ -1539,6 +1535,14 @@
             <div class="campo"><label>Qtd</label><input type="number" step="0.01" id="reqCompletaQtd" value="1"></div>
             <div class="campo"><label>Valor unit. (R$)</label><input type="number" step="0.01" id="reqCompletaValor"></div>
         </div>
+        <div class="grade col4" style="margin-top:8px; align-items:flex-end;">
+            <div class="campo"><label>Tag (código na obra/reforma)</label><input type="text" id="reqCompletaTag" placeholder="ex: 112"></div>
+            <div class="campo"><label>Responsável (deste item)</label><input type="text" id="reqCompletaItemResponsavel" placeholder="Deixe em branco pra usar o de cima"></div>
+            <div class="campo" style="grid-column:span 2; display:flex; align-items:center; gap:8px; padding-bottom:10px;">
+                <input type="checkbox" id="reqCompletaPerguntarSempre" style="width:auto; margin:0;">
+                <label for="reqCompletaPerguntarSempre" style="margin:0; cursor:pointer;">Perguntar tag e responsável a cada item (limpa os dois depois de incluir)</label>
+            </div>
+        </div>
         <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
             <div style="display:flex; gap:6px; flex-wrap:wrap;">
                 <button type="button" class="btn btn-pequeno btn-preco-opcao" id="btnReqCompletaUsarPrecoMedio">Preço médio</button>
@@ -1550,7 +1554,7 @@
         </div>
 
         <table class="tabela" style="margin-top:14px; font-size:0.85em;">
-            <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th>Tag</th><th>Setor</th><th>Almoxarifado</th><th>Plano de Contas</th><th class="num">Subtotal</th><th>Ações</th></tr></thead>
+            <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th>Tag</th><th>Responsável</th><th>Setor</th><th>Almoxarifado</th><th>Plano de Contas</th><th class="num">Subtotal</th><th>Ações</th></tr></thead>
             <tbody id="corpoItensReqCompleta"></tbody>
         </table>
         <div style="text-align:right; margin-top:6px; font-weight:600;">Total: <span id="totalItensReqCompleta">R$ 0,00</span></div>
@@ -1559,7 +1563,7 @@
             <hr style="margin-bottom:16px; border:none; border-top:1px solid #eee;">
             <h4 style="margin-bottom:8px;">Itens já lançados nessa requisição</h4>
             <table class="tabela">
-                <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th>Plano de Contas</th><th class="num">Subtotal</th><th>Ações</th></tr></thead>
+                <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th>Tag</th><th>Responsável</th><th>Plano de Contas</th><th class="num">Subtotal</th><th>Ações</th></tr></thead>
                 <tbody id="corpoItensJaLancadosReq"></tbody>
             </table>
         </div>
@@ -6592,8 +6596,8 @@ async function abrirModalEditarMovimentacaoGeral(movId) {
         if (error) throw error;
 
         movGeralEmEdicaoId = movId;
-        const prod = produtos.find(p => p.id === mov.produto_id);
         movGeralOriginal = { ...mov, nomeProduto: prod ? prod.nome : '#' + mov.produto_id };
+        const prod = produtos.find(p => p.id === mov.produto_id);
         document.getElementById('editMovGeralInfo').textContent =
             `${mov.tipo === 'entrada' ? 'Entrada' : 'Saída'} · ${prod ? prod.nome : '#' + mov.produto_id} · ${formatarData(mov.data)}`;
         document.getElementById('editMovGeralQtd').value = mov.qtd;
@@ -8344,9 +8348,9 @@ async function abrirModalRequisicaoCompleta(notaIdExistente) {
 
 async function carregarItensJaLancadosReq(notaId) {
     const corpo = document.getElementById('corpoItensJaLancadosReq');
-    corpo.innerHTML = '<tr><td colspan="6" class="vazio">Carregando...</td></tr>';
+    corpo.innerHTML = '<tr><td colspan="8" class="vazio">Carregando...</td></tr>';
     const { data, error } = await sb.from('estoque_movimentacoes').select('*').eq('estoque_nota_id', notaId).order('id');
-    if (error) { corpo.innerHTML = `<tr><td colspan="6" class="vazio">Erro: ${escapeHtml(error.message)}</td></tr>`; return; }
+    if (error) { corpo.innerHTML = `<tr><td colspan="8" class="vazio">Erro: ${escapeHtml(error.message)}</td></tr>`; return; }
 
     // pré-preenche o cabeçalho com os valores do ÚLTIMO item lançado —
     // evita ter que escolher setor/subsetor/veículo/evento/plano de
@@ -8393,6 +8397,8 @@ async function carregarItensJaLancadosReq(notaId) {
                 <td>${prod ? escapeHtml(prod.nome) : (m.descricao_avulsa ? escapeHtml(m.descricao_avulsa) + ' (avulso)' : '#' + m.produto_id)}</td>
                 <td class="num">${m.qtd}</td>
                 <td class="num">${formatarMoeda(m.valor_unit)}</td>
+                <td><input type="text" class="input-tag-evento" value="${escapeHtml(m.tag || '')}" data-tag-lancado="${m.id}" data-qtd-original="${m.qtd}" style="width:80px;"></td>
+                <td><input type="text" class="input-tag-evento" value="${escapeHtml(m.responsavel || '')}" data-responsavel-lancado="${m.id}" data-qtd-original="${m.qtd}" style="width:100px;"></td>
                 <td>${pc ? escapeHtml(pc.codigo) + ' - ' + escapeHtml(pc.descricao) : '-'}</td>
                 <td class="num">${formatarMoeda(subtotal)}</td>
                 <td class="center">
@@ -8401,7 +8407,26 @@ async function carregarItensJaLancadosReq(notaId) {
                 </td>
             </tr>
         `;
-    }).join('') || '<tr><td colspan="6" class="vazio">Nenhum item lançado ainda.</td></tr>';
+    }).join('') || '<tr><td colspan="8" class="vazio">Nenhum item lançado ainda.</td></tr>';
+
+    corpo.querySelectorAll('[data-tag-lancado]').forEach(inp => {
+        inp.addEventListener('change', async () => {
+            try {
+                await chamarPost('editarMovimentacao', { movId: Number(inp.dataset.tagLancado), novaQtd: Number(inp.dataset.qtdOriginal), tag: inp.value.trim() });
+            } catch (err) {
+                alert('Erro ao salvar tag: ' + err.message);
+            }
+        });
+    });
+    corpo.querySelectorAll('[data-responsavel-lancado]').forEach(inp => {
+        inp.addEventListener('change', async () => {
+            try {
+                await chamarPost('editarMovimentacao', { movId: Number(inp.dataset.responsavelLancado), novaQtd: Number(inp.dataset.qtdOriginal), responsavel: inp.value.trim().toUpperCase() });
+            } catch (err) {
+                alert('Erro ao salvar responsável: ' + err.message);
+            }
+        });
+    });
 
     corpo.querySelectorAll('[data-editar-item-req]').forEach(btn => {
         btn.addEventListener('click', () => abrirModalEditarMovimentacaoGeral(Number(btn.dataset.editarItemReq)));
@@ -8501,9 +8526,16 @@ document.getElementById('btnAdicionarItemReqCompleta').addEventListener('click',
     if (isNaN(qtd) || qtd <= 0) { alert('Informe uma quantidade válida.'); return; }
     if (isNaN(valorUnit) || valorUnit < 0) { alert('Informe um valor unitário válido.'); return; }
 
+    const perguntarSempre = document.getElementById('reqCompletaPerguntarSempre').checked;
+    if (perguntarSempre && !document.getElementById('reqCompletaTag').value.trim() && !document.getElementById('reqCompletaItemResponsavel').value.trim()) {
+        alert('Informe a tag e/ou o responsável desse item (a opção "perguntar a cada item" está marcada).');
+        return;
+    }
+
     itensReqCompleta.push({
         produtoId: produtoSelecionadoReqCompleta.id, produtoNome: produtoSelecionadoReqCompleta.nome, qtd, valorUnit,
         tag: document.getElementById('reqCompletaTag').value.trim(),
+        responsavel: document.getElementById('reqCompletaItemResponsavel').value.trim().toUpperCase(),
         setorId: document.getElementById('reqCompletaSetor').value ? Number(document.getElementById('reqCompletaSetor').value) : null,
         almoxarifadoId: document.getElementById('reqCompletaAlmoxarifado').value ? Number(document.getElementById('reqCompletaAlmoxarifado').value) : null,
         // já entra com o plano de contas padrão escolhido no
@@ -8515,10 +8547,14 @@ document.getElementById('btnAdicionarItemReqCompleta').addEventListener('click',
     document.getElementById('reqCompletaProdutoSelecionado').textContent = '';
     document.getElementById('reqCompletaQtd').value = 1;
     document.getElementById('reqCompletaValor').value = '';
+    if (perguntarSempre) {
+        document.getElementById('reqCompletaTag').value = '';
+        document.getElementById('reqCompletaItemResponsavel').value = '';
+    }
     document.querySelectorAll('#modalRequisicaoCompleta .btn-preco-opcao').forEach(b => b.classList.remove('ativo'));
     produtoSelecionadoReqCompleta = null;
     renderizarItensReqCompleta();
-    document.getElementById('reqCompletaProdutoBusca').focus();
+    document.getElementById(perguntarSempre ? 'reqCompletaTag' : 'reqCompletaProdutoBusca').focus();
 });
 
 function renderizarItensReqCompleta() {
@@ -8536,6 +8572,7 @@ function renderizarItensReqCompleta() {
                 <td class="num">${item.qtd}</td>
                 <td class="num">${formatarMoeda(item.valorUnit)}</td>
                 <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.tag || '')}" data-tag-item-req="${idx}" style="width:80px;"></td>
+                <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.responsavel || '')}" data-responsavel-item-req="${idx}" style="width:100px;"></td>
                 <td><select class="input-tag-evento" data-setor-item-req="${idx}" style="padding:6px;">${optSetorLinha}</select></td>
                 <td><select class="input-tag-evento" data-almoxarifado-item-req="${idx}" style="padding:6px;">${optAlmoxarifadoLinha}</select></td>
                 <td><select class="input-tag-evento" data-planocontas-item-req="${idx}" style="padding:6px; max-width:160px;">${optPlanoContasLinha}</select></td>
@@ -8565,6 +8602,11 @@ function renderizarItensReqCompleta() {
     corpo.querySelectorAll('[data-tag-item-req]').forEach(inp => {
         inp.addEventListener('change', () => {
             itensReqCompleta[Number(inp.dataset.tagItemReq)].tag = inp.value.trim();
+        });
+    });
+    corpo.querySelectorAll('[data-responsavel-item-req]').forEach(inp => {
+        inp.addEventListener('change', () => {
+            itensReqCompleta[Number(inp.dataset.responsavelItemReq)].responsavel = inp.value.trim().toUpperCase();
         });
     });
     corpo.querySelectorAll('[data-setor-item-req]').forEach(sel => {
@@ -8643,7 +8685,7 @@ document.getElementById('btnConfirmarRequisicaoCompleta').addEventListener('clic
             await chamarPost('registrarMovimentacao', {
                 movimentacao: {
                     data, produtoId: item.produtoId, qtd: item.qtd, valorUnit: item.valorUnit, tipo: 'saida',
-                    responsavel, evento,
+                    responsavel: item.responsavel || responsavel, evento,
                     tag: item.tag || '',
                     observacao: 'Requisição de saída',
                     estoqueNotaId: notaId,
