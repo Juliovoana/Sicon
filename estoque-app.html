@@ -570,8 +570,20 @@
                 <input type="text" id="buscaItemProjeto" placeholder="Digite código ou descrição do produto...">
                 <button class="btn btn-azul" id="btnBuscarItemProjeto">Buscar</button>
                 <button class="btn btn-cinza btn-pequeno" id="btnSincronizarProdutoReq" title="Recarrega a lista de produtos (pra achar produtos criados agora há pouco)">🔄</button>
+                <button class="btn btn-cinza" id="btnAbrirDescreverProduto" type="button">📝 Descrever produto</button>
             </div>
             <div id="resultadosBuscaItemProjeto"></div>
+        </div>
+        <div id="blocoDescreverProduto" style="display:none; margin-top:10px; padding:14px; border-radius:8px; background:#EAF2EE; border:1px solid #cfe3d8;">
+            <p style="margin-bottom:10px; font-size:0.9em;">Pro material que ainda não está cadastrado no estoque:</p>
+            <div class="grade col2">
+                <div class="campo"><label>Descrição do produto</label><input type="text" id="descreverProdutoTexto" placeholder="Ex: Parafuso sextavado 1/4 × 2..."></div>
+                <div class="campo"><label>Quantidade</label><input type="number" step="0.01" id="descreverProdutoQtd" value="1"></div>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:10px;">
+                <button class="btn btn-cinza" id="btnCancelarDescreverProduto" type="button" style="flex:1;">Cancelar</button>
+                <button class="btn btn-verde" id="btnConfirmarDescreverProduto" type="button" style="flex:1;">+ Adicionar</button>
+            </div>
         </div>
         <span class="status-msg" id="statusItemProjeto"></span>
 
@@ -1594,6 +1606,21 @@
 </div>
 
 <!-- ===================== MODAL / POPUP: Atender item ===================== -->
+<div class="modal-overlay" id="modalVincularProduto">
+    <div class="modal-caixa" style="max-width:520px;">
+        <h3>Vincular a um produto cadastrado</h3>
+        <p id="modalVincularDescricaoAvulsa" style="margin:8px 0 14px; padding:10px 12px; background:#F5F6FA; border-radius:8px; font-size:0.9em;"></p>
+        <p style="font-size:0.85em; color:var(--muted); margin-bottom:8px;">Esse item foi pedido só por descrição. Busque o produto já cadastrado que corresponde a ele (cadastre primeiro na aba Estoque, se ainda não existir):</p>
+        <div style="position:relative;">
+            <input type="text" id="buscaVincularProduto" placeholder="Digite código ou descrição do produto...">
+            <div id="resultadosBuscaVincularProduto"></div>
+        </div>
+        <div style="text-align:right; margin-top:14px;">
+            <button class="btn btn-cinza" id="btnFecharModalVincularProduto">Fechar</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal-overlay" id="modalAtender">
     <div class="modal-caixa">
         <h4 style="margin-top:0;">Registrar atendimento</h4>
@@ -2317,7 +2344,7 @@ async function chamarPost(acao, d) {
     if (acao === 'adicionarItemProjeto') {
         const it = d.item;
         const { data, error } = await sb.from('fabrica_itens_projeto').insert({
-            projeto_id: it.projetoId, produto_id: it.produtoId, qtd_requisitada: it.qtdRequisitada,
+            projeto_id: it.projetoId, produto_id: it.produtoId || null, descricao_avulsa: it.descricaoAvulsa || null, qtd_requisitada: it.qtdRequisitada,
             responsavel: it.responsavel || '', observacao: it.observacao || '', tag: it.tag || '', evento: it.evento || '',
             segmento: it.segmento || '',
             valor_unitario: it.valorUnitario != null ? it.valorUnitario : null,
@@ -2325,6 +2352,19 @@ async function chamarPost(acao, d) {
             estoque_disponivel_no_momento: it.estoqueDisponivelNoMomento != null ? it.estoqueDisponivelNoMomento : null,
             unidade_negocio_id: meuPerfil.unidadeId
         }).select().single();
+        if (error) throw error;
+        return data;
+    }
+    if (acao === 'vincularProdutoItemAvulso') {
+        // liga um item que tinha sido pedido só por descrição (sem
+        // produto cadastrado) a um produto real, depois que ele foi
+        // cadastrado no estoque -- a partir daqui, o item se comporta
+        // como qualquer outro item normal (com controle de estoque de
+        // verdade)
+        const { data, error } = await sb.from('fabrica_itens_projeto')
+            .update({ produto_id: d.produtoId, descricao_avulsa: null })
+            .eq('id', d.itemId)
+            .select().single();
         if (error) throw error;
         return data;
     }
@@ -2472,7 +2512,8 @@ async function carregarProjetos() {
         itens: (p.itens || []).map(i => ({
             id: Number(i.id),
             projetoId: Number(i.projeto_id),
-            produtoId: Number(i.produto_id),
+            produtoId: i.produto_id != null ? Number(i.produto_id) : null,
+            descricaoAvulsa: i.descricao_avulsa || null,
             qtdRequisitada: Number(i.qtd_requisitada) || 0,
             responsavel: i.responsavel || '',
             observacao: i.observacao || '',
@@ -4521,20 +4562,24 @@ function renderizarRequisicao(id) {
         const travadoAtender = (proj.status || 'em_construcao') === 'finalizado';
         ordenarItensRequisicao(proj.itens).forEach(item => {
             const prod = produtos.find(p => p.id === item.produtoId);
+            const ehAvulso = !item.produtoId;
             const ent = entreguePorItem(item.id);
             const valorReferencia = item.valorUnitario != null ? item.valorUnitario : (prod ? prod.valor : 0);
             const subtotal = item.qtdRequisitada * valorReferencia;
             totalPedido += subtotal;
             let classeBadge = '';
             if (ent >= item.qtdRequisitada && item.qtdRequisitada > 0) classeBadge = ent > item.qtdRequisitada ? 'excedido' : 'completo';
-            const saldoAtualItem = almoxarifadoTrabalho ? saldoDoProdutoNoAlmoxarifado(item.produtoId, almoxarifadoTrabalho) : null;
-            const estoqueAtualNum = almoxarifadoTrabalho ? (saldoAtualItem ? Number(saldoAtualItem.estoque) : 0) : (prod ? Number(prod.estoque) : null);
+            const saldoAtualItem = (!ehAvulso && almoxarifadoTrabalho) ? saldoDoProdutoNoAlmoxarifado(item.produtoId, almoxarifadoTrabalho) : null;
+            const estoqueAtualNum = ehAvulso ? null : (almoxarifadoTrabalho ? (saldoAtualItem ? Number(saldoAtualItem.estoque) : 0) : (prod ? Number(prod.estoque) : null));
             const diferencaEstoque = (item.estoqueDisponivelNoMomento != null && estoqueAtualNum != null) ? estoqueAtualNum - Number(item.estoqueDisponivelNoMomento) : null;
             const corDiferenca = diferencaEstoque == null ? '' : (diferencaEstoque < 0 ? 'color:var(--danger);' : (diferencaEstoque > 0 ? 'color:var(--brand-2);' : ''));
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${prod ? prod.id : item.produtoId}</td>
-                <td>${prod ? escapeHtml(prod.nome) : ('#' + item.produtoId)}${item.posAprovacao ? ' <span class="pill" style="background:#FFF3E0; color:#E65100; font-size:0.65rem;" title="Adicionado depois que o projeto já estava aprovado">pós-aprovação</span>' : ''}</td>
+                <td>${ehAvulso ? '—' : (prod ? prod.id : item.produtoId)}</td>
+                <td>${ehAvulso
+                    ? `${escapeHtml(item.descricaoAvulsa || '')} <span class="pill" style="background:#FBEAE8; color:#C0392B; font-size:0.65rem;" title="Ainda não tem produto cadastrado -- vincule na hora de atender">avulso</span>`
+                    : (prod ? escapeHtml(prod.nome) : ('#' + item.produtoId))
+                }${item.posAprovacao ? ' <span class="pill" style="background:#FFF3E0; color:#E65100; font-size:0.65rem;" title="Adicionado depois que o projeto já estava aprovado">pós-aprovação</span>' : ''}</td>
                 <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.tag)}" data-tag-item="${item.id}"></td>
                 <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.evento)}" data-evento-item="${item.id}"></td>
                 <td><input type="text" class="input-tag-evento" value="${escapeHtml(item.segmento || '')}" data-segmento-item="${item.id}" placeholder="Ex: Estrutura, Gesso..." style="min-width:110px;"></td>
@@ -4572,6 +4617,8 @@ function renderizarRequisicao(id) {
         corpo.querySelectorAll('[data-atender]').forEach(btn => {
             btn.addEventListener('click', () => {
                 if (travadoAtender) { alert('Esse projeto está finalizado — não é mais possível lançar baixa de material.'); return; }
+                const itemClicado = proj.itens.find(i => i.id === Number(btn.dataset.atender));
+                if (itemClicado && !itemClicado.produtoId) { abrirModalVincularProduto(itemClicado.id); return; }
                 abrirModalAtender(Number(btn.dataset.atender));
             });
         });
@@ -4882,6 +4929,67 @@ document.getElementById('buscaItemProjeto').addEventListener('input', () => {
     const termo = document.getElementById('buscaItemProjeto').value;
     if (termo.trim()) renderizarResultadosBusca('resultadosBuscaItemProjeto', termo, adicionarProdutoAoProjeto);
     else document.getElementById('resultadosBuscaItemProjeto').classList.remove('aberto');
+});
+
+// ---------------------------------------------------------------
+// DESCREVER PRODUTO -- pro material que ainda não está cadastrado no
+// estoque. Entra na requisição só com descrição + quantidade, sem
+// produto_id (nem preço/estoque, que não existem ainda). Depois que o
+// produto for cadastrado de verdade, dá pra vincular esse item a ele
+// (ver renderizarRequisicao / abrirModalAtender).
+// ---------------------------------------------------------------
+document.getElementById('btnAbrirDescreverProduto').addEventListener('click', () => {
+    document.getElementById('resultadosBuscaItemProjeto').classList.remove('aberto');
+    document.getElementById('descreverProdutoTexto').value = '';
+    document.getElementById('descreverProdutoQtd').value = 1;
+    document.getElementById('blocoDescreverProduto').style.display = 'block';
+    document.getElementById('descreverProdutoTexto').focus();
+});
+document.getElementById('btnCancelarDescreverProduto').addEventListener('click', () => {
+    document.getElementById('blocoDescreverProduto').style.display = 'none';
+});
+document.getElementById('btnConfirmarDescreverProduto').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusItemProjeto');
+    const proj = projetos.find(x => x.id === projetoAtualId);
+    if (!proj) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Selecione um projeto antes de adicionar produtos.'; return; }
+    if ((proj.status || 'em_construcao') === 'finalizado') { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Esse projeto está finalizado — não é mais possível adicionar itens.'; return; }
+
+    const descricao = document.getElementById('descreverProdutoTexto').value.trim().toUpperCase();
+    const qtd = parseFloat(document.getElementById('descreverProdutoQtd').value);
+    if (!descricao) { alert('Descreva o produto.'); return; }
+    if (!qtd || qtd <= 0) { alert('Informe uma quantidade válida.'); return; }
+
+    const btn = document.getElementById('btnConfirmarDescreverProduto');
+    btn.disabled = true;
+    btn.textContent = 'Salvando...';
+    try {
+        const tagAtual = document.getElementById('cabTag').value.trim();
+        const eventoAtual = eventoSelecionadoAtual ? eventoSelecionadoAtual.codigo : '';
+        await chamarPost('adicionarItemProjeto', {
+            item: {
+                projetoId: projetoAtualId,
+                produtoId: null,
+                descricaoAvulsa: descricao,
+                qtdRequisitada: qtd,
+                tag: tagAtual,
+                evento: eventoAtual,
+                posAprovacao: (proj.status || 'em_construcao') === 'aprovado'
+            }
+        });
+        await carregarProjetos();
+        atualizarTagContagem();
+        document.getElementById('blocoDescreverProduto').style.display = 'none';
+        statusEl.className = 'status-msg sucesso';
+        statusEl.textContent = '✅ Item avulso adicionado — vincule a um produto cadastrado quando for atender.';
+        renderizarRequisicao(projetoAtualId);
+        renderizarListaProjetos();
+    } catch (err) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Erro ao adicionar: ' + err.message;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '+ Adicionar';
+    }
 });
 
 let produtoPendenteAdicionar = null;
@@ -5259,6 +5367,43 @@ document.getElementById('btnConfirmarQtdInicial').addEventListener('click', asyn
    (abre uma janela indicando a quantidade atendida e quem retirou;
    ao confirmar, grava a operação na tabela de movimentação)
    ============================================================ */
+let itemAvulsoAtualVinculoId = null;
+
+function abrirModalVincularProduto(itemId) {
+    const proj = projetos.find(p => p.id === projetoAtualId);
+    const item = proj.itens.find(i => i.id === itemId);
+    itemAvulsoAtualVinculoId = itemId;
+    document.getElementById('modalVincularDescricaoAvulsa').innerHTML =
+        `<strong>${escapeHtml(item.descricaoAvulsa || '')}</strong> — quantidade pedida: ${item.qtdRequisitada}`;
+    document.getElementById('buscaVincularProduto').value = '';
+    document.getElementById('resultadosBuscaVincularProduto').innerHTML = '';
+    document.getElementById('resultadosBuscaVincularProduto').classList.remove('aberto');
+    document.getElementById('modalVincularProduto').classList.add('aberto');
+    document.getElementById('buscaVincularProduto').focus();
+}
+document.getElementById('buscaVincularProduto').addEventListener('input', () => {
+    const termo = document.getElementById('buscaVincularProduto').value;
+    if (termo.trim()) {
+        renderizarResultadosBusca('resultadosBuscaVincularProduto', termo, async (p) => {
+            if (!confirm(`Vincular esse item avulso ao produto "${p.nome}" (#${p.id})?`)) return;
+            try {
+                await chamarPost('vincularProdutoItemAvulso', { itemId: itemAvulsoAtualVinculoId, produtoId: p.id });
+                await carregarProjetos();
+                document.getElementById('modalVincularProduto').classList.remove('aberto');
+                renderizarRequisicao(projetoAtualId);
+                renderizarListaProjetos();
+            } catch (err) {
+                alert('Erro ao vincular: ' + err.message);
+            }
+        });
+    } else {
+        document.getElementById('resultadosBuscaVincularProduto').classList.remove('aberto');
+    }
+});
+document.getElementById('btnFecharModalVincularProduto').addEventListener('click', () => {
+    document.getElementById('modalVincularProduto').classList.remove('aberto');
+});
+
 async function abrirModalAtender(itemId) {
     const proj = projetos.find(p => p.id === projetoAtualId);
     const item = proj.itens.find(i => i.id === itemId);
@@ -6596,8 +6741,8 @@ async function abrirModalEditarMovimentacaoGeral(movId) {
         if (error) throw error;
 
         movGeralEmEdicaoId = movId;
-        movGeralOriginal = { ...mov, nomeProduto: prod ? prod.nome : '#' + mov.produto_id };
         const prod = produtos.find(p => p.id === mov.produto_id);
+        movGeralOriginal = { ...mov, nomeProduto: prod ? prod.nome : '#' + mov.produto_id };
         document.getElementById('editMovGeralInfo').textContent =
             `${mov.tipo === 'entrada' ? 'Entrada' : 'Saída'} · ${prod ? prod.nome : '#' + mov.produto_id} · ${formatarData(mov.data)}`;
         document.getElementById('editMovGeralQtd').value = mov.qtd;
@@ -7933,13 +8078,20 @@ function construirDadosInventario(mostrarSemEstoque) {
 function construirPdfInventario(dados, nomeAlmoxarifado) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
+    // sem "R$" nas células da tabela -- só o número, pra caber numa
+    // linha só (a tabela tem muita coluna apertada nessa)
+    const numSemMoeda = (v) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     doc.setFontSize(16);
     doc.text('Inventário de Estoque', 14, 18);
     doc.setFontSize(10);
     doc.text(`Almoxarifado: ${nomeAlmoxarifado}`, 14, 26);
     doc.text(`Relatório emitido em: ${hojeISO()}`, 14, 32);
+    doc.setFontSize(8);
+    doc.setTextColor(120);
+    doc.text('Valores em R$', 14, 37);
+    doc.setTextColor(0);
 
-    let y = 40;
+    let y = 44;
     dados.grupos.forEach(grupo => {
         if (y > 265) { doc.addPage(); y = 20; }
         doc.setFontSize(11);
@@ -7952,10 +8104,10 @@ function construirPdfInventario(dados, nomeAlmoxarifado) {
             it.produto.nome,
             it.produto.un || 'UN',
             Number(it.estoque).toLocaleString('pt-BR'),
-            formatarMoeda(it.valorCadastrado),
-            formatarMoeda(it.precoMedio),
-            formatarMoeda(it.precoUltimaCompra),
-            formatarMoeda(it.totalCadastrado)
+            numSemMoeda(it.valorCadastrado),
+            numSemMoeda(it.precoMedio),
+            numSemMoeda(it.precoUltimaCompra),
+            numSemMoeda(it.totalCadastrado)
         ]);
 
         doc.autoTable({
@@ -7964,6 +8116,10 @@ function construirPdfInventario(dados, nomeAlmoxarifado) {
             body: corpo,
             styles: { fontSize: 8 },
             headStyles: { fillColor: [27, 67, 50] },
+            columnStyles: {
+                2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' },
+                5: { halign: 'right' }, 6: { halign: 'right' }
+            },
             margin: { left: 14, right: 14 }
         });
         y = doc.lastAutoTable.finalY + 4;
