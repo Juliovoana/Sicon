@@ -1011,10 +1011,10 @@
 <!-- ===================== MODAL / POPUP: Histórico do produto ===================== -->
 <!-- ===================== MODAL / POPUP: Baixa direta (sem projeto) ===================== -->
 <!-- ===================== MODAL / POPUP: Importar NF-e (XML) ===================== -->
-<div class="modal-overlay" id="modalVincularNotasParciais">
+<div class="modal-overlay" id="modalVincularNotasParciais" style="z-index:1200;">
     <div class="modal-caixa" style="max-width:560px;">
         <h3>Vincular a notas já lançadas</h3>
-        <p style="font-size:0.85em; color:var(--muted); margin:6px 0 12px;">Notas de entrada lançadas manualmente (sem XML) desse mesmo produto, que ainda não estão ligadas a nenhuma NF-e. Marque as que correspondem ao recebimento parcial já feito — elas continuam contando pro estoque normalmente, só a quantidade delas deixa de ser lançada de novo por essa NF-e.</p>
+        <p style="font-size:0.85em; color:var(--muted); margin:6px 0 12px;">Notas de entrada lançadas manualmente (sem XML) desse mesmo produto, que ainda não estão ligadas a nenhuma NF-e. Marque as que correspondem ao recebimento parcial já feito — a quantidade delas continua contando pro estoque normalmente (não duplica), e o <strong>preço dessas unidades é corrigido pro preço oficial da NF-e</strong> (o preço provisório usado antes deixa de valer, já que a NF-e é o documento definitivo).</p>
         <div id="listaNotasParciaisDisponiveis" style="max-height:45vh; overflow:auto;"></div>
         <p id="statusVincularNotasParciais" style="font-size:0.85em; margin-top:10px;"></p>
         <div style="text-align:right; margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
@@ -2292,10 +2292,27 @@ async function chamarPost(acao, d) {
         }));
     }
     if (acao === 'vincularNotasParciaisNfe') {
-        const { error } = await sb.from('estoque_notas')
+        const { error: eLink } = await sb.from('estoque_notas')
             .update({ nota_definitiva_id: d.notaDefinitivaId })
             .in('id', d.notasParciaisIds);
-        if (error) throw error;
+        if (eLink) throw eLink;
+
+        // a NF-e é o documento definitivo -- corrige o preço das
+        // movimentações que já tinham sido lançadas na(s) nota(s)
+        // provisória(s) pro preço oficial, e reprocessa pra recalcular
+        // o preço médio já considerando essa correção (senão a média
+        // fica misturando o preço provisório com o oficial)
+        const { error: eCorrige } = await sb.from('estoque_movimentacoes')
+            .update({ valor_unit: d.valorUnitDefinitivo, valor_unit_original: d.valorUnitDefinitivo })
+            .in('estoque_nota_id', d.notasParciaisIds)
+            .eq('produto_id', d.produtoId)
+            .eq('tipo', 'entrada');
+        if (eCorrige) throw eCorrige;
+
+        const { error: eReproc } = await sb.rpc('fn_estoque_reprocessar_movimentos', {
+            p_unidade_negocio_id: meuPerfil.unidadeId, p_produto_id: d.produtoId, p_almoxarifado_id: d.almoxarifadoId || null
+        });
+        if (eReproc) throw eReproc;
         return;
     }
     if (acao === 'salvarNotaFiscal') {
@@ -3078,9 +3095,13 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
             ? (Number(saldoAntigoDoAlmoxarifado.estoqueInicial) !== novoEstoqueInicial || (saldoAntigoDoAlmoxarifado.valorEstoqueInicial ?? null) !== novoValorEstoqueInicial)
             : (novoEstoqueInicial !== 0 || novoValorEstoqueInicial !== null))) {
             const { error: eSaldoInicial } = await sb.from('estoque_saldo_almoxarifado')
-                .update({ estoque_inicial: novoEstoqueInicial, valor_estoque_inicial: novoValorEstoqueInicial })
-                .eq('produto_id', p.id)
-                .eq('almoxarifado_id', almoxarifadoSelecionadoEditProduto.id);
+                .upsert({
+                    unidade_negocio_id: meuPerfil.unidadeId,
+                    produto_id: p.id,
+                    almoxarifado_id: almoxarifadoSelecionadoEditProduto.id,
+                    estoque_inicial: novoEstoqueInicial,
+                    valor_estoque_inicial: novoValorEstoqueInicial
+                }, { onConflict: 'produto_id,almoxarifado_id' });
             if (eSaldoInicial) throw eSaldoInicial;
 
             const { error: eReproc } = await sb.rpc('fn_estoque_reprocessar_movimentos', {
@@ -3105,9 +3126,12 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
         const precoMedioRealmenteMudou = novoPrecoMedio !== null && Math.abs((novoPrecoMedio || 0) - (precoMedioOriginalDoAlmoxarifado || 0)) > 0.001;
         if (precoMedioRealmenteMudou && almoxarifadoSelecionadoEditProduto) {
             const { error: eSaldo } = await sb.from('estoque_saldo_almoxarifado')
-                .update({ preco_medio: novoPrecoMedio })
-                .eq('produto_id', p.id)
-                .eq('almoxarifado_id', almoxarifadoSelecionadoEditProduto.id);
+                .upsert({
+                    unidade_negocio_id: meuPerfil.unidadeId,
+                    produto_id: p.id,
+                    almoxarifado_id: almoxarifadoSelecionadoEditProduto.id,
+                    preco_medio: novoPrecoMedio
+                }, { onConflict: 'produto_id,almoxarifado_id' });
             if (eSaldo) throw eSaldo;
 
             // só recalcula o AGREGADO (média ponderada entre os
@@ -3665,7 +3689,7 @@ function renderizarTabelaNFe() {
             <td><input type="text" class="input-qtd-pedida" value="${escapeHtml(item.un)}" data-nfe-unidade="${idx}" style="width:70px;"></td>
             <td class="num">
                 <input type="number" step="0.01" class="input-qtd-pedida" value="${item.qtd}" data-nfe-qtd="${idx}">
-                ${item.notasParciaisVinculadas.length ? `<div style="font-size:0.72em; color:#1565c0; margin-top:2px;">🔗 ${item.qtdJaCoberta} já coberto — entra só ${Math.max(0, item.qtd - item.qtdJaCoberta)}</div>` : ''}
+                ${item.notasParciaisVinculadas.length ? `<div style="font-size:0.72em; color:#1565c0; margin-top:2px;">🔗 ${item.qtdJaCoberta} já coberto (preço será corrigido pro oficial) — entra só ${Math.max(0, item.qtd - item.qtdJaCoberta)}</div>` : ''}
             </td>
             <td class="num">
                 <input type="number" step="0.01" class="input-qtd-pedida" value="${item.valorUnit}" data-nfe-valor="${idx}">
@@ -3986,13 +4010,18 @@ async function processarImportacaoNFe(tipo) {
             }
 
             // se essa nota tem notas parciais vinculadas (recebimento já
-            // lançado manualmente aos poucos), liga elas à nota definitiva
-            // e só lança a diferença -- evita duplicar estoque
+            // lançado manualmente aos poucos), liga elas à nota definitiva,
+            // corrige o preço do que já foi lançado pro preço oficial da
+            // NF-e (documento definitivo -- não o provisório), e só lança
+            // a diferença de quantidade -- evita duplicar estoque
             let qtdALancar = item.qtd;
             if (tipo === 'entrada' && item.notasParciaisVinculadas.length && estoqueNotaId) {
                 await chamarPost('vincularNotasParciaisNfe', {
                     notaDefinitivaId: estoqueNotaId,
-                    notasParciaisIds: item.notasParciaisVinculadas
+                    notasParciaisIds: item.notasParciaisVinculadas,
+                    produtoId,
+                    valorUnitDefinitivo: item.valorUnit,
+                    almoxarifadoId: item.almoxarifadoId
                 });
                 qtdALancar = Math.max(0, item.qtd - item.qtdJaCoberta);
             }
