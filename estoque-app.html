@@ -4595,9 +4595,15 @@ function renderizarRequisicao(id) {
                 <td class="num"><input type="number" step="0.01" class="input-qtd-pedida" value="${item.qtdRequisitada}" data-qtd-item="${item.id}" ${travado ? 'disabled title="Projeto não está mais em construção"' : ''}></td>
                 <td class="center"><span class="badge-atendido ${classeBadge}" data-atender="${item.id}" style="${travadoAtender ? 'opacity:0.5; cursor:not-allowed;' : 'cursor:pointer;'}" title="${travadoAtender ? 'Projeto finalizado — não é mais possível lançar baixa' : ''}">${ent}</span></td>
                 <td class="num">${formatarMoeda(subtotal)}</td>
-                <td class="center">${travado ? '' : `<button class="btn btn-vermelho btn-pequeno" data-remover-item="${item.id}">×</button>`}</td>
+                <td class="center">
+                    ${ehAvulso ? `<button class="btn btn-cinza btn-pequeno" data-vincular-item="${item.id}" title="Vincular a um produto cadastrado no estoque">🔗 Vincular</button>` : ''}
+                    ${travado ? '' : `<button class="btn btn-vermelho btn-pequeno" data-remover-item="${item.id}">×</button>`}
+                </td>
             `;
             corpo.appendChild(tr);
+        });
+        corpo.querySelectorAll('[data-vincular-item]').forEach(btn => {
+            btn.addEventListener('click', () => abrirModalVincularProduto(Number(btn.dataset.vincularItem)));
         });
         corpo.querySelectorAll('[data-remover-item]').forEach(btn => {
             btn.addEventListener('click', async () => {
@@ -6182,8 +6188,8 @@ function construirPdfProjetoResumo(proj) {
 
         const itensDoGrupo = gruposMap[nomeSegmento];
         const corpo = itensDoGrupo.map(l => [
-            l.prod ? l.prod.id : l.item.produtoId,
-            l.prod ? l.prod.nome : '-',
+            l.prod ? l.prod.id : (l.item.descricaoAvulsa ? '—' : l.item.produtoId),
+            l.prod ? l.prod.nome : (l.item.descricaoAvulsa ? l.item.descricaoAvulsa + ' (avulso)' : '-'),
             l.item.tag || '-',
             l.item.evento || '-',
             formatarMoeda(l.valorReferencia),
@@ -6230,7 +6236,7 @@ function construirPdfProjetoDetalhado(proj) {
         if (y > 255) { doc.addPage(); y = 20; }
         doc.setFontSize(10);
         doc.setFont(undefined, 'bold');
-        doc.text(`${l.prod ? l.prod.id : l.item.produtoId} — ${l.prod ? l.prod.nome : ''}`, 14, y);
+        doc.text(l.prod ? `${l.prod.id} — ${l.prod.nome}` : (l.item.descricaoAvulsa ? `${l.item.descricaoAvulsa} (avulso)` : `${l.item.produtoId} — `), 14, y);
         doc.setFont(undefined, 'normal');
         y += 5;
         doc.setFontSize(9);
@@ -6272,8 +6278,8 @@ function construirPdfProjetoDetalhado(proj) {
 
 function construirDadosExcelProjetoResumo(proj) {
     return itensComDadosProjeto(proj).map(l => ({
-        'Código': l.prod ? l.prod.id : l.item.produtoId,
-        'Descrição': l.prod ? l.prod.nome : '',
+        'Código': l.prod ? l.prod.id : (l.item.descricaoAvulsa ? '—' : l.item.produtoId),
+        'Descrição': l.prod ? l.prod.nome : (l.item.descricaoAvulsa ? l.item.descricaoAvulsa + ' (avulso)' : ''),
         'Tag': l.item.tag || '',
         'Evento': l.item.evento || '',
         'Valor Unit.': l.valorReferencia,
@@ -6290,8 +6296,8 @@ function construirDadosExcelProjetoDetalhado(proj) {
     itensComDadosProjeto(proj).forEach(l => {
         const atendimentos = atendimentosDoItem(l.item.id);
         const base = {
-            'Código': l.prod ? l.prod.id : l.item.produtoId,
-            'Descrição': l.prod ? l.prod.nome : '',
+            'Código': l.prod ? l.prod.id : (l.item.descricaoAvulsa ? '—' : l.item.produtoId),
+            'Descrição': l.prod ? l.prod.nome : (l.item.descricaoAvulsa ? l.item.descricaoAvulsa + ' (avulso)' : ''),
             'Tag': l.item.tag || '',
             'Evento': l.item.evento || '',
             'Valor Unit.': l.valorReferencia,
