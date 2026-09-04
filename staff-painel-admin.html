@@ -825,9 +825,19 @@
         <button class="drawer-close" id="btnFecharModalCartazX">✕</button>
       </div>
       <div class="modal-lista-body" style="padding:20px;">
+        <div id="avisoSemLogoCartaz" style="display:none; background:#FFF3E0; color:#8A5E12; border-radius:8px; padding:10px 12px; font-size:.82rem; margin-bottom:12px;">
+          ⚠️ Essa unidade ainda não tem um logotipo cadastrado — o cartaz vai sair sem logo. Pra adicionar, vá em <strong>Servir Central → Dados da unidade</strong>.
+        </div>
         <div class="field-group">
           <label>Mês</label>
           <select id="cartaz_mes"></select>
+        </div>
+        <div class="field-group">
+          <label>Cor do cartaz</label>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <input type="color" id="cartaz_cor" value="#1B4B91" style="width:44px; height:38px; padding:2px; border:1px solid var(--border); border-radius:8px; cursor:pointer;">
+            <input type="text" id="cartaz_cor_hex" value="#1B4B91" style="flex:1;">
+          </div>
         </div>
         <p style="font-size:.82rem; color:var(--muted); margin:10px 0 6px;">Desmarque quem não deve entrar no cartaz dessa vez:</p>
         <div id="listaSelecaoCartaz" style="max-height:38vh; overflow:auto; border:1px solid var(--border); border-radius:8px; padding:6px;"></div>
@@ -846,7 +856,7 @@
         <button class="drawer-close" id="btnFecharModalResultadoCartazX">✕</button>
       </div>
       <div class="modal-lista-body" style="padding:20px;">
-        <div id="previewResultadoCartaz" style="margin:0 0 12px; text-align:center;"></div>
+        <div id="previewResultadoCartaz" style="margin:0 0 12px; text-align:center; max-height:45vh; overflow:auto;"></div>
         <div style="display:flex; gap:8px; margin-top:10px;">
           <button class="btn-acao" id="btnVerCartaz" style="flex:1; justify-content:center;">👁 Visualizar</button>
           <button class="btn-acao" id="btnBaixarCartaz" style="flex:1; justify-content:center;">📄 Baixar</button>
@@ -1670,7 +1680,21 @@
     selectMes.value = String(new Date().getMonth() + 1);
     renderizarSelecaoCartaz();
     selectMes.addEventListener('change', renderizarSelecaoCartaz);
+
+    const avisoLogo = document.getElementById('avisoSemLogoCartaz');
+    avisoLogo.style.display = (personalizacaoAtual && personalizacaoAtual.logo_url) ? 'none' : 'block';
+
+    const corPadrao = (personalizacaoAtual && personalizacaoAtual.cor_principal) || '#1B4B91';
+    document.getElementById('cartaz_cor').value = corPadrao;
+    document.getElementById('cartaz_cor_hex').value = corPadrao;
+
     document.getElementById('modalCartazAniversario').classList.add('show');
+  });
+  document.getElementById('cartaz_cor').addEventListener('input', (e) => {
+    document.getElementById('cartaz_cor_hex').value = e.target.value;
+  });
+  document.getElementById('cartaz_cor_hex').addEventListener('input', (e) => {
+    if(/^#[0-9a-fA-F]{6}$/.test(e.target.value)) document.getElementById('cartaz_cor').value = e.target.value;
   });
   document.getElementById('btnFecharModalCartaz').addEventListener('click', () => {
     document.getElementById('modalCartazAniversario').classList.remove('show');
@@ -1694,6 +1718,7 @@
   async function converterImagemParaBase64(url){
     try{
       const resposta = await fetch(url);
+      if(!resposta.ok) throw new Error('resposta ' + resposta.status);
       const blob = await resposta.blob();
       return await new Promise((resolve, reject) => {
         const leitor = new FileReader();
@@ -1702,7 +1727,8 @@
         leitor.readAsDataURL(blob);
       });
     } catch(erro){
-      return null; // sem foto -- o cartaz usa as iniciais no lugar
+      console.warn('Não consegui carregar essa imagem pro cartaz (' + url + '): ' + erro.message);
+      return null; // sem foto/logo -- o cartaz segue sem ela, sem travar
     }
   }
 
@@ -1724,10 +1750,11 @@
       })));
       const logoBase64 = (personalizacaoAtual && personalizacaoAtual.logo_url) ? await converterImagemParaBase64(personalizacaoAtual.logo_url) : null;
       const nomeUnidade = (personalizacaoAtual && personalizacaoAtual.nome) || '';
+      const corEscolhida = document.getElementById('cartaz_cor').value || '#1B4B91';
 
       const palco = document.createElement('div');
       palco.style.cssText = 'position:fixed; left:-9999px; top:0; width:900px;';
-      palco.innerHTML = construirHtmlCartaz(comFotoBase64, NOMES_MES[mes - 1], nomeUnidade, logoBase64);
+      palco.innerHTML = construirHtmlCartaz(comFotoBase64, NOMES_MES[mes - 1], nomeUnidade, logoBase64, corEscolhida);
       document.body.appendChild(palco);
 
       await new Promise(r => setTimeout(r, 60)); // dá um respiro pro layout assentar antes do print
@@ -1744,13 +1771,18 @@
     }
   });
 
-  function construirHtmlCartaz(pessoas, nomeMes, nomeUnidade, logoBase64){
+  function construirHtmlCartaz(pessoas, nomeMes, nomeUnidade, logoBase64, corPrincipal){
+    const cor = corPrincipal || '#1B4B91';
+    const corClara1 = clarearCor(cor, 0.55);   // tom mais claro, pros balões de trás
+    const corClara2 = clarearCor(cor, 0.25);   // tom médio, pro balão intermediário
+    const corEscura = escurecerCor(cor, 0.15); // tom levemente mais escuro, pro contraste
+
     const cartao = (a) => `
       <div style="display:flex; flex-direction:column; align-items:center; width:190px;">
-        <div style="width:170px; height:170px; border-radius:14px; overflow:hidden; background:#EAF2EE; display:flex; align-items:center; justify-content:center; font-size:2.4rem; font-weight:700; color:var(--brand-2, #2D6A4F);">
+        <div style="width:170px; height:170px; border-radius:14px; overflow:hidden; background:${clarearCor(cor, 0.9)}; display:flex; align-items:center; justify-content:center; font-size:2.4rem; font-weight:700; color:${cor};">
           ${a.fotoBase64 ? `<img src="${a.fotoBase64}" style="width:100%; height:100%; object-fit:cover;">` : escapeHtml((a.nome || '').split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase())}
         </div>
-        <div style="margin-top:10px; background:#1B4B91; color:#fff; font-weight:700; padding:7px 18px; border-radius:20px; font-size:.95rem; white-space:nowrap;">${escapeHtml(a.nome)}</div>
+        <div style="margin-top:10px; background:${cor}; color:#fff; font-weight:700; padding:7px 18px; border-radius:20px; font-size:.95rem; white-space:nowrap;">${escapeHtml(a.nome)}</div>
         <div style="margin-top:6px; text-align:center; font-size:.82rem; color:#333; line-height:1.35;">
           ${String(a.dia).padStart(2, '0')} de ${nomeMes}${a.qualificacao ? '<br>' + escapeHtml(a.qualificacao) : ''}
         </div>
@@ -1758,13 +1790,17 @@
 
     return `
       <div style="position:relative; width:900px; background:#fff; padding:36px 40px 0; font-family:Arial, sans-serif; overflow:hidden; border-radius:18px; box-shadow:0 0 0 1px #eee;">
-        <svg width="150" height="150" style="position:absolute; top:-10px; left:-10px;"><ellipse cx="55" cy="55" rx="30" ry="38" fill="#BFE0F5" opacity="0.9"/><ellipse cx="100" cy="80" rx="26" ry="33" fill="#8FCBEA" opacity="0.9"/></svg>
-        <svg width="180" height="150" style="position:absolute; top:-10px; right:-10px;"><ellipse cx="120" cy="60" rx="32" ry="40" fill="#8FCBEA" opacity="0.9"/><ellipse cx="70" cy="90" rx="26" ry="33" fill="#1B4B91" opacity="0.85"/></svg>
+        <svg width="150" height="150" style="position:absolute; top:-10px; left:-10px;"><ellipse cx="55" cy="55" rx="30" ry="38" fill="${corClara1}" opacity="0.9"/><ellipse cx="100" cy="80" rx="26" ry="33" fill="${corClara2}" opacity="0.9"/></svg>
+        <svg width="180" height="150" style="position:absolute; top:-10px; right:-10px;"><ellipse cx="120" cy="60" rx="32" ry="40" fill="${corClara2}" opacity="0.9"/><ellipse cx="70" cy="90" rx="26" ry="33" fill="${cor}" opacity="0.85"/></svg>
 
         <div style="position:relative; text-align:center; padding-top:18px;">
-          ${logoBase64 ? `<img src="${logoBase64}" style="max-height:56px; max-width:220px; margin-bottom:14px;">` : ''}
-          ${nomeUnidade ? `<div style="font-size:1.1rem; font-weight:700; color:#1B4B91; margin-bottom:4px;">${escapeHtml(nomeUnidade)}</div>` : ''}
-          <div style="font-size:2.1rem; font-weight:800; color:#1B4B91; line-height:1.15;">Aniversariantes<br>do Mês</div>
+          ${(logoBase64 || nomeUnidade) ? `
+            <div style="display:inline-flex; align-items:center; gap:10px; margin-bottom:10px;">
+              ${logoBase64 ? `<img src="${logoBase64}" style="height:32px; width:32px; object-fit:contain;">` : ''}
+              ${nomeUnidade ? `<span style="font-size:1.05rem; font-weight:700; color:${corEscura};">${escapeHtml(nomeUnidade)}</span>` : ''}
+            </div>
+          ` : ''}
+          <div style="font-size:2.1rem; font-weight:800; color:${corEscura}; line-height:1.15;">Aniversariantes<br>do Mês</div>
         </div>
 
         <div style="position:relative; display:flex; flex-wrap:wrap; justify-content:center; gap:28px 20px; padding:34px 10px 50px;">
@@ -1772,8 +1808,8 @@
         </div>
 
         <svg width="900" height="70" style="position:relative; display:block; margin:0 -40px;" viewBox="0 0 900 70" preserveAspectRatio="none">
-          <path d="M0,35 C150,70 300,0 450,35 C600,70 750,0 900,35 L900,70 L0,70 Z" fill="#BFE0F5"/>
-          <path d="M0,50 C150,80 300,20 450,50 C600,80 750,20 900,50 L900,70 L0,70 Z" fill="#1B4B91"/>
+          <path d="M0,35 C150,70 300,0 450,35 C600,70 750,0 900,35 L900,70 L0,70 Z" fill="${corClara1}"/>
+          <path d="M0,50 C150,80 300,20 450,50 C600,80 750,20 900,50 L900,70 L0,70 Z" fill="${cor}"/>
         </svg>
       </div>`;
   }
@@ -4274,7 +4310,7 @@ Contratada: _______________________________`;
       };
       const { error } = await sb.from('servir_unidades_negocio').update(payload).eq('id', agenciaId);
       if(error) throw new Error(error.message);
-      personalizacaoAtual = payload;
+      personalizacaoAtual = { ...personalizacaoAtual, ...payload }; // mescla -- não perde logo_url/nome que já estavam carregados
       aplicarPersonalizacao(payload.cor_principal, payload.imagem_fundo_url);
       alert('Personalização salva!');
     } catch(erro){
