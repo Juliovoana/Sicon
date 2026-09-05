@@ -78,6 +78,7 @@
   .modal-body{padding:20px 24px;}
   .modal-close{background:none; border:none; font-size:1.2rem; cursor:pointer; color:var(--muted);}
   .abas-modal{display:flex; gap:4px; border-bottom:1px solid var(--border); margin:-20px -24px 18px; padding:0 24px;}
+  .abas-topo{display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:20px;}
   .aba-modal-btn{padding:11px 14px; border:none; background:none; font-family:inherit; font-size:.85rem; font-weight:600; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent;}
   .aba-modal-btn.on{color:var(--brand); border-bottom-color:var(--brand);}
   .aba-modal-conteudo{display:none;}
@@ -183,6 +184,7 @@
           <button class="aba-modal-btn on" data-aba-modal="status">Status</button>
           <button class="aba-modal-btn" data-aba-modal="pagamentos">Pagamentos</button>
           <button class="aba-modal-btn" data-aba-modal="modulos">Módulos</button>
+          <button class="aba-modal-btn" data-aba-modal="usuarios">Usuários</button>
         </div>
 
         <div class="aba-modal-conteudo on" id="abaStatus">
@@ -222,6 +224,11 @@
         <div class="aba-modal-conteudo" id="abaModulos">
           <p style="font-size:.82rem; color:var(--muted); margin-bottom:10px;">Desmarcar um módulo bloqueia o acesso de verdade — a unidade não consegue mais abrir aquele app.</p>
           <div class="lista-modulos" id="listaModulosToggle"></div>
+        </div>
+
+        <div class="aba-modal-conteudo" id="abaUsuarios">
+          <p style="font-size:.82rem; color:var(--muted); margin-bottom:10px;">Marcar como principal dá acesso administrativo completo a essa pessoa em todos os módulos dessa unidade.</p>
+          <div class="lista-modulos" id="listaUsuariosUnidade"></div>
         </div>
       </div>
     </div>
@@ -291,6 +298,7 @@
       u._modulosLiberados = (liberados || []).filter(l => l.unidade_negocio_id === u.id);
     });
 
+    await carregarUsuarios();
     renderizarResumo();
     renderizarTabela();
   }
@@ -361,6 +369,7 @@
 
     carregarPagamentos(id);
     renderizarTogglesModulos(u);
+    renderizarUsuariosDaUnidade(id);
 
     document.getElementById('modalUnidade').classList.add('show');
   }
@@ -500,6 +509,47 @@
       btn.disabled = false; btn.textContent = 'Salvar';
     }
   });
+
+  let todosUsuarios = [];
+
+  async function carregarUsuarios(){
+    const { data, error } = await sb.rpc('fn_listar_usuarios_plataforma');
+    if(error){ console.error('Erro ao carregar usuários:', error.message); return; }
+    todosUsuarios = data || [];
+  }
+
+  function renderizarUsuariosDaUnidade(unidadeId){
+    const doUnidade = todosUsuarios.filter(u => u.unidade_negocio_id === unidadeId);
+    const lista = document.getElementById('listaUsuariosUnidade');
+    if(!doUnidade.length){ lista.innerHTML = '<div class="vazio">Nenhum usuário vinculado a essa unidade.</div>'; return; }
+
+    lista.innerHTML = doUnidade.map(u => `
+      <label style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 4px; cursor:pointer; border-bottom:1px solid var(--border);">
+        <span>${escapeHtml(u.email)}</span>
+        <span style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" data-vinculo-id="${u.vinculo_id}" ${u.eh_principal ? 'checked' : ''} style="width:auto;">
+          ${u.eh_principal ? '<span class="pill pill-ativo">Principal</span>' : '<span style="color:var(--muted); font-size:.8rem;">Colaborador</span>'}
+        </span>
+      </label>`).join('');
+
+    lista.querySelectorAll('[data-vinculo-id]').forEach(chk => {
+      chk.addEventListener('change', async () => {
+        chk.disabled = true;
+        try{
+          const { error } = await sb.rpc('fn_definir_principal', { p_vinculo_id: chk.dataset.vinculoId, p_eh_principal: chk.checked });
+          if(error) throw new Error(error.message);
+          const registro = todosUsuarios.find(u => u.vinculo_id === chk.dataset.vinculoId);
+          if(registro) registro.eh_principal = chk.checked;
+          renderizarUsuariosDaUnidade(unidadeId);
+        } catch(erro){
+          alert('Erro ao atualizar: ' + erro.message);
+          chk.checked = !chk.checked;
+        } finally{
+          chk.disabled = false;
+        }
+      });
+    });
+  }
 
   checarSessao();
 </script>
