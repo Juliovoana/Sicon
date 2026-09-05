@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Servir — Central Administrativa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  :root{
+    --ink:#171E1A; --bg:#F6F7F9; --surface:#FFFFFF; --border:#E8EAED;
+    --muted:#6B7280; --brand:#1B4332; --brand-2:#2D6A4F; --brand-soft:#EAF2EE;
+    --accent:#F2A93B; --accent-ink:#8A5E12; --danger:#C0392B; --danger-soft:#FBEAE8;
+    --success-soft:#E8F3EC; --warn:#B7791F; --warn-soft:#FEF3D8;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-family:'Inter',sans-serif; background:var(--bg); color:var(--ink); min-height:100vh;}
+  h1,h2,h3{font-family:'Fraunces',serif;}
+  .mono{font-family:'JetBrains Mono',monospace;}
+
+  /* ---------- login ---------- */
+  #telaLogin{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px;}
+  .login-caixa{background:var(--surface); border-radius:16px; padding:36px; width:100%; max-width:400px; box-shadow:0 8px 28px rgba(20,30,50,.1);}
+  .login-caixa h1{font-size:1.3rem; color:var(--brand); margin-bottom:4px;}
+  .login-caixa p{color:var(--muted); font-size:.85rem; margin-bottom:20px;}
+  .campo{margin-bottom:14px;}
+  .campo label{display:block; font-size:.8rem; font-weight:600; color:var(--muted); margin-bottom:5px; text-transform:uppercase; letter-spacing:.02em;}
+  .campo input, .campo select{width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:8px; font-size:.92rem; font-family:inherit;}
+  .campo input:focus, .campo select:focus{outline:none; border-color:var(--brand-2);}
+  .btn{display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:10px 18px; border-radius:8px; border:none; font-weight:600; font-size:.9rem; cursor:pointer; font-family:inherit;}
+  .btn-primary{background:var(--brand); color:#fff; width:100%;}
+  .btn-primary:hover{background:var(--brand-2);}
+  .btn-secundario{background:var(--surface); color:var(--muted); border:1px solid var(--border);}
+  .btn-danger{background:var(--danger); color:#fff;}
+  .erro-msg{background:var(--danger-soft); color:var(--danger); padding:9px 12px; border-radius:8px; font-size:.82rem; margin-top:10px; display:none;}
+  .erro-msg.show{display:block;}
+
+  #telaSemAcesso{min-height:100vh; display:none; align-items:center; justify-content:center; text-align:center; padding:20px;}
+  #telaSemAcesso .caixa{background:var(--surface); border-radius:16px; padding:40px; max-width:420px;}
+
+  /* ---------- app ---------- */
+  #app{display:none;}
+  header{background:var(--brand); color:#fff; padding:16px 28px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;}
+  header h1{font-size:1.15rem;}
+  header .sub{font-size:.78rem; opacity:.7;}
+  main{max-width:1200px; margin:0 auto; padding:26px 20px;}
+
+  .resumo-cards{display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:14px; margin-bottom:24px;}
+  .resumo-card{background:var(--surface); border-radius:12px; padding:16px 18px; box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  .resumo-card .num{font-size:1.6rem; font-weight:700; font-family:'JetBrains Mono',monospace;}
+  .resumo-card .rotulo{font-size:.78rem; color:var(--muted); margin-top:2px;}
+
+  .filtros-topo{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px; justify-content:space-between;}
+  .filtros-topo input, .filtros-topo select{padding:9px 12px; border:1px solid var(--border); border-radius:8px; font-family:inherit; font-size:.85rem;}
+
+  table{width:100%; border-collapse:collapse; background:var(--surface); border-radius:12px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,.05);}
+  thead{background:#F1F3F6;}
+  th{text-align:left; padding:11px 14px; font-size:.72rem; text-transform:uppercase; letter-spacing:.03em; color:var(--muted); font-weight:700;}
+  td{padding:12px 14px; border-top:1px solid var(--border); font-size:.88rem; vertical-align:middle;}
+  tr.linha-unidade{cursor:pointer;}
+  tr.linha-unidade:hover{background:var(--brand-soft);}
+
+  .pill{display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:20px; font-size:.76rem; font-weight:600;}
+  .pill::before{content:''; width:6px; height:6px; border-radius:50%; background:currentColor;}
+  .pill-ativo{background:var(--success-soft); color:#1e7a43;}
+  .pill-trial{background:#E5EEFB; color:#2563a8;}
+  .pill-atrasado{background:var(--warn-soft); color:var(--warn);}
+  .pill-suspenso{background:var(--danger-soft); color:var(--danger);}
+  .pill-cancelado{background:#EEE; color:#666;}
+
+  /* ---------- modal ---------- */
+  .modal-overlay{position:fixed; inset:0; background:rgba(23,30,26,.5); display:none; align-items:center; justify-content:center; padding:20px; z-index:100;}
+  .modal-overlay.show{display:flex;}
+  .modal{background:var(--surface); border-radius:16px; width:100%; max-width:640px; max-height:88vh; overflow:auto; box-shadow:0 12px 40px rgba(0,0,0,.2);}
+  .modal-head{padding:20px 24px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between;}
+  .modal-head h2{font-size:1.1rem; color:var(--brand);}
+  .modal-body{padding:20px 24px;}
+  .modal-close{background:none; border:none; font-size:1.2rem; cursor:pointer; color:var(--muted);}
+  .abas-modal{display:flex; gap:4px; border-bottom:1px solid var(--border); margin:-20px -24px 18px; padding:0 24px;}
+  .aba-modal-btn{padding:11px 14px; border:none; background:none; font-family:inherit; font-size:.85rem; font-weight:600; color:var(--muted); cursor:pointer; border-bottom:2px solid transparent;}
+  .aba-modal-btn.on{color:var(--brand); border-bottom-color:var(--brand);}
+  .aba-modal-conteudo{display:none;}
+  .aba-modal-conteudo.on{display:block;}
+
+  .linha-2{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .lista-pagamentos{max-height:240px; overflow:auto; border:1px solid var(--border); border-radius:10px;}
+  .item-pagamento{padding:10px 12px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; font-size:.85rem;}
+  .item-pagamento:last-child{border-bottom:none;}
+
+  .lista-modulos label{display:flex; align-items:center; gap:10px; padding:9px 4px; cursor:pointer; font-size:.9rem;}
+  .lista-modulos input{width:auto;}
+
+  .vazio{text-align:center; padding:30px; color:var(--muted); font-size:.85rem;}
+  @media (max-width:720px){ .linha-2{grid-template-columns:1fr;} table, thead{display:block;} thead{display:none;} tr{display:block; border-bottom:1px solid var(--border); padding:10px 0;} td{display:flex; justify-content:space-between; border:none; padding:4px 14px;} td::before{content:attr(data-rotulo); font-weight:600; color:var(--muted); font-size:.75rem;} }
+</style>
+</head>
+<body>
+
+  <div id="telaLogin">
+    <div class="login-caixa">
+      <h1>🔐 Servir — Central Administrativa</h1>
+      <p>Acesso restrito à equipe de gestão da plataforma.</p>
+      <div class="campo"><label>E-mail</label><input type="email" id="loginEmail"></div>
+      <div class="campo"><label>Senha</label><input type="password" id="loginSenha"></div>
+      <button class="btn btn-primary" id="btnEntrar">Entrar</button>
+      <div class="erro-msg" id="erroLogin"></div>
+    </div>
+  </div>
+
+  <div id="telaSemAcesso">
+    <div class="caixa">
+      <h2 style="color:var(--danger); margin-bottom:10px;">Acesso não autorizado</h2>
+      <p style="color:var(--muted); margin-bottom:18px;">Sua conta não tem permissão de super-administrador nessa plataforma.</p>
+      <button class="btn btn-secundario" id="btnSairSemAcesso">Sair</button>
+    </div>
+  </div>
+
+  <div id="app">
+    <header>
+      <div>
+        <h1>Central Administrativa</h1>
+        <div class="sub">Controle de assinatura e módulos liberados por unidade</div>
+      </div>
+      <button class="btn btn-secundario" id="btnSair" style="background:rgba(255,255,255,.12); color:#fff; border-color:rgba(255,255,255,.25);">Sair</button>
+    </header>
+
+    <div style="max-width:1200px; margin:14px auto 0; padding:0 20px; display:flex; justify-content:flex-end;">
+      <button class="btn btn-secundario" id="btnConfigSuporte">⚙️ Contato do suporte</button>
+    </div>
+
+    <main>
+      <div class="resumo-cards" id="resumoCards"></div>
+
+      <div class="filtros-topo">
+        <input type="text" id="filtroBusca" placeholder="Buscar unidade...">
+        <select id="filtroStatus">
+          <option value="">Todos os status</option>
+          <option value="trial">Trial</option>
+          <option value="ativo">Ativo</option>
+          <option value="atrasado">Atrasado</option>
+          <option value="suspenso">Suspenso</option>
+          <option value="cancelado">Cancelado</option>
+        </select>
+        <span style="flex:1;"></span>
+        <button class="btn btn-secundario" id="btnRecarregar">🔄 Recarregar</button>
+      </div>
+
+      <table>
+        <thead>
+          <tr><th>Unidade</th><th>Status</th><th>Vencimento</th><th>Mensalidade</th><th>Módulos liberados</th></tr>
+        </thead>
+        <tbody id="corpoTabelaUnidades"></tbody>
+      </table>
+    </main>
+  </div>
+
+  <!-- ================= MODAL: CONTATO DO SUPORTE ================= -->
+  <div class="modal-overlay" id="modalConfigSuporte">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-head">
+        <h2>Contato do suporte</h2>
+        <button class="modal-close" id="btnFecharModalConfigSuporte">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:.82rem; color:var(--muted); margin-bottom:14px;">Aparece automaticamente nas mensagens de pendência mostradas dentro dos apps, pra quem receber o aviso saber como te procurar.</p>
+        <div class="campo"><label>Telefone</label><input type="text" id="cfg_telefone" placeholder="(71) 99999-9999"></div>
+        <div class="campo"><label>E-mail</label><input type="email" id="cfg_email" placeholder="suporte@servir.com.br"></div>
+        <button class="btn btn-primary" id="btnSalvarConfigSuporte">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: DETALHE DA UNIDADE ================= -->
+  <div class="modal-overlay" id="modalUnidade">
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="modalUnidadeTitulo">Unidade</h2>
+        <button class="modal-close" id="btnFecharModalUnidade">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="abas-modal">
+          <button class="aba-modal-btn on" data-aba-modal="status">Status</button>
+          <button class="aba-modal-btn" data-aba-modal="pagamentos">Pagamentos</button>
+          <button class="aba-modal-btn" data-aba-modal="modulos">Módulos</button>
+        </div>
+
+        <div class="aba-modal-conteudo on" id="abaStatus">
+          <div class="linha-2">
+            <div class="campo">
+              <label>Status da assinatura</label>
+              <select id="u_status">
+                <option value="trial">Trial</option>
+                <option value="ativo">Ativo</option>
+                <option value="atrasado">Atrasado</option>
+                <option value="suspenso">Suspenso</option>
+                <option value="cancelado">Cancelado</option>
+              </select>
+            </div>
+            <div class="campo"><label>Vencimento</label><input type="date" id="u_vencimento"></div>
+          </div>
+          <div class="linha-2">
+            <div class="campo"><label>Mensalidade (R$)</label><input type="number" step="0.01" id="u_mensalidade"></div>
+          </div>
+          <div class="campo"><label>Observação financeira</label><input type="text" id="u_observacao"></div>
+          <button class="btn btn-primary" id="btnSalvarStatusUnidade">Salvar status</button>
+        </div>
+
+        <div class="aba-modal-conteudo" id="abaPagamentos">
+          <div class="linha-2" style="margin-bottom:10px;">
+            <div class="campo"><label>Mês de referência</label><input type="month" id="pg_mes"></div>
+            <div class="campo"><label>Valor pago (R$)</label><input type="number" step="0.01" id="pg_valor"></div>
+          </div>
+          <div class="linha-2" style="margin-bottom:10px;">
+            <div class="campo"><label>Data do pagamento</label><input type="date" id="pg_data"></div>
+            <div class="campo"><label>Forma de pagamento</label><input type="text" id="pg_forma" placeholder="Pix, boleto..."></div>
+          </div>
+          <button class="btn btn-primary" id="btnRegistrarPagamento" style="margin-bottom:16px;">+ Registrar pagamento</button>
+          <div class="lista-pagamentos" id="listaPagamentos"></div>
+        </div>
+
+        <div class="aba-modal-conteudo" id="abaModulos">
+          <p style="font-size:.82rem; color:var(--muted); margin-bottom:10px;">Desmarcar um módulo bloqueia o acesso de verdade — a unidade não consegue mais abrir aquele app.</p>
+          <div class="lista-modulos" id="listaModulosToggle"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const SUPABASE_URL = 'https://frzvcrcshkpvjdbbqkhz.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_h-JuDyjYgb5YKGYFRKtLEg_8gnJor9w';
+  const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  let todasUnidades = [];
+  let todosModulos = [];
+  let unidadeAtualId = null;
+
+  function escapeHtml(t){ const d=document.createElement('div'); d.textContent=t==null?'':String(t); return d.innerHTML; }
+  function formatarMoeda(v){ return v == null ? '—' : 'R$ ' + Number(v).toFixed(2).replace('.', ','); }
+  function formatarData(d){ if(!d) return '—'; const [ano,mes,dia] = d.slice(0,10).split('-'); return `${dia}/${mes}/${ano}`; }
+  const LABEL_STATUS = { trial:'Trial', ativo:'Ativo', atrasado:'Atrasado', suspenso:'Suspenso', cancelado:'Cancelado' };
+
+  async function checarSessao(){
+    const { data:{ session } } = await sb.auth.getSession();
+    if(session) await iniciarAposLogin(session.user);
+  }
+
+  async function iniciarAposLogin(user){
+    const { data: souAdmin, error } = await sb.rpc('fn_sou_super_admin');
+    if(error || !souAdmin){
+      document.getElementById('telaLogin').style.display = 'none';
+      document.getElementById('telaSemAcesso').style.display = 'flex';
+      return;
+    }
+    document.getElementById('telaLogin').style.display = 'none';
+    document.getElementById('telaSemAcesso').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    await carregarTudo();
+  }
+
+  document.getElementById('btnEntrar').addEventListener('click', async () => {
+    const email = document.getElementById('loginEmail').value.trim();
+    const senha = document.getElementById('loginSenha').value;
+    const erroEl = document.getElementById('erroLogin');
+    erroEl.classList.remove('show');
+    try{
+      const { data, error } = await sb.auth.signInWithPassword({ email, password: senha });
+      if(error) throw new Error('E-mail ou senha inválidos.');
+      await iniciarAposLogin(data.user);
+    } catch(erro){
+      erroEl.textContent = erro.message;
+      erroEl.classList.add('show');
+    }
+  });
+  document.getElementById('btnSairSemAcesso').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
+  document.getElementById('btnSair').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
+
+  async function carregarTudo(){
+    const [{ data: unidades, error: e1 }, { data: modulos, error: e2 }] = await Promise.all([
+      sb.from('servir_unidades_negocio').select('*').order('nome'),
+      sb.from('servir_modulos_disponiveis').select('*').eq('ativo', true).order('nome')
+    ]);
+    if(e1){ alert('Erro ao carregar unidades: ' + e1.message); return; }
+    if(e2){ alert('Erro ao carregar módulos: ' + e2.message); return; }
+    todasUnidades = unidades || [];
+    todosModulos = modulos || [];
+
+    const { data: liberados } = await sb.from('servir_unidades_negocio_modulos_liberados').select('*');
+    todasUnidades.forEach(u => {
+      u._modulosLiberados = (liberados || []).filter(l => l.unidade_negocio_id === u.id);
+    });
+
+    renderizarResumo();
+    renderizarTabela();
+  }
+
+  function renderizarResumo(){
+    const contagem = { trial:0, ativo:0, atrasado:0, suspenso:0, cancelado:0 };
+    todasUnidades.forEach(u => { contagem[u.status_assinatura] = (contagem[u.status_assinatura] || 0) + 1; });
+    const cards = [
+      ['Total de unidades', todasUnidades.length, 'var(--ink)'],
+      ['Ativas', contagem.ativo, '#1e7a43'],
+      ['Trial', contagem.trial, '#2563a8'],
+      ['Atrasadas', contagem.atrasado, 'var(--warn)'],
+      ['Suspensas/Canceladas', contagem.suspenso + contagem.cancelado, 'var(--danger)'],
+    ];
+    document.getElementById('resumoCards').innerHTML = cards.map(([rotulo, num, cor]) => `
+      <div class="resumo-card"><div class="num" style="color:${cor};">${num}</div><div class="rotulo">${rotulo}</div></div>
+    `).join('');
+  }
+
+  function renderizarTabela(){
+    const busca = document.getElementById('filtroBusca').value.trim().toLowerCase();
+    const filtroStatus = document.getElementById('filtroStatus').value;
+    const filtradas = todasUnidades.filter(u =>
+      (!busca || (u.nome || '').toLowerCase().includes(busca)) &&
+      (!filtroStatus || u.status_assinatura === filtroStatus)
+    );
+    const corpo = document.getElementById('corpoTabelaUnidades');
+    if(!filtradas.length){ corpo.innerHTML = '<tr><td colspan="5"><div class="vazio">Nenhuma unidade encontrada.</div></td></tr>'; return; }
+
+    corpo.innerHTML = filtradas.map(u => {
+      const totalModulos = todosModulos.length;
+      const liberadosCount = todosModulos.filter(m => {
+        const registro = u._modulosLiberados.find(l => l.modulo_chave === m.chave);
+        return registro ? registro.liberado : true; // sem registro = liberado por padrão
+      }).length;
+      return `
+        <tr class="linha-unidade" data-abrir-unidade="${u.id}">
+          <td data-rotulo="Unidade"><strong>${escapeHtml(u.nome)}</strong></td>
+          <td data-rotulo="Status"><span class="pill pill-${u.status_assinatura}">${LABEL_STATUS[u.status_assinatura] || u.status_assinatura}</span></td>
+          <td data-rotulo="Vencimento">${formatarData(u.data_vencimento_assinatura)}</td>
+          <td data-rotulo="Mensalidade" class="mono">${formatarMoeda(u.valor_mensalidade)}</td>
+          <td data-rotulo="Módulos">${liberadosCount} de ${totalModulos}</td>
+        </tr>`;
+    }).join('');
+
+    corpo.querySelectorAll('[data-abrir-unidade]').forEach(tr => {
+      tr.addEventListener('click', () => abrirModalUnidade(tr.dataset.abrirUnidade));
+    });
+  }
+
+  document.getElementById('filtroBusca').addEventListener('input', renderizarTabela);
+  document.getElementById('filtroStatus').addEventListener('change', renderizarTabela);
+  document.getElementById('btnRecarregar').addEventListener('click', carregarTudo);
+
+  function abrirModalUnidade(id){
+    unidadeAtualId = id;
+    const u = todasUnidades.find(x => x.id === id);
+    document.getElementById('modalUnidadeTitulo').textContent = u.nome;
+    document.getElementById('u_status').value = u.status_assinatura;
+    document.getElementById('u_vencimento').value = u.data_vencimento_assinatura || '';
+    document.getElementById('u_mensalidade').value = u.valor_mensalidade || '';
+    document.getElementById('u_observacao').value = u.observacao_financeira || '';
+
+    document.querySelectorAll('.aba-modal-btn').forEach(b => b.classList.remove('on'));
+    document.querySelectorAll('.aba-modal-conteudo').forEach(c => c.classList.remove('on'));
+    document.querySelector('[data-aba-modal="status"]').classList.add('on');
+    document.getElementById('abaStatus').classList.add('on');
+
+    carregarPagamentos(id);
+    renderizarTogglesModulos(u);
+
+    document.getElementById('modalUnidade').classList.add('show');
+  }
+  document.getElementById('btnFecharModalUnidade').addEventListener('click', () => {
+    document.getElementById('modalUnidade').classList.remove('show');
+  });
+  document.querySelectorAll('.aba-modal-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.aba-modal-btn').forEach(b => b.classList.remove('on'));
+      document.querySelectorAll('.aba-modal-conteudo').forEach(c => c.classList.remove('on'));
+      btn.classList.add('on');
+      document.getElementById('aba' + btn.dataset.abaModal.charAt(0).toUpperCase() + btn.dataset.abaModal.slice(1)).classList.add('on');
+    });
+  });
+
+  document.getElementById('btnSalvarStatusUnidade').addEventListener('click', async () => {
+    const btn = document.getElementById('btnSalvarStatusUnidade');
+    btn.disabled = true; btn.textContent = 'Salvando...';
+    try{
+      const payload = {
+        status_assinatura: document.getElementById('u_status').value,
+        data_vencimento_assinatura: document.getElementById('u_vencimento').value || null,
+        valor_mensalidade: document.getElementById('u_mensalidade').value ? Number(document.getElementById('u_mensalidade').value) : null,
+        observacao_financeira: document.getElementById('u_observacao').value.trim() || null,
+      };
+      const { error } = await sb.from('servir_unidades_negocio').update(payload).eq('id', unidadeAtualId);
+      if(error) throw new Error(error.message);
+      await carregarTudo();
+      alert('Status salvo!');
+    } catch(erro){
+      alert('Erro ao salvar: ' + erro.message);
+    } finally{
+      btn.disabled = false; btn.textContent = 'Salvar status';
+    }
+  });
+
+  async function carregarPagamentos(unidadeId){
+    const { data, error } = await sb.from('servir_unidades_negocio_pagamentos')
+      .select('*').eq('unidade_negocio_id', unidadeId).order('referente_a_mes', { ascending: false });
+    const lista = document.getElementById('listaPagamentos');
+    if(error){ lista.innerHTML = `<div class="vazio">Erro: ${escapeHtml(error.message)}</div>`; return; }
+    if(!data.length){ lista.innerHTML = '<div class="vazio">Nenhum pagamento registrado ainda.</div>'; return; }
+    lista.innerHTML = data.map(p => `
+      <div class="item-pagamento">
+        <span>${p.referente_a_mes.slice(0,7).split('-').reverse().join('/')} · ${escapeHtml(p.forma_pagamento || '-')}</span>
+        <span class="mono">${formatarMoeda(p.valor_pago)}</span>
+      </div>`).join('');
+  }
+
+  document.getElementById('btnRegistrarPagamento').addEventListener('click', async () => {
+    const mes = document.getElementById('pg_mes').value; // formato YYYY-MM
+    const valor = document.getElementById('pg_valor').value;
+    if(!mes || !valor){ alert('Informe o mês de referência e o valor.'); return; }
+    const btn = document.getElementById('btnRegistrarPagamento');
+    btn.disabled = true; btn.textContent = 'Registrando...';
+    try{
+      const { data: { user } } = await sb.auth.getUser();
+      const { error } = await sb.from('servir_unidades_negocio_pagamentos').insert({
+        unidade_negocio_id: unidadeAtualId,
+        referente_a_mes: mes + '-01',
+        valor_pago: Number(valor),
+        data_pagamento: document.getElementById('pg_data').value || new Date().toISOString().slice(0,10),
+        forma_pagamento: document.getElementById('pg_forma').value.trim() || null,
+        registrado_por: user.id,
+      });
+      if(error) throw new Error(error.message);
+      document.getElementById('pg_mes').value = '';
+      document.getElementById('pg_valor').value = '';
+      document.getElementById('pg_forma').value = '';
+      await carregarPagamentos(unidadeAtualId);
+    } catch(erro){
+      alert('Erro ao registrar: ' + erro.message);
+    } finally{
+      btn.disabled = false; btn.textContent = '+ Registrar pagamento';
+    }
+  });
+
+  function renderizarTogglesModulos(u){
+    const lista = document.getElementById('listaModulosToggle');
+    lista.innerHTML = todosModulos.map(m => {
+      const registro = u._modulosLiberados.find(l => l.modulo_chave === m.chave);
+      const liberado = registro ? registro.liberado : true;
+      return `<label><input type="checkbox" data-modulo-chave="${m.chave}" ${liberado ? 'checked' : ''}> ${escapeHtml(m.nome)}</label>`;
+    }).join('');
+    lista.querySelectorAll('[data-modulo-chave]').forEach(chk => {
+      chk.addEventListener('change', async () => {
+        chk.disabled = true;
+        try{
+          const { data: { user } } = await sb.auth.getUser();
+          const { error } = await sb.from('servir_unidades_negocio_modulos_liberados').upsert({
+            unidade_negocio_id: unidadeAtualId,
+            modulo_chave: chk.dataset.moduloChave,
+            liberado: chk.checked,
+            liberado_por: user.id,
+            data_liberacao: new Date().toISOString(),
+          }, { onConflict: 'unidade_negocio_id,modulo_chave' });
+          if(error) throw new Error(error.message);
+          const u = todasUnidades.find(x => x.id === unidadeAtualId);
+          const idx = u._modulosLiberados.findIndex(l => l.modulo_chave === chk.dataset.moduloChave);
+          if(idx >= 0) u._modulosLiberados[idx].liberado = chk.checked;
+          else u._modulosLiberados.push({ modulo_chave: chk.dataset.moduloChave, liberado: chk.checked });
+          renderizarTabela();
+        } catch(erro){
+          alert('Erro ao atualizar módulo: ' + erro.message);
+          chk.checked = !chk.checked;
+        } finally{
+          chk.disabled = false;
+        }
+      });
+    });
+  }
+
+  document.getElementById('btnConfigSuporte').addEventListener('click', async () => {
+    const { data, error } = await sb.from('servir_configuracoes_plataforma').select('*').single();
+    if(error){ alert('Erro ao carregar: ' + error.message); return; }
+    document.getElementById('cfg_telefone').value = data.telefone_suporte || '';
+    document.getElementById('cfg_email').value = data.email_suporte || '';
+    document.getElementById('modalConfigSuporte').classList.add('show');
+  });
+  document.getElementById('btnFecharModalConfigSuporte').addEventListener('click', () => {
+    document.getElementById('modalConfigSuporte').classList.remove('show');
+  });
+  document.getElementById('btnSalvarConfigSuporte').addEventListener('click', async () => {
+    const btn = document.getElementById('btnSalvarConfigSuporte');
+    btn.disabled = true; btn.textContent = 'Salvando...';
+    try{
+      const { error } = await sb.from('servir_configuracoes_plataforma').update({
+        telefone_suporte: document.getElementById('cfg_telefone').value.trim() || null,
+        email_suporte: document.getElementById('cfg_email').value.trim() || null,
+      }).eq('id', true);
+      if(error) throw new Error(error.message);
+      alert('Contato do suporte salvo!');
+      document.getElementById('modalConfigSuporte').classList.remove('show');
+    } catch(erro){
+      alert('Erro ao salvar: ' + erro.message);
+    } finally{
+      btn.disabled = false; btn.textContent = 'Salvar';
+    }
+  });
+
+  checarSessao();
+</script>
+</body>
+</html>

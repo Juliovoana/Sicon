@@ -327,7 +327,9 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
       <div><div class="hdr-t"><i class="ti ti-clipboard-check"></i> Checklist Equipamentos</div><div class="hdr-s" id="hsub">—</div></div>
     </div>
     <div class="hdr-r">
+      <button class="hbtn" id="btn-trocar-unidade" onclick="trocarUnidade()" title="Trocar unidade" style="display:none;"><i class="ti ti-replace"></i></button>
       <span class="bdg bon" id="operador-badge" style="cursor:pointer" title="Sair"></span>
+      <button class="hbtn" onclick="if (confirm('Sair da conta?')) sair();" title="Sair"><i class="ti ti-logout"></i></button>
     </div>
   </div>
 
@@ -650,7 +652,7 @@ async function checkSession(){
 
 async function iniciarComUsuario(user){
   const { data: vinculos, error } = await sb.from('servir_unidade_usuarios')
-    .select('*, servir_unidades_negocio(nome)')
+    .select('*, servir_unidades_negocio(nome, endereco, telefone, logo_url)')
     .eq('user_id', user.id);
 
   if (error || !vinculos || !vinculos.length) {
@@ -686,6 +688,9 @@ async function selecionarUnidade(vinculo, user){
     nomeOperador: user.user_metadata?.nome || user.user_metadata?.full_name || user.email,
     unidadeId: vinculo.unidade_negocio_id,
     unidadeNome: vinculo.servir_unidades_negocio ? vinculo.servir_unidades_negocio.nome : '',
+    unidadeEndereco: vinculo.servir_unidades_negocio ? (vinculo.servir_unidades_negocio.endereco || '') : '',
+    unidadeTelefone: vinculo.servir_unidades_negocio ? (vinculo.servir_unidades_negocio.telefone || '') : '',
+    unidadeLogoUrl: vinculo.servir_unidades_negocio ? (vinculo.servir_unidades_negocio.logo_url || '') : '',
     ehPrincipal: !!vinculo.eh_principal,
     papel: vinculo.papel || ''
   };
@@ -697,6 +702,27 @@ async function selecionarUnidade(vinculo, user){
 
 function souAdmin(){
   return !!(meuPerfil && (meuPerfil.ehPrincipal || meuPerfil.papel === 'administrador'));
+}
+
+// converte o logotipo (URL pública) em base64 uma única vez, pra poder
+// usar no jsPDF (que precisa da imagem já carregada, não só a URL) --
+// se falhar por qualquer motivo, os relatórios simplesmente saem sem
+// logo, sem travar nada
+let logoUnidadeBase64 = null;
+async function carregarLogoUnidade(){
+  if (!meuPerfil.unidadeLogoUrl) return;
+  try {
+    const resposta = await fetch(meuPerfil.unidadeLogoUrl);
+    const blob = await resposta.blob();
+    logoUnidadeBase64 = await new Promise((resolve, reject) => {
+      const leitor = new FileReader();
+      leitor.onload = () => resolve(leitor.result);
+      leitor.onerror = reject;
+      leitor.readAsDataURL(blob);
+    });
+  } catch (erro) {
+    console.warn('Não consegui carregar o logotipo da unidade:', erro.message);
+  }
 }
 
 // ===================================================================
@@ -782,6 +808,11 @@ async function sair(){
   location.reload();
 }
 
+function trocarUnidade(){
+  document.getElementById('tela-app').style.display = 'none';
+  document.getElementById('tela-selecionar-unidade').style.display = 'flex';
+}
+
 checkSession();
 
 /* ══════════════════════════════════════════════════════════
@@ -841,7 +872,45 @@ let manAtual = [];       // manutenções do veículo selecionado
 let recSel = null;
 let fAt = null;          // id do item que está recebendo foto no momento
 
+function mostrarAvisoLicenca(texto){
+  if(!texto) return;
+  if(document.getElementById('avisoPendenciaLicenca')) return;
+  const banner = document.createElement('div');
+  banner.id = 'avisoPendenciaLicenca';
+  banner.style.cssText = 'position:sticky; top:0; z-index:99999; background:#FEF3D8; color:#8A5E12; padding:10px 16px; font-size:.85rem; font-family:Arial,Helvetica,sans-serif; text-align:center; border-bottom:2px solid #F2A93B; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 2px 6px rgba(0,0,0,.08);';
+  const span = document.createElement('span');
+  span.textContent = texto;
+  banner.innerHTML = '⚠️ ';
+  banner.appendChild(span);
+  document.body.prepend(banner);
+}
+
+function bloquearAcessoTotal(mensagem){
+  document.body.innerHTML = `
+    <div style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; font-family:Arial,Helvetica,sans-serif; background:#F6F7F9;">
+      <div style="background:#fff; border-radius:16px; padding:36px; max-width:440px; text-align:center; box-shadow:0 8px 28px rgba(20,30,50,.1);">
+        <div style="font-size:2.5rem; margin-bottom:12px;">🔒</div>
+        <h2 style="color:#C0392B; margin-bottom:12px; font-size:1.2rem;">Acesso bloqueado</h2>
+        <p style="color:#333; font-size:.92rem; line-height:1.5;">${mensagem}</p>
+      </div>
+    </div>`;
+}
+
+async function verificarPendenciaLicenca(unidadeIdAlvo, moduloChave){
+  try{
+    const { data, error } = await sb.rpc('fn_verificar_pendencia_licenca', { p_unidade_negocio_id: unidadeIdAlvo, p_modulo_chave: moduloChave });
+    if(error || !data) return;
+    if(data.bloqueia) bloquearAcessoTotal(data.mensagem);
+    else mostrarAvisoLicenca(data.mensagem);
+  } catch(erro){
+    console.warn('Não consegui checar pendência de licença:', erro.message);
+  }
+}
+
 async function iniciarAppChecklist(){
+  await verificarPendenciaLicenca(meuPerfil.unidadeId, 'checklist');
+  carregarLogoUnidade(); // não precisa esperar -- se demorar, o PDF sai sem logo dessa vez
+  document.getElementById('btn-trocar-unidade').style.display = vinculosDoUsuario.length > 1 ? 'flex' : 'none';
   document.getElementById('hsub').textContent = meuPerfil.unidadeNome + ' · ' + meuPerfil.nomeOperador;
   document.getElementById('operador-badge').textContent = '⬤ ' + meuPerfil.nomeOperador;
   document.getElementById('operador-badge').addEventListener('click', () => { if (confirm('Sair da conta?')) sair(); });
@@ -2530,13 +2599,32 @@ function gerarPdfSolicitacao(req, item, equipamento, solicitante, almoxarifadoId
   function construirPdfA4(){
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF();
+    let yTopo = 14;
+
+    // cabeçalho: logo + dados da empresa, no estilo do sistema original
+    if (logoUnidadeBase64) {
+      try {
+        const formatoImagem = logoUnidadeBase64.includes('image/png') ? 'PNG' : logoUnidadeBase64.includes('image/webp') ? 'WEBP' : 'JPEG';
+        doc.addImage(logoUnidadeBase64, formatoImagem, 14, yTopo - 6, 22, 22);
+      } catch (e) { /* imagem inválida, segue sem ela */ }
+    }
+    const xTextoEmpresa = logoUnidadeBase64 ? 40 : 14;
+    doc.setFont(undefined, 'bold'); doc.setFontSize(12);
+    doc.text(meuPerfil.unidadeNome || '', xTextoEmpresa, yTopo);
+    doc.setFont(undefined, 'normal'); doc.setFontSize(8.5); doc.setTextColor(90);
+    let yEmpresa = yTopo + 5;
+    if (meuPerfil.unidadeEndereco) { doc.text(meuPerfil.unidadeEndereco, xTextoEmpresa, yEmpresa); yEmpresa += 4; }
+    if (meuPerfil.unidadeTelefone) { doc.text('Tel: ' + meuPerfil.unidadeTelefone, xTextoEmpresa, yEmpresa); yEmpresa += 4; }
+    doc.setTextColor(0);
+
+    const yTitulo = Math.max(yEmpresa, yTopo + 16) + 6;
     doc.setFont(undefined, 'bold'); doc.setFontSize(15);
-    doc.text(tituloDoc, 105, 18, { align: 'center' });
+    doc.text(tituloDoc, 105, yTitulo, { align: 'center' });
     doc.setFont(undefined, 'normal');
-    doc.setDrawColor(200); doc.line(14, 24, 196, 24);
+    doc.setDrawColor(200); doc.line(14, yTitulo + 6, 196, yTitulo + 6);
 
     doc.setFontSize(10);
-    let y = 32;
+    let y = yTitulo + 14;
     [['Solicitante', solicitante], ['Almoxarifado', almoxarifadoTexto], ['Setor', setorTexto],
      ['Evento', req.evento], ['Data', dataTexto]].forEach(([rotulo, valor]) => {
       doc.text(rotulo + ': ' + (valor || '—'), 14, y);
@@ -2563,11 +2651,21 @@ function gerarPdfSolicitacao(req, item, equipamento, solicitante, almoxarifadoId
 
   function construirPdfBobina(){
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: 'mm', format: [80, 150] });
+    const doc = new jsPDF({ unit: 'mm', format: [80, 170] });
     const larguraUtil = 72;
+    let y = 8;
+
+    doc.setFont(undefined, 'bold'); doc.setFontSize(10);
+    doc.text(meuPerfil.unidadeNome || '', 40, y, { align: 'center' }); y += 4;
+    doc.setFont(undefined, 'normal'); doc.setFontSize(7.5); doc.setTextColor(90);
+    if (meuPerfil.unidadeEndereco) { doc.text(meuPerfil.unidadeEndereco, 40, y, { align: 'center' }); y += 3.5; }
+    if (meuPerfil.unidadeTelefone) { doc.text('Tel: ' + meuPerfil.unidadeTelefone, 40, y, { align: 'center' }); y += 3.5; }
+    doc.setTextColor(0);
+    y += 3;
+    doc.setDrawColor(200); doc.line(4, y, 76, y); y += 5;
+
     doc.setFont(undefined, 'bold'); doc.setFontSize(11);
     const linhasTitulo = doc.splitTextToSize(tituloDoc, larguraUtil);
-    let y = 10;
     linhasTitulo.forEach(linha => { doc.text(linha, 40, y, { align: 'center' }); y += 5; });
     doc.setFont(undefined, 'normal');
     y += 2;

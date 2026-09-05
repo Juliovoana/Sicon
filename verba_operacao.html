@@ -967,10 +967,46 @@
     abrirEscolhaAgencia(vinculosComNome);
   }
 
+  function mostrarAvisoLicenca(texto){
+    if(!texto) return;
+    if(document.getElementById('avisoPendenciaLicenca')) return;
+    const banner = document.createElement('div');
+    banner.id = 'avisoPendenciaLicenca';
+    banner.style.cssText = 'position:sticky; top:0; z-index:99999; background:#FEF3D8; color:#8A5E12; padding:10px 16px; font-size:.85rem; font-family:Arial,Helvetica,sans-serif; text-align:center; border-bottom:2px solid #F2A93B; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 2px 6px rgba(0,0,0,.08);';
+    const span = document.createElement('span');
+    span.textContent = texto;
+    banner.innerHTML = '⚠️ ';
+    banner.appendChild(span);
+    document.body.prepend(banner);
+  }
+
+  function bloquearAcessoTotal(mensagem){
+    document.body.innerHTML = `
+      <div style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; font-family:Arial,Helvetica,sans-serif; background:#F6F7F9;">
+        <div style="background:#fff; border-radius:16px; padding:36px; max-width:440px; text-align:center; box-shadow:0 8px 28px rgba(20,30,50,.1);">
+          <div style="font-size:2.5rem; margin-bottom:12px;">🔒</div>
+          <h2 style="color:#C0392B; margin-bottom:12px; font-size:1.2rem;">Acesso bloqueado</h2>
+          <p style="color:#333; font-size:.92rem; line-height:1.5;">${mensagem}</p>
+        </div>
+      </div>`;
+  }
+
+  async function verificarPendenciaLicenca(unidadeIdAlvo, moduloChave){
+    try{
+      const { data, error } = await sb.rpc('fn_verificar_pendencia_licenca', { p_unidade_negocio_id: unidadeIdAlvo, p_modulo_chave: moduloChave });
+      if(error || !data) return;
+      if(data.bloqueia) bloquearAcessoTotal(data.mensagem);
+      else mostrarAvisoLicenca(data.mensagem);
+    } catch(erro){
+      console.warn('Não consegui checar pendência de licença:', erro.message);
+    }
+  }
+
   async function onLogin(){
     $('login-screen').classList.add('hidden');
     $('app').classList.remove('hidden');
     await carregarMeuPerfil();
+    await verificarPendenciaLicenca(meuPerfil.agenciaId, 'verba_operacao');
     await carregarListas();
     definirDataHoje();
     await atualizarSaldoELista();
@@ -1145,19 +1181,54 @@
 
   // ---------- listas ----------
   async function carregarListas(){
+    // Todas as listas de referência usadas nos campos de busca precisam
+    // ficar restritas à unidade de negócio ativa (meuPerfil.agenciaId).
+    // Sem isso, os resultados de busca (ex.: eventos, fornecedores, setores,
+    // veículos, contas correntes, centro de custo) misturam registros de
+    // TODAS as unidades de negócio.
+    const agenciaId = meuPerfil.agenciaId;
+
     let querySubcontas = sb.from('financeiro_sub_contas').select('id,nome').eq('ativo', true);
-    if(meuPerfil.agenciaId) querySubcontas = querySubcontas.eq('unidade_negocio_id', meuPerfil.agenciaId);
+    if(agenciaId) querySubcontas = querySubcontas.eq('unidade_negocio_id', agenciaId);
     querySubcontas = querySubcontas.order('criado_em', { ascending:false }).order('id', { ascending:false });
+
+    let queryContas = sb.from('financeiro_contas_correntes').select('id,nome').eq('ativo', true);
+    if(agenciaId) queryContas = queryContas.eq('unidade_negocio_id', agenciaId);
+    queryContas = queryContas.order('nome');
+
+    let queryCentroCusto = sb.from('centro_custo').select('id,nome').eq('ativo', true);
+    if(agenciaId) queryCentroCusto = queryCentroCusto.eq('unidade_negocio_id', agenciaId);
+    queryCentroCusto = queryCentroCusto.order('nome');
+
+    let queryEmpresas = sb.from('empresas').select('id,nome').eq('ativo', true);
+    if(agenciaId) queryEmpresas = queryEmpresas.eq('unidade_negocio_id', agenciaId);
+    queryEmpresas = queryEmpresas.order('nome');
+
+    let queryPessoas = sb.from('vw_fornecedores').select('id,nome');
+    if(agenciaId) queryPessoas = queryPessoas.eq('unidade_negocio_id', agenciaId);
+    queryPessoas = queryPessoas.order('nome');
+
+    let queryEventos = sb.from('eventos').select('id,nome').eq('ativo', true);
+    if(agenciaId) queryEventos = queryEventos.eq('unidade_negocio_id', agenciaId);
+    queryEventos = queryEventos.order('nome');
+
+    let querySetores = sb.from('setores').select('id,nome').eq('ativo', true);
+    if(agenciaId) querySetores = querySetores.eq('unidade_negocio_id', agenciaId);
+    querySetores = querySetores.order('nome');
+
+    let queryVeiculos = sb.from('veiculos').select('id,nome').eq('ativo', true);
+    if(agenciaId) queryVeiculos = queryVeiculos.eq('unidade_negocio_id', agenciaId);
+    queryVeiculos = queryVeiculos.order('nome');
 
     const [subcontas, contas, centrocusto, empresas, pessoas, eventos, setores, veiculos] = await Promise.all([
       querySubcontas,
-      sb.from('financeiro_contas_correntes').select('id,nome').eq('ativo', true).order('nome'),
-      sb.from('centro_custo').select('id,nome').eq('ativo', true).order('nome'),
-      sb.from('empresas').select('id,nome').eq('ativo', true).order('nome'),
-      sb.from('vw_fornecedores').select('id,nome').order('nome'),
-      sb.from('eventos').select('id,nome').eq('ativo', true).order('nome'),
-      sb.from('setores').select('id,nome').eq('ativo', true).order('nome'),
-      sb.from('veiculos').select('id,nome').eq('ativo', true).order('nome'),
+      queryContas,
+      queryCentroCusto,
+      queryEmpresas,
+      queryPessoas,
+      queryEventos,
+      querySetores,
+      queryVeiculos,
     ]);
     cache.subcontas = subcontas.data || [];
     cache.contas = contas.data || [];
@@ -1233,7 +1304,7 @@
     if(!nome || !nome.trim()) return;
     const { data: maxRow } = await sb.from('financeiro_contas_correntes').select('id').order('id', { ascending:false }).limit(1).maybeSingle();
     const novoId = (maxRow?.id || 0) + 1;
-    const { error } = await sb.from('financeiro_contas_correntes').insert({ id: novoId, nome: nome.trim() });
+    const { error } = await sb.from('financeiro_contas_correntes').insert({ id: novoId, nome: nome.trim(), unidade_negocio_id: meuPerfil.agenciaId });
     if(error){ alert('Erro ao criar conta: ' + error.message); return; }
     await carregarListas();
     $('sel-conta').value = textoParaItem({ id: novoId, nome: nome.trim() });
@@ -1324,7 +1395,7 @@
     const alvo = nome.trim();
     const existente = cache.centrocusto.find(c => c.nome.toLowerCase() === alvo.toLowerCase());
     if(existente) return existente.id;
-    const { data, error } = await sb.from('centro_custo').insert({ nome: alvo }).select('id').single();
+    const { data, error } = await sb.from('centro_custo').insert({ nome: alvo, unidade_negocio_id: meuPerfil.agenciaId }).select('id').single();
     if(error){ console.error(error); return null; }
     cache.centrocusto.push({ id:data.id, nome:alvo });
     return data.id;
