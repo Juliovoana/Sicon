@@ -455,6 +455,15 @@
               <input type="hidden" id="du_imagem_fundo_url" value="">
             </div>
           </div>
+
+          <div style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border);">
+            <label style="font-weight:600;">Chave de IA (Anthropic)</label>
+            <p style="font-size:.78rem; color:var(--muted); margin:2px 0 8px;">Usada nos recursos de IA da plataforma (ex: editar cards por chat). Cada unidade usa e paga a própria chave.</p>
+            <div id="du_ia_status" style="font-size:.8rem; margin-bottom:8px;"></div>
+            <input type="password" id="du_chave_ia" placeholder="sk-ant-...">
+            <button class="btn-acao" id="btnSalvarChaveIA" style="margin-top:8px;">Salvar chave de IA</button>
+            <div id="du_ia_salvo_status" style="font-size:.78rem; margin-top:6px;"></div>
+          </div>
         </div>
       </div>
       <div class="drawer-actions">
@@ -1344,6 +1353,13 @@
       document.getElementById('placeholderFundoUnidade').style.display = '';
     }
     aplicarPersonalizacaoCentral(data.cor_principal, data.imagem_fundo_url);
+
+    document.getElementById('du_chave_ia').value = '';
+    document.getElementById('du_ia_salvo_status').textContent = '';
+    const { data: temChave } = await sb.rpc('fn_tem_chave_ia', { p_unidade_negocio_id: agenciaId });
+    const statusIA = document.getElementById('du_ia_status');
+    statusIA.textContent = temChave ? '✅ Chave configurada' : '⚠️ Nenhuma chave configurada ainda';
+    statusIA.style.color = temChave ? 'var(--brand-2)' : 'var(--accent-ink)';
   }
 
   async function enviarLogoUnidade(arquivo){
@@ -1467,6 +1483,28 @@
     } finally{
       btn.disabled = false;
       btn.textContent = 'Salvar';
+    }
+  });
+
+  document.getElementById('btnSalvarChaveIA').addEventListener('click', async () => {
+    const btn = document.getElementById('btnSalvarChaveIA');
+    const statusEl = document.getElementById('du_ia_salvo_status');
+    const chave = document.getElementById('du_chave_ia').value.trim();
+    if(!chave){ statusEl.style.color = 'var(--accent-ink)'; statusEl.textContent = 'Digite a chave antes de salvar.'; return; }
+    btn.disabled = true;
+    try{
+      const { error } = await sb.rpc('fn_definir_chave_ia', { p_unidade_negocio_id: agenciaId, p_chave: chave });
+      if(error) throw new Error(error.message);
+      document.getElementById('du_chave_ia').value = '';
+      document.getElementById('du_ia_status').textContent = '✅ Chave configurada';
+      document.getElementById('du_ia_status').style.color = 'var(--brand-2)';
+      statusEl.style.color = 'var(--brand-2)';
+      statusEl.textContent = '✅ Salvo!';
+    } catch(erro){
+      statusEl.style.color = 'var(--danger)';
+      statusEl.textContent = '⚠️ ' + erro.message;
+    } finally{
+      btn.disabled = false;
     }
   });
 

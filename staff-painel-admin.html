@@ -863,6 +863,17 @@
           <button class="btn-acao" id="btnCompartilharCartaz" style="flex:1; justify-content:center;">📤 Compartilhar</button>
         </div>
         <button class="btn-acao" id="btnFecharModalResultadoCartaz" style="background:none; border:1.5px solid var(--border); color:var(--muted); width:100%; justify-content:center; margin-top:8px;">Fechar</button>
+
+        <div id="blocoEdicaoIACartaz" style="display:none; margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">
+          <div style="font-size:.82rem; font-weight:600; color:var(--muted); margin-bottom:8px;">💬 Pedir uma alteração</div>
+          <div id="avisoSemChaveIA" style="display:none; font-size:.78rem; background:#FEF3E2; color:var(--accent-ink); padding:8px 10px; border-radius:8px; margin-bottom:8px;">⚠️ Essa unidade ainda não configurou a chave de IA. Configure em <strong>Servir Central → Dados da unidade</strong> pra usar isso.</div>
+          <div id="historicoEdicaoIACartaz" style="display:flex; flex-direction:column; gap:6px; max-height:120px; overflow-y:auto; margin-bottom:8px;"></div>
+          <div style="display:flex; gap:6px;">
+            <input type="text" id="inputEdicaoIACartaz" placeholder="Ex: deixa o balão vermelho..." style="flex:1;">
+            <button class="btn-acao" id="btnEnviarEdicaoIACartaz" style="flex:none;">Enviar</button>
+          </div>
+          <div id="statusEdicaoIACartaz" style="font-size:.75rem; color:var(--muted); margin-top:6px;"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -1898,9 +1909,35 @@
     return `<div style="position:absolute; left:${x}px; top:${y}px; width:44px; height:58px; border-radius:50% 50% 50% 50% / 45% 45% 55% 55%; background:${cor}; transform:rotate(${rotacao}deg);"></div>`;
   }
 
-  function construirHtmlCardStatus(pessoa, nomeUnidade, logoBase64, corPrincipal){
-    const cor = corPrincipal || '#1B4B91';
+  // design padrão do card -- é esse objeto que a IA recebe e devolve
+  // atualizado; nunca é código, só esses campos (cor, textos, layout,
+  // visibilidade), validados antes de usar (ver validarDesignCard)
+  function construirDesignPadraoCard(){
+    return {
+      cor_principal: '#1B4B91',
+      layout: 'foto_direita', // ou 'foto_esquerda'
+      mostrar_baloes: true,
+      mostrar_rodape: true,
+      textos: {
+        headline_topo: 'Hoje é dia de',
+        headline_grande: 'CELEBRAR',
+        headline_script: 'você!',
+        mensagem: 'Desejamos um dia incrível, cheio de boas energias, alegrias e momentos especiais!',
+        assinatura: 'Parabéns! 🎉',
+        rodape: 'Que seu novo ciclo seja repleto de saúde, felicidade, conquistas e sucesso! Conte sempre com a gente! 💙',
+      },
+    };
+  }
+
+  function construirHtmlCardStatus(pessoa, nomeUnidade, logoBase64, design){
+    design = design || construirDesignPadraoCard();
+    const cor = design.cor_principal || '#1B4B91';
     const corEscura = escurecerCor(cor, 0.55);
+    const t = { ...construirDesignPadraoCard().textos, ...(design.textos || {}) };
+    const fotoEsquerda = design.layout === 'foto_esquerda';
+    const xTexto = fotoEsquerda ? 270 : 26;
+    const xFoto = fotoEsquerda ? 26 : 270;
+    const xBaloes = fotoEsquerda ? 10 : 390;
 
     return `
       <div style="position:relative; width:540px; height:540px; background:linear-gradient(160deg, #F3F9FF, #D9EBFA); font-family:Arial, sans-serif; overflow:hidden;">
@@ -1909,24 +1946,26 @@
           <div style="position:absolute; left:${x}px; top:${y}px; width:${s}px; height:${s}px; background:${corEscura}; opacity:.5; transform:rotate(45deg);"></div>
         `).join('')}
 
-        <div style="position:absolute; left:390px; top:14px; width:140px; height:140px;">
-          ${balaoHtml(0, 6, cor, -8)}
-          ${balaoHtml(36, 16, '#ffffff', 4)}
-          ${balaoHtml(70, -4, corEscura, 10)}
-          <div style="position:absolute; left:20px; top:60px; width:1px; height:60px; background:#a8cae8; transform:rotate(4deg); transform-origin:top;"></div>
-          <div style="position:absolute; left:56px; top:70px; width:1px; height:64px; background:${corEscura}; opacity:.6; transform:rotate(-3deg); transform-origin:top;"></div>
-          <div style="position:absolute; left:90px; top:50px; width:1px; height:60px; background:#333; opacity:.5; transform:rotate(6deg); transform-origin:top;"></div>
-        </div>
+        ${design.mostrar_baloes ? `
+          <div style="position:absolute; left:${xBaloes}px; top:14px; width:140px; height:140px;">
+            ${balaoHtml(0, 6, cor, -8)}
+            ${balaoHtml(36, 16, '#ffffff', 4)}
+            ${balaoHtml(70, -4, corEscura, 10)}
+            <div style="position:absolute; left:20px; top:60px; width:1px; height:60px; background:#a8cae8; transform:rotate(4deg); transform-origin:top;"></div>
+            <div style="position:absolute; left:56px; top:70px; width:1px; height:64px; background:${corEscura}; opacity:.6; transform:rotate(-3deg); transform-origin:top;"></div>
+            <div style="position:absolute; left:90px; top:50px; width:1px; height:60px; background:#333; opacity:.5; transform:rotate(6deg); transform-origin:top;"></div>
+          </div>
+        ` : ''}
 
         <div style="position:absolute; top:22px; left:0; right:0; display:flex; align-items:center; justify-content:center; gap:10px;">
           ${logoBase64 ? `<img src="${logoBase64}" style="width:44px; height:44px; object-fit:contain;">` : ''}
           <div style="font-size:1.45rem; font-weight:800; color:${corEscura};">${escapeHtml(nomeUnidade)}</div>
         </div>
 
-        <div style="position:absolute; left:26px; top:128px; width:225px;">
-          <div style="font-size:.98rem; font-weight:700; color:${corEscura};">〉 Hoje é dia de 〈</div>
-          <div style="font-size:2.35rem; font-weight:900; color:${corEscura}; line-height:1.0; margin-top:6px;">CELEBRAR</div>
-          <div style="font-family:'Pacifico',cursive; font-size:2.2rem; color:${cor}; margin-top:4px; line-height:1;">você!</div>
+        <div style="position:absolute; left:${xTexto}px; top:128px; width:225px;">
+          <div style="font-size:.98rem; font-weight:700; color:${corEscura};">〉 ${escapeHtml(t.headline_topo)} 〈</div>
+          <div style="font-size:2.35rem; font-weight:900; color:${corEscura}; line-height:1.0; margin-top:6px;">${escapeHtml(t.headline_grande)}</div>
+          <div style="font-family:'Pacifico',cursive; font-size:2.2rem; color:${cor}; margin-top:4px; line-height:1;">${escapeHtml(t.headline_script)}</div>
 
           <div style="display:flex; align-items:center; gap:7px; margin:16px 0 12px;">
             <div style="flex:1; height:2px; background:${cor}; opacity:.45;"></div>
@@ -1935,31 +1974,62 @@
           </div>
 
           <div style="font-size:.84rem; color:${corEscura}; line-height:1.45; font-weight:600;">
-            Desejamos um dia incrível, cheio de boas energias, alegrias e momentos especiais!
+            ${escapeHtml(t.mensagem)}
           </div>
 
-          <div style="font-family:'Pacifico',cursive; font-size:1.5rem; color:${cor}; margin-top:14px;">Parabéns! 🎉</div>
+          <div style="font-family:'Pacifico',cursive; font-size:1.5rem; color:${cor}; margin-top:14px;">${escapeHtml(t.assinatura)}</div>
         </div>
 
-        <div style="position:absolute; left:270px; top:120px; width:245px; height:245px; border-radius:50%; border:7px solid ${cor}; overflow:hidden; background:#fff; display:flex; align-items:center; justify-content:center; font-size:4rem; font-weight:800; color:${cor}; box-sizing:border-box;">
+        <div style="position:absolute; left:${xFoto}px; top:120px; width:245px; height:245px; border-radius:50%; border:7px solid ${cor}; overflow:hidden; background:#fff; display:flex; align-items:center; justify-content:center; font-size:4rem; font-weight:800; color:${cor}; box-sizing:border-box;">
           ${pessoa.fotoBase64 ? `<img src="${pessoa.fotoBase64}" style="width:100%; height:100%; object-fit:cover;">` : escapeHtml((pessoa.nome || '').split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase())}
         </div>
 
-        <div style="position:absolute; left:270px; top:342px; width:245px; height:52px; background:${corEscura}; border-radius:10px; display:flex; align-items:center; justify-content:center;">
+        <div style="position:absolute; left:${xFoto}px; top:342px; width:245px; height:52px; background:${corEscura}; border-radius:10px; display:flex; align-items:center; justify-content:center;">
           <div style="font-family:'Pacifico',cursive; font-size:1.55rem; color:#fff; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:0 12px; max-width:100%; box-sizing:border-box;">${escapeHtml(pessoa.nome)}</div>
         </div>
 
-        <div style="position:absolute; left:270px; top:404px; width:245px; text-align:center;">
+        <div style="position:absolute; left:${xFoto}px; top:404px; width:245px; text-align:center;">
           <div style="font-size:1.3rem;">🎂</div>
           <div style="font-size:.92rem; font-weight:800; color:${corEscura}; margin-top:2px; line-height:1.3;">ESTÁ FAZENDO<br>ANIVERSÁRIO HOJE! ♥</div>
         </div>
 
-        <div style="position:absolute; left:0; top:468px; width:540px; height:72px; background:${corEscura}; border-radius:26px 26px 0 0;"></div>
-        <div style="position:absolute; left:24px; top:490px; display:flex; align-items:center; gap:12px; width:490px;">
-          <div style="width:34px; height:34px; border-radius:50%; border:2px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; flex-shrink:0;">♥</div>
-          <div style="font-size:.72rem; color:#fff; line-height:1.35;">Que seu novo ciclo seja repleto de <span style="font-family:'Pacifico',cursive; font-size:.85rem; color:#bfe0ff;">saúde, felicidade, conquistas e sucesso!</span> Conte sempre com a gente! 💙</div>
-        </div>
+        ${design.mostrar_rodape ? `
+          <div style="position:absolute; left:0; top:468px; width:540px; height:72px; background:${corEscura}; border-radius:26px 26px 0 0;"></div>
+          <div style="position:absolute; left:24px; top:490px; display:flex; align-items:center; gap:12px; width:490px;">
+            <div style="width:34px; height:34px; border-radius:50%; border:2px solid #fff; display:flex; align-items:center; justify-content:center; color:#fff; flex-shrink:0;">♥</div>
+            <div style="font-size:.72rem; color:#fff; line-height:1.35;">${escapeHtml(t.rodape)}</div>
+          </div>
+        ` : ''}
       </div>`;
+  }
+
+  // valida/corrige o que a IA devolveu -- nunca confia cegamente:
+  // cor precisa ser um hex válido, textos têm tamanho máximo, layout e
+  // booleans só aceitam os valores esperados. Qualquer campo estranho
+  // ou ausente cai no padrão.
+  function validarDesignCard(designRecebido, designAtual){
+    const padrao = construirDesignPadraoCard();
+    const base = designAtual || padrao;
+    const d = (designRecebido && typeof designRecebido === 'object') ? designRecebido : {};
+    const corValida = /^#[0-9a-fA-F]{6}$/.test(d.cor_principal || '') ? d.cor_principal : base.cor_principal;
+    const layoutValido = ['foto_direita', 'foto_esquerda'].includes(d.layout) ? d.layout : base.layout;
+    const limitar = (texto, max, fallback) => (typeof texto === 'string' && texto.trim()) ? texto.trim().slice(0, max) : fallback;
+    const textosBase = base.textos || padrao.textos;
+    const textosRecebidos = (d.textos && typeof d.textos === 'object') ? d.textos : {};
+    return {
+      cor_principal: corValida,
+      layout: layoutValido,
+      mostrar_baloes: typeof d.mostrar_baloes === 'boolean' ? d.mostrar_baloes : base.mostrar_baloes,
+      mostrar_rodape: typeof d.mostrar_rodape === 'boolean' ? d.mostrar_rodape : base.mostrar_rodape,
+      textos: {
+        headline_topo: limitar(textosRecebidos.headline_topo, 40, textosBase.headline_topo),
+        headline_grande: limitar(textosRecebidos.headline_grande, 20, textosBase.headline_grande),
+        headline_script: limitar(textosRecebidos.headline_script, 20, textosBase.headline_script),
+        mensagem: limitar(textosRecebidos.mensagem, 160, textosBase.mensagem),
+        assinatura: limitar(textosRecebidos.assinatura, 40, textosBase.assinatura),
+        rodape: limitar(textosRecebidos.rodape, 180, textosBase.rodape),
+      },
+    };
   }
 
   // -----------------------------------------------------------------
@@ -1992,6 +2062,21 @@
     if(palco){ palco.style.left = '-9999px'; palco.innerHTML = ''; }
   }
 
+  // estado do card atualmente aberto no modal -- o chat de edição usa
+  // isso pra saber o que reenviar pra IA e o que re-renderizar
+  let estadoCardAtual = null;
+
+  async function renderizarECapturarCard(pessoa, nomeUnidade, logoBase64, design){
+    await carregarScriptSobDemanda('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
+    await document.fonts.load('40px Pacifico');
+    const palco = obterPalcoCartaz();
+    palco.innerHTML = construirHtmlCardStatus(pessoa, nomeUnidade, logoBase64, design);
+    await new Promise(r => setTimeout(r, 60)); // dá um respiro pro layout assentar antes do print
+    const canvas = await html2canvas(palco.firstElementChild, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
+    esconderPalcoCartaz(); // já pode sumir da tela, a captura terminou
+    return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+  }
+
   async function gerarCardStatusAniversario(id){
     const a = todosAniversarios.find(x => x.id === id);
     if(!a) return;
@@ -1999,24 +2084,18 @@
     const textoOriginal = btn.textContent;
     btn.disabled = true; btn.textContent = '…';
     try{
-      await carregarScriptSobDemanda('https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js');
-      await document.fonts.load('40px Pacifico');
-
       const fotoBase64 = a.foto_url ? await converterImagemParaBase64(a.foto_url) : null;
       const logoBase64 = (personalizacaoAtual && personalizacaoAtual.logo_url) ? await converterImagemParaBase64(personalizacaoAtual.logo_url) : null;
       const nomeUnidade = (personalizacaoAtual && personalizacaoAtual.nome) || '';
-      const corEscolhida = (personalizacaoAtual && personalizacaoAtual.cor_principal) || '#1B4B91';
+      const design = construirDesignPadraoCard();
+      design.cor_principal = (personalizacaoAtual && personalizacaoAtual.cor_principal) || design.cor_principal;
 
-      const palco = obterPalcoCartaz();
-      palco.innerHTML = construirHtmlCardStatus({ ...a, fotoBase64 }, nomeUnidade, logoBase64, corEscolhida);
+      const pessoa = { ...a, fotoBase64 };
+      const blob = await renderizarECapturarCard(pessoa, nomeUnidade, logoBase64, design);
 
-      await new Promise(r => setTimeout(r, 60)); // dá um respiro pro layout assentar antes do print
-      const canvas = await html2canvas(palco.firstElementChild, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
-      esconderPalcoCartaz(); // já pode sumir da tela, a captura terminou
-
-      const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+      estadoCardAtual = { pessoa, nomeUnidade, logoBase64, design, tipoArte: 'card_aniversario' };
       const nomeArquivo = `aniversario-${(a.nome || 'pessoa').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`;
-      mostrarResultadoCartaz(blob, nomeArquivo, 'Card gerado', `Feliz aniversário, ${a.nome}! 🎉`);
+      mostrarResultadoCartaz(blob, nomeArquivo, 'Card gerado', `Feliz aniversário, ${a.nome}! 🎉`, true);
     } catch(erro){
       esconderPalcoCartaz(); // não deixa o card cru na tela mesmo se algo falhar
       alert('Erro ao gerar card: ' + erro.message);
@@ -2026,7 +2105,7 @@
   }
 
   let urlBlobCartazAtual = null;
-  function mostrarResultadoCartaz(blob, nomeArquivoBase, tituloModal, tituloCompartilhar){
+  function mostrarResultadoCartaz(blob, nomeArquivoBase, tituloModal, tituloCompartilhar, permitirEdicaoIA){
     tituloModal = tituloModal || 'Cartaz gerado';
     tituloCompartilhar = tituloCompartilhar || 'Aniversariantes do mês';
     if(urlBlobCartazAtual) URL.revokeObjectURL(urlBlobCartazAtual);
@@ -2035,6 +2114,17 @@
     document.getElementById('tituloModalResultadoCartaz').textContent = tituloModal;
     document.getElementById('previewResultadoCartaz').innerHTML = `<img src="${urlBlob}" style="max-width:100%; border-radius:10px; box-shadow:0 2px 10px rgba(0,0,0,.15);">`;
     document.getElementById('modalResultadoCartaz').classList.add('show');
+
+    document.getElementById('blocoEdicaoIACartaz').style.display = permitirEdicaoIA ? 'block' : 'none';
+    if(permitirEdicaoIA){
+      document.getElementById('historicoEdicaoIACartaz').innerHTML = '';
+      document.getElementById('inputEdicaoIACartaz').value = '';
+      document.getElementById('statusEdicaoIACartaz').textContent = '';
+      document.getElementById('avisoSemChaveIA').style.display = 'none';
+      sb.rpc('fn_tem_chave_ia', { p_unidade_negocio_id: agenciaId }).then(({ data }) => {
+        document.getElementById('avisoSemChaveIA').style.display = data ? 'none' : 'block';
+      });
+    }
 
     const nomeArquivo = `${nomeArquivoBase}.png`;
 
@@ -2059,6 +2149,67 @@
   });
   document.getElementById('btnFecharModalResultadoCartazX').addEventListener('click', () => {
     document.getElementById('modalResultadoCartaz').classList.remove('show');
+  });
+
+  // -----------------------------------------------------------------
+  // CHAT DE EDIÇÃO POR IA -- o operador descreve o que quer mudar; a
+  // IA (via Edge Function, que guarda a chave com segurança) devolve
+  // só um JSON com os campos do "design" a atualizar -- NUNCA código.
+  // O JSON passa por validarDesignCard() antes de qualquer uso.
+  // -----------------------------------------------------------------
+  function adicionarMensagemHistoricoIA(texto, deQuemEh){
+    const div = document.createElement('div');
+    div.style.cssText = `font-size:.82rem; padding:6px 10px; border-radius:8px; max-width:85%; ${deQuemEh === 'operador' ? 'align-self:flex-end; background:var(--brand-soft); color:var(--ink);' : 'align-self:flex-start; background:var(--bg); color:var(--muted);'}`;
+    div.textContent = texto;
+    const historico = document.getElementById('historicoEdicaoIACartaz');
+    historico.appendChild(div);
+    historico.scrollTop = historico.scrollHeight;
+  }
+
+  async function enviarEdicaoIACartaz(){
+    const input = document.getElementById('inputEdicaoIACartaz');
+    const pedido = input.value.trim();
+    if(!pedido || !estadoCardAtual) return;
+    const btn = document.getElementById('btnEnviarEdicaoIACartaz');
+    const statusEl = document.getElementById('statusEdicaoIACartaz');
+    input.value = '';
+    btn.disabled = true;
+    adicionarMensagemHistoricoIA(pedido, 'operador');
+    statusEl.textContent = 'Pensando...';
+    try{
+      const { data, error } = await sb.functions.invoke('editar-arte-ia', {
+        body: {
+          pedido,
+          tipo_arte: estadoCardAtual.tipoArte,
+          design_atual: estadoCardAtual.design,
+          unidade_negocio_id: agenciaId,
+        },
+      });
+      if(error) throw new Error(error.message);
+      if(data && data.erro){
+        if(data.codigo_erro === 'sem_chave') document.getElementById('avisoSemChaveIA').style.display = 'block';
+        throw new Error(data.erro);
+      }
+
+      const designValidado = validarDesignCard(data.design, estadoCardAtual.design);
+      estadoCardAtual.design = designValidado;
+
+      const blob = await renderizarECapturarCard(estadoCardAtual.pessoa, estadoCardAtual.nomeUnidade, estadoCardAtual.logoBase64, designValidado);
+      const nomeArquivo = `aniversario-${(estadoCardAtual.pessoa.nome || 'pessoa').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}`;
+      mostrarResultadoCartaz(blob, nomeArquivo, 'Card gerado', `Feliz aniversário, ${estadoCardAtual.pessoa.nome}! 🎉`, true);
+      // a chamada acima já limpa o histórico -- recoloca a conversa de novo
+      adicionarMensagemHistoricoIA(pedido, 'operador');
+      adicionarMensagemHistoricoIA(data.resposta_curta || 'Pronto, atualizei o card!', 'ia');
+      document.getElementById('statusEdicaoIACartaz').textContent = '';
+    } catch(erro){
+      statusEl.textContent = '⚠️ ' + erro.message;
+    } finally{
+      btn.disabled = false;
+    }
+  }
+  document.getElementById('btnEnviarEdicaoIACartaz').addEventListener('click', enviarEdicaoIACartaz);
+  document.getElementById('inputEdicaoIACartaz').addEventListener('keydown', (e) => {
+    if(e.key === 'Enter') enviarEdicaoIACartaz();
   });
 
   async function carregarClientesStaff(){
