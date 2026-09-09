@@ -295,6 +295,14 @@
   .barra-filtro-profissionais select{ min-width:170px; }
   .barra-filtro-profissionais input:focus, .barra-filtro-profissionais select:focus{ border-color:var(--brand-2); box-shadow:0 0 0 3px var(--brand-soft); }
 
+  .toggle-exibicao{ display:flex; border:1.5px solid var(--border); border-radius:9px; overflow:hidden; flex-shrink:0; }
+  .toggle-exibicao-btn{
+    padding:9px 14px; border:none; background:var(--surface); color:var(--muted); font-size:.82rem; font-weight:600;
+    cursor:pointer; font-family:'Inter', sans-serif; white-space:nowrap; transition:background .15s, color .15s;
+  }
+  .toggle-exibicao-btn + .toggle-exibicao-btn{ border-left:1.5px solid var(--border); }
+  .toggle-exibicao-btn.ativo{ background:var(--brand); color:#fff; }
+
   .usuario-papel-row{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 18px; display:flex; align-items:center; gap:16px; }
   .usuario-papel-row .email{ flex:1; min-width:0; font-weight:600; font-size:.9rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .usuario-papel-row select{ padding:8px 11px; border-radius:8px; border:1.5px solid var(--border); font-size:.82rem; background:var(--surface); color:var(--ink); }
@@ -612,10 +620,24 @@
           <!-- ================= ANIVERSÁRIOS ================= -->
           <div class="panel-app" id="app-panel-aniversarios">
             <div class="filtros" style="justify-content:space-between; display:flex; margin-bottom:18px; gap:10px; flex-wrap:wrap;">
-              <span style="font-size:.85rem; color:var(--muted);">Lembretes de aniversário — colaboradores, fornecedores, ou qualquer pessoa de fora, ordenado pelo próximo a fazer aniversário.</span>
+              <span style="font-size:.85rem; color:var(--muted);">Lembretes de aniversário — colaboradores, fornecedores, ou qualquer pessoa de fora.</span>
               <div style="display:flex; gap:8px;">
                 <button class="btn-acao" id="btnGerarCartazAniversario" style="background:none; border:1.5px solid var(--brand-2); color:var(--brand-2); padding:8px 14px;">🎂 Gerar cartaz do mês</button>
                 <button class="btn-novo" id="btnNovoAniversario">+ Novo lembrete</button>
+              </div>
+            </div>
+            <div class="barra-filtro-profissionais">
+              <input type="text" id="filtroAniversarioNome" placeholder="Buscar por nome...">
+              <select id="filtroAniversarioMes">
+                <option value="">Todos os meses</option>
+                <option value="1">Janeiro</option><option value="2">Fevereiro</option><option value="3">Março</option>
+                <option value="4">Abril</option><option value="5">Maio</option><option value="6">Junho</option>
+                <option value="7">Julho</option><option value="8">Agosto</option><option value="9">Setembro</option>
+                <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+              </select>
+              <div class="toggle-exibicao">
+                <button type="button" class="toggle-exibicao-btn ativo" id="btnVisaoAniversarioData" data-visao="data">📅 Por data</button>
+                <button type="button" class="toggle-exibicao-btn" id="btnVisaoAniversarioNome" data-visao="nome">🔤 Por nome</button>
               </div>
             </div>
             <div class="lista-cadastro" id="listaAniversarios"></div>
@@ -1584,6 +1606,7 @@
   // =================================================================
   let todosAniversarios = [];
   let aniversarioIdAtual = null;
+  let visaoAniversarios = 'data'; // 'data' (próximo aniversário) ou 'nome' (ordem alfabética)
 
   const NOMES_MES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -1606,7 +1629,20 @@
     const lista = document.getElementById('listaAniversarios');
     if(!todosAniversarios.length){ lista.innerHTML = '<div class="vazio">Nenhum lembrete de aniversário cadastrado ainda.</div>'; return; }
 
-    const ordenados = [...todosAniversarios].sort((a, b) => diasAteProximoAniversario(a.dia, a.mes) - diasAteProximoAniversario(b.dia, b.mes));
+    const termoNome = (document.getElementById('filtroAniversarioNome').value || '').trim().toLowerCase();
+    const mesFiltro = document.getElementById('filtroAniversarioMes').value;
+
+    const filtrados = todosAniversarios.filter(a => {
+      if(termoNome && !(a.nome || '').toLowerCase().includes(termoNome)) return false;
+      if(mesFiltro && a.mes !== Number(mesFiltro)) return false;
+      return true;
+    });
+
+    if(!filtrados.length){ lista.innerHTML = '<div class="vazio">Nenhum aniversariante encontrado com esse filtro.</div>'; return; }
+
+    const ordenados = visaoAniversarios === 'nome'
+      ? [...filtrados].sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR', { sensitivity: 'base' }))
+      : [...filtrados].sort((a, b) => diasAteProximoAniversario(a.dia, a.mes) - diasAteProximoAniversario(b.dia, b.mes));
 
     lista.innerHTML = ordenados.map(a => {
       const diasFaltam = diasAteProximoAniversario(a.dia, a.mes);
@@ -1696,6 +1732,17 @@
 
     document.getElementById('drawerAniversarioOverlay').classList.add('show');
   }
+
+  document.getElementById('filtroAniversarioNome').addEventListener('input', renderizarListaAniversarios);
+  document.getElementById('filtroAniversarioMes').addEventListener('change', renderizarListaAniversarios);
+  document.querySelectorAll('.toggle-exibicao-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      visaoAniversarios = btn.dataset.visao;
+      document.querySelectorAll('.toggle-exibicao-btn').forEach(b => b.classList.remove('ativo'));
+      btn.classList.add('ativo');
+      renderizarListaAniversarios();
+    });
+  });
 
   document.getElementById('btnNovoAniversario').addEventListener('click', () => abrirDrawerAniversario(null));
   document.getElementById('btnFecharDrawerAniversario').addEventListener('click', () => document.getElementById('drawerAniversarioOverlay').classList.remove('show'));
