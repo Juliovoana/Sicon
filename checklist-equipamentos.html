@@ -496,6 +496,8 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
           <button class="stab on" onclick="goAdminTab('veic',this)"><i class="ti ti-bus"></i> Veículos</button>
           <button class="stab" onclick="goAdminTab('itens',this)"><i class="ti ti-list-check"></i> Itens do checklist</button>
           <button class="stab" onclick="goAdminTab('man',this)"><i class="ti ti-tool"></i> Tipos de manutenção</button>
+          <button class="stab" onclick="goAdminTab('osparam',this)"><i class="ti ti-file-invoice"></i> OS automática</button>
+          <button class="stab" onclick="goAdminTab('permissoes',this)"><i class="ti ti-users"></i> Permissões</button>
         </div>
         <div id="admin-veic" class="subscreen on">
           <div class="sbar">
@@ -533,6 +535,20 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
           </div>
           <div class="modal-cad-overlay" id="modal-cad-man"><div class="modal-cad-caixa" id="admin-man-form"></div></div>
           <div id="admin-man-lista"></div>
+        </div>
+        <div id="admin-osparam" class="subscreen">
+          <div class="card" id="admin-osparam-form"></div>
+        </div>
+        <div id="admin-permissoes" class="subscreen">
+          <div class="sbar">
+            <span style="font-size:12px;color:var(--tx2)">Papel de cada pessoa vinculada a essa unidade</span>
+            <button class="sbtn" onclick="carregarPermissoesChecklist()"><i class="ti ti-refresh"></i> Atualizar</button>
+          </div>
+          <p style="font-size:12px;color:var(--tx2);padding:0 16px 10px;line-height:1.5">
+            <strong>Administrador</strong> tem acesso completo (igual o Principal). <strong>Motorista</strong> vê só a
+            tela de lançar um checklist novo, sem painel, frota, manutenção nem as outras abas.
+          </p>
+          <div id="lista-permissoes-checklist"><div class="empty"><i class="ti ti-loader"></i> Carregando...</div></div>
         </div>
       </div>
     </div>
@@ -865,6 +881,8 @@ function categoriaParaChecklist(v){
 let frota = [];          // lista de equipamentos/veículos da unidade
 let itensCache = {};     // { tipo: [{g:'grupo', i:['item',...]}] } -- carregado do banco
 let itensModeloRaw = {}; // { tipo: [{id, grupo, item}] } -- com IDs, pra referenciar depois
+let itensModeloGerarOsMap = {}; // { itemModeloId: true/false } -- quais itens geram OS automática ao marcar NOK
+let parametrosOSAutomatica = null; // { id, almoxarifado_id, setor_id, evento_id, evento_texto, plano_contas_id } -- config fixa da unidade pra OS automática
 let vSel = null;         // equipamento/veículo selecionado
 let est = {};            // estado dos itens do checklist atual: { id: {status,obs,fotos:[File],fotoUrls:[],nome,grupo} }
 let ultimoKmConhecido = null;
@@ -886,35 +904,62 @@ function mostrarAvisoLicenca(texto){
 }
 
 function bloquearAcessoTotal(mensagem){
-  document.body.innerHTML = `
-    <div style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; font-family:Arial,Helvetica,sans-serif; background:#F6F7F9;">
-      <div style="background:#fff; border-radius:16px; padding:36px; max-width:440px; text-align:center; box-shadow:0 8px 28px rgba(20,30,50,.1);">
-        <div style="font-size:2.5rem; margin-bottom:12px;">🔒</div>
-        <h2 style="color:#C0392B; margin-bottom:12px; font-size:1.2rem;">Acesso bloqueado</h2>
-        <p style="color:#333; font-size:.92rem; line-height:1.5;">${mensagem}</p>
+  if(document.getElementById('overlayBloqueioLicenca')) return; // já mostrado, não duplica
+  // detecta se esse app tem algum jeito de trocar de unidade (nome do
+  // botão varia entre os apps -- reaproveita o que já existir, sem
+  // precisar reconstruir a tela de seleção do zero
+  const botaoTrocar = document.getElementById('btnTrocarAgencia') || document.getElementById('btnTrocarUnidade') || document.getElementById('btn-trocar-unidade');
+  const temTrocar = botaoTrocar && botaoTrocar.style.display !== 'none';
+
+  const overlay = document.createElement('div');
+  overlay.id = 'overlayBloqueioLicenca';
+  overlay.style.cssText = 'position:fixed; inset:0; z-index:999999; background:#F6F7F9; display:flex; align-items:center; justify-content:center; padding:20px; font-family:Arial,Helvetica,sans-serif;';
+  overlay.innerHTML = `
+    <div style="background:#fff; border-radius:16px; padding:36px; max-width:440px; text-align:center; box-shadow:0 8px 28px rgba(20,30,50,.1);">
+      <div style="font-size:2.5rem; margin-bottom:12px;">🔒</div>
+      <h2 style="color:#C0392B; margin-bottom:12px; font-size:1.2rem;">Acesso bloqueado</h2>
+      <p style="color:#333; font-size:.92rem; line-height:1.5; margin-bottom:20px;">${mensagem}</p>
+      <div style="display:flex; gap:10px; flex-direction:column;">
+        ${temTrocar ? '<button id="btnTrocarUnidadeBloqueio" style="padding:10px; border-radius:8px; border:1.5px solid #1B4332; background:none; color:#1B4332; font-weight:600; cursor:pointer; font-family:inherit;">🔄 Escolher outra unidade</button>' : ''}
+        <button id="btnSairBloqueio" style="padding:10px; border-radius:8px; border:none; background:#1B4332; color:#fff; font-weight:600; cursor:pointer; font-family:inherit;">Sair</button>
       </div>
     </div>`;
+  document.body.appendChild(overlay);
+
+  if(temTrocar){
+    document.getElementById('btnTrocarUnidadeBloqueio').addEventListener('click', () => {
+      overlay.remove();
+      botaoTrocar.click();
+    });
+  }
+  document.getElementById('btnSairBloqueio').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    location.reload();
+  });
 }
 
 async function verificarPendenciaLicenca(unidadeIdAlvo, moduloChave){
   try{
     const { data, error } = await sb.rpc('fn_verificar_pendencia_licenca', { p_unidade_negocio_id: unidadeIdAlvo, p_modulo_chave: moduloChave });
-    if(error || !data) return;
-    if(data.bloqueia) bloquearAcessoTotal(data.mensagem);
-    else mostrarAvisoLicenca(data.mensagem);
+    if(error || !data) return false;
+    if(data.bloqueia){ bloquearAcessoTotal(data.mensagem); return true; }
+    mostrarAvisoLicenca(data.mensagem);
+    return false;
   } catch(erro){
     console.warn('Não consegui checar pendência de licença:', erro.message);
+    return false;
   }
 }
 
 async function iniciarAppChecklist(){
-  await verificarPendenciaLicenca(meuPerfil.unidadeId, 'checklist');
+  if(await verificarPendenciaLicenca(meuPerfil.unidadeId, 'checklist')) return;
   carregarLogoUnidade(); // não precisa esperar -- se demorar, o PDF sai sem logo dessa vez
   document.getElementById('btn-trocar-unidade').style.display = vinculosDoUsuario.length > 1 ? 'flex' : 'none';
   document.getElementById('hsub').textContent = meuPerfil.unidadeNome + ' · ' + meuPerfil.nomeOperador;
   document.getElementById('operador-badge').textContent = '⬤ ' + meuPerfil.nomeOperador;
   document.getElementById('operador-badge').addEventListener('click', () => { if (confirm('Sair da conta?')) sair(); });
   document.getElementById('dt').value = new Date().toISOString().slice(0,10);
+  document.getElementById('mot').value = lerPadrao('motorista') || '';
 
   if (souAdmin()) {
     document.getElementById('fr-sem-permissao').classList.add('hidden');
@@ -927,7 +972,23 @@ async function iniciarAppChecklist(){
   await carregarFrota();
   await carregarItensModelo();
   carregarPersonalizacao(); // não trava a abertura -- aplica assim que chegar
-  await carregarDashboard();
+
+  // Operador "somente checklist" (papel = motorista): não vê painel,
+  // frota, manutenção, abastecimento nem corretiva -- só a tela de
+  // lançar um checklist novo, sem aba nenhuma pra navegar pra outro lugar.
+  if (meuPerfil.papel === 'motorista') {
+    document.querySelector('.tabs').style.display = 'none';
+    document.querySelector('.menu-mobile-btn').style.display = 'none';
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('on'));
+    const telaChecklist = document.getElementById('s-cl');
+    telaChecklist.classList.add('on');
+    // no desktop a tela normalmente fica só na "coluna 2" (ao lado do
+    // menu lateral, que agora está escondido) -- faz ela ocupar a
+    // largura toda em vez de deixar uma faixa vazia à esquerda
+    telaChecklist.style.gridColumn = '1 / -1';
+  } else {
+    await carregarDashboard();
+  }
 }
 
 function goTab(id, btn){
@@ -1007,14 +1068,20 @@ async function carregarItensModelo(){
     if (!itensModeloRaw[item.tipo_veiculo]) itensModeloRaw[item.tipo_veiculo] = [];
     itensModeloRaw[item.tipo_veiculo].push(item);
   });
+  itensModeloGerarOsMap = {};
   Object.keys(itensModeloRaw).forEach(tipo => {
     const gruposMap = {};
     itensModeloRaw[tipo].forEach(item => {
       if (!gruposMap[item.grupo]) gruposMap[item.grupo] = [];
       gruposMap[item.grupo].push(item);
+      itensModeloGerarOsMap[item.id] = !!item.gerar_os;
     });
-    itensCache[tipo] = Object.keys(gruposMap).map(g => ({ g, i: gruposMap[g] }));
+    // grupos de checagem em ordem alfabética, sem acento/maiúscula
+    const gruposOrdenados = Object.keys(gruposMap).sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }));
+    itensCache[tipo] = gruposOrdenados.map(g => ({ g, i: gruposMap[g] }));
   });
+
+  await carregarParametrosOS();
 }
 
 /* ── Busca/seleção de veículo ── */
@@ -1111,9 +1178,27 @@ function kmValido(){
   return true;
 }
 
+// Junta os itens específicos da categoria com os itens cadastrados
+// como "Todos" (valem pra qualquer equipamento) -- grupos com o mesmo
+// nome nos dois conjuntos viram uma seção só, e o resultado final sai
+// em ordem alfabética.
+function montarGruposParaTipo(tipo){
+  const especificos = itensCache[tipo] || [];
+  const genericos = (tipo !== 'Todos') ? (itensCache['Todos'] || []) : [];
+  if (!genericos.length) return especificos;
+  const mapa = {};
+  [...especificos, ...genericos].forEach(g => {
+    if (!mapa[g.g]) mapa[g.g] = [];
+    mapa[g.g] = mapa[g.g].concat(g.i);
+  });
+  return Object.keys(mapa)
+    .sort((a, b) => a.localeCompare(b, 'pt-BR', { sensitivity: 'base' }))
+    .map(g => ({ g, i: mapa[g] }));
+}
+
 /* ── Montar o checklist (itens do modelo pro tipo do veículo) ── */
 function buildChecklist(tipo){
-  const grupos = itensCache[tipo] || [];
+  const grupos = montarGruposParaTipo(tipo);
   const body = document.getElementById('clbody');
   body.innerHTML = ''; est = {};
 
@@ -1816,6 +1901,7 @@ async function enviarChecklist(){
   if (!vSel) { toast('Selecione um veículo'); return; }
   const motorista = document.getElementById('mot').value.trim();
   if (!motorista) { toast('Informe o nome do motorista/responsável'); document.getElementById('mot').focus(); return; }
+  salvarPadrao('motorista', motorista); // lembra o último motorista/responsável informado, pra próxima vez já vir preenchido
   const kmVal = document.getElementById('km').value.trim();
   if (!kmVal) { toast(labelMedida(vSel) + ' é obrigatório'); document.getElementById('km').focus(); return; }
   if (!kmValido()) { toast(labelMedida(vSel) + ' não pode ser menor que o último registrado — verifique'); document.getElementById('km').focus(); return; }
@@ -1880,7 +1966,53 @@ async function enviarChecklist(){
     // grava as alterações de manutenção feitas durante esse checklist
     // (só os tipos que a pessoa realmente preencheu algo)
     await salvarManutencaoAlterada(checklist.id);
-    toast('✓ Checklist enviado com sucesso!');
+
+    // Gera Ordem(ns) de Serviço automática(s) pros itens marcados NOK
+    // que estão cadastrados com "gerar_os" -- usa os parâmetros fixos
+    // (Almoxarifado/Setor/Evento) configurados em Gerenciar → OS
+    // automática, sem depender do motorista escolher nada
+    let mensagemFinal = '✓ Checklist enviado com sucesso!';
+    const itensParaOS = Object.values(est).filter(item => item.status === 'nok' && itensModeloGerarOsMap[item.itemModeloId]);
+    if (itensParaOS.length) {
+      if (!parametrosOSAutomatica || !parametrosOSAutomatica.almoxarifado_id || !parametrosOSAutomatica.setor_id || !parametrosOSAutomatica.evento_texto) {
+        console.warn('OS automática não gerada: configure Almoxarifado/Setor/Evento em Gerenciar → OS automática.');
+        mensagemFinal = '✓ Checklist enviado — mas a OS automática não foi criada (configure os parâmetros em Gerenciar → OS automática).';
+      } else {
+        try {
+          const { data: reqOS, error: errReqOS } = await sb.from('estoque_requisicoes_rapidas').insert({
+            unidade_negocio_id: meuPerfil.unidadeId,
+            almoxarifado_id: parametrosOSAutomatica.almoxarifado_id,
+            setor_id: parametrosOSAutomatica.setor_id,
+            evento: parametrosOSAutomatica.evento_texto,
+            solicitante: motorista,
+            criado_por: meuPerfil.userId,
+            tipo: 'servico_manutencao_corretiva',
+            status: 'pendente'
+          }).select().single();
+          if (errReqOS) throw errReqOS;
+
+          const itensOSPayload = itensParaOS.map(item => ({
+            requisicao_id: reqOS.id,
+            equipamento_veiculo_id: vSel.id,
+            servico_descricao: '🚨 ' + item.nome,
+            observacao: (item.obs ? item.obs + ' — ' : '') + 'Gerado automaticamente pelo checklist de ' + vSel.nome + (vSel.placa ? ' (' + vSel.placa + ')' : '') + ' em ' + new Date().toLocaleDateString('pt-BR') + '.',
+            qtd_solicitada: 1,
+            setor_id: parametrosOSAutomatica.setor_id,
+            evento: parametrosOSAutomatica.evento_texto,
+            plano_contas_id: parametrosOSAutomatica.plano_contas_id || null
+          }));
+          const { error: errItensOS } = await sb.from('estoque_requisicoes_rapidas_itens').insert(itensOSPayload);
+          if (errItensOS) throw errItensOS;
+
+          mensagemFinal = '✓ Checklist enviado — ' + itensParaOS.length + ' OS gerada(s) automaticamente.';
+        } catch (errOS) {
+          console.error('Falha ao gerar OS automática:', errOS.message);
+          mensagemFinal = '✓ Checklist enviado — mas houve erro ao gerar a OS automática: ' + errOS.message;
+        }
+      }
+    }
+
+    toast(mensagemFinal);
     await carregarFrota();
     limparVeiculoSelecionado();
   } catch (err) {
@@ -1908,6 +2040,8 @@ function goAdminTab(id, btn){
   if (id === 'veic') carregarVeiculosAdmin();
   if (id === 'itens') carregarItensAdmin();
   if (id === 'man') carregarTiposManutencaoAdmin();
+  if (id === 'osparam') renderizarParametrosOS();
+  if (id === 'permissoes') carregarPermissoesChecklist();
 }
 
 /* ── Gerenciar: Veículos/Equipamentos ── */
@@ -2070,7 +2204,7 @@ async function carregarItensAdmin(){
     <div class="sec">${escapeHtml(LABEL_TIPO[tipo] || tipo)}</div>
     ${porTipo[tipo].map(it => `
       <div class="fi">
-        <div style="flex:1"><div class="fipl" style="font-size:13px">${escapeHtml(it.item)}</div><div class="fisb">${escapeHtml(it.grupo)}</div></div>
+        <div style="flex:1"><div class="fipl" style="font-size:13px">${escapeHtml(it.item)}${it.gerar_os ? ' <span class="pill" style="background:#fee2e2;color:#991b1b">🚨 Gera OS</span>' : ''}</div><div class="fisb">${escapeHtml(it.grupo)}</div></div>
         <div class="fi-actions">
           <button class="fi-btn" data-editar-item="${it.id}" title="Editar"><i class="ti ti-edit"></i></button>
           <button class="fi-btn danger" data-excluir-item="${it.id}" title="Excluir"><i class="ti ti-trash"></i></button>
@@ -2085,7 +2219,7 @@ async function carregarItensAdmin(){
 
 function abrirFormItemModeloNovo(){
   itemModeloEmEdicaoId = null;
-  renderizarFormItemModelo({ tipo_veiculo:'', grupo:'', item:'', ordem:0 });
+  renderizarFormItemModelo({ tipo_veiculo:'', grupo:'', item:'', ordem:0, gerar_os:false });
 }
 function abrirFormItemModeloEditar(id){
   const it = todosItensModelo.find(x => x.id === id); if (!it) return;
@@ -2099,20 +2233,27 @@ function renderizarFormItemModelo(it){
   // algum equipamento cadastrado, pra não desalinhar do que a pessoa
   // já digitou no cadastro
   const categoriasUsadas = [...new Set(frota.map(v => categoriaParaChecklist(v)).filter(Boolean))];
-  const sugestoes = [...new Set(['Caminhão', 'Ônibus', 'Van', 'Utilitário', 'Motocicleta', 'Gerador', 'Climatizador', 'Outro', ...categoriasUsadas])];
+  const sugestoes = [...new Set(['Todos', 'Caminhão', 'Ônibus', 'Van', 'Utilitário', 'Motocicleta', 'Gerador', 'Climatizador', 'Outro', ...categoriasUsadas])];
   form.innerHTML = `
     <div class="lbl">${itemModeloEmEdicaoId ? 'Editar' : 'Novo'} item de checklist</div>
     <div class="man-grid" style="margin-top:8px">
       <div class="man-field"><label>Categoria do equipamento *</label>
-        <input class="inp" id="fi-tipo" list="lista-sugestao-categoria" value="${escapeHtml(it.tipo_veiculo||'')}" placeholder="Ex: Caminhão, Ônibus, Van...">
+        <input class="inp" id="fi-tipo" list="lista-sugestao-categoria" value="${escapeHtml(it.tipo_veiculo||'')}" placeholder="Ex: Caminhão, Ônibus, Van... ou 'Todos'">
         <datalist id="lista-sugestao-categoria">
           ${sugestoes.map(s => `<option value="${escapeHtml(s)}"></option>`).join('')}
         </datalist>
+        <p style="font-size:11px;color:var(--tx3);margin-top:4px">Digite "Todos" pra esse item aparecer no checklist de qualquer categoria de equipamento.</p>
       </div>
       <div class="man-field"><label>Grupo/Seção *</label><input class="inp" id="fi-grupo" placeholder="Ex: Pneus, Freios..." value="${escapeHtml(it.grupo)}"></div>
     </div>
     <div class="man-field" style="margin-top:8px"><label>Item a verificar *</label><input class="inp" id="fi-item" placeholder="Ex: Calibragem dos pneus" value="${escapeHtml(it.item)}"></div>
     <div class="man-field" style="margin-top:8px"><label>Ordem de exibição</label><input class="inp" type="number" id="fi-ordem" value="${it.ordem||0}"></div>
+    <div class="man-field" style="margin-top:8px">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;font-weight:400;letter-spacing:normal;font-size:13px;color:var(--tx)">
+        <input type="checkbox" id="fi-gerar-os" ${it.gerar_os ? 'checked' : ''} style="width:16px;height:16px">
+        🚨 Gerar Ordem de Serviço automaticamente quando este item for marcado NOK
+      </label>
+    </div>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn-buscar" onclick="salvarItemModeloAdmin()"><i class="ti ti-device-floppy"></i> Salvar</button>
       <button class="btn-buscar" style="background:var(--tx3)" onclick="document.getElementById('modal-cad-item').classList.remove('on')">Cancelar</button>
@@ -2128,6 +2269,7 @@ async function salvarItemModeloAdmin(){
     tipo_veiculo: categoria,
     grupo, item,
     ordem: Number(document.getElementById('fi-ordem').value) || 0,
+    gerar_os: document.getElementById('fi-gerar-os').checked,
     ativo: true
   };
   const { error } = itemModeloEmEdicaoId
@@ -2290,6 +2432,193 @@ async function carregarEventosParaSolicitacao(){
   return eventosUnidadeCache;
 }
 
+/* ── Parâmetros da OS automática (checklist → manutenção corretiva) ──
+   Almoxarifado/Setor/Evento fixos por unidade, usados quando um item
+   marcado "gerar_os" é reprovado (NOK) num checklist -- o motorista
+   não escolhe nada disso, só o admin, uma vez, aqui. */
+async function carregarParametrosOS(){
+  const { data, error } = await sb.from('checklist_parametros_os')
+    .select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).maybeSingle();
+  if (error) { console.error('Erro ao carregar parâmetros de OS automática:', error.message); return; }
+  parametrosOSAutomatica = data || null;
+}
+
+async function renderizarParametrosOS(){
+  const form = document.getElementById('admin-osparam-form');
+  form.innerHTML = '<div class="empty" style="padding:20px"><i class="ti ti-loader"></i> Carregando...</div>';
+
+  const [almoxarifados, setores, eventos, planosContas] = await Promise.all([
+    carregarAlmoxarifados(), carregarSetoresParaSolicitacao(), carregarEventosParaSolicitacao(), carregarPlanoContasParaSolicitacao()
+  ]);
+  const p = parametrosOSAutomatica || {};
+  const almoxSel = almoxarifados.find(a => a.id === p.almoxarifado_id);
+  const setorSel = setores.find(s => s.id === p.setor_id);
+  const planoSel = planosContas.find(pc => pc.id === p.plano_contas_id);
+
+  form.innerHTML = `
+    <div class="lbl">Parâmetros da OS automática</div>
+    <p style="font-size:12px;color:var(--tx2);margin:6px 0 12px;line-height:1.5">
+      Quando um item marcado "🚨 Gera OS" (em Itens do checklist) for reprovado (NOK), o sistema
+      cria sozinho uma solicitação de manutenção corretiva com os valores abaixo — o motorista/
+      responsável pelo checklist não escolhe (nem vê) almoxarifado, setor ou evento.
+    </p>
+    <div class="man-field" style="position:relative">
+      <label>Almoxarifado *</label>
+      <input class="inp" type="text" id="pos-almox-busca" placeholder="Buscar almoxarifado..." autocomplete="off"
+        data-selecionado-id="${escapeHtml(almoxSel ? String(almoxSel.id) : '')}">
+      <div class="lista-sugestoes-autocomplete" id="pos-almox-sugestoes"></div>
+      <div id="pos-almox-confirmacao" style="font-size:12px;color:var(--ok);margin-top:4px">${almoxSel ? 'Selecionado: ' + escapeHtml(almoxSel.nome || almoxSel.descricao || ('Almoxarifado ' + almoxSel.id)) : ''}</div>
+    </div>
+    <div class="man-field" style="position:relative;margin-top:10px">
+      <label>Setor *</label>
+      <input class="inp" type="text" id="pos-setor-busca" placeholder="Buscar setor..." autocomplete="off"
+        data-selecionado-id="${escapeHtml(setorSel ? String(setorSel.id) : '')}">
+      <div class="lista-sugestoes-autocomplete" id="pos-setor-sugestoes"></div>
+      <div id="pos-setor-confirmacao" style="font-size:12px;color:var(--ok);margin-top:4px">${setorSel ? 'Selecionado: ' + escapeHtml(setorSel.nome || setorSel.descricao || ('Setor ' + setorSel.id)) : ''}</div>
+    </div>
+    <div class="man-field" style="position:relative;margin-top:10px">
+      <label>Evento *</label>
+      <input class="inp" type="text" id="pos-evento-busca" placeholder="Buscar evento..." autocomplete="off"
+        data-selecionado-id="${escapeHtml(p.evento_id ? String(p.evento_id) : '')}" data-selecionado-texto="${escapeHtml(p.evento_texto || '')}">
+      <div class="lista-sugestoes-autocomplete" id="pos-evento-sugestoes"></div>
+      <div id="pos-evento-confirmacao" style="font-size:12px;color:var(--ok);margin-top:4px">${p.evento_texto ? 'Selecionado: ' + escapeHtml(p.evento_texto) : ''}</div>
+    </div>
+    <div class="man-field" style="position:relative;margin-top:10px">
+      <label>Plano de Contas (opcional)</label>
+      <input class="inp" type="text" id="pos-plano-busca" placeholder="Buscar código ou descrição..." autocomplete="off"
+        data-selecionado-id="${escapeHtml(planoSel ? String(planoSel.id) : '')}">
+      <div class="lista-sugestoes-autocomplete" id="pos-plano-sugestoes"></div>
+      <div id="pos-plano-confirmacao" style="font-size:12px;color:var(--ok);margin-top:4px">${planoSel ? 'Selecionado: ' + escapeHtml((planoSel.codigo || '') + ' — ' + (planoSel.nome || planoSel.descricao || '')) : ''}</div>
+    </div>
+    <button class="btn-buscar" style="width:100%;justify-content:center;margin-top:14px" onclick="salvarParametrosOS()"><i class="ti ti-device-floppy"></i> Salvar parâmetros</button>
+  `;
+
+  function buscaComConfirmacao(inputId, sugestoesId, confirmacaoId, lista, filtro, formatarTexto){
+    const input = document.getElementById(inputId);
+    const sugestoes = document.getElementById(sugestoesId);
+    const confirmacao = document.getElementById(confirmacaoId);
+    input.addEventListener('input', () => {
+      const termo = input.value.trim().toLowerCase();
+      delete input.dataset.selecionadoId;
+      confirmacao.textContent = '';
+      if (!termo) { sugestoes.classList.remove('show'); return; }
+      const encontrados = lista.filter(item => filtro(item, termo)).slice(0, 8);
+      sugestoes.innerHTML = encontrados.length
+        ? encontrados.map(item => `<div class="sugestao-autocomplete" data-id="${item.id}">${escapeHtml(formatarTexto(item))}</div>`).join('')
+        : '<div class="sugestao-autocomplete" style="opacity:.6">Nada encontrado</div>';
+      sugestoes.classList.add('show');
+      sugestoes.querySelectorAll('[data-id]').forEach(el => el.addEventListener('click', () => {
+        const item = lista.find(x => String(x.id) === el.dataset.id);
+        input.value = '';
+        input.dataset.selecionadoId = item.id;
+        input.dataset.selecionadoTexto = formatarTexto(item);
+        confirmacao.textContent = 'Selecionado: ' + formatarTexto(item);
+        sugestoes.classList.remove('show');
+      }));
+    });
+    input.addEventListener('blur', () => setTimeout(() => sugestoes.classList.remove('show'), 200));
+  }
+
+  buscaComConfirmacao('pos-almox-busca', 'pos-almox-sugestoes', 'pos-almox-confirmacao', almoxarifados,
+    (item, termo) => (item.nome || item.descricao || '').toLowerCase().includes(termo),
+    (item) => item.nome || item.descricao || ('Almoxarifado ' + item.id));
+
+  buscaComConfirmacao('pos-setor-busca', 'pos-setor-sugestoes', 'pos-setor-confirmacao', setores,
+    (item, termo) => (item.nome || item.descricao || '').toLowerCase().includes(termo),
+    (item) => item.nome || item.descricao || ('Setor ' + item.id));
+
+  buscaComConfirmacao('pos-evento-busca', 'pos-evento-sugestoes', 'pos-evento-confirmacao', eventos,
+    (item, termo) => (item.nome || '').toLowerCase().includes(termo) || String(item.numero_evento || '').includes(termo),
+    (item) => (item.numero_evento || item.id) + ' — ' + (item.nome || ''));
+
+  buscaComConfirmacao('pos-plano-busca', 'pos-plano-sugestoes', 'pos-plano-confirmacao', planosContas,
+    (item, termo) => (item.nome || item.descricao || '').toLowerCase().includes(termo) || (item.codigo || '').toLowerCase().includes(termo),
+    (item) => (item.codigo || '') + ' — ' + (item.nome || item.descricao || ''));
+}
+
+async function salvarParametrosOS(){
+  const almoxarifadoId = document.getElementById('pos-almox-busca').dataset.selecionadoId ? Number(document.getElementById('pos-almox-busca').dataset.selecionadoId) : null;
+  const setorId = document.getElementById('pos-setor-busca').dataset.selecionadoId ? Number(document.getElementById('pos-setor-busca').dataset.selecionadoId) : null;
+  const eventoEl = document.getElementById('pos-evento-busca');
+  const eventoId = eventoEl.dataset.selecionadoId ? Number(eventoEl.dataset.selecionadoId) : null;
+  const eventoTexto = eventoEl.dataset.selecionadoTexto || '';
+  const planoContasId = document.getElementById('pos-plano-busca').dataset.selecionadoId ? Number(document.getElementById('pos-plano-busca').dataset.selecionadoId) : null;
+
+  if (!almoxarifadoId || !setorId || !eventoTexto) { toast('Preencha Almoxarifado, Setor e Evento'); return; }
+
+  const registro = {
+    unidade_negocio_id: meuPerfil.unidadeId,
+    almoxarifado_id: almoxarifadoId,
+    setor_id: setorId,
+    evento_id: eventoId,
+    evento_texto: eventoTexto,
+    plano_contas_id: planoContasId,
+    atualizado_em: new Date().toISOString()
+  };
+  const { error } = (parametrosOSAutomatica && parametrosOSAutomatica.id)
+    ? await sb.from('checklist_parametros_os').update(registro).eq('id', parametrosOSAutomatica.id)
+    : await sb.from('checklist_parametros_os').insert(registro);
+  if (error) { toast('Erro ao salvar parâmetros: ' + error.message); return; }
+  toast('✓ Parâmetros da OS automática salvos.');
+  await carregarParametrosOS();
+}
+
+/* ── Permissões: papel de cada pessoa vinculada à unidade ──
+   Usa o campo servir_unidade_usuarios.papel (não é uma tabela por
+   módulo como o Estoque tem -- decisão consciente, pra manter simples
+   aqui). Valores possíveis: '' (operador padrão), 'administrador',
+   'motorista' (somente lança checklist, ver iniciarAppChecklist). */
+async function carregarPermissoesChecklist(){
+  const lista = document.getElementById('lista-permissoes-checklist');
+  lista.innerHTML = '<div class="empty"><i class="ti ti-loader"></i> Carregando...</div>';
+
+  const { data: vinculos, error } = await sb.from('servir_unidade_usuarios')
+    .select('user_id, eh_principal, papel').eq('unidade_negocio_id', meuPerfil.unidadeId);
+  if (error) { lista.innerHTML = '<div class="empty">Erro ao carregar usuários: ' + escapeHtml(error.message) + '</div>'; return; }
+  if (!vinculos || !vinculos.length) { lista.innerHTML = '<div class="empty"><i class="ti ti-users"></i>Nenhum usuário vinculado a essa unidade.</div>'; return; }
+
+  const linhas = [];
+  for (const v of vinculos) {
+    const { data: email } = await sb.rpc('fn_obter_email_usuario', { p_user_id: v.user_id });
+    linhas.push({ userId: v.user_id, ehPrincipal: v.eh_principal, papel: v.papel || '', email: email || 'E-mail indisponível' });
+  }
+  linhas.sort((a, b) => a.email.localeCompare(b.email, 'pt-BR', { sensitivity: 'base' }));
+
+  lista.innerHTML = linhas.map(u => {
+    const souEu = u.userId === meuPerfil.userId;
+    const travado = u.ehPrincipal || souEu;
+    const motivoTravado = u.ehPrincipal ? 'Principal sempre tem acesso completo' : 'Não é possível alterar sua própria permissão por aqui';
+    return `
+      <div class="fi" data-user-id="${escapeHtml(u.userId)}">
+        <div style="flex:1">
+          <div class="fipl" style="font-size:13px">${escapeHtml(u.email)}</div>
+          ${u.ehPrincipal ? '<div class="fisb" style="color:var(--nv)">Principal</div>' : ''}
+          ${souEu && !u.ehPrincipal ? '<div class="fisb">Você</div>' : ''}
+        </div>
+        <select class="inp select-papel-checklist" style="width:auto;min-width:220px" ${travado ? `disabled title="${motivoTravado}"` : ''}>
+          <option value="" ${u.papel === '' ? 'selected' : ''}>Operador padrão (vê o painel normal)</option>
+          <option value="administrador" ${u.papel === 'administrador' ? 'selected' : ''}>Administrador</option>
+          <option value="motorista" ${u.papel === 'motorista' ? 'selected' : ''}>Motorista (só lança checklist)</option>
+        </select>
+      </div>`;
+  }).join('');
+
+  lista.querySelectorAll('[data-user-id]').forEach(row => {
+    const select = row.querySelector('.select-papel-checklist');
+    if (!select || select.disabled) return;
+    select.addEventListener('change', async () => {
+      const userId = row.dataset.userId;
+      const novoPapel = select.value || null;
+      const { error: erroUp } = await sb.from('servir_unidade_usuarios')
+        .update({ papel: novoPapel })
+        .eq('unidade_negocio_id', meuPerfil.unidadeId)
+        .eq('user_id', userId);
+      if (erroUp) { toast('Erro ao salvar: ' + erroUp.message); return; }
+      toast('✓ Permissão atualizada.');
+    });
+  });
+}
+
 // busca genérica reutilizável (equipamento, setor, plano de contas...)
 function configurarBuscaSolicitacao(inputId, sugestoesId, lista, camposTexto, aoSelecionar){
   const input = document.getElementById(inputId);
@@ -2335,7 +2664,7 @@ async function carregarSolicitacoes(tipo, aba, statusFiltro){
     const descricao = tipo === 'servico_abastecimento'
       ? (item.qtd_solicitada ? Number(item.qtd_solicitada).toLocaleString('pt-BR') + ' ' + (item.unidade_medida || 'L') : '—') + (item.fornecedor_recomendado ? ' · ' + escapeHtml(item.fornecedor_recomendado) : '')
       : escapeHtml(item.servico_descricao || item.descricao_livre || '—');
-    solicitacoesInfoCache[item.id] = { nomeEquip, fornecedor: item.fornecedor_recomendado || '', descricaoServico: item.servico_descricao || item.descricao_livre || '' };
+    solicitacoesInfoCache[item.id] = { nomeEquip, fornecedor: item.fornecedor_recomendado || '', descricaoServico: item.servico_descricao || item.descricao_livre || '', observacao: item.observacao || '' };
     const botoesAdmin = souAdmin() && statusFiltro === 'pendente' ? `
       <div style="display:flex;gap:6px;margin-top:8px">
         <button class="btn-buscar" style="flex:1;justify-content:center;padding:8px" data-atender="${item.id}" data-req="${req.id}">Atender</button>
@@ -2346,6 +2675,8 @@ async function carregarSolicitacoes(tipo, aba, statusFiltro){
       : '';
     const infoReprovacao = statusFiltro === 'reprovada' && req.motivo_reprovacao
       ? `<div class="fisb" style="margin-top:2px;color:var(--nk)">Motivo: ${escapeHtml(req.motivo_reprovacao)}</div>` : '';
+    const infoObservacao = item.observacao
+      ? `<div class="fisb" style="margin-top:4px;font-style:italic">"${escapeHtml(item.observacao)}"</div>` : '';
     return `
       <div class="fi" style="align-items:flex-start;flex-direction:column">
         <div style="display:flex;width:100%;gap:10px">
@@ -2354,6 +2685,7 @@ async function carregarSolicitacoes(tipo, aba, statusFiltro){
             <div class="fipl">${escapeHtml(nomeEquip)}</div>
             <div class="fisb">${descricao}</div>
             <div class="fisb" style="margin-top:2px">Solicitado por ${escapeHtml(req.solicitante)} · ${new Date(req.created_at).toLocaleDateString('pt-BR')}</div>
+            ${infoObservacao}
             ${infoAtendimento}${infoReprovacao}
           </div>
         </div>
@@ -2733,6 +3065,7 @@ function abrirFormAtender(itemId, requisicaoId, tipo){
       <div><strong>Equipamento:</strong> ${escapeHtml(info.nomeEquip || '—')}</div>
       <div style="margin-top:3px"><strong>${ehAbastecimento ? 'Posto' : 'Prestador de serviço'}:</strong> ${escapeHtml(info.fornecedor || '—')}</div>
       ${!ehAbastecimento && info.descricaoServico ? `<div style="margin-top:3px"><strong>Problema:</strong> ${escapeHtml(info.descricaoServico)}</div>` : ''}
+      ${info.observacao ? `<div style="margin-top:3px"><strong>Observação:</strong> ${escapeHtml(info.observacao)}</div>` : ''}
     </div>
     <div class="man-grid" style="margin-top:8px">
       <div class="man-field"><label>${ehAbastecimento ? 'Litros atendidos' : 'Quantidade'} *</label><input class="inp" type="number" step="0.01" id="at-qtd" value="${ehAbastecimento ? '' : '1'}"></div>
