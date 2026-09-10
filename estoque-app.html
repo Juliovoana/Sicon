@@ -65,6 +65,29 @@
     .btn-vermelho:hover { background: #7a0016; }
     .btn-pequeno { padding: 5px 10px; font-size: 0.8em; }
 
+    /* ===== Ajuda do módulo ===== */
+    .btn-ajuda-modulo { background:#eef2ff; color:#1565c0; }
+    .btn-ajuda-modulo:hover { background:#dde6fb; }
+    .modal-ajuda-body { display:flex; flex:1; min-height:0; overflow:hidden; }
+    .modal-ajuda-nav { width:220px; flex-shrink:0; border-right:1px solid #ddd; background:#fafafa; overflow-y:auto; padding:10px; }
+    .modal-ajuda-nav-item {
+        display:block; width:100%; text-align:left; background:none; border:none; color:#666; font-size:0.85em; font-weight:bold;
+        padding:9px 10px; border-radius:6px; cursor:pointer; margin-bottom:2px; font-family:inherit;
+    }
+    .modal-ajuda-nav-item:hover { background:#eef2ff; color:#1565c0; }
+    .modal-ajuda-nav-item.ativa { background:#1565c0; color:#fff; }
+    .modal-ajuda-conteudo { flex:1; overflow-y:auto; padding:20px 24px; font-size:0.9em; line-height:1.55; }
+    .modal-ajuda-conteudo h4 { margin-top:0; margin-bottom:10px; }
+    .modal-ajuda-conteudo p { margin:0 0 10px; }
+    .modal-ajuda-conteudo ul { margin:0 0 12px 18px; }
+    .modal-ajuda-conteudo li { margin-bottom:6px; }
+    .modal-ajuda-conteudo .ajuda-atualizado { font-size:0.75em; color:#888; margin-top:16px; padding-top:10px; border-top:1px solid #eee; }
+    @media (max-width:680px) {
+        .modal-ajuda-body { flex-direction:column; }
+        .modal-ajuda-nav { width:100%; border-right:none; border-bottom:1px solid #ddd; display:flex; overflow-x:auto; gap:4px; padding:8px; white-space:nowrap; }
+        .modal-ajuda-nav-item { margin-bottom:0; flex-shrink:0; }
+    }
+
     #resultadosBuscaProduto {
         max-width: 620px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 16px;
         max-height: 260px; overflow-y: auto; display: none;
@@ -434,6 +457,7 @@
     </div>
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
         <span id="unidade-logada" style="font-size:0.85em; color:#555;"></span>
+        <button class="btn btn-ajuda-modulo" id="btnAjudaModulo">❓ Ajuda</button>
         <button class="btn btn-cinza" id="btnSincronizarTudo" title="Recarrega produtos, eventos e catálogos de todos os formulários">🔄 Sincronizar tudo</button>
         <button class="btn btn-cinza" id="btn-trocar-unidade" style="display:none;" title="Trocar unidade">⇄ Trocar unidade</button>
         <button class="btn btn-cinza" id="btn-convidar-colaborador" style="display:none;" title="Convidar colaborador">👤+ Convidar</button>
@@ -464,6 +488,19 @@
             <button class="btn-icone" id="inventarioCompartilhar" title="Compartilhar">📤</button>
             <button class="btn-icone" id="inventarioSalvar" title="Salvar">💾</button>
             <button class="btn btn-cinza" id="btnFecharInventario" style="margin-left:auto;">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal-overlay" id="modalAjudaOverlay" style="z-index:1300;">
+    <div class="modal-caixa larga" style="max-width:900px; height:min(640px, 85vh); display:flex; flex-direction:column; padding:0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:16px 22px; border-bottom:1px solid #ddd; flex-shrink:0;">
+            <h4 style="margin:0;" id="modalAjudaTitulo">❓ Ajuda — Estoque</h4>
+            <button class="btn btn-cinza btn-pequeno" id="btnFecharModalAjuda">Fechar</button>
+        </div>
+        <div class="modal-ajuda-body">
+            <nav class="modal-ajuda-nav" id="ajudaModuloNav"></nav>
+            <div class="modal-ajuda-conteudo" id="ajudaModuloConteudo"></div>
         </div>
     </div>
 </div>
@@ -2632,6 +2669,186 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
         if (btn.dataset.aba === 'cadastrosgerais') carregarCadastrosGerais();
     });
 });
+
+/* ============================================================
+   AJUDA DO MÓDULO -- conteúdo educativo pro operador (não é
+   documentação técnica pra dev, é o "manual" de quem lança no dia a
+   dia). IMPORTANTE: toda vez que uma decisão de negócio ou um
+   comportamento substancial deste módulo mudar (novo status de
+   projeto, nova regra de baixa, nova trava de permissão etc.), a
+   seção correspondente aqui embaixo precisa ser atualizada na mesma
+   sessão -- e o campo `ultimaRevisao` também. O id de cada seção é o
+   mesmo `data-aba` da aba equivalente, pra abrir contextualizado.
+   ============================================================ */
+const AJUDA_ESTOQUE = {
+    titulo: 'Estoque — Controle de Estoque & Projetos',
+    ultimaRevisao: '10/09/2026',
+    secoes: [
+        { id: 'geral', titulo: 'Visão geral', corpo: `
+            <p>O Estoque controla o material físico da unidade (contêiner/esquadria): o que entra
+            (compra de fornecedor), o que sai (consumo em obra/reforma ou uso avulso) e o que sobra —
+            e integra com o Financeiro pra gerar os títulos a pagar de cada compra.</p>
+            <ul>
+                <li><strong>Almoxarifado de trabalho</strong>: escolhido uma vez no topo da tela, fica
+                salvo como padrão <em>por usuário</em> — toda tela de entrada/saída já abre com ele
+                selecionado, sem precisar escolher de novo.</li>
+                <li>Fluxo típico: <strong>Notas</strong> (compra) alimentam o estoque →
+                <strong>Requisição de Saída</strong> (ligada a um Projeto) ou <strong>Nova requisição</strong>
+                (avulsa, sem projeto) consomem o estoque → <strong>Protocolo</strong> agrupa o que já foi
+                lançado pro Financeiro (Sicon) saber o que sincronizar.</li>
+                <li>Os papéis de acesso aqui são <strong>diferentes dos outros módulos</strong>
+                (Administrador, Almoxarife, Auxiliar de Almoxarifado, Engenheiro) — ver aba Permissões,
+                inclusive uma regra invertida que vale a pena ler com atenção.</li>
+            </ul>
+        ` },
+        { id: 'estoque', titulo: 'Estoque', corpo: `
+            <p>Lista de produtos cadastrados, com os saldos calculados:</p>
+            <ul>
+                <li><strong>Valor</strong>: preço unitário cadastrado manualmente no produto.</li>
+                <li><strong>Últ. Compra</strong>: preço pago na entrada mais recente desse produto.</li>
+                <li><strong>Preço Médio</strong>: média ponderada calculada automaticamente a partir das
+                entradas registradas — não é um campo pra digitar, ele muda sozinho conforme chega
+                nota nova.</li>
+                <li><strong>Estoque Inicial</strong> (o que foi cadastrado na largada) e
+                <strong>Estoque Atual</strong> (inicial + entradas − saídas até agora).</li>
+            </ul>
+            <p><strong>⬇️ Baixa direta (sem projeto)</strong> tira uma quantidade do estoque sem passar
+            por projeto nem requisição — use só pra ajuste pontual, não pro consumo normal de obra.</p>
+            <p><strong>📄 Importar NF-e (XML)</strong> lê o arquivo da nota fiscal do fornecedor e já
+            cria a nota de entrada com itens e valores preenchidos automaticamente, sem digitar um por
+            um.</p>
+        ` },
+        { id: 'movimentacao', titulo: 'Requisição de Saída', corpo: `
+            <p>É a forma normal de retirar material do estoque pra usar numa obra/reforma. Selecione o
+            <strong>Projeto</strong> e o <strong>Evento</strong> (o que vai custear aquilo) antes de
+            adicionar itens.</p>
+            <ul>
+                <li><strong>📝 Descrever produto</strong>: pro material que ainda não está cadastrado no
+                estoque. Entra como item avulso na lista e depois pode ser vinculado a um produto real
+                (na aba Projetos, ao "Atender" o item).</li>
+                <li><strong>Qtd. Pedida</strong> (o que o projeto solicitou) é diferente de
+                <strong>Qtd. Atendida</strong> (o que realmente já foi retirado/entregue) — dá pra
+                atender aos poucos, em vez de tudo de uma vez.</li>
+                <li><strong>📋 Copiar itens de outro projeto</strong> agiliza requisições parecidas com
+                uma já feita antes.</li>
+            </ul>
+        ` },
+        { id: 'projetos', titulo: 'Projetos', corpo: `
+            <p>Cadastro dos projetos (Contêiner ou Esquadria) que consomem material do estoque. Clique
+            num projeto da lista pra abrir a requisição de saída dele.</p>
+            <p>Status, na ordem: 🟡 <strong>Em construção</strong> → 🔵 <strong>Aprovado</strong> →
+            ⚫ <strong>Finalizado</strong>.</p>
+            <ul>
+                <li>Ao <strong>aprovar</strong>, trava a quantidade solicitada dos materiais — não dá
+                mais pra mudar quanto foi pedido.</li>
+                <li>Ao <strong>finalizar</strong>, trava tudo (nem item nem quantidade muda mais).</li>
+                <li><strong>↩️ Voltar status</strong> libera a edição de novo, se precisar corrigir algo
+                — mas exige confirmação, porque desfaz a trava.</li>
+                <li><strong>Atender item do projeto</strong> registra quem retirou e quanto foi
+                realmente atendido daquele pedido — é essa ação que gera a movimentação de saída de
+                fato no estoque.</li>
+            </ul>
+        ` },
+        { id: 'movpainel', titulo: 'Movimentações', corpo: `
+            <p>Painel geral com todo o histórico de entradas e saídas, filtrável por Produto,
+            Fornecedor, Tag ou Evento.</p>
+            <p><strong>🏷️ Itens avulsos pendentes de destino</strong> mostra os itens que foram
+            "descritos" numa requisição (produto ainda não cadastrado no estoque) e que ainda não
+            foram vinculados a um produto real — vale revisar essa lista periodicamente pra não deixar
+            item solto sem virar cadastro.</p>
+        ` },
+        { id: 'notasentrada', titulo: 'Notas', corpo: `
+            <p>Reúne tanto notas de <strong>entrada</strong> (compra, manual ou importada por XML)
+            quanto notas de <strong>saída avulsa</strong> — a coluna Tipo diferencia uma da outra.</p>
+            <ul>
+                <li><strong>+ Nova entrada direta</strong>: lança manualmente uma compra (fornecedor,
+                itens, valores) — gera os títulos de pagamento correspondentes no Financeiro.</li>
+                <li><strong>+ Nova requisição</strong>: saída avulsa de estoque <strong>sem</strong>
+                vínculo com projeto (ex.: manutenção de veículo/equipamento) — permite registrar
+                KM/horímetro pra próxima troca.</li>
+                <li><strong>Baixar itens da nota</strong>: pega os itens de uma nota de entrada já
+                salva e gera as saídas pra setor/veículo/evento/plano de contas — dá pra dividir a
+                quantidade de um mesmo item entre destinos diferentes, e pra baixar aos poucos, em
+                sessões diferentes (o sistema rastreia quanto de cada item já foi baixado).</li>
+                <li><strong>Excluir uma nota</strong> remove títulos → movimentações → a nota, nessa
+                ordem, e reprocessa o estoque dos produtos afetados automaticamente.</li>
+            </ul>
+        ` },
+        { id: 'protocolo', titulo: 'Protocolo', corpo: `
+            <p>Agrupa notas já lançadas (e os títulos delas) num número de protocolo sequencial — é
+            esse número que o Financeiro (Sicon) usa do outro lado pra saber o que já foi aceito e
+            sincronizar. <strong>Não altera nada financeiro aqui, só numera e agrupa.</strong></p>
+            <p>Filtre entre "Ainda não protocoladas" e "Já protocoladas (histórico)", e por tipo
+            (entrada/saída), antes de selecionar o que entra num protocolo novo.</p>
+        ` },
+        { id: 'cadastrosgerais', titulo: 'Cadastros', corpo: `
+            <p>Listas base usadas nos formulários de estoque e requisição:</p>
+            <ul>
+                <li><strong>Almoxarifados</strong> — só o Principal ou Administradores podem criar/editar.</li>
+                <li><strong>Setores</strong> e <strong>Subsetores</strong> (cada subsetor pertence a um
+                setor) — classificação de destino da saída.</li>
+                <li><strong>Plano de Contas</strong> — classificação gerencial, igual ao conceito usado
+                no Financeiro.</li>
+                <li><strong>Equipamentos/Veículos</strong> — com placa, KM, horímetro e status de
+                funcionamento; são o destino típico das requisições avulsas de manutenção (peça,
+                combustível etc.).</li>
+            </ul>
+        ` },
+        { id: 'permissoes', titulo: 'Permissões', corpo: `
+            <p>Os papéis aqui são específicos do Estoque, diferentes dos outros módulos:
+            <strong>Administrador</strong>, <strong>Almoxarife</strong>,
+            <strong>Auxiliar de Almoxarifado</strong> e <strong>Engenheiro</strong>.</p>
+            <p>⚠️ <strong>Atenção — regra invertida em relação aos outros módulos</strong>: aqui,
+            "Sem acesso explícito" significa <strong>acesso completo</strong> (liberado por padrão),
+            e não bloqueado como em Staff/Financeiro. Só fica restrito quem receber um papel
+            específico atribuído. Quem é Principal da unidade sempre tem acesso completo, do mesmo
+            jeito.</p>
+        ` },
+        { id: 'relatorios', titulo: 'Relatórios', corpo: `
+            <ul>
+                <li><strong>Por Evento</strong> e <strong>por Tag</strong>: detalhado, mostra o produto
+                e a data de cada retirada.</li>
+                <li><strong>Por Projeto</strong>: resumo ou detalhado.</li>
+                <li>Todos saem em <strong>PDF ou Excel</strong>, com opções de Visualizar, Compartilhar
+                ou Salvar.</li>
+                <li><strong>🔄 Reprocessar Estoque</strong>: recalcula o saldo de cada produto (estoque
+                inicial + entradas − saídas) e corrige quem estiver divergente — não mexe em quem já
+                está certo. Rode depois de uma importação grande de nota pra conferir consistência
+                (mas lembre que ele não detecta item que nunca chegou a ser gravado por uma importação
+                interrompida — isso só a contagem de itens da nota revela).</li>
+            </ul>
+        ` },
+    ]
+};
+
+function renderizarAjudaModulo(secaoId) {
+    const secao = AJUDA_ESTOQUE.secoes.find(s => s.id === secaoId) || AJUDA_ESTOQUE.secoes[0];
+    document.querySelectorAll('.modal-ajuda-nav-item').forEach(el => el.classList.toggle('ativa', el.dataset.secao === secao.id));
+    document.getElementById('ajudaModuloConteudo').innerHTML = `
+        <h4>${secao.titulo}</h4>
+        ${secao.corpo}
+        <div class="ajuda-atualizado">Última revisão deste conteúdo: ${AJUDA_ESTOQUE.ultimaRevisao}</div>
+    `;
+}
+
+function abrirModalAjuda(secaoInicial) {
+    document.getElementById('modalAjudaTitulo').textContent = '❓ Ajuda — ' + AJUDA_ESTOQUE.titulo;
+    document.getElementById('ajudaModuloNav').innerHTML = AJUDA_ESTOQUE.secoes.map(s =>
+        `<button type="button" class="modal-ajuda-nav-item" data-secao="${s.id}">${s.titulo}</button>`
+    ).join('');
+    document.querySelectorAll('.modal-ajuda-nav-item').forEach(btn => {
+        btn.addEventListener('click', () => renderizarAjudaModulo(btn.dataset.secao));
+    });
+    renderizarAjudaModulo(secaoInicial || 'geral');
+    document.getElementById('modalAjudaOverlay').classList.add('aberto');
+}
+
+document.getElementById('btnAjudaModulo').addEventListener('click', () => {
+    const abaAtiva = document.querySelector('.aba-btn.ativa')?.dataset.aba;
+    const secaoValida = AJUDA_ESTOQUE.secoes.some(s => s.id === abaAtiva) ? abaAtiva : 'geral';
+    abrirModalAjuda(secaoValida);
+});
+document.getElementById('btnFecharModalAjuda').addEventListener('click', () => document.getElementById('modalAjudaOverlay').classList.remove('aberto'));
 
 function popularRelatoriosSelects() {
     popularSelectProjetos(document.getElementById('relProjetoSelect'));
@@ -9359,29 +9576,55 @@ function mostrarAvisoLicenca(texto){
 }
 
 function bloquearAcessoTotal(mensagem){
-  document.body.innerHTML = `
-    <div style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; font-family:Arial,Helvetica,sans-serif; background:#F6F7F9;">
-      <div style="background:#fff; border-radius:16px; padding:36px; max-width:440px; text-align:center; box-shadow:0 8px 28px rgba(20,30,50,.1);">
-        <div style="font-size:2.5rem; margin-bottom:12px;">🔒</div>
-        <h2 style="color:#C0392B; margin-bottom:12px; font-size:1.2rem;">Acesso bloqueado</h2>
-        <p style="color:#333; font-size:.92rem; line-height:1.5;">${mensagem}</p>
+  if(document.getElementById('overlayBloqueioLicenca')) return; // já mostrado, não duplica
+  // detecta se esse app tem algum jeito de trocar de unidade (nome do
+  // botão varia entre os apps -- reaproveita o que já existir, sem
+  // precisar reconstruir a tela de seleção do zero
+  const botaoTrocar = document.getElementById('btnTrocarAgencia') || document.getElementById('btnTrocarUnidade') || document.getElementById('btn-trocar-unidade');
+  const temTrocar = botaoTrocar && botaoTrocar.style.display !== 'none';
+
+  const overlay = document.createElement('div');
+  overlay.id = 'overlayBloqueioLicenca';
+  overlay.style.cssText = 'position:fixed; inset:0; z-index:999999; background:#F6F7F9; display:flex; align-items:center; justify-content:center; padding:20px; font-family:Arial,Helvetica,sans-serif;';
+  overlay.innerHTML = `
+    <div style="background:#fff; border-radius:16px; padding:36px; max-width:440px; text-align:center; box-shadow:0 8px 28px rgba(20,30,50,.1);">
+      <div style="font-size:2.5rem; margin-bottom:12px;">🔒</div>
+      <h2 style="color:#C0392B; margin-bottom:12px; font-size:1.2rem;">Acesso bloqueado</h2>
+      <p style="color:#333; font-size:.92rem; line-height:1.5; margin-bottom:20px;">${mensagem}</p>
+      <div style="display:flex; gap:10px; flex-direction:column;">
+        ${temTrocar ? '<button id="btnTrocarUnidadeBloqueio" style="padding:10px; border-radius:8px; border:1.5px solid #1B4332; background:none; color:#1B4332; font-weight:600; cursor:pointer; font-family:inherit;">🔄 Escolher outra unidade</button>' : ''}
+        <button id="btnSairBloqueio" style="padding:10px; border-radius:8px; border:none; background:#1B4332; color:#fff; font-weight:600; cursor:pointer; font-family:inherit;">Sair</button>
       </div>
     </div>`;
+  document.body.appendChild(overlay);
+
+  if(temTrocar){
+    document.getElementById('btnTrocarUnidadeBloqueio').addEventListener('click', () => {
+      overlay.remove();
+      botaoTrocar.click();
+    });
+  }
+  document.getElementById('btnSairBloqueio').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    location.reload();
+  });
 }
 
 async function verificarPendenciaLicenca(unidadeIdAlvo, moduloChave){
   try{
     const { data, error } = await sb.rpc('fn_verificar_pendencia_licenca', { p_unidade_negocio_id: unidadeIdAlvo, p_modulo_chave: moduloChave });
-    if(error || !data) return;
-    if(data.bloqueia) bloquearAcessoTotal(data.mensagem);
-    else mostrarAvisoLicenca(data.mensagem);
+    if(error || !data) return false;
+    if(data.bloqueia){ bloquearAcessoTotal(data.mensagem); return true; }
+    mostrarAvisoLicenca(data.mensagem);
+    return false;
   } catch(erro){
     console.warn('Não consegui checar pendência de licença:', erro.message);
+    return false;
   }
 }
 
 async function iniciarAppFabrica() {
-    await verificarPendenciaLicenca(meuPerfil.unidadeId, 'estoque');
+    if(await verificarPendenciaLicenca(meuPerfil.unidadeId, 'estoque')) return;
     await carregarPapelEPermissoes();
     aplicarPermissoesNaInterface();
     await carregarTudo();
