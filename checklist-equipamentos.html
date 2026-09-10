@@ -207,6 +207,23 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 .modal-cad-overlay.on{display:flex}
 .modal-cad-caixa{background:var(--sf);border-radius:12px;padding:20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;box-shadow:0 12px 40px rgba(0,0,0,.25)}
 
+/* popup de Ajuda do módulo */
+.modal-ajuda-overlay{display:none;position:fixed;inset:0;background:rgba(20,30,50,.55);z-index:200;align-items:center;justify-content:center;padding:16px}
+.modal-ajuda-overlay.on{display:flex}
+.modal-ajuda-caixa{background:var(--sf);border-radius:12px;width:100%;max-width:480px;height:min(640px,85vh);display:flex;flex-direction:column;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+.modal-ajuda-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--bd);flex-shrink:0}
+.modal-ajuda-head .lbl{font-size:14px;font-weight:600;color:var(--nv);display:flex;align-items:center;gap:6px}
+.modal-ajuda-nav{display:flex;overflow-x:auto;gap:4px;padding:8px 10px;border-bottom:1px solid var(--bd);background:var(--bg);flex-shrink:0;white-space:nowrap}
+.modal-ajuda-nav-item{flex:none;background:none;border:none;color:var(--tx2);font-size:12px;font-weight:500;padding:8px 12px;border-radius:20px;cursor:pointer;font-family:inherit}
+.modal-ajuda-nav-item.on{background:var(--nv);color:#fff}
+.modal-ajuda-conteudo{flex:1;overflow-y:auto;padding:16px;font-size:13px;line-height:1.55;color:var(--tx)}
+.modal-ajuda-conteudo h4{margin:0 0 8px;font-size:14px;font-weight:600;color:var(--nv)}
+.modal-ajuda-conteudo p{margin:0 0 10px}
+.modal-ajuda-conteudo ul{margin:0 0 12px 18px}
+.modal-ajuda-conteudo li{margin-bottom:6px}
+.modal-ajuda-conteudo strong{color:var(--tx)}
+.modal-ajuda-conteudo .ajuda-atualizado{font-size:11px;color:var(--tx3);margin-top:16px;padding-top:10px;border-top:1px solid var(--bdl)}
+
 /* MANUTENÇÃO */
 .man-sec{background:var(--sf);border-bottom:1px solid var(--bd);padding:0}
 .man-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;user-select:none}
@@ -327,6 +344,7 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
       <div><div class="hdr-t"><i class="ti ti-clipboard-check"></i> Checklist Equipamentos</div><div class="hdr-s" id="hsub">—</div></div>
     </div>
     <div class="hdr-r">
+      <button class="hbtn" onclick="abrirModalAjuda()" title="Ajuda"><i class="ti ti-help-circle"></i></button>
       <button class="hbtn" id="btn-trocar-unidade" onclick="trocarUnidade()" title="Trocar unidade" style="display:none;"><i class="ti ti-replace"></i></button>
       <span class="bdg bon" id="operador-badge" style="cursor:pointer" title="Sair"></span>
       <button class="hbtn" onclick="if (confirm('Sair da conta?')) sair();" title="Sair"><i class="ti ti-logout"></i></button>
@@ -341,6 +359,18 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
     <button class="tab" data-tab="man" onclick="goTab('man',this)" title="Manutenção"><i class="ti ti-tool"></i><span class="tab-label">Manutenção</span></button>
     <button class="tab" data-tab="abast" onclick="goTab('abast',this)" title="Abastecimento"><i class="ti ti-gas-station"></i><span class="tab-label">Abastecimento</span></button>
     <button class="tab" data-tab="corr" onclick="goTab('corr',this)" title="Manutenção Corretiva"><i class="ti ti-alert-triangle"></i><span class="tab-label">Manutenção Corretiva</span></button>
+  </div>
+
+  <!-- ── AJUDA DO MÓDULO ── -->
+  <div class="modal-ajuda-overlay" id="modal-ajuda-overlay">
+    <div class="modal-ajuda-caixa">
+      <div class="modal-ajuda-head">
+        <span class="lbl" id="modal-ajuda-titulo"><i class="ti ti-help-circle"></i> Ajuda</span>
+        <button class="hbtn" style="color:var(--tx2)" onclick="fecharModalAjuda()" title="Fechar"><i class="ti ti-x"></i></button>
+      </div>
+      <nav class="modal-ajuda-nav" id="ajuda-modulo-nav"></nav>
+      <div class="modal-ajuda-conteudo" id="ajuda-modulo-conteudo"></div>
+    </div>
   </div>
 
   <!-- ── NOVO CHECKLIST ── -->
@@ -1006,6 +1036,137 @@ function goTab(id, btn){
 
 function toggleMenuMobile(){
   document.querySelector('.tabs').classList.toggle('aberto');
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   AJUDA DO MÓDULO -- conteúdo educativo pro operador (não é
+   documentação técnica pra dev, é o "manual" de quem usa no dia a
+   dia -- motorista fazendo checklist, administrador cadastrando).
+   IMPORTANTE: toda vez que uma decisão de negócio ou um comportamento
+   substancial deste módulo mudar (novo status, nova trava de KM, nova
+   regra de OS automática, nova permissão etc.), a seção correspondente
+   aqui embaixo precisa ser atualizada na mesma sessão -- e o campo
+   `ultimaRevisao` também. O id de cada seção é o mesmo `data-tab` da
+   aba equivalente, pra abrir contextualizado.
+   ══════════════════════════════════════════════════════════════════ */
+const AJUDA_CHECKLIST = {
+  titulo: 'Checklist Equipamentos',
+  ultimaRevisao: '10/09/2026',
+  secoes: [
+    { id: 'geral', titulo: 'Visão geral', corpo: `
+      <p>Esse app registra o checklist diário de veículos/equipamentos (carro, gerador,
+      climatizador, outros), acompanha a manutenção preventiva de cada um e permite pedir
+      abastecimento ou manutenção corretiva quando algo foge do checklist normal.</p>
+      <ul>
+        <li>Fluxo típico: escolher o equipamento → marcar os itens do checklist → informar
+        KM/horímetro atual → enviar. Um item marcado <strong>NOK</strong> pode gerar
+        <strong>automaticamente</strong> uma Ordem de Serviço no Estoque, se a unidade tiver
+        configurado isso em Frota → Gerenciar → OS automática.</li>
+        <li>Só existem dois papéis aqui: <strong>Administrador</strong> (acesso completo, igual
+        Principal) e <strong>Motorista</strong> (só vê a tela de Novo checklist — sem painel,
+        frota, manutenção nem as outras abas).</li>
+      </ul>
+    ` },
+    { id: 'dash', titulo: 'Painel', corpo: `
+      <p>Visão geral da frota: quantidade de equipamentos por tipo, por status de
+      funcionamento, e a situação de manutenção de todos:</p>
+      <ul>
+        <li><strong>Vencida</strong>: a data prevista já passou <strong>ou</strong> o
+        KM/horímetro atual já ultrapassou o valor programado pra próxima troca.</li>
+        <li><strong>A vencer nos próximos 15 dias</strong>: ainda não venceu, mas está perto.</li>
+        <li><strong>Em dia</strong>: o resto.</li>
+      </ul>
+    ` },
+    { id: 'cl', titulo: 'Novo checklist', corpo: `
+      <p>Tela principal, usada todo dia:</p>
+      <ul>
+        <li>Selecione o veículo/equipamento, informe motorista/responsável, data e o
+        <strong>KM/horímetro atual</strong> — o sistema avisa (em vermelho) se você digitar um
+        valor <strong>menor</strong> que o último registrado, pra evitar erro de digitação.</li>
+        <li><strong>Preencher com último checklist deste veículo</strong> reaproveita os
+        mesmos itens já usados na vez anterior, pra ganhar tempo.</li>
+        <li><strong>Status de funcionamento</strong> (Disponível/Locado/Manutenção/Não
+        especificado) — se marcar Locado, pede também o local.</li>
+        <li>Os itens do checklist mudam conforme o <strong>tipo</strong> do equipamento, mais
+        os itens cadastrados como "Todos" (valem pra qualquer tipo) — os contadores no topo
+        mostram quantos ficaram OK, NOK e quantos ainda estão pendentes.</li>
+        <li>O bloco <strong>Manutenção &amp; Trocas</strong> (quando aparece) permite registrar
+        uma troca/manutenção junto com o checklist, sem precisar abrir outra tela.</li>
+        <li>Um item marcado <strong>NOK</strong> pode gerar uma Ordem de Serviço automática no
+        Estoque (ver aba Frota → Gerenciar → OS automática) — se os parâmetros não estiverem
+        configurados, o checklist é enviado normalmente, só a OS não é criada (o sistema avisa).</li>
+      </ul>
+    ` },
+    { id: 'rec', titulo: 'Recuperar', corpo: `
+      <p>Busca checklists já enviados, por placa/modelo e/ou data — útil pra conferir o que já
+      foi lançado ou reabrir os dados de um checklist anterior.</p>
+    ` },
+    { id: 'fr', titulo: 'Veículos e Equipamentos', corpo: `
+      <p><strong>Ver lista</strong>: todos os veículos/equipamentos cadastrados, com busca e
+      filtro por tipo, e um PDF ordenado por tipo, status e categoria.</p>
+      <p><strong>Gerenciar</strong> (só Administrador) tem 5 abas:</p>
+      <ul>
+        <li><strong>Veículos</strong> — cadastro de veículos/equipamentos (placa, tipo,
+        identificador etc.).</li>
+        <li><strong>Itens do checklist</strong> — monta os itens que aparecem no checklist,
+        por tipo de equipamento (ou "Todos"), e marca quais deles, se ficarem <strong>NOK</strong>,
+        devem gerar uma Ordem de Serviço automática.</li>
+        <li><strong>Tipos de manutenção</strong> — catálogo de manutenções/trocas possíveis.</li>
+        <li><strong>OS automática</strong> — configura Almoxarifado/Setor/Evento/Plano de
+        Contas usados quando um item NOK gera uma ordem de serviço sozinho. Sem isso
+        preenchido, a OS automática simplesmente não é criada.</li>
+        <li><strong>Permissões</strong> — define o papel de cada pessoa vinculada à unidade
+        (Administrador ou Motorista).</li>
+      </ul>
+    ` },
+    { id: 'man', titulo: 'Manutenção', corpo: `
+      <p>Mesma lógica de vencida/a vencer/em dia do Painel, mas com busca, filtro por tipo e
+      relatório em PDF — pensada pra revisar a situação de manutenção de toda a frota de uma
+      vez, não só o resumo do Painel.</p>
+    ` },
+    { id: 'abast', titulo: 'Abastecimento', corpo: `
+      <p>Solicitações de abastecimento, separadas em <strong>Pendentes</strong>,
+      <strong>Atendidas</strong> e <strong>Reprovadas</strong>.</p>
+      <p>"Nova solicitação" pede o veículo/equipamento e fica pendente até alguém aprovar
+      (atender) ou reprovar.</p>
+    ` },
+    { id: 'corr', titulo: 'Manutenção Corretiva', corpo: `
+      <p>Mesma lógica do Abastecimento (Pendentes/Atendidas/Reprovadas), mas pra pedir uma
+      manutenção corretiva fora do fluxo normal — por exemplo, um problema percebido fora do
+      checklist.</p>
+      <p>É o mesmo tipo de registro que pode ser criado <strong>automaticamente</strong> quando
+      um item do checklist é marcado NOK e a OS automática está configurada.</p>
+    ` },
+  ]
+};
+
+function renderizarAjudaModulo(secaoId){
+  const secao = AJUDA_CHECKLIST.secoes.find(s => s.id === secaoId) || AJUDA_CHECKLIST.secoes[0];
+  document.querySelectorAll('.modal-ajuda-nav-item').forEach(el => el.classList.toggle('on', el.dataset.secao === secao.id));
+  document.getElementById('ajuda-modulo-conteudo').innerHTML = `
+    <h4>${secao.titulo}</h4>
+    ${secao.corpo}
+    <div class="ajuda-atualizado">Última revisão deste conteúdo: ${AJUDA_CHECKLIST.ultimaRevisao}</div>
+  `;
+}
+
+function abrirModalAjuda(){
+  const abaAtiva = document.querySelector('.tab.on')?.dataset.tab;
+  const secaoInicial = AJUDA_CHECKLIST.secoes.some(s => s.id === abaAtiva) ? abaAtiva : 'geral';
+  document.getElementById('modal-ajuda-titulo').innerHTML = '<i class="ti ti-help-circle"></i> Ajuda — ' + AJUDA_CHECKLIST.titulo;
+  document.getElementById('ajuda-modulo-nav').innerHTML = AJUDA_CHECKLIST.secoes.map(s =>
+    `<button type="button" class="modal-ajuda-nav-item" data-secao="${s.id}">${s.titulo}</button>`
+  ).join('');
+  document.querySelectorAll('.modal-ajuda-nav-item').forEach(btn => {
+    btn.addEventListener('click', () => renderizarAjudaModulo(btn.dataset.secao));
+  });
+  renderizarAjudaModulo(secaoInicial);
+  document.getElementById('modal-ajuda-overlay').classList.add('on');
+  document.querySelector('.tabs').classList.remove('aberto');
+}
+
+function fecharModalAjuda(){
+  document.getElementById('modal-ajuda-overlay').classList.remove('on');
 }
 
 function toast(msg){
