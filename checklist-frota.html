@@ -196,6 +196,7 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 .os-meta{display:flex;gap:12px;font-size:12px;color:var(--tx2);flex-wrap:wrap}
 .os-valor{font-weight:600;color:var(--tx)}
 .os-status{font-size:11px;padding:2px 9px;border-radius:10px;font-weight:600;white-space:nowrap}
+.os-urgente{background:#fee2e2;color:#991b1b}
 .os-aberta{background:#fef9c3;color:#854d0e}
 .os-andamento{background:#dbeafe;color:#1e40af}
 .os-concluida{background:#dcfce7;color:#166534}
@@ -454,6 +455,12 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
             </div>
             <div class="man-field" style="margin-bottom:8px"><label>Grupo</label><input class="inp" id="fi-grupo" placeholder="Ex: Motor e fluidos"></div>
             <div class="man-field" style="margin-bottom:10px"><label>Item</label><input class="inp" id="fi-item" placeholder="Ex: Nível de óleo"></div>
+            <div class="man-field" style="margin-bottom:10px">
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="fi-criar-os" style="width:16px;height:16px">
+                🚨 Criar OS urgente automaticamente quando este item for marcado NOK
+              </label>
+            </div>
             <div style="display:flex;gap:8px">
               <button class="btn-buscar" style="flex:1;justify-content:center" onclick="salvarItemApp()"><i class="ti ti-device-floppy"></i> Salvar</button>
               <button class="sbtn" onclick="fecharFormItem()" style="border:1px solid var(--bd);border-radius:var(--rs);padding:0 14px">Cancelar</button>
@@ -506,6 +513,7 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
         <div style="display:flex;gap:8px">
           <select class="inp" id="os-filtro-status" style="flex:1" onchange="renderOS()">
             <option value="">Todos os status</option>
+            <option value="Urgente">Urgente</option>
             <option value="Aberta">Aberta</option>
             <option value="Em andamento">Em andamento</option>
             <option value="Concluída">Concluída</option>
@@ -568,6 +576,7 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
           <div class="man-field">
             <label>Status</label>
             <select class="inp" id="fos-status">
+              <option value="Urgente">Urgente</option>
               <option value="Aberta">Aberta</option>
               <option value="Em andamento">Em andamento</option>
               <option value="Concluída">Concluída</option>
@@ -606,6 +615,7 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
           <div style="display:flex;gap:8px">
             <select class="inp" id="osv-filtro-status" style="flex:1" onchange="renderOSVeiculo()">
               <option value="">Todos os status</option>
+              <option value="Urgente">Urgente</option>
               <option value="Aberta">Aberta</option>
               <option value="Em andamento">Em andamento</option>
               <option value="Concluída">Concluída</option>
@@ -1135,11 +1145,32 @@ function updStatusItens(st, detalhe){
 }
 
 /* ── CHECKLIST ── */
+// Grupo(s) que devem sempre aparecer no topo do checklist, não importa a
+// ordem que vieram do backend/cadastro (ex: "A reparar" -- pendências
+// identificadas em checklists anteriores, pra chamar atenção primeiro).
+// Comparação sem acento/maiúscula, então "A reparar", "a reparar" ou
+// "A REPARAR" cadastrado no admin funcionam do mesmo jeito.
+const GRUPOS_PRIORITARIOS = ['a reparar'];
+function normalizarNomeGrupo(nome){
+  return (nome||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase();
+}
+function ordenarGruposComPrioridade(grupos){
+  // sort é estável em todo navegador atual -- mantém a ordem original dos
+  // demais grupos, só puxa o(s) prioritário(s) pra frente
+  return [...grupos].sort((a,b)=>{
+    const pa = GRUPOS_PRIORITARIOS.includes(normalizarNomeGrupo(a.g)) ? 0 : 1;
+    const pb = GRUPOS_PRIORITARIOS.includes(normalizarNomeGrupo(b.g)) ? 0 : 1;
+    return pa - pb;
+  });
+}
+
 function buildCL(tipo, itensRecuperados){
   // Usa itens em cache ou fallback fixo
-  const grupos = (itensCache[tipo] && itensCache[tipo].length)
-    ? itensCache[tipo]
-    : (ITENS[tipo]||ITENS['Van']);
+  const grupos = ordenarGruposComPrioridade(
+    (itensCache[tipo] && itensCache[tipo].length)
+      ? itensCache[tipo]
+      : (ITENS[tipo]||ITENS['Van'])
+  );
   const body=document.getElementById('clbody');
   body.innerHTML=''; est={};
   grupos.forEach(g=>{
@@ -1222,7 +1253,11 @@ function tirarFoto(id){
       const r=new FileReader();
       r.onload=ev=>{
         const b64=ev.target.result;
-        est[fAt].fotos.push(b64);
+        // só fotoBase64 -- "fotos" é reservado pra links já existentes
+        // (reaproveitados de um checklist anterior). Empurrar o base64
+        // bruto ali também fazia a foto ser contada duas vezes na hora
+        // de montar o foto_link (uma como base64 cru, outra como link
+        // já enviado), duplicando a miniatura.
         est[fAt].fotoBase64.push(b64);
         const row=document.getElementById('fp_'+fAt);
         const img=document.createElement('img'); img.className='fth'; img.src=b64;
@@ -1904,7 +1939,7 @@ async function carregarOS(){
   }
 }
 
-const STATUS_CLASS = {'Aberta':'os-aberta','Em andamento':'os-andamento','Concluída':'os-concluida','Cancelada':'os-cancelada'};
+const STATUS_CLASS = {'Urgente':'os-urgente','Aberta':'os-aberta','Em andamento':'os-andamento','Concluída':'os-concluida','Cancelada':'os-cancelada'};
 
 function goSubOS(id, btn){
   document.querySelectorAll('#os-painel .subscreen').forEach(s=>s.classList.remove('on'));
@@ -1917,6 +1952,16 @@ function limparFiltrosOS(){
   document.getElementById('os-filtro-texto').value='';
   document.getElementById('os-filtro-status').value='';
   renderOS();
+}
+
+// Miniaturas das fotos de uma OS (as mesmas fotos do item do checklist
+// quando a OS foi gerada automaticamente) -- mesmo padrão visual das
+// fotos do checklist, clique abre a foto original em nova aba
+function htmlFotosOS(fotos){
+  if(!fotos || !fotos.length) return '';
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+    ${fotos.map(link=>`<img class="fth" src="${driveThumbUrl(link)}" loading="lazy" onclick="event.stopPropagation();window.open('${link}','_blank')" onerror="this.style.display='none'">`).join('')}
+  </div>`;
 }
 
 function renderOS(){
@@ -1957,6 +2002,7 @@ function renderOS(){
 <select class="os-status-sel ${STATUS_CLASS[os.status]||'os-aberta'}"
           onchange="atualizarStatusOS(${os.linha},this.value,this)"
           onclick="event.stopPropagation()">
+          <option value="Urgente" ${os.status==='Urgente'?'selected':''}>Urgente</option>
           <option value="Aberta" ${os.status==='Aberta'?'selected':''}>Aberta</option>
           <option value="Em andamento" ${os.status==='Em andamento'?'selected':''}>Em andamento</option>
           <option value="Concluída" ${os.status==='Concluída'?'selected':''}>Concluída</option>
@@ -1973,6 +2019,7 @@ function renderOS(){
         ${os.produtos.map(p=>`<div class="prod-os-item"><span>${p.quantidade}x ${p.produto}</span><span>R$ ${Number(p.subtotal||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></div>`).join('')}
       </div>` : ''}
       ${os.observacao?`<div style="font-size:12px;color:var(--tx2)">${os.observacao}</div>`:''}
+      ${htmlFotosOS(os.fotos)}
       <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:2px">
         <button class="fi-btn" title="Visualizar PDF" onclick='gerarPdfOS(${JSON.stringify(os).replace(/'/g,"&apos;")},"view")'><i class="ti ti-eye"></i></button>
         <button class="fi-btn" title="Baixar PDF" onclick='gerarPdfOS(${JSON.stringify(os).replace(/'/g,"&apos;")},"download")'><i class="ti ti-file-type-pdf"></i></button>
@@ -2108,6 +2155,7 @@ function renderOSVeiculo(){
 <select class="os-status-sel ${STATUS_CLASS[os.status]||'os-aberta'}"
           onchange="atualizarStatusOS(${os.linha},this.value,this)"
           onclick="event.stopPropagation()">
+          <option value="Urgente" ${os.status==='Urgente'?'selected':''}>Urgente</option>
           <option value="Aberta" ${os.status==='Aberta'?'selected':''}>Aberta</option>
           <option value="Em andamento" ${os.status==='Em andamento'?'selected':''}>Em andamento</option>
           <option value="Concluída" ${os.status==='Concluída'?'selected':''}>Concluída</option>
@@ -2115,6 +2163,7 @@ function renderOSVeiculo(){
         </select>
       </div>
       <div class="os-serv">${os.servico}${os.fornecedor?' · '+os.fornecedor:''}</div>
+      ${htmlFotosOS(os.fotos)}
       ${os.produtos&&os.produtos.length?`<div style="margin-top:4px">
         ${os.produtos.map(p=>`<div class="prod-os-item"><span>${p.quantidade}x ${p.produto}</span><span>R$ ${Number(p.subtotal||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></div>`).join('')}
       </div>`:''}
@@ -2757,7 +2806,7 @@ function renderItensAdmin(){
       const d=document.createElement('div'); d.className='fi';
       const inativoStyle = it.ativo.toLowerCase()!=='sim' ? 'opacity:.5' : '';
       d.style.cssText += inativoStyle;
-      d.innerHTML=`<div style="flex:1"><div class="fipl" style="font-size:13px">${it.item}</div><div class="fisb">${it.grupo}</div></div>
+      d.innerHTML=`<div style="flex:1"><div class="fipl" style="font-size:13px">${it.item}${it.criarOs?' <span class="pill" style="background:#fee2e2;color:#991b1b">🚨 Gera OS</span>':''}</div><div class="fisb">${it.grupo}</div></div>
         <div class="fi-actions">
           <button class="fi-btn" title="Editar" onclick='editarItemApp(${JSON.stringify(it).replace(/'/g,"&apos;")})'><i class="ti ti-edit"></i></button>
           <button class="fi-btn danger" title="Desativar" onclick="confirmarExcluirItem(${it.linha},'${it.item.replace(/'/g,"")}')"><i class="ti ti-trash"></i></button>
@@ -2774,6 +2823,7 @@ function abrirFormItem(){
   document.getElementById('fi-grupo').value='';
   document.getElementById('fi-item').value='';
   document.getElementById('fi-ativo').value='Sim';
+  document.getElementById('fi-criar-os').checked=false;
   document.getElementById('form-item').style.display='block';
 }
 
@@ -2784,6 +2834,7 @@ function editarItemApp(it){
   document.getElementById('fi-grupo').value=it.grupo;
   document.getElementById('fi-item').value=it.item;
   document.getElementById('fi-ativo').value=it.ativo;
+  document.getElementById('fi-criar-os').checked=!!it.criarOs;
   document.getElementById('form-item').style.display='block';
   document.getElementById('form-item').scrollIntoView({behavior:'smooth'});
 }
@@ -2795,9 +2846,10 @@ async function salvarItemApp(){
   const grupo = document.getElementById('fi-grupo').value.trim();
   const item  = document.getElementById('fi-item').value.trim();
   const ativo = document.getElementById('fi-ativo').value;
+  const criarOS = document.getElementById('fi-criar-os').checked;
   if(!grupo || !item){ toast('Preencha grupo e item'); return; }
   try{
-    const payload = {action:'salvarItem', senha:adminSenha, tipo, grupo, item, ativo, usuario:usuarioGoogle};
+    const payload = {action:'salvarItem', senha:adminSenha, tipo, grupo, item, ativo, criarOS, usuario:usuarioGoogle};
     if(editandoItemLinha) payload.linha = editandoItemLinha;
     const r = await fetch(cfg.url, {method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload)});
     const d = await r.json();
@@ -2805,7 +2857,8 @@ async function salvarItemApp(){
       toast('✓ Item '+(d.acao==='criado'?'cadastrado':'atualizado'));
       fecharFormItem();
       carregarItensAdmin();
-      localStorage.removeItem(IK); // força recarregar cache de itens do checklist
+      localStorage.removeItem(IK);
+      carregarItens(); // recarrega de verdade agora -- só limpar o cache não bastava, precisava dessa chamada pra o checklist já pegar o item novo sem precisar clicar em "Recarregar Itens" manualmente
     } else { toast(d.erro || 'Erro ao salvar'); }
   }catch(e){ toast('Erro de conexão'); }
 }
@@ -2820,7 +2873,7 @@ async function excluirItemApp(linha, item){
     const r = await fetch(cfg.url, {method:'POST', headers:{'Content-Type':'text/plain'},
       body:JSON.stringify({action:'excluirItem', senha:adminSenha, linha, item, usuario:usuarioGoogle})});
     const d = await r.json();
-    if(d.ok){ toast('✓ Item desativado'); carregarItensAdmin(); localStorage.removeItem(IK); }
+    if(d.ok){ toast('✓ Item desativado'); carregarItensAdmin(); localStorage.removeItem(IK); carregarItens(); }
     else toast(d.erro || 'Erro ao desativar');
   }catch(e){ toast('Erro de conexão'); }
 }
