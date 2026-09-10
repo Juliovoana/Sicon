@@ -206,6 +206,32 @@
   .modal-lista-salvar:hover:not(:disabled){ background:#143327; }
   .modal-lista-salvar:disabled{ opacity:.6; cursor:not-allowed; }
 
+  .btn-ajuda-modulo{
+    display:flex; align-items:center; gap:6px; background:none; border:1.5px solid var(--border); color:var(--muted);
+    font-size:.8rem; font-weight:600; padding:7px 12px; border-radius:8px; cursor:pointer; flex-shrink:0;
+  }
+  .btn-ajuda-modulo:hover{ background:var(--brand-soft); color:var(--ink); }
+  .modal-ajuda-body{ display:flex; flex:1; min-height:0; overflow:hidden; }
+  .modal-ajuda-nav{ width:210px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface); overflow-y:auto; padding:10px; }
+  .modal-ajuda-nav-item{
+    display:block; width:100%; text-align:left; background:none; border:none; color:var(--muted); font-size:.82rem; font-weight:600;
+    padding:9px 10px; border-radius:8px; cursor:pointer; margin-bottom:2px;
+  }
+  .modal-ajuda-nav-item:hover{ background:var(--brand-soft); color:var(--ink); }
+  .modal-ajuda-nav-item.ativo{ background:var(--brand); color:#fff; }
+  .modal-ajuda-conteudo{ flex:1; overflow-y:auto; padding:22px 26px; font-size:.88rem; line-height:1.55; color:var(--ink); }
+  .modal-ajuda-conteudo h4{ font-size:1rem; font-weight:700; margin-bottom:10px; }
+  .modal-ajuda-conteudo p{ margin-bottom:10px; }
+  .modal-ajuda-conteudo ul{ margin:0 0 12px 18px; }
+  .modal-ajuda-conteudo li{ margin-bottom:6px; }
+  .modal-ajuda-conteudo strong{ color:var(--ink); }
+  .modal-ajuda-conteudo .ajuda-atualizado{ font-size:.72rem; color:var(--muted); margin-top:18px; padding-top:12px; border-top:1px solid var(--border); }
+  @media (max-width:680px){
+    .modal-ajuda-body{ flex-direction:column; }
+    .modal-ajuda-nav{ width:100%; border-right:none; border-bottom:1px solid var(--border); display:flex; overflow-x:auto; gap:4px; padding:8px; white-space:nowrap; }
+    .modal-ajuda-nav-item{ margin-bottom:0; flex-shrink:0; }
+  }
+
   .lancamento-rapido-item{ display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap; margin-bottom:6px; background:var(--brand-soft); border:1px solid var(--border); border-radius:10px; padding:12px; }
   .lancamento-rapido-item .field-group{ margin-bottom:0; }
   .lancamento-rapido-item .campo-profissional{ flex:1.4; min-width:170px; }
@@ -515,6 +541,7 @@
         <div class="content-header">
           <h1 id="tituloConteudo">Dashboard</h1>
           <div style="display:flex; gap:8px; align-items:center;">
+            <button type="button" class="btn-ajuda-modulo" id="btnAjudaModulo">❓ Ajuda</button>
             <span class="papel-pill" id="papelPill" style="display:none;">—</span>
             <span class="agencia-pill" id="agenciaPill">—</span>
           </div>
@@ -836,6 +863,19 @@
       <div class="drawer-actions">
         <button class="btn-acao" id="btnExcluirAniversario" style="background:none; border:1.5px solid var(--danger); color:var(--danger); display:none;">Excluir</button>
         <button class="btn-acao btn-salvar" id="btnSalvarAniversario" style="flex:2;">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-lista-overlay" id="modalAjudaOverlay" style="z-index:80;">
+    <div class="modal-lista" style="max-width:840px; height:min(640px, 85vh);">
+      <div class="modal-lista-head">
+        <h3 id="modalAjudaTitulo">❓ Ajuda — Staff</h3>
+        <button class="drawer-close" id="btnFecharModalAjudaX">✕</button>
+      </div>
+      <div class="modal-ajuda-body">
+        <nav class="modal-ajuda-nav" id="ajudaModuloNav"></nav>
+        <div class="modal-ajuda-conteudo" id="ajudaModuloConteudo"></div>
       </div>
     </div>
   </div>
@@ -1441,12 +1481,186 @@
     });
   });
 
+  // =================================================================
+  // AJUDA DO MÓDULO -- conteúdo educativo pro operador (não é
+  // documentação técnica pra dev, é o "manual" de quem lança no dia a
+  // dia). IMPORTANTE: toda vez que uma decisão de negócio ou um
+  // comportamento substancial deste módulo mudar (nova regra de
+  // preenchimento, novo status, nova trava de permissão etc.), a seção
+  // correspondente aqui embaixo precisa ser atualizada na mesma sessão
+  // -- e o campo `ultimaRevisao` também. O id de cada seção é o mesmo
+  // `data-app-tab` da aba equivalente, pra abrir contextualizado.
+  // =================================================================
+  const AJUDA_STAFF = {
+    titulo: 'Staff — Equipe, Escalas, Ponto e Pagamentos',
+    ultimaRevisao: '10/09/2026',
+    secoes: [
+      { id: 'geral', titulo: 'Visão geral', corpo: `
+        <p>O Staff é onde a unidade organiza <strong>quem trabalha</strong> pra ela (equipe fixa ou freelancer),
+        <strong>onde/quando</strong> essas pessoas trabalham (eventos e escalas), <strong>quanto</strong> recebem
+        por isso (recibos e verbas), e guarda lembretes de aniversário e artes de aniversário pra publicar.</p>
+        <ul>
+          <li><strong>Profissionais / Funções / Clientes</strong> — os cadastros base.</li>
+          <li><strong>Eventos</strong> — as operações da unidade, com a equipe escalada dentro de cada uma.</li>
+          <li><strong>Ponto</strong> — consulta de quem bateu ponto (a marcação em si é feita no quiosque facial, tela separada).</li>
+          <li><strong>Recibos</strong> — pagamento avulso por profissional (RPA), agrupado em número de recibo.</li>
+          <li><strong>Verbas de Operação</strong> — adiantamento de dinheiro pra cobrir gasto de evento.</li>
+          <li><strong>Aniversários</strong> — lembretes + geração de cartaz/card pra postar.</li>
+          <li><strong>Permissões</strong> — quem pode ver/editar o quê dentro do Staff.</li>
+          <li><strong>Personalização</strong> — cor e logo usados nas artes geradas pelo módulo.</li>
+        </ul>
+        <p>Regra que vale pra unidade toda (não só Staff): quem é <strong>"Principal"</strong> da unidade
+        (definido em Servir Central) sempre tem acesso administrativo completo, mesmo sem papel cadastrado
+        aqui em Permissões.</p>
+      ` },
+      { id: 'profissionais', titulo: 'Profissionais', corpo: `
+        <p>Cadastro de cada pessoa que trabalha pra unidade — fixo ou freelancer.</p>
+        <ul>
+          <li><strong>Foto</strong>: aparece no card de aniversário e é a base do reconhecimento facial do Ponto.</li>
+          <li><strong>Consentimento de biometria + "Processar rosto agora"</strong>: precisam estar feitos pra esse
+          profissional conseguir bater ponto pelo quiosque facial. Sem isso, o Ponto não reconhece o rosto dele
+          — ele continua podendo ser escalado normalmente, só não bate ponto automático.</li>
+          <li><strong>Função principal / funções secundárias</strong>: usadas pra escalar o profissional em eventos
+          e como referência de cargo nos recibos.</li>
+        </ul>
+        <p>Só quem tem papel <strong>Administrador</strong> (ou é Principal da unidade) edita esse cadastro —
+        os outros papéis só visualizam.</p>
+      ` },
+      { id: 'funcoes', titulo: 'Funções', corpo: `
+        <p>Os cargos/funções que a equipe pode exercer (ex.: Garçom, Segurança, Coordenador).</p>
+        <ul>
+          <li><strong>Valor sugerido</strong> é só uma referência de cachê — não calcula nem trava nada
+          automaticamente, é preenchido manualmente ao escalar equipe ou lançar recibo.</li>
+          <li>Função marcada como <strong>Inativa</strong> some das opções pra novos cadastros/escalas, mas
+          continua aparecendo no histórico do que já foi lançado com ela.</li>
+        </ul>
+      ` },
+      { id: 'clientes', titulo: 'Clientes', corpo: `
+        <p>Cadastro de quem contrata os eventos (empresa ou pessoa). Serve pra vincular ao evento e aparecer
+        nos filtros/relatórios do Staff — não tem nenhum controle financeiro embutido aqui (isso é papel do
+        módulo Financeiro).</p>
+      ` },
+      { id: 'aniversarios', titulo: 'Aniversários', corpo: `
+        <p>Lembretes de aniversário de qualquer pessoa — não precisa ser alguém cadastrado em Profissionais
+        (pode ser cliente, fornecedor, diretor etc.).</p>
+        <ul>
+          <li>O campo <strong>Nome</strong> já formata automaticamente como nome próprio ao digitar (primeira
+          letra maiúscula, resto minúsculo — "de/da/do/das/dos/e" sempre em minúsculo).</li>
+          <li><strong>Gerar cartaz do mês</strong>: pôster com todos os aniversariantes de um mês escolhido.</li>
+          <li><strong>📱 (por pessoa)</strong>: card individual pronto pra postar no Status/Stories.</li>
+        </ul>
+        <p>Os dois usam a cor e o logo definidos em <strong>Personalização</strong>.</p>
+      ` },
+      { id: 'eventos', titulo: 'Eventos', corpo: `
+        <p>Cadastro das operações/eventos da unidade, com status <strong>Planejado → Em andamento →
+        Finalizado</strong> (ou Cancelado).</p>
+        <ul>
+          <li>Dentro de cada evento fica a <strong>equipe escalada</strong>: profissional + função + valor
+          combinado (cachê), com status Confirmado/Pendente/Cancelado por pessoa.</li>
+          <li><strong>Importar de outro evento</strong> copia a equipe de um evento anterior, útil pra escalas
+          que se repetem.</li>
+          <li>Essa mesma equipe é o que aparece nos filtros do <strong>Ponto</strong> e é referenciada nos
+          <strong>Recibos</strong> e <strong>Verbas</strong> daquele evento.</li>
+        </ul>
+      ` },
+      { id: 'ponto', titulo: 'Ponto', corpo: `
+        <p>Essa tela é <strong>só consulta</strong>. A marcação de ponto em si acontece no quiosque facial
+        (tela separada, instalada no local do evento), que reconhece o rosto processado no cadastro do
+        profissional.</p>
+        <ul>
+          <li>Filtre por evento ou profissional pra achar um registro específico.</li>
+          <li><strong>Método</strong> mostra se foi reconhecimento <strong>Facial</strong> ou lançamento
+          <strong>Manual</strong>.</li>
+        </ul>
+      ` },
+      { id: 'recibos', titulo: 'Recibos (RPA)', corpo: `
+        <p>Um recibo agrupa vários lançamentos de pagamento avulso por número sequencial, gerado
+        automaticamente pela unidade (não precisa digitar número).</p>
+        <ul>
+          <li>Cada lançamento = profissional + tipo (Diária completa, Meia diária, Hora extra, Adicional
+          noturno, Outro) + <strong>valor bruto − descontos = valor líquido</strong> (o líquido é calculado,
+          não digitado).</li>
+          <li>Enquanto o recibo está <strong>Aberto</strong>, os lançamentos podem ser editados livremente.</li>
+          <li><strong>Fechar recibo</strong> é definitivo: depois de fechado, não dá mais pra editar os
+          lançamentos dele. Só feche quando o recibo estiver pronto pra impressão/pagamento.</li>
+          <li>Excluir o recibo remove todos os lançamentos dele de uma vez — não tem como excluir um recibo
+          "pela metade" e manter o resto.</li>
+        </ul>
+      ` },
+      { id: 'verbas', titulo: 'Verbas de Operação', corpo: `
+        <p>Dinheiro adiantado pra cobrir gasto de um evento/operação — pode ou não estar ligado a um evento
+        específico.</p>
+        <p>Fluxo de status: <strong>Solicitada → Aprovada → Liberada → Prestada</strong> (ou
+        <strong>Rejeitada</strong>, que pode acontecer em vez de aprovar). "Prestada" é quando a pessoa já
+        devolveu a prestação de contas (comprovantes anexados na própria verba).</p>
+      ` },
+      { id: 'permissoes', titulo: 'Permissões', corpo: `
+        <p>Define, por usuário vinculado à unidade, o papel dele dentro do Staff:</p>
+        <ul>
+          <li><strong>Administrador</strong> — acesso total, inclusive editar cadastros de Profissionais.</li>
+          <li><strong>Financeiro</strong> / <strong>Operacional</strong> — acesso conforme a função do dia a dia
+          (lançamentos, escalas, recibos).</li>
+          <li><strong>Consulta</strong> — só visualização, sem editar nada.</li>
+          <li><strong>Sem acesso explícito</strong> — está vinculado à unidade, mas não entra no Staff, a
+          menos que seja Principal.</li>
+        </ul>
+        <p>Lembrando: quem é <strong>Principal</strong> da unidade tem acesso total mesmo sem papel definido
+        aqui — essa regra é da plataforma, não só do Staff.</p>
+      ` },
+      { id: 'personalizacao', titulo: 'Personalização', corpo: `
+        <p>Cor principal e logotipo usados nas artes que o Staff gera automaticamente: o cartaz mensal de
+        aniversariantes e os cards individuais de aniversário/Status.</p>
+        <p>Sem logo cadastrado, a arte é gerada normalmente, só sai sem a marca da unidade.</p>
+      ` },
+    ]
+  };
+
+  function renderizarAjudaModulo(secaoId){
+    const secao = AJUDA_STAFF.secoes.find(s => s.id === secaoId) || AJUDA_STAFF.secoes[0];
+    document.querySelectorAll('.modal-ajuda-nav-item').forEach(el => el.classList.toggle('ativo', el.dataset.secao === secao.id));
+    document.getElementById('ajudaModuloConteudo').innerHTML = `
+      <h4>${secao.titulo}</h4>
+      ${secao.corpo}
+      <div class="ajuda-atualizado">Última revisão deste conteúdo: ${AJUDA_STAFF.ultimaRevisao}</div>
+    `;
+  }
+
+  function abrirModalAjuda(secaoInicial){
+    document.getElementById('modalAjudaTitulo').textContent = '❓ Ajuda — ' + AJUDA_STAFF.titulo;
+    document.getElementById('ajudaModuloNav').innerHTML = AJUDA_STAFF.secoes.map(s =>
+      `<button type="button" class="modal-ajuda-nav-item" data-secao="${s.id}">${s.titulo}</button>`
+    ).join('');
+    document.querySelectorAll('.modal-ajuda-nav-item').forEach(btn => {
+      btn.addEventListener('click', () => renderizarAjudaModulo(btn.dataset.secao));
+    });
+    renderizarAjudaModulo(secaoInicial || 'geral');
+    document.getElementById('modalAjudaOverlay').classList.add('show');
+  }
+
+  document.getElementById('btnAjudaModulo').addEventListener('click', () => {
+    const tabAtiva = document.querySelector('.tab-app-btn.active')?.dataset.appTab;
+    const secaoValida = AJUDA_STAFF.secoes.some(s => s.id === tabAtiva) ? tabAtiva : 'geral';
+    abrirModalAjuda(secaoValida);
+  });
+  document.getElementById('btnFecharModalAjudaX').addEventListener('click', () => document.getElementById('modalAjudaOverlay').classList.remove('show'));
+
   function formatarMoeda(v){ return 'R$ ' + Number(v || 0).toFixed(2).replace('.', ','); }
 
   function escapeHtml(texto){
     const div = document.createElement('div');
     div.textContent = texto == null ? '' : String(texto);
     return div.innerHTML;
+  }
+
+  // Formata como nome próprio: primeira letra de cada palavra maiúscula,
+  // restante minúsculo -- exceto conectivos ("de", "da", "do", "das", "dos", "e"),
+  // que ficam sempre em minúsculo.
+  const CONECTIVOS_NOME = ['de', 'da', 'do', 'das', 'dos', 'e'];
+  function formatarNomeProprio(nome){
+    return (nome || '').toLowerCase().split(' ').map(palavra => {
+      if(!palavra || CONECTIVOS_NOME.includes(palavra)) return palavra;
+      return palavra.charAt(0).toUpperCase() + palavra.slice(1);
+    }).join(' ');
   }
 
   // =================================================================
@@ -1706,6 +1920,12 @@
         </div>
       </div>`;
 
+    document.getElementById('an_nome').addEventListener('input', (e) => {
+      const cursorPos = e.target.selectionStart;
+      e.target.value = formatarNomeProprio(e.target.value);
+      e.target.setSelectionRange(cursorPos, cursorPos);
+    });
+
     document.getElementById('btnEscolherFotoAniversario').addEventListener('click', () => document.getElementById('an_foto_arquivo').click());
     document.getElementById('an_foto_arquivo').addEventListener('change', async (e) => {
       const arquivo = e.target.files[0];
@@ -1748,7 +1968,7 @@
   document.getElementById('btnFecharDrawerAniversario').addEventListener('click', () => document.getElementById('drawerAniversarioOverlay').classList.remove('show'));
 
   document.getElementById('btnSalvarAniversario').addEventListener('click', async () => {
-    const nome = document.getElementById('an_nome').value.trim();
+    const nome = formatarNomeProprio(document.getElementById('an_nome').value.trim());
     const dia = Number(document.getElementById('an_dia').value);
     const mes = Number(document.getElementById('an_mes').value);
     if(!nome){ alert('Informe o nome.'); return; }
