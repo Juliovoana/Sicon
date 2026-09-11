@@ -753,6 +753,25 @@ function souAdmin(){
   return !!(meuPerfil && (meuPerfil.ehPrincipal || meuPerfil.papel === 'administrador'));
 }
 
+// grava um registro na sentinela (auditoria global, compartilhada entre
+// módulos) -- não bloqueia a ação principal se falhar, só avisa no
+// console, pra nunca travar o operador por causa de um log
+async function registrarSentinela(tipoAcao, descricao){
+  try {
+    const { error } = await sb.from('servir_sentinela').insert({
+      unidade_negocio_id: meuPerfil.unidadeId,
+      modulo: 'checklist_equipamentos',
+      tipo_acao: tipoAcao,
+      descricao,
+      operador: meuPerfil.nomeOperador,
+      operador_user_id: meuPerfil.userId
+    });
+    if (error) console.error('Falha ao gravar na sentinela:', error);
+  } catch (e) {
+    console.error('Falha ao gravar na sentinela:', e);
+  }
+}
+
 // converte o logotipo (URL pública) em base64 uma única vez, pra poder
 // usar no jsPDF (que precisa da imagem já carregada, não só a URL) --
 // se falhar por qualquer motivo, os relatórios simplesmente saem sem
@@ -1136,6 +1155,9 @@ const AJUDA_CHECKLIST = {
       <strong>Atendidas</strong> e <strong>Reprovadas</strong>.</p>
       <p>"Nova solicitação" pede o veículo/equipamento e fica pendente até alguém aprovar
       (atender) ou reprovar.</p>
+      <p>🗑️ <strong>Excluir</strong>: aparece nas abas Pendentes e Reprovadas pra quem criou a
+      solicitação ou pra um administrador — nunca numa já Atendida (poderia deixar
+      estoque/financeiro inconsistente). É uma ação crítica e fica registrada na sentinela.</p>
     ` },
     { id: 'corr', titulo: 'Manutenção Corretiva', corpo: `
       <p>Mesma lógica do Abastecimento (Pendentes/Atendidas/Reprovadas), mas pra pedir uma
@@ -2704,6 +2726,7 @@ let setoresUnidadeCache = null;
 let planoContasUnidadeCache = null;
 let tipoSolicitacaoAtual = null;
 let solicitacoesInfoCache = {}; // item.id -> {equipamento, fornecedor, descricao} -- pro popup de atender mostrar contexto
+let solicitacoesReqCache = {}; // req.id -> contexto pra excluir (log da sentinela + recarregar a lista certa depois)
 
 /* ── memória do último valor escolhido (por unidade) ── */
 function chaveLS(campo){ return 'checklist_padrao_' + campo + '_' + meuPerfil.unidadeId; }
@@ -2980,6 +3003,22 @@ async function carregarSolicitacoes(tipo, aba, statusFiltro){
         <button class="btn-buscar" style="flex:1;justify-content:center;padding:8px" data-atender="${item.id}" data-req="${req.id}">Atender</button>
         <button class="btn-buscar" style="flex:1;justify-content:center;padding:8px;background:var(--nk)" data-reprovar="${req.id}">Reprovar</button>
       </div>` : '';
+    // excluir: só quem criou a solicitação (ex: motorista que abriu por
+    // engano) ou um admin, e só antes de ter sido atendida -- depois de
+    // atendida já pode ter afetado estoque/financeiro, então nem admin
+    // exclui daqui (teria que estornar o atendimento primeiro, em
+    // Estoque → Requisição rápida). É uma ação crítica: fica registrada
+    // na sentinela.
+    const podeExcluir = statusFiltro !== 'atendida' && (req.criado_por === meuPerfil.userId || souAdmin());
+    const tipoLabel = tipo === 'servico_abastecimento' ? 'abastecimento' : 'manutenção corretiva';
+    if (podeExcluir) {
+      solicitacoesReqCache[req.id] = {
+        tipo, aba, statusFiltro, tipoLabel, nomeEquip,
+        descricao: item.servico_descricao || item.descricao_livre || tipoLabel,
+        solicitante: req.solicitante
+      };
+    }
+    const botaoExcluir = podeExcluir ? `<button class="fi-btn danger" data-excluir-solicitacao="${req.id}" title="Excluir solicitação"><i class="ti ti-trash"></i></button>` : '';
     const infoAtendimento = statusFiltro === 'atendida'
       ? `<div class="fisb" style="margin-top:2px;color:var(--ok)">Atendido em ${req.aprovado_em ? new Date(req.aprovado_em).toLocaleDateString('pt-BR') : ''}</div>`
       : '';
@@ -3007,6 +3046,7 @@ async function carregarSolicitacoes(tipo, aba, statusFiltro){
             ${blocoFotos}
             ${infoAtendimento}${infoReprovacao}
           </div>
+          ${botaoExcluir ? `<div class="fi-actions">${botaoExcluir}</div>` : ''}
         </div>
         ${botoesAdmin}
       </div>`;
@@ -3014,6 +3054,7 @@ async function carregarSolicitacoes(tipo, aba, statusFiltro){
 
   lista.querySelectorAll('[data-atender]').forEach(btn => btn.addEventListener('click', () => abrirFormAtender(Number(btn.dataset.atender), btn.dataset.req, tipo)));
   lista.querySelectorAll('[data-reprovar]').forEach(btn => btn.addEventListener('click', () => reprovarSolicitacao(btn.dataset.reprovar, tipo, aba)));
+  lista.querySelectorAll('[data-excluir-solicitacao]').forEach(btn => btn.addEventListener('click', () => excluirSolicitacao(btn.dataset.excluirSolicitacao)));
   lista.querySelectorAll('.foto-evidencia-os').forEach(img => img.addEventListener('click', () => abrirFoto(img.dataset.fotoUrl)));
 }
 
@@ -3469,6 +3510,33 @@ async function reprovarSolicitacao(requisicaoId, tipo, aba){
   if (error) { toast('Erro ao reprovar: ' + error.message); return; }
   toast('Solicitação reprovada.');
   carregarSolicitacoes(tipo, aba, 'pendente');
+}
+
+// exclui uma solicitação de abastecimento/manutenção corretiva inteira
+// (pendente ou reprovada -- nunca uma já atendida, pra não deixar
+// estoque/financeiro inconsistente). Ação crítica: fica registrada na
+// sentinela antes de qualquer coisa dar errado depois.
+async function excluirSolicitacao(requisicaoId){
+  const info = solicitacoesReqCache[requisicaoId];
+  if (!info) return;
+  if (!confirm(`Excluir esta solicitação de ${info.tipoLabel}${info.nomeEquip && info.nomeEquip !== '—' ? ' (' + info.nomeEquip + ')' : ''}? Essa ação não pode ser desfeita.`)) return;
+
+  try {
+    // usa .select() depois do delete pra saber se REALMENTE excluiu --
+    // a política de segurança do banco pode bloquear silenciosamente,
+    // sem erro nenhum, só retornando zero linhas
+    const { data, error } = await sb.from('estoque_requisicoes_rapidas').delete().eq('id', requisicaoId).select();
+    if (error) throw error;
+    if (!data || !data.length) { toast('Não foi possível excluir — você não tem permissão pra essa solicitação.'); return; }
+
+    await registrarSentinela('exclusao_solicitacao_manutencao',
+      `Excluiu solicitação de ${info.tipoLabel} "${info.descricao}"${info.nomeEquip && info.nomeEquip !== '—' ? ' do equipamento ' + info.nomeEquip : ''} (solicitada por ${info.solicitante})`);
+
+    toast('✓ Solicitação excluída.');
+    carregarSolicitacoes(info.tipo, info.aba, info.statusFiltro);
+  } catch (err) {
+    toast('Erro ao excluir: ' + err.message);
+  }
 }
 
 // os popups só fecham pelo botão "Fechar"/"Cancelar"/"Concluir" — não
