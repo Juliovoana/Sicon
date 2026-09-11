@@ -1143,6 +1143,10 @@ const AJUDA_CHECKLIST = {
       checklist.</p>
       <p>É o mesmo tipo de registro que pode ser criado <strong>automaticamente</strong> quando
       um item do checklist é marcado NOK e a OS automática está configurada.</p>
+      <p>Quando a OS vem do checklist, a(s) <strong>foto(s) tiradas naquele item</strong> viajam
+      junto e aparecem como miniaturas tanto na lista quanto no popup "Atender" — clique numa
+      foto pra ver em tamanho maior. Solicitação criada manualmente (Nova solicitação) não tem
+      foto.</p>
     ` },
   ]
 };
@@ -2102,6 +2106,9 @@ async function enviarChecklist(){
       }).select().single();
       if (errItem) throw errItem;
 
+      // guarda as URLs finais das fotos desse item -- usado logo abaixo
+      // pra levar a evidência junto se esse item virar uma OS automática
+      item.urlsFotosSalvas = [];
       for (const blob of item.fotos) {
         const nomeArquivo = `${meuPerfil.unidadeId}/${checklist.id}/${itemSalvo.id}_${Date.now()}.jpg`;
         const { error: errUpload } = await sb.storage.from('checklist-fotos').upload(nomeArquivo, blob, { contentType: 'image/jpeg' });
@@ -2109,6 +2116,7 @@ async function enviarChecklist(){
         const { data: urlPublica } = sb.storage.from('checklist-fotos').getPublicUrl(nomeArquivo);
         const { error: errFoto } = await sb.from('checklist_realizados_itens_fotos').insert({ item_id: itemSalvo.id, url: urlPublica.publicUrl });
         if (errFoto) throw new Error('Falha ao salvar registro da foto: ' + errFoto.message);
+        item.urlsFotosSalvas.push(urlPublica.publicUrl);
       }
       // fotos reaproveitadas de um checklist anterior (via "Preencher
       // com último checklist") -- só referencia a mesma URL, sem
@@ -2116,6 +2124,7 @@ async function enviarChecklist(){
       for (const urlReaproveitada of item.fotoUrls) {
         const { error: errFotoReap } = await sb.from('checklist_realizados_itens_fotos').insert({ item_id: itemSalvo.id, url: urlReaproveitada });
         if (errFotoReap) throw new Error('Falha ao vincular foto reaproveitada: ' + errFotoReap.message);
+        item.urlsFotosSalvas.push(urlReaproveitada);
       }
     }
 
@@ -2167,7 +2176,11 @@ async function enviarChecklist(){
             qtd_solicitada: 1,
             setor_id: parametrosOSAutomatica.setor_id,
             evento: parametrosOSAutomatica.evento_texto,
-            plano_contas_id: parametrosOSAutomatica.plano_contas_id || null
+            plano_contas_id: parametrosOSAutomatica.plano_contas_id || null,
+            // leva a(s) foto(s) tiradas nesse item do checklist junto pra OS --
+            // igual já acontece no Checklist Frota, pra quem vai atender ver a
+            // evidência sem precisar caçar o checklist original
+            fotos_evidencia: item.urlsFotosSalvas || []
           }));
           const { error: errItensOS } = await sb.from('estoque_requisicoes_rapidas_itens').insert(itensOSPayload);
           if (errItensOS) throw errItensOS;
@@ -2961,7 +2974,7 @@ async function carregarSolicitacoes(tipo, aba, statusFiltro){
     const descricao = tipo === 'servico_abastecimento'
       ? (item.qtd_solicitada ? Number(item.qtd_solicitada).toLocaleString('pt-BR') + ' ' + (item.unidade_medida || 'L') : '—') + (item.fornecedor_recomendado ? ' · ' + escapeHtml(item.fornecedor_recomendado) : '')
       : escapeHtml(item.servico_descricao || item.descricao_livre || '—');
-    solicitacoesInfoCache[item.id] = { nomeEquip, fornecedor: item.fornecedor_recomendado || '', descricaoServico: item.servico_descricao || item.descricao_livre || '', observacao: item.observacao || '' };
+    solicitacoesInfoCache[item.id] = { nomeEquip, fornecedor: item.fornecedor_recomendado || '', descricaoServico: item.servico_descricao || item.descricao_livre || '', observacao: item.observacao || '', fotos: item.fotos_evidencia || [] };
     const botoesAdmin = souAdmin() && statusFiltro === 'pendente' ? `
       <div style="display:flex;gap:6px;margin-top:8px">
         <button class="btn-buscar" style="flex:1;justify-content:center;padding:8px" data-atender="${item.id}" data-req="${req.id}">Atender</button>
@@ -2974,6 +2987,14 @@ async function carregarSolicitacoes(tipo, aba, statusFiltro){
       ? `<div class="fisb" style="margin-top:2px;color:var(--nk)">Motivo: ${escapeHtml(req.motivo_reprovacao)}</div>` : '';
     const infoObservacao = item.observacao
       ? `<div class="fisb" style="margin-top:4px;font-style:italic">"${escapeHtml(item.observacao)}"</div>` : '';
+    // foto(s) de evidência -- vêm do item do checklist que gerou essa OS
+    // automaticamente (item.fotos_evidencia), igual já acontece no
+    // Checklist Frota. Solicitação feita manualmente não tem foto.
+    const fotosEvidencia = item.fotos_evidencia || [];
+    const blocoFotos = fotosEvidencia.length ? `
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+        ${fotosEvidencia.map(url => `<img class="fth foto-evidencia-os" data-foto-url="${escapeHtml(url)}" src="${escapeHtml(url)}" loading="lazy">`).join('')}
+      </div>` : '';
     return `
       <div class="fi" style="align-items:flex-start;flex-direction:column">
         <div style="display:flex;width:100%;gap:10px">
@@ -2983,6 +3004,7 @@ async function carregarSolicitacoes(tipo, aba, statusFiltro){
             <div class="fisb">${descricao}</div>
             <div class="fisb" style="margin-top:2px">Solicitado por ${escapeHtml(req.solicitante)} · ${new Date(req.created_at).toLocaleDateString('pt-BR')}</div>
             ${infoObservacao}
+            ${blocoFotos}
             ${infoAtendimento}${infoReprovacao}
           </div>
         </div>
@@ -2992,6 +3014,7 @@ async function carregarSolicitacoes(tipo, aba, statusFiltro){
 
   lista.querySelectorAll('[data-atender]').forEach(btn => btn.addEventListener('click', () => abrirFormAtender(Number(btn.dataset.atender), btn.dataset.req, tipo)));
   lista.querySelectorAll('[data-reprovar]').forEach(btn => btn.addEventListener('click', () => reprovarSolicitacao(btn.dataset.reprovar, tipo, aba)));
+  lista.querySelectorAll('.foto-evidencia-os').forEach(img => img.addEventListener('click', () => abrirFoto(img.dataset.fotoUrl)));
 }
 
 function filtrarSolicitacoes(aba, status, btn){
@@ -3363,6 +3386,7 @@ function abrirFormAtender(itemId, requisicaoId, tipo){
       <div style="margin-top:3px"><strong>${ehAbastecimento ? 'Posto' : 'Prestador de serviço'}:</strong> ${escapeHtml(info.fornecedor || '—')}</div>
       ${!ehAbastecimento && info.descricaoServico ? `<div style="margin-top:3px"><strong>Problema:</strong> ${escapeHtml(info.descricaoServico)}</div>` : ''}
       ${info.observacao ? `<div style="margin-top:3px"><strong>Observação:</strong> ${escapeHtml(info.observacao)}</div>` : ''}
+      ${(info.fotos || []).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">${info.fotos.map(url => `<img class="fth foto-evidencia-os" data-foto-url="${escapeHtml(url)}" src="${escapeHtml(url)}" loading="lazy">`).join('')}</div>` : ''}
     </div>
     <div class="man-grid" style="margin-top:8px">
       <div class="man-field"><label>${ehAbastecimento ? 'Litros atendidos' : 'Quantidade'} *</label><input class="inp" type="number" step="0.01" id="at-qtd" value="${ehAbastecimento ? '' : '1'}"></div>
@@ -3377,6 +3401,7 @@ function abrirFormAtender(itemId, requisicaoId, tipo){
       <button class="btn-buscar" onclick="confirmarAtendimento(${itemId}, '${requisicaoId}', '${tipo}')"><i class="ti ti-check"></i> Confirmar atendimento</button>
       <button class="btn-buscar" style="background:var(--tx3)" onclick="document.getElementById('modal-atender-solicitacao').classList.remove('on')">Cancelar</button>
     </div>`;
+  form.querySelectorAll('.foto-evidencia-os').forEach(img => img.addEventListener('click', () => abrirFoto(img.dataset.fotoUrl)));
   document.getElementById('modal-atender-solicitacao').classList.add('on');
 }
 
