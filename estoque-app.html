@@ -143,6 +143,8 @@
     .item-resultado:hover { background: #f5f9ff; }
     .info-resultado { font-size: 0.88em; }
     .info-resultado .cod { font-weight: bold; color: #1565c0; }
+    .input-qtd-copiar { width: 80px; text-align: right; padding: 5px 6px; border: 1px solid #ccc; border-radius: 4px; font-size: 0.95em; font-family: Arial, sans-serif; }
+    .input-qtd-copiar.qtd-editada { background: #fff8e1; border-color: #f9a825; }
     .info-resultado .preco { color: #2e7d32; font-weight: bold; }
     .info-resultado .estoque-baixo { color: #b00020; font-weight: bold; }
 
@@ -5380,13 +5382,18 @@ document.getElementById('btnAbrirCopiarProjeto').addEventListener('click', () =>
 
     document.getElementById('copiarProjetoOrigemBusca').value = '';
     document.getElementById('copiarProjetoOrigemSelecionadoTexto').textContent = '';
-    document.getElementById('copiarProjetoOrigemResultados').classList.remove('aberto');
     projetoOrigemSelecionadoParaCopia = null;
     document.getElementById('copiarProjetoBlocoItens').classList.add('hidden');
     document.getElementById('copiarProjetoSemItens').classList.add('hidden');
     document.getElementById('statusCopiarProjeto').textContent = '';
     document.getElementById('copiarProjetoMarcarTodos').checked = false;
     document.getElementById('modalCopiarProjeto').classList.add('aberto');
+    // já deixa os 3 projetos mais recentes (com itens) listados, sem
+    // precisar digitar nada -- na maioria das vezes é um deles mesmo
+    // (setTimeout pra abrir só depois que esse mesmo clique terminar de
+    // borbulhar até o document, senão o listener de "clique fora" fecha
+    // a lista no mesmo instante em que ela é aberta)
+    setTimeout(() => renderizarOpcoesProjetoOrigem(listarProjetosRecentesParaCopia(), ''), 0);
 });
 document.getElementById('btnFecharCopiarProjeto').addEventListener('click', () => {
     document.getElementById('modalCopiarProjeto').classList.remove('aberto');
@@ -5394,25 +5401,43 @@ document.getElementById('btnFecharCopiarProjeto').addEventListener('click', () =
 
 let projetoOrigemSelecionadoParaCopia = null;
 
-document.getElementById('copiarProjetoOrigemBusca').addEventListener('input', (e) => {
-    const termo = e.target.value.trim().toUpperCase();
+function listarProjetosRecentesParaCopia() {
+    return projetos
+        .filter(p => p.id !== projetoAtualId && (p.itens || []).length)
+        .sort((a, b) => b.id - a.id) // mais recente primeiro
+        .slice(0, 3);
+}
+
+function renderizarOpcoesProjetoOrigem(lista, mensagemVazio) {
     const el = document.getElementById('copiarProjetoOrigemResultados');
-    if (!termo) { el.classList.remove('aberto'); return; }
-    // busca por qualquer parte do nome -- não trava a lista mesmo com
-    // muitos projetos cadastrados no futuro
-    const filtrados = projetos.filter(p =>
-        p.id !== projetoAtualId && (p.itens || []).length && p.descricao.toUpperCase().includes(termo)
-    ).slice(0, 20);
-    if (!filtrados.length) { el.innerHTML = '<div class="resultado-item">Nenhum projeto encontrado com itens pra copiar.</div>'; el.classList.add('aberto'); return; }
-    el.innerHTML = filtrados.map(p => `<div class="resultado-item" data-id="${p.id}">${escapeHtml(p.descricao)} <span style="color:var(--muted);">(${p.itens.length} item(ns))</span></div>`).join('');
+    if (!lista.length) {
+        el.innerHTML = `<div class="item-resultado">${mensagemVazio || 'Nenhum projeto encontrado com itens pra copiar.'}</div>`;
+        el.classList.add('aberto');
+        return;
+    }
+    el.innerHTML = lista.map(p => `<div class="item-resultado" data-id="${p.id}" style="cursor:pointer;">${escapeHtml(p.descricao)} <span style="color:var(--muted);">(${p.itens.length} item(ns))</span></div>`).join('');
     el.classList.add('aberto');
     el.querySelectorAll('[data-id]').forEach(opt => {
         opt.addEventListener('click', () => {
             selecionarProjetoOrigemParaCopia(Number(opt.dataset.id));
             document.getElementById('copiarProjetoOrigemBusca').value = '';
-            el.classList.remove('aberto');
+            el.classList.remove('aberto'); // retrai a lista assim que escolhe o projeto
         });
     });
+}
+
+document.getElementById('copiarProjetoOrigemBusca').addEventListener('input', (e) => {
+    const termo = e.target.value.trim().toUpperCase();
+    if (!termo) { renderizarOpcoesProjetoOrigem(listarProjetosRecentesParaCopia(), ''); return; }
+    // busca por qualquer parte do nome -- não trava a lista mesmo com
+    // muitos projetos cadastrados no futuro
+    const filtrados = projetos.filter(p =>
+        p.id !== projetoAtualId && (p.itens || []).length && p.descricao.toUpperCase().includes(termo)
+    ).slice(0, 20);
+    renderizarOpcoesProjetoOrigem(filtrados, 'Nenhum projeto encontrado com itens pra copiar.');
+});
+document.getElementById('copiarProjetoOrigemBusca').addEventListener('focus', (e) => {
+    if (!e.target.value.trim()) renderizarOpcoesProjetoOrigem(listarProjetosRecentesParaCopia(), '');
 });
 document.addEventListener('click', (e) => {
     const campo = document.getElementById('copiarProjetoOrigemBusca');
@@ -5462,7 +5487,7 @@ function selecionarProjetoOrigemParaCopia(projId) {
             <tr>
                 <td class="center"><input type="checkbox" class="check-copiar-item" data-item-id="${item.id}"></td>
                 <td>${prod ? escapeHtml(prod.nome) : '#' + item.produtoId}</td>
-                <td class="num">${item.qtdRequisitada}</td>
+                <td class="num"><input type="number" class="input-qtd-copiar" data-item-id="${item.id}" data-qtd-original="${item.qtdRequisitada}" value="${item.qtdRequisitada}" min="1" step="1"></td>
                 <td class="num">${formatarMoeda(valorRef)}</td>
                 <td>${item.segmento ? escapeHtml(item.segmento) : '-'}</td>
             </tr>
@@ -5471,6 +5496,14 @@ function selecionarProjetoOrigemParaCopia(projId) {
     atualizarContagemCopiarProjeto();
     corpo.querySelectorAll('.check-copiar-item').forEach(chk => {
         chk.addEventListener('change', atualizarContagemCopiarProjeto);
+    });
+    // muda a cor do campo assim que a quantidade é alterada da original,
+    // pra deixar claro visualmente o que foi ajustado antes de copiar
+    corpo.querySelectorAll('.input-qtd-copiar').forEach(inp => {
+        inp.addEventListener('input', () => {
+            const original = Number(inp.dataset.qtdOriginal);
+            inp.classList.toggle('qtd-editada', Number(inp.value) !== original);
+        });
     });
 }
 
@@ -5516,7 +5549,13 @@ document.getElementById('btnConfirmarCopiarProjeto').addEventListener('click', a
     const eventoCabecalho = eventoSelecionadoAtual ? eventoSelecionadoAtual.codigo : '';
 
     try {
-        const itensParaCopiar = projOrigem.itens.filter(i => idsMarcados.includes(i.id));
+        // usa a quantidade que está no campo agora -- o usuário pode ter
+        // ajustado antes de confirmar (campo fica destacado quando editado)
+        const itensParaCopiar = projOrigem.itens.filter(i => idsMarcados.includes(i.id)).map(i => {
+            const inputQtd = document.querySelector(`.input-qtd-copiar[data-item-id="${i.id}"]`);
+            const qtdEditada = inputQtd ? Number(inputQtd.value) : NaN;
+            return (Number.isFinite(qtdEditada) && qtdEditada > 0) ? { ...i, qtdRequisitada: qtdEditada } : i;
+        });
         for (const item of itensParaCopiar) {
             const prod = produtos.find(p => p.id === item.produtoId);
             const saldoAlmoxTrabalho = almoxarifadoTrabalho ? saldoDoProdutoNoAlmoxarifado(item.produtoId, almoxarifadoTrabalho) : null;
