@@ -1686,6 +1686,20 @@
                 <p class="subtitulo" id="modalAtenderEventoSelecionado" style="margin-top:4px;"></p>
             </div>
         </div>
+        <div style="margin-top:6px;">
+            <button type="button" class="btn btn-cinza btn-pequeno" id="btnBuscarMovNaoAgregadas">🔎 Buscar movimentações não agregadas dessa tag</button>
+        </div>
+        <div id="blocoMovNaoAgregadas" class="hidden" style="margin-top:10px; border:1px solid var(--linha); border-radius:8px; padding:10px; background:#fffdf5;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <strong style="font-size:0.9em;">Saídas desse produto com essa tag, feitas fora desta janela</strong>
+                <span class="subtitulo" id="movNaoAgregadasContagem" style="margin:0;"></span>
+            </div>
+            <div id="listaMovNaoAgregadas" style="max-height:200px; overflow-y:auto;"></div>
+            <div style="margin-top:8px; text-align:right;">
+                <button type="button" class="btn btn-verde btn-pequeno" id="btnAgregarMovSelecionadas">Agregar selecionadas a este item</button>
+            </div>
+            <p class="status-msg" id="statusMovNaoAgregadas" style="margin-top:6px;"></p>
+        </div>
         <div class="grade col2" style="margin-top:10px;">
             <div class="campo"><label>Quantidade atendida agora</label><input type="number" step="0.01" id="modalQtdAtendida"></div>
             <div class="campo"><label>Quem retirou (responsável)</label><input type="text" id="modalResponsavelRetirada"></div>
@@ -2543,6 +2557,17 @@ async function chamarPost(acao, d) {
         const ev = d.evento;
         const { error } = await sb.from('fabrica_eventos')
             .upsert({ codigo: ev.codigo, descricao: ev.descricao || '', unidade_negocio_id: meuPerfil.unidadeId }, { onConflict: 'unidade_negocio_id,codigo' });
+        if (error) throw error;
+        return;
+    }
+    if (acao === 'agregarMovimentacoesAoItem') {
+        // vincula movimentações de saída que foram lançadas soltas (fora
+        // da janela "Registrar atendimento") a um item de projeto -- não
+        // mexe em estoque nem em preço médio, só passa a contar essa
+        // saída como "já entregue" desse item específico
+        const { error } = await sb.from('estoque_movimentacoes')
+            .update({ item_projeto_id: d.itemId, projeto_id: d.projetoId })
+            .in('id', d.movIds);
         if (error) throw error;
         return;
     }
@@ -5820,20 +5845,11 @@ async function abrirModalAtender(itemId) {
     const proj = projetos.find(p => p.id === projetoAtualId);
     const item = proj.itens.find(i => i.id === itemId);
     const prod = produtos.find(p => p.id === item.produtoId);
-    const ent = entreguePorItem(itemId);
-    const restante = item.qtdRequisitada - ent;
+    const restante = item.qtdRequisitada - entreguePorItem(itemId);
 
     itemAtualAtendimentoId = itemId;
     if (!catalogosBaixa.almoxarifados || !catalogosBaixa.almoxarifados.length) catalogosBaixa = await chamarGet('listarCatalogosBaixa');
-    const almoxAtual = almoxarifadoTrabalho ? (catalogosBaixa.almoxarifados || []).find(a => a.id === almoxarifadoTrabalho) : null;
-    const saldoAgora = almoxarifadoTrabalho ? saldoDoProdutoNoAlmoxarifado(item.produtoId, almoxarifadoTrabalho) : null;
-    const estoqueAgoraTexto = almoxarifadoTrabalho
-        ? `${saldoAgora ? Number(saldoAgora.estoque).toLocaleString('pt-BR') : '0'} no ${almoxAtual ? escapeHtml(almoxAtual.nome) : 'almoxarifado selecionado'}`
-        : `${prod ? Number(prod.estoque).toLocaleString('pt-BR') : '0'} no total (selecione um almoxarifado de trabalho pra ver separado)`;
-    document.getElementById('modalAtenderProduto').innerHTML =
-        `<strong>${escapeHtml(prod ? prod.nome : '#' + item.produtoId)}</strong><br>
-         Requisitado: ${item.qtdRequisitada} · já entregue: ${ent} · restante: ${restante}<br>
-         Estoque disponível agora: <strong>${estoqueAgoraTexto}</strong>${item.estoqueDisponivelNoMomento != null ? ` <span style="color:var(--muted); font-size:0.85em;">(era ${Number(item.estoqueDisponivelNoMomento).toLocaleString('pt-BR')} quando o item foi provisionado)</span>` : ''}`;
+    atualizarResumoModalAtender(itemId);
     document.getElementById('modalAtenderTag').value = item.tag || '';
     document.getElementById('modalAtenderEventoBusca').value = '';
     eventoSelecionadoModalAtender = preencherEventoSelecionadoUI('modalAtenderEventoSelecionado', item.evento || '');
@@ -5857,8 +5873,112 @@ async function abrirModalAtender(itemId) {
     document.getElementById('modalAtenderValorUnit').value = precoMedioOuValor;
     document.getElementById('statusModalAtender').textContent = '';
     renderizarListaAtendimentosItem(itemId);
+    document.getElementById('blocoMovNaoAgregadas').classList.add('hidden');
+    document.getElementById('statusMovNaoAgregadas').textContent = '';
     document.getElementById('modalAtender').classList.add('aberto');
 }
+
+// resumo do topo do modal (requisitado/já entregue/restante + estoque
+// disponível) -- em função separada pra poder atualizar sozinho depois
+// de editar, excluir ou agregar um atendimento, sem reabrir o modal
+function atualizarResumoModalAtender(itemId) {
+    const proj = projetos.find(p => p.id === projetoAtualId);
+    const item = proj.itens.find(i => i.id === itemId);
+    const prod = produtos.find(p => p.id === item.produtoId);
+    const ent = entreguePorItem(itemId);
+    const restante = item.qtdRequisitada - ent;
+    const almoxAtual = almoxarifadoTrabalho ? (catalogosBaixa.almoxarifados || []).find(a => a.id === almoxarifadoTrabalho) : null;
+    const saldoAgora = almoxarifadoTrabalho ? saldoDoProdutoNoAlmoxarifado(item.produtoId, almoxarifadoTrabalho) : null;
+    const estoqueAgoraTexto = almoxarifadoTrabalho
+        ? `${saldoAgora ? Number(saldoAgora.estoque).toLocaleString('pt-BR') : '0'} no ${almoxAtual ? escapeHtml(almoxAtual.nome) : 'almoxarifado selecionado'}`
+        : `${prod ? Number(prod.estoque).toLocaleString('pt-BR') : '0'} no total (selecione um almoxarifado de trabalho pra ver separado)`;
+    document.getElementById('modalAtenderProduto').innerHTML =
+        `<strong>${escapeHtml(prod ? prod.nome : '#' + item.produtoId)}</strong><br>
+         Requisitado: ${item.qtdRequisitada} · já entregue: ${ent} · restante: ${restante}<br>
+         Estoque disponível agora: <strong>${estoqueAgoraTexto}</strong>${item.estoqueDisponivelNoMomento != null ? ` <span style="color:var(--muted); font-size:0.85em;">(era ${Number(item.estoqueDisponivelNoMomento).toLocaleString('pt-BR')} quando o item foi provisionado)</span>` : ''}`;
+}
+
+// ---------------------------------------------------------------
+// BUSCAR MOVIMENTAÇÕES NÃO AGREGADAS -- às vezes uma saída desse mesmo
+// produto pra essa mesma tag foi lançada por outra tela (baixa direta,
+// requisição completa etc.), sem passar por "Registrar atendimento".
+// Essa saída fica "solta": não conta como entregue no item do projeto
+// e não aparece na lista de atendimentos dele. Aqui a gente localiza
+// essas saídas soltas (mesmo produto + mesma tag + ainda sem item de
+// projeto vinculado) e deixa a pessoa vincular ao item atual.
+// ---------------------------------------------------------------
+document.getElementById('btnBuscarMovNaoAgregadas').addEventListener('click', () => {
+    buscarMovimentacoesNaoAgregadas();
+});
+
+function buscarMovimentacoesNaoAgregadas() {
+    const bloco = document.getElementById('blocoMovNaoAgregadas');
+    const statusEl = document.getElementById('statusMovNaoAgregadas');
+    statusEl.textContent = '';
+    const tag = document.getElementById('modalAtenderTag').value.trim();
+    if (!tag) {
+        bloco.classList.add('hidden');
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Informe a tag antes de buscar.';
+        return;
+    }
+    const proj = projetos.find(p => p.id === projetoAtualId);
+    const item = proj.itens.find(i => i.id === itemAtualAtendimentoId);
+    const tagUpper = tag.toUpperCase();
+    const encontradas = movimentacoes.filter(m =>
+        m.tipo === 'saida' &&
+        m.produtoId === item.produtoId &&
+        (m.tag || '').trim().toUpperCase() === tagUpper &&
+        !m.itemProjetoId // ainda não está vinculada a nenhum item de projeto
+    ).sort((a, b) => (b.data || '').localeCompare(a.data || ''));
+
+    bloco.classList.remove('hidden');
+    document.getElementById('movNaoAgregadasContagem').textContent = `${encontradas.length} encontrada(s)`;
+    const lista = document.getElementById('listaMovNaoAgregadas');
+    if (!encontradas.length) {
+        lista.innerHTML = '<div class="vazio" style="padding:6px 0;">Nenhuma movimentação solta encontrada com essa tag pra esse produto.</div>';
+        return;
+    }
+    lista.innerHTML = encontradas.map(m => `
+        <label style="display:flex; align-items:flex-start; gap:8px; padding:6px 0; border-bottom:1px solid #eee; cursor:pointer;">
+            <input type="checkbox" class="check-mov-nao-agregada" data-mov-id="${m.id}" style="margin-top:3px;">
+            <span style="font-size:0.9em;">
+                <strong>${Number(m.qtd).toLocaleString('pt-BR')}</strong> em ${m.data} — ${escapeHtml(m.responsavel) || '-'}
+                ${m.evento ? ` · evento ${escapeHtml(m.evento)}` : ''}
+                ${m.observacao ? `<br><span style="color:#666;">${escapeHtml(m.observacao)}</span>` : ''}
+            </span>
+        </label>
+    `).join('');
+}
+
+document.getElementById('btnAgregarMovSelecionadas').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusMovNaoAgregadas');
+    const idsSelecionados = Array.from(document.querySelectorAll('.check-mov-nao-agregada:checked')).map(chk => Number(chk.dataset.movId));
+    if (!idsSelecionados.length) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Marque pelo menos uma movimentação pra agregar.';
+        return;
+    }
+    const proj = projetos.find(p => p.id === projetoAtualId);
+    const item = proj.itens.find(i => i.id === itemAtualAtendimentoId);
+    statusEl.className = '';
+    statusEl.textContent = 'Agregando...';
+    try {
+        await chamarPost('agregarMovimentacoesAoItem', { movIds: idsSelecionados, itemId: item.id, projetoId: proj.id });
+        await carregarMovimentacoes();
+        atualizarResumoModalAtender(item.id);
+        renderizarListaAtendimentosItem(item.id);
+        renderizarRequisicao(projetoAtualId);
+        renderizarListaProjetos();
+        buscarMovimentacoesNaoAgregadas(); // atualiza a lista, removendo as que acabaram de ser agregadas (isso limpa statusEl, por isso a mensagem de sucesso vem só depois)
+        statusEl.className = 'status-msg sucesso';
+        statusEl.textContent = `✅ ${idsSelecionados.length} movimentação(ões) agregada(s) a este item.`;
+    } catch (err) {
+        console.error(err);
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = '⚠️ ' + err.message;
+    }
+});
 
 document.getElementById('btnAtenderUsarPrecoMedio').addEventListener('click', () => {
     const proj = projetos.find(p => p.id === projetoAtualId);
@@ -5978,6 +6098,7 @@ document.getElementById('btnSalvarEditarAtendimento').addEventListener('click', 
         atualizarTagContagem();
         document.getElementById('modalEditarAtendimento').classList.remove('aberto');
         statusEl.textContent = '';
+        atualizarResumoModalAtender(itemAtualEdicaoId);
         renderizarListaAtendimentosItem(itemAtualEdicaoId);
         renderizarRequisicao(projetoAtualId);
         renderizarListaProjetos();
@@ -6009,6 +6130,7 @@ async function excluirAtendimento(movId, itemId) {
         }
         statusEl.className = 'status-msg sucesso';
         statusEl.textContent = '✅ Atendimento excluído.';
+        atualizarResumoModalAtender(itemId);
         renderizarListaAtendimentosItem(itemId);
         renderizarRequisicao(projetoAtualId);
         renderizarListaProjetos();
