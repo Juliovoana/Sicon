@@ -247,6 +247,8 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 .dash-man-row .detalhe{font-size:11px;color:var(--tx2);margin-top:2px}
 .man-body{display:none;border-top:1px solid var(--bd)}
 .man-body.on{display:block}
+#admin-item-lista .man-sec{margin:8px 16px;border-radius:10px;border:1px solid var(--bd);overflow:hidden}
+#admin-item-lista .fi{padding:10px 12px}
 .man-item{border-bottom:1px solid var(--bdl);padding:12px 16px;display:flex;flex-direction:column;gap:10px}
 .man-item:last-child{border-bottom:none}
 .man-item-title{font-size:13px;font-weight:600;color:var(--tx);display:flex;align-items:center;justify-content:space-between}
@@ -556,6 +558,7 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
             <button class="sbtn" onclick="abrirFormItemModeloNovo()"><i class="ti ti-plus"></i> Novo item</button>
           </div>
           <div class="modal-cad-overlay" id="modal-cad-item"><div class="modal-cad-caixa" id="admin-item-form"></div></div>
+          <div class="modal-cad-overlay" id="modal-duplicar-grupo"><div class="modal-cad-caixa" id="duplicar-grupo-form"></div></div>
           <div id="admin-item-lista"></div>
         </div>
         <div id="admin-man" class="subscreen">
@@ -2361,21 +2364,150 @@ async function carregarItensAdmin(){
   const porTipo = {};
   todosItensModelo.forEach(it => { if (!porTipo[it.tipo_veiculo]) porTipo[it.tipo_veiculo] = []; porTipo[it.tipo_veiculo].push(it); });
 
-  lista.innerHTML = Object.keys(porTipo).map(tipo => `
-    <div class="sec">${escapeHtml(LABEL_TIPO[tipo] || tipo)}</div>
-    ${porTipo[tipo].map(it => `
-      <div class="fi">
-        <div style="flex:1"><div class="fipl" style="font-size:13px">${escapeHtml(it.item)}${it.gerar_os ? ' <span class="pill" style="background:#fee2e2;color:#991b1b">🚨 Gera OS</span>' : ''}</div><div class="fisb">${escapeHtml(it.grupo)}</div></div>
-        <div class="fi-actions">
-          <button class="fi-btn" data-editar-item="${it.id}" title="Editar"><i class="ti ti-edit"></i></button>
-          <button class="fi-btn danger" data-excluir-item="${it.id}" title="Excluir"><i class="ti ti-trash"></i></button>
-        </div>
-      </div>
-    `).join('')}
-  `).join('');
+  lista.innerHTML = '';
+  Object.keys(porTipo).forEach(tipo => {
+    const h = document.createElement('div'); h.className = 'sec'; h.textContent = LABEL_TIPO[tipo] || tipo;
+    lista.appendChild(h);
+
+    // dentro de cada categoria, agrupa por "grupo" -- cada grupo vira um
+    // acordeão recuado e fechado por padrão, mesmo padrão usado no
+    // Checklist Frota (evita rolar uma lista enorme só pra editar 1 item)
+    const porGrupo = {};
+    porTipo[tipo].forEach(it => { const g = it.grupo || '(sem grupo)'; if (!porGrupo[g]) porGrupo[g] = []; porGrupo[g].push(it); });
+    Object.keys(porGrupo).forEach(grupo => {
+      const itensDoGrupo = porGrupo[grupo];
+      const sec = document.createElement('div'); sec.className = 'man-sec';
+      const hdr = document.createElement('div'); hdr.className = 'man-hdr';
+      hdr.innerHTML = `<div class="man-hdr-l"><i class="ti ti-folder" style="color:var(--nv);font-size:15px"></i><span class="man-hdr-title">${escapeHtml(grupo)}</span><span class="man-hdr-badge">${itensDoGrupo.length}</span></div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <button type="button" class="fi-btn" title="Duplicar grupo pra outra categoria" data-duplicar-grupo><i class="ti ti-copy"></i></button>
+          <i class="ti ti-chevron-down" style="color:var(--tx3);transition:transform .2s"></i>
+        </div>`;
+      const body = document.createElement('div'); body.className = 'man-body';
+      const chevron = hdr.querySelector('.ti-chevron-down');
+      hdr.addEventListener('click', () => {
+        const aberto = body.classList.contains('on');
+        body.classList.toggle('on', !aberto);
+        chevron.style.transform = aberto ? '' : 'rotate(180deg)';
+      });
+      hdr.querySelector('[data-duplicar-grupo]').addEventListener('click', (e) => {
+        e.stopPropagation(); // não deixa abrir/fechar o acordeão junto
+        abrirDuplicarGrupoModelo(tipo, grupo, itensDoGrupo);
+      });
+      itensDoGrupo.forEach(it => {
+        const d = document.createElement('div'); d.className = 'fi';
+        d.innerHTML = `<div style="flex:1"><div class="fipl" style="font-size:13px">${escapeHtml(it.item)}${it.gerar_os ? ' <span class="pill" style="background:#fee2e2;color:#991b1b">🚨 Gera OS</span>' : ''}</div></div>
+          <div class="fi-actions">
+            <button class="fi-btn" data-editar-item="${it.id}" title="Editar"><i class="ti ti-edit"></i></button>
+            <button class="fi-btn danger" data-excluir-item="${it.id}" title="Excluir"><i class="ti ti-trash"></i></button>
+          </div>`;
+        body.appendChild(d);
+      });
+      sec.appendChild(hdr); sec.appendChild(body);
+      lista.appendChild(sec);
+    });
+  });
 
   lista.querySelectorAll('[data-editar-item]').forEach(btn => btn.addEventListener('click', () => abrirFormItemModeloEditar(Number(btn.dataset.editarItem))));
   lista.querySelectorAll('[data-excluir-item]').forEach(btn => btn.addEventListener('click', () => excluirItemModeloAdmin(Number(btn.dataset.excluirItem))));
+}
+
+/* ── DUPLICAR GRUPO -- copia todos os itens de um grupo pra outra
+   categoria de equipamento de uma vez, sem recadastrar item por item
+   nem rodar SQL manual toda vez que entra uma categoria nova. Mesmo
+   recurso do Checklist Frota, aqui via insert direto no Supabase
+   (dá pra inserir a lista inteira numa chamada só). ── */
+let duplicarGrupoOrigemModelo = null; // {tipo, grupo, itens}
+
+function abrirDuplicarGrupoModelo(tipo, grupo, itens){
+  duplicarGrupoOrigemModelo = { tipo, grupo, itens };
+  const categoriasUsadas = [...new Set(frota.map(v => categoriaParaChecklist(v)).filter(Boolean))];
+  const sugestoes = [...new Set(['Todos', 'Caminhão', 'Ônibus', 'Van', 'Utilitário', 'Motocicleta', 'Gerador', 'Climatizador', 'Outro', ...categoriasUsadas, ...Object.keys(porTipoAtual())])];
+  const form = document.getElementById('duplicar-grupo-form');
+  form.innerHTML = `
+    <div class="lbl"><i class="ti ti-copy"></i> Duplicar grupo</div>
+    <p style="font-size:12px;color:var(--tx2);margin:6px 0 12px">Grupo "${escapeHtml(grupo)}" de "${escapeHtml(LABEL_TIPO[tipo] || tipo)}" -- marque quais itens duplicar e escolha pra qual outra categoria.</p>
+    <div id="dg-itens-lista" style="margin-bottom:8px;max-height:220px;overflow-y:auto;border:1px solid var(--bd);border-radius:var(--rs)">
+      ${itens.map((it, i) => `
+        <label style="display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--bdl);cursor:pointer;font-size:13px">
+          <input type="checkbox" class="dg-item-check" data-idx="${i}" checked style="width:16px;height:16px;flex-shrink:0">
+          <span>${escapeHtml(it.item)}${it.gerar_os ? ' <span class="pill" style="background:#fee2e2;color:#991b1b;font-size:10px">🚨</span>' : ''}</span>
+        </label>`).join('')}
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;font-size:12px">
+      <button type="button" class="btn-buscar" style="background:var(--tx3);padding:5px 10px" onclick="marcarTodosItensDuplicarModelo(true)">Marcar todos</button>
+      <button type="button" class="btn-buscar" style="background:var(--tx3);padding:5px 10px" onclick="marcarTodosItensDuplicarModelo(false)">Desmarcar todos</button>
+    </div>
+    <div class="man-field"><label>Duplicar para a categoria</label>
+      <input class="inp" id="dg-tipo-destino" list="lista-sugestao-categoria-dup" placeholder="Ex: Ônibus">
+      <datalist id="lista-sugestao-categoria-dup">${sugestoes.map(s => `<option value="${escapeHtml(s)}"></option>`).join('')}</datalist>
+    </div>
+    <div id="dg-status" style="font-size:12px;color:var(--nk);margin-top:10px;display:none"></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn-buscar" id="dg-btn-confirmar" onclick="confirmarDuplicarGrupoModelo()"><i class="ti ti-copy"></i> Duplicar</button>
+      <button class="btn-buscar" style="background:var(--tx3)" onclick="document.getElementById('modal-duplicar-grupo').classList.remove('on')">Cancelar</button>
+    </div>`;
+  document.getElementById('modal-duplicar-grupo').classList.add('on');
+  document.getElementById('dg-tipo-destino').focus();
+}
+
+function marcarTodosItensDuplicarModelo(marcar){
+  document.querySelectorAll('#duplicar-grupo-form .dg-item-check').forEach(chk => { chk.checked = marcar; });
+}
+
+// pequeno helper só pra sugerir no datalist as categorias que já têm
+// item de checklist cadastrado (além das fixas + das já usadas por
+// equipamento) -- não precisa ser exaustivo, é só sugestão
+function porTipoAtual(){
+  const porTipo = {};
+  todosItensModelo.forEach(it => { porTipo[it.tipo_veiculo] = true; });
+  return porTipo;
+}
+
+async function confirmarDuplicarGrupoModelo(){
+  if (!duplicarGrupoOrigemModelo) return;
+  const tipoDestino = document.getElementById('dg-tipo-destino').value.trim();
+  const statusEl = document.getElementById('dg-status');
+  statusEl.style.display = 'block';
+
+  const selecionados = [...document.querySelectorAll('#duplicar-grupo-form .dg-item-check:checked')]
+    .map(chk => duplicarGrupoOrigemModelo.itens[Number(chk.dataset.idx)]);
+
+  if (!selecionados.length) { statusEl.textContent = 'Marque ao menos um item pra duplicar.'; return; }
+  if (!tipoDestino) { statusEl.textContent = 'Digite a categoria de destino.'; return; }
+  if (tipoDestino === duplicarGrupoOrigemModelo.tipo) { statusEl.textContent = 'Escolha uma categoria diferente da original -- copiar pra mesma categoria criaria itens repetidos.'; return; }
+
+  // pula item que já existe com essa categoria+grupo+item de destino --
+  // idempotente, igual o SQL que já usamos antes pra duplicar
+  // Micro Onibus -> Onibus no Checklist Frota
+  const jaExistentes = new Set(
+    todosItensModelo.filter(it => it.tipo_veiculo === tipoDestino && it.grupo === duplicarGrupoOrigemModelo.grupo).map(it => it.item)
+  );
+  const paraCopiar = selecionados.filter(it => !jaExistentes.has(it.item));
+  if (!paraCopiar.length) { statusEl.textContent = `Os itens marcados já existem em "${tipoDestino}".`; return; }
+
+  const btn = document.getElementById('dg-btn-confirmar');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Duplicando...';
+
+  const registros = paraCopiar.map(it => ({
+    unidade_negocio_id: meuPerfil.unidadeId,
+    tipo_veiculo: tipoDestino,
+    grupo: duplicarGrupoOrigemModelo.grupo,
+    item: it.item,
+    ordem: it.ordem || 0,
+    gerar_os: !!it.gerar_os,
+    ativo: true
+  }));
+  const { error } = await sb.from('checklist_itens_modelo').insert(registros);
+
+  btn.disabled = false; btn.innerHTML = '<i class="ti ti-copy"></i> Duplicar';
+
+  if (error) { statusEl.textContent = 'Erro ao duplicar: ' + error.message; return; }
+
+  toast(`✓ ${registros.length} ${registros.length === 1 ? 'item duplicado' : 'itens duplicados'} para "${tipoDestino}"`);
+  document.getElementById('modal-duplicar-grupo').classList.remove('on');
+  await carregarItensModelo();
+  carregarItensAdmin();
 }
 
 function abrirFormItemModeloNovo(){
