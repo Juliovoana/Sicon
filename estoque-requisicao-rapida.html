@@ -89,6 +89,11 @@
     table.itens input[type=number] { width: 70px; padding: 6px 8px; border: 1.5px solid var(--border); border-radius: 7px; }
     .vazio { text-align: center; padding: 24px 0; color: var(--muted); font-size: 0.88rem; }
     .btn-remover { background: var(--danger-soft); color: var(--danger); border-radius: 7px; width: 28px; height: 28px; font-size: 1rem; padding: 0; }
+    .aprovador-row-req { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+    .aprovador-row-req:last-child { border-bottom: none; }
+    .aprovador-row-req .email { flex: 1; min-width: 180px; font-size: 0.88rem; }
+    .aprovador-row-req .toggle-ativo { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--muted); }
+    .badge-status-req { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 0.68rem; font-weight: 700; text-transform: uppercase; }
     .btn-principal-full { background: var(--brand); color: white; width: 100%; font-size: 1rem; padding: 14px; margin-top: 4px; }
     .btn-principal-full:hover { background: var(--brand-2); }
     .btn-principal-full:disabled { background: var(--muted); cursor: not-allowed; }
@@ -98,6 +103,8 @@
     .card-requisicao .meta { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
     .pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
     .pill-pendente { background: #FFF3E0; color: var(--accent-ink); }
+    .pill-aprovada { background: #E3F2FD; color: #0D47A1; }
+    .pill-reprovada { background: #FBEAE8; color: #C0392B; }
     .pill-atendida { background: var(--success-soft); color: var(--brand-2); }
     .item-req-linha { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
     .item-req-linha .nome-produto { flex: 1; min-width: 180px; font-size: 0.88rem; }
@@ -116,6 +123,35 @@
     .modal-caixa h3 { font-family: 'Fraunces', serif; margin: 0 0 4px 0; color: var(--brand); }
     .tipo-req-btn { background: #EEF0F1; color: var(--muted); }
     .tipo-req-btn.ativa { background: var(--brand); color: white; }
+
+    /* ---- modal de Ajuda (mesmo padrão dos outros módulos Servir) ---- */
+    .btn-ajuda-modulo{
+        display:flex; align-items:center; gap:6px; background:none; border:1.5px solid var(--border); color:var(--muted);
+        font-size:.8rem; font-weight:600; padding:7px 12px; border-radius:8px; cursor:pointer; flex-shrink:0;
+    }
+    .btn-ajuda-modulo:hover{ background:var(--brand-soft); color:var(--ink); }
+    .modal-ajuda-head{ display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border); }
+    .modal-ajuda-head h3{ font-family:'Fraunces', serif; margin:0; color:var(--brand); font-size:1.05rem; }
+    .modal-ajuda-body{ display:flex; flex:1; min-height:0; overflow:hidden; }
+    .modal-ajuda-nav{ width:210px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface); overflow-y:auto; padding:10px; }
+    .modal-ajuda-nav-item{
+        display:block; width:100%; text-align:left; background:none; border:none; color:var(--muted); font-size:.82rem; font-weight:600;
+        padding:9px 10px; border-radius:8px; cursor:pointer; margin-bottom:2px; font-family:'Inter', sans-serif;
+    }
+    .modal-ajuda-nav-item:hover{ background:var(--brand-soft); color:var(--ink); }
+    .modal-ajuda-nav-item.ativo{ background:var(--brand); color:#fff; }
+    .modal-ajuda-conteudo{ flex:1; overflow-y:auto; padding:22px 26px; font-size:.88rem; line-height:1.55; color:var(--ink); }
+    .modal-ajuda-conteudo h4{ font-size:1rem; font-weight:700; margin-bottom:10px; }
+    .modal-ajuda-conteudo p{ margin-bottom:10px; }
+    .modal-ajuda-conteudo ul{ margin:0 0 12px 18px; }
+    .modal-ajuda-conteudo li{ margin-bottom:6px; }
+    .modal-ajuda-conteudo strong{ color:var(--ink); }
+    .modal-ajuda-conteudo .ajuda-atualizado{ font-size:.72rem; color:var(--muted); margin-top:18px; padding-top:12px; border-top:1px solid var(--border); }
+    @media (max-width:680px){
+        .modal-ajuda-body{ flex-direction:column; }
+        .modal-ajuda-nav{ width:100%; border-right:none; border-bottom:1px solid var(--border); display:flex; overflow-x:auto; gap:4px; padding:8px; white-space:nowrap; }
+        .modal-ajuda-nav-item{ margin-bottom:0; flex-shrink:0; }
+    }
 </style>
 </head>
 <body>
@@ -139,6 +175,19 @@
     </div>
 </div>
 
+<div id="modal-ajuda" class="modal-overlay">
+    <div class="modal-caixa" style="max-width:820px; height:min(640px, 85vh); padding:0; display:flex; flex-direction:column;">
+        <div class="modal-ajuda-head">
+            <h3 id="modalAjudaTitulo">❓ Ajuda — Requisição Rápida</h3>
+            <button type="button" class="btn btn-cinza" id="btnFecharModalAjuda" style="width:auto; padding:6px 12px;">✕</button>
+        </div>
+        <div class="modal-ajuda-body">
+            <nav class="modal-ajuda-nav" id="ajudaModuloNav"></nav>
+            <div class="modal-ajuda-conteudo" id="ajudaModuloConteudo"></div>
+        </div>
+    </div>
+</div>
+
 <div id="modal-unidade" class="modal-overlay">
     <div class="modal-caixa">
         <h3>Escolha a unidade</h3>
@@ -153,6 +202,7 @@
             <p class="subtitulo" id="unidade-logada"></p>
         </div>
         <div style="display:flex; gap:8px;">
+            <button type="button" class="btn-ajuda-modulo" id="btnAjudaModulo">❓ Ajuda</button>
             <button class="btn btn-cinza" id="btn-trocar-unidade" style="display:none;">⇄ Trocar unidade</button>
             <button class="btn btn-cinza" id="btn-sair">Sair</button>
         </div>
@@ -161,6 +211,8 @@
     <div class="abas">
         <button class="aba-btn ativa" data-aba="nova">📝 Nova requisição</button>
         <button class="aba-btn" data-aba="atender" id="aba-btn-atender" style="display:none;">📦 Atender requisições</button>
+        <button class="aba-btn" data-aba="produtos">📋 Produtos do almoxarifado</button>
+        <button class="aba-btn" data-aba="aprovadores" id="aba-btn-aprovadores" style="display:none;">✅ Aprovadores</button>
     </div>
 
     <div class="conteudo-aba ativa" id="aba-nova">
@@ -290,7 +342,9 @@
             <h2>Filtrar</h2>
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
                 <select id="filtroStatusAtender">
-                    <option value="pendente">Pendentes</option>
+                    <option value="pendente">Aguardando aprovação</option>
+                    <option value="aprovada">Aprovadas (liberadas p/ atender)</option>
+                    <option value="reprovada">Reprovadas</option>
                     <option value="atendida">Já atendidas</option>
                     <option value="">Todas</option>
                 </select>
@@ -299,6 +353,63 @@
         </div>
         <div id="listaRequisicoesAtender"></div>
         <div id="vazioRequisicoesAtender" class="vazio hidden">Nenhuma requisição encontrada.</div>
+    </div>
+
+    <div class="conteudo-aba" id="aba-produtos">
+        <div class="cartao">
+            <h2>Produtos do almoxarifado</h2>
+            <div class="grade" style="margin-bottom:12px;">
+                <div class="campo">
+                    <label>Almoxarifado</label>
+                    <select id="painelProdutosAlmoxarifadoSelect"><option value="">-- selecione --</option></select>
+                </div>
+                <div class="campo">
+                    <label>Buscar</label>
+                    <input type="text" id="painelProdutosBusca" placeholder="🔍 Código ou descrição..." autocomplete="off">
+                </div>
+            </div>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.85rem; cursor:pointer; margin-bottom:10px;">
+                <input type="checkbox" id="painelProdutosMostrarTodos" style="width:15px; height:15px;">
+                Mostrar todos os produtos cadastrados (preço normal, mesmo sem estoque nesse almoxarifado)
+            </label>
+            <p class="subtitulo" id="painelProdutosContador" style="margin:0 0 8px 0;"></p>
+            <table class="itens">
+                <thead><tr><th>Código</th><th>Descrição</th><th>Preço</th><th>Estoque</th></tr></thead>
+                <tbody id="painelProdutosCorpo"></tbody>
+            </table>
+            <div id="painelProdutosVazio" class="vazio hidden">Nenhum produto encontrado.</div>
+        </div>
+    </div>
+
+    <div class="conteudo-aba" id="aba-aprovadores">
+        <div class="cartao">
+            <h2>Aprovação de requisições</h2>
+            <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem; cursor:pointer; margin-bottom:6px;">
+                <input type="checkbox" id="checkExigeAprovacaoReq" style="width:16px; height:16px;">
+                Exigir aprovação antes de atender
+            </label>
+            <p class="subtitulo" style="margin:0;">
+                Ligado (padrão): toda requisição nasce "aguardando aprovação" e só pode ser
+                atendida depois que um aprovador cadastrado abaixo aprovar. Desligado: a
+                requisição já nasce aprovada e o link do PDF abre direto pra atender.
+            </p>
+        </div>
+        <div class="cartao">
+            <h2>Quem pode aprovar requisições desta unidade</h2>
+            <p class="subtitulo" style="margin:0 0 16px 0;">
+                Só vale enquanto "Exigir aprovação" (acima) estiver ligado. Só o principal
+                da unidade gerencia essa lista.
+            </p>
+            <div style="display:flex; gap:8px; margin-bottom:16px; flex-wrap:wrap; align-items:flex-end;">
+                <div class="campo" style="flex:1; min-width:220px; margin-bottom:0;">
+                    <label>E-mail do colaborador</label>
+                    <input type="email" id="inputEmailNovoAprovadorReq" placeholder="pessoa@email.com">
+                </div>
+                <button class="btn btn-principal" id="btnAdicionarAprovadorReq" style="width:auto;">Adicionar</button>
+            </div>
+            <div id="listaAprovadoresReq"></div>
+            <div id="vazioAprovadoresReq" class="vazio hidden">Nenhum aprovador cadastrado ainda.</div>
+        </div>
     </div>
 </div>
 
@@ -465,6 +576,137 @@
 const SUPABASE_URL = 'https://frzvcrcshkpvjdbbqkhz.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_h-JuDyjYgb5YKGYFRKtLEg_8gnJor9w';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Deep link vindo do link "Atender" embutido no PDF (ver linkAcaoRequisicao)
+const REQ_ATENDER_URL = new URLSearchParams(window.location.search).get('atender') || '';
+
+// ---------------------------------------------------------------
+// MODAL DE AJUDA (mesmo padrão dos outros módulos Servir -- ver seção
+// 4.6 do CLAUDE.md: conteúdo pro operador, uma seção por aba do app,
+// atualizar sempre que uma regra/comportamento mudar)
+// ---------------------------------------------------------------
+const AJUDA_REQRAPIDA = {
+    titulo: 'Requisição Rápida',
+    ultimaRevisao: '12/09/2026',
+    secoes: [
+        { id: 'geral', titulo: 'Visão geral', corpo: `
+            <p>App de requisição de material e serviço/abastecimento do almoxarifado --
+            mais enxuto que o Estoque completo, pensado pra lançar e atender rápido pelo
+            celular. Quem cria a requisição (qualquer usuário vinculado à unidade) e quem
+            atende (Almoxarife, Auxiliar de Almoxarifado, Administrador ou Principal) podem
+            ser pessoas diferentes.</p>
+            <p>Toda requisição pertence a uma única unidade -- se você tem acesso a mais de
+            uma, escolhe qual usar ao entrar (botão "⇄ Trocar unidade" no topo, a qualquer
+            momento).</p>
+        ` },
+        { id: 'nova', titulo: 'Nova requisição', corpo: `
+            <p>Primeiro escolhe o tipo -- <strong>📦 Material</strong> (produto do estoque) ou
+            <strong>⛽ Serviço/Abastecimento</strong> (veículo/equipamento + descrição do
+            serviço) -- cada um mostra sua própria lista de itens.</p>
+            <ul>
+                <li><strong>Almoxarifado, Setor e Evento são obrigatórios.</strong> Evento é
+                sempre uma escolha ativa (busca por código/descrição) -- o app <strong>lembra
+                o último almoxarifado, setor e evento escolhidos</strong> nesse aparelho e já
+                preenche na próxima requisição (continua editável, é só trocar se for outro).</li>
+                <li><strong>Plano de Contas padrão</strong> (opcional) se aplica a todo item
+                novo adicionado depois de preenchido, mas dá pra trocar item por item na
+                lista antes de enviar.</li>
+                <li>Em Material: buscar produto cadastrado, ou <strong>"✏️ Descrever
+                produto"</strong> pra pedir algo que ainda não existe no cadastro (fica
+                marcado como "novo" até alguém do Estoque cadastrar de verdade).</li>
+                <li>Cada item da lista tem um botão de <strong>detalhes</strong> que permite
+                sobrescrever setor/evento/plano de contas só daquele item, sem mudar o resto
+                da requisição.</li>
+                <li>Ao enviar, a requisição nasce <strong>"aguardando aprovação"</strong> ou já
+                <strong>"aprovada"</strong>, dependendo do parâmetro configurado na aba
+                Aprovadores (ver mais abaixo) -- e já abre na hora o popup pra
+                visualizar/baixar/compartilhar o PDF (folha A4 ou bobina de impressora
+                térmica).</li>
+            </ul>
+        ` },
+        { id: 'atender', titulo: 'Atender requisições', corpo: `
+            <p>Só aparece pra quem pode atender (Almoxarife, Auxiliar de Almoxarifado,
+            Administrador ou Principal). Lista com filtro por status e busca por número de
+            requisição externa.</p>
+            <ul>
+                <li><strong>Só uma requisição "aprovada" pode ser atendida.</strong>
+                "Aguardando aprovação" e "Reprovada" mostram os itens só pra consulta, sem
+                botão de atender -- precisa aprovar antes (ver aba Aprovadores).</li>
+                <li>Quem já é aprovador (ou o Principal) vê os botões <strong>✅ Aprovar</strong>/
+                <strong>❌ Reprovar</strong> direto nessa lista, sem precisar de nenhum link --
+                mesma função por trás do link de aprovação do PDF.</li>
+                <li><strong>Atender tudo</strong> resolve de uma vez todo item com quantidade
+                definida e ainda pendente; item sem quantidade (comum em serviço sem
+                estimativa) só dá pra atender individualmente, um de cada vez, quantas vezes
+                for preciso.</li>
+                <li>Atendimento de item de <strong>serviço/abastecimento</strong> pode
+                registrar também KM na hora e data da próxima troca -- fica no histórico do
+                item, junto com quem atendeu e quando.</li>
+                <li><strong>↩️ Desfazer</strong> reverte um atendimento específico (e devolve
+                pro estoque, se era um produto que baixou saldo).</li>
+                <li><strong>✏️ Reabrir</strong> volta a requisição pra edição na aba "Nova
+                requisição". <strong>🗑️ Excluir</strong> só aparece se nenhum item ainda foi
+                atendido, e só pra quem criou ou é Administrador/Principal.</li>
+                <li><strong>📄 A4 / 🧾 Bobina</strong> reimprime o PDF (com o link de
+                aprovação/atendimento embutido, clicável, mesmo que o app de destino no
+                celular descarte a legenda do compartilhamento).</li>
+            </ul>
+        ` },
+        { id: 'produtos', titulo: 'Produtos do almoxarifado', corpo: `
+            <p>Consulta rápida de preço e estoque disponível por almoxarifado -- útil pra
+            conferir antes de lançar uma requisição grande. Por padrão só mostra produto com
+            saldo nesse almoxarifado; o checkbox "Mostrar todos" inclui também os sem
+            estoque ali (com o preço normal do cadastro).</p>
+        ` },
+        { id: 'aprovadores', titulo: 'Aprovadores', corpo: `
+            <p>Só o <strong>Principal</strong> da unidade vê e mexe nesta aba.</p>
+            <ul>
+                <li><strong>"Exigir aprovação antes de atender"</strong> (checkbox no topo):
+                ligado (padrão) = toda requisição nasce "aguardando aprovação" e só libera o
+                atendimento depois que um aprovador cadastrado aqui aprovar. Desligado = a
+                requisição já nasce aprovada, e o link do PDF passa a abrir direto na aba
+                "Atender requisições", já na requisição certa -- sem aprovação nenhuma no
+                meio.</li>
+                <li>Só vale a pena cadastrar aprovador com "Exigir aprovação" ligado --
+                adiciona pelo e-mail (a pessoa precisa já ter feito login em algum módulo
+                Servir antes), e dá pra desativar (sem excluir o histórico) ou remover.</li>
+                <li>Mudar esse parâmetro <strong>não altera requisições já lançadas</strong> --
+                só vale pra partir da próxima criada.</li>
+            </ul>
+        ` }
+    ]
+};
+
+function renderizarAjudaModulo(secaoId) {
+    const secao = AJUDA_REQRAPIDA.secoes.find(s => s.id === secaoId) || AJUDA_REQRAPIDA.secoes[0];
+    document.querySelectorAll('.modal-ajuda-nav-item').forEach(el => el.classList.toggle('ativo', el.dataset.secao === secao.id));
+    document.getElementById('ajudaModuloConteudo').innerHTML = `
+        <h4>${secao.titulo}</h4>
+        ${secao.corpo}
+        <div class="ajuda-atualizado">Última revisão deste conteúdo: ${AJUDA_REQRAPIDA.ultimaRevisao}</div>
+    `;
+}
+
+function abrirModalAjuda(secaoInicial) {
+    document.getElementById('modalAjudaTitulo').textContent = '❓ Ajuda — ' + AJUDA_REQRAPIDA.titulo;
+    document.getElementById('ajudaModuloNav').innerHTML = AJUDA_REQRAPIDA.secoes.map(s =>
+        `<button type="button" class="modal-ajuda-nav-item" data-secao="${s.id}">${s.titulo}</button>`
+    ).join('');
+    document.querySelectorAll('.modal-ajuda-nav-item').forEach(btn => {
+        btn.addEventListener('click', () => renderizarAjudaModulo(btn.dataset.secao));
+    });
+    renderizarAjudaModulo(secaoInicial || 'geral');
+    document.getElementById('modal-ajuda').classList.add('aberto');
+}
+
+document.getElementById('btnAjudaModulo').addEventListener('click', () => {
+    const abaAtivaBtn = document.querySelector('.aba-btn.ativa');
+    const abaAtiva = abaAtivaBtn ? abaAtivaBtn.dataset.aba : 'geral';
+    const secaoValida = AJUDA_REQRAPIDA.secoes.some(s => s.id === abaAtiva) ? abaAtiva : 'geral';
+    abrirModalAjuda(secaoValida);
+});
+document.getElementById('btnFecharModalAjuda').addEventListener('click', () => {
+    document.getElementById('modal-ajuda').classList.remove('aberto');
+});
 
 // ---------- olho de mostrar/ocultar senha ----------
 const svgOlhoAberto = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
@@ -492,6 +734,11 @@ function formatarMoeda(v) { return (Number(v) || 0).toLocaleString('pt-BR', { st
 // ESTADO GLOBAL
 // ---------------------------------------------------------------
 let meuPerfil = { unidadeId: null, unidadeNome: '', ehPrincipal: false, papel: null, email: '' };
+// Parâmetro por unidade: se a requisição precisa de aprovação antes de
+// atender (padrão) ou se já nasce aprovada -- configurável na aba
+// "Aprovadores" (só o principal muda). Default true até carregar de
+// verdade, pra manter o comportamento já existente enquanto não sabemos.
+let parametroRequisicao = { exigeAprovacao: true };
 let vinculosGlobais = [];
 let almoxarifados = [];
 let setores = [];
@@ -514,6 +761,7 @@ function saldoDoProdutoNoAlmoxarifado(produtoId, almoxarifadoId) {
 }
 
 const PAPEIS_PODEM_ATENDER = ['administrador', 'almoxarife', 'auxiliar_almoxarifado'];
+const STATUS_REQ_LABEL = { pendente: 'aguardando aprovação', aprovada: 'aprovada', reprovada: 'reprovada', atendida: 'atendida' };
 
 // grava um registro na sentinela (auditoria global, compartilhada
 // entre módulos) -- não bloqueia a ação principal se falhar, só avisa
@@ -667,6 +915,21 @@ async function iniciarApp() {
     const podeAtender = meuPerfil.ehPrincipal || PAPEIS_PODEM_ATENDER.includes(meuPerfil.papel);
     document.getElementById('aba-btn-atender').style.display = podeAtender ? '' : 'none';
     document.getElementById('btnGerenciarVeiculos').classList.toggle('hidden', !(meuPerfil.ehPrincipal || meuPerfil.papel === 'administrador'));
+    document.getElementById('aba-btn-aprovadores').style.display = meuPerfil.ehPrincipal ? '' : 'none';
+
+    // Confere se o usuário logado é aprovador ativo desta unidade -- usado
+    // pra mostrar (ou não) os botões de aprovar/reprovar direto na lista
+    // de "Atender requisições", sem precisar do link/página pública.
+    const { data: souAprovador } = await sb.from('estoque_requisicoes_aprovadores')
+        .select('id').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('user_id', meuPerfil.userId).eq('ativo', true).limit(1);
+    meuPerfil.ehAprovador = !!(souAprovador && souAprovador.length);
+
+    // Parâmetro "exige aprovação" -- sem linha cadastrada ainda = true
+    // (comportamento padrão, mesmo default da coluna no banco)
+    const { data: parametro } = await sb.from('estoque_requisicoes_parametros')
+        .select('exige_aprovacao').eq('unidade_negocio_id', meuPerfil.unidadeId).maybeSingle();
+    parametroRequisicao.exigeAprovacao = parametro ? !!parametro.exige_aprovacao : true;
+    document.getElementById('checkExigeAprovacaoReq').checked = parametroRequisicao.exigeAprovacao;
 
     document.getElementById('campoSolicitante').value = meuPerfil.email;
 
@@ -692,15 +955,44 @@ async function iniciarApp() {
 
     document.getElementById('campoAlmoxarifado').innerHTML =
         '<option value="">-- selecione --</option>' + almoxarifados.map(a => `<option value="${a.id}">${escapeHtml(a.nome)}</option>`).join('');
+    document.getElementById('painelProdutosAlmoxarifadoSelect').innerHTML =
+        '<option value="">-- selecione --</option>' + almoxarifados.map(a => `<option value="${a.id}">${escapeHtml(a.nome)}</option>`).join('');
     document.getElementById('campoSetor').innerHTML =
         '<option value="">-- selecione --</option>' + setores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
 
     aplicarUltimaEscolhaSalva();
     aplicarUltimoPlanoContasSalvo();
+    try {
+        const almoxSalvoPainel = localStorage.getItem(chavePainelProdutosAlmoxarifado());
+        if (almoxSalvoPainel && almoxarifados.some(a => String(a.id) === almoxSalvoPainel)) {
+            document.getElementById('painelProdutosAlmoxarifadoSelect').value = almoxSalvoPainel;
+        }
+    } catch (e) { /* dado salvo corrompido ou navegador bloqueando -- ignora e segue sem pré-preencher */ }
 
     await carregarProdutosESaldos();
+    renderizarPainelProdutosAlmoxarifado();
 
     if (podeAtender) await carregarRequisicoesAtender();
+
+    // Deep link vindo do link "Atender" do PDF (?atender=<id>) -- unidade
+    // sem trava de aprovação, ou requisição já aprovada: pula direto pra
+    // aba de atender, já rolada até o card certo (sem essa ajuda a pessoa
+    // teria que caçar a requisição na lista manualmente).
+    if (REQ_ATENDER_URL && podeAtender) {
+        document.getElementById('filtroStatusAtender').value = '';
+        await carregarRequisicoesAtender();
+        document.querySelectorAll('.aba-btn').forEach(b => b.classList.remove('ativa'));
+        document.querySelectorAll('.conteudo-aba').forEach(c => c.classList.remove('ativa'));
+        document.querySelector('.aba-btn[data-aba="atender"]').classList.add('ativa');
+        document.getElementById('aba-atender').classList.add('ativa');
+        const elImprimir = document.querySelector(`[data-imprimir-req="${REQ_ATENDER_URL}"]`);
+        const cardEl = elImprimir ? elImprimir.closest('.card-requisicao') : null;
+        if (cardEl) {
+            cardEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            cardEl.style.outline = '2px solid var(--brand-2)';
+            cardEl.style.outlineOffset = '2px';
+        }
+    }
 }
 
 function chaveUltimaEscolha() {
@@ -711,9 +1003,18 @@ function salvarUltimaEscolha() {
     try {
         localStorage.setItem(chaveUltimaEscolha(), JSON.stringify({
             almoxarifadoId: document.getElementById('campoAlmoxarifado').value || null,
-            setorId: document.getElementById('campoSetor').value || null
-            // evento NÃO entra aqui de propósito -- sempre exige escolha
-            // nova a cada requisição, nunca fica pré-preenchido
+            setorId: document.getElementById('campoSetor').value || null,
+            // Evento passou a ser lembrado também (pedido do usuário) --
+            // antes era excluído de propósito daqui, porque em empresas
+            // de evento o campo precisa nascer em branco (controle real,
+            // cada evento é único e precisa ser escolhido conscientemente).
+            // Em outras empresas o "evento" é mais uma tag de sazonalidade
+            // recorrente (ex: "Operacional 2026", "Temporada Julho",
+            // "Réveillon") que se repete requisição após requisição, e aí
+            // lembrar o último economiza trabalho. Por ora, sem diferenciar
+            // o tipo de empresa, lembra sempre -- continua editável/trocável
+            // na hora, então quem precisa escolher de novo consegue.
+            evento: eventoSelecionado ? eventoSelecionado.codigo : null
         }));
     } catch (e) { /* se não conseguir salvar, só não lembra da próxima vez -- não trava o uso */ }
 }
@@ -723,12 +1024,19 @@ function aplicarUltimaEscolhaSalva() {
         const salvo = JSON.parse(localStorage.getItem(chaveUltimaEscolha()) || 'null');
         if (!salvo) return;
         // só aplica se a opção salva ainda existe hoje (evita deixar
-        // selecionado um almoxarifado/setor que foi desativado/removido)
+        // selecionado um almoxarifado/setor/evento que foi desativado/removido)
         if (salvo.almoxarifadoId && almoxarifados.some(a => String(a.id) === String(salvo.almoxarifadoId))) {
             document.getElementById('campoAlmoxarifado').value = salvo.almoxarifadoId;
         }
         if (salvo.setorId && setores.some(s => String(s.id) === String(salvo.setorId))) {
             document.getElementById('campoSetor').value = salvo.setorId;
+        }
+        if (salvo.evento) {
+            const encontrado = eventos.find(ev => ev.codigo === salvo.evento);
+            if (encontrado) {
+                eventoSelecionado = encontrado;
+                document.getElementById('eventoSelecionadoTexto').textContent = `Selecionado: ${encontrado.codigo} — ${encontrado.descricao}`;
+            }
         }
     } catch (e) { /* dado salvo corrompido ou navegador bloqueando -- ignora e segue sem pré-preencher */ }
 }
@@ -772,6 +1080,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
         document.querySelectorAll('.conteudo-aba').forEach(c => c.classList.remove('ativa'));
         btn.classList.add('ativa');
         document.getElementById('aba-' + btn.dataset.aba).classList.add('ativa');
+        if (btn.dataset.aba === 'aprovadores') carregarAprovadoresRequisicao();
     });
 });
 
@@ -946,6 +1255,88 @@ function renderizarItensNovaReq() {
     });
 }
 document.getElementById('campoAlmoxarifado').addEventListener('change', renderizarItensNovaReq);
+
+// ---------------------------------------------------------------
+// PAINEL "PRODUTOS DO ALMOXARIFADO" -- lista os produtos do
+// almoxarifado escolhido que têm quantidade em estoque; com o
+// checkbox marcado, mostra todos os produtos cadastrados (com o
+// preço normal/cadastrado, em vez do preço médio do almoxarifado)
+// ---------------------------------------------------------------
+function chavePainelProdutosAlmoxarifado() {
+    return `reqrapida_painel_produtos_almox_${meuPerfil.unidadeId}`;
+}
+
+function renderizarPainelProdutosAlmoxarifado() {
+    const corpo = document.getElementById('painelProdutosCorpo');
+    const vazio = document.getElementById('painelProdutosVazio');
+    const contador = document.getElementById('painelProdutosContador');
+    const almoxId = document.getElementById('painelProdutosAlmoxarifadoSelect').value ? Number(document.getElementById('painelProdutosAlmoxarifadoSelect').value) : null;
+    const mostrarTodos = document.getElementById('painelProdutosMostrarTodos').checked;
+    const termo = document.getElementById('painelProdutosBusca').value.trim().toUpperCase();
+    const palavras = termo.split(/\s+/).filter(Boolean);
+
+    if (!mostrarTodos && !almoxId) {
+        corpo.innerHTML = '';
+        vazio.textContent = 'Selecione um almoxarifado pra ver os produtos com estoque, ou marque "Mostrar todos os produtos cadastrados".';
+        vazio.classList.remove('hidden');
+        contador.textContent = '';
+        return;
+    }
+
+    let linhas;
+    if (mostrarTodos) {
+        // todos os produtos cadastrados, com o preço normal (valor cadastrado)
+        linhas = produtos.map(p => ({
+            id: p.id, codigo_externo: p.codigo_externo, nome: p.nome, un: p.un,
+            preco: p.valor || 0,
+            estoque: almoxId ? ((saldoDoProdutoNoAlmoxarifado(p.id, almoxId) || {}).estoque || 0) : null
+        }));
+    } else {
+        // só produtos com quantidade em estoque nesse almoxarifado
+        linhas = produtos.reduce((acc, p) => {
+            const saldo = saldoDoProdutoNoAlmoxarifado(p.id, almoxId);
+            if (saldo && saldo.estoque > 0) {
+                acc.push({
+                    id: p.id, codigo_externo: p.codigo_externo, nome: p.nome, un: p.un,
+                    preco: saldo.precoMedio || p.precoMedio || p.valor || 0,
+                    estoque: saldo.estoque
+                });
+            }
+            return acc;
+        }, []);
+    }
+
+    if (palavras.length) {
+        linhas = linhas.filter(l => {
+            const texto = (String(l.id) + ' ' + (l.codigo_externo || '') + ' ' + l.nome).toUpperCase();
+            return palavras.every(palavra => texto.includes(palavra));
+        });
+    }
+
+    linhas.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
+
+    if (!linhas.length) {
+        corpo.innerHTML = '';
+        vazio.textContent = 'Nenhum produto encontrado.';
+        vazio.classList.remove('hidden');
+    } else {
+        vazio.classList.add('hidden');
+        corpo.innerHTML = linhas.map(l => `
+            <tr>
+                <td>#${l.id}${l.codigo_externo ? ' · ' + escapeHtml(l.codigo_externo) : ''}</td>
+                <td>${escapeHtml(l.nome)} <span style="color:var(--muted); font-size:0.85em;">(${escapeHtml(l.un)})</span></td>
+                <td>${formatarMoeda(l.preco)}</td>
+                <td>${l.estoque != null ? Number(l.estoque).toLocaleString('pt-BR') : '-'}</td>
+            </tr>`).join('');
+    }
+    contador.textContent = `Exibindo ${linhas.length} produto(s)`;
+}
+document.getElementById('painelProdutosAlmoxarifadoSelect').addEventListener('change', () => {
+    try { localStorage.setItem(chavePainelProdutosAlmoxarifado(), document.getElementById('painelProdutosAlmoxarifadoSelect').value || ''); } catch (e) { /* ignora se não conseguir salvar */ }
+    renderizarPainelProdutosAlmoxarifado();
+});
+document.getElementById('painelProdutosBusca').addEventListener('input', renderizarPainelProdutosAlmoxarifado);
+document.getElementById('painelProdutosMostrarTodos').addEventListener('change', renderizarPainelProdutosAlmoxarifado);
 
 // ---------------------------------------------------------------
 // ALTERNAR TIPO DE REQUISIÇÃO (material / serviço-abastecimento)
@@ -1354,6 +1745,81 @@ async function excluirVeiculo(id) {
 }
 
 // ---------------------------------------------------------------
+// APROVADORES (só o principal gerencia -- mesmo padrão do Compras)
+// ---------------------------------------------------------------
+let todosAprovadoresReq = [];
+
+async function carregarAprovadoresRequisicao() {
+    const { data, error } = await sb.from('estoque_requisicoes_aprovadores')
+        .select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('created_at', { ascending: true });
+    if (error) { alert('Erro ao carregar aprovadores: ' + error.message); return; }
+    todosAprovadoresReq = data || [];
+    await renderListaAprovadoresRequisicao();
+}
+
+async function renderListaAprovadoresRequisicao() {
+    const lista = document.getElementById('listaAprovadoresReq');
+    const vazio = document.getElementById('vazioAprovadoresReq');
+    if (!todosAprovadoresReq.length) { lista.innerHTML = ''; vazio.classList.remove('hidden'); return; }
+    vazio.classList.add('hidden');
+
+    const linhas = await Promise.all(todosAprovadoresReq.map(async a => {
+        const { data: email } = await sb.rpc('fn_obter_email_usuario', { p_user_id: a.user_id });
+        return `
+            <div class="aprovador-row-req" data-id="${a.id}">
+                <span class="email">${escapeHtml(email || a.user_id)}</span>
+                <label class="toggle-ativo"><input type="checkbox" class="ap-req-ativo-check" ${a.ativo ? 'checked' : ''}> Ativo</label>
+                <button type="button" class="btn btn-remover" title="Remover">✕</button>
+            </div>`;
+    }));
+    lista.innerHTML = linhas.join('');
+
+    lista.querySelectorAll('.aprovador-row-req').forEach(row => {
+        row.querySelector('.ap-req-ativo-check').addEventListener('change', async (e) => {
+            const { error } = await sb.from('estoque_requisicoes_aprovadores').update({ ativo: e.target.checked }).eq('id', row.dataset.id);
+            if (error) { alert('Erro: ' + error.message); e.target.checked = !e.target.checked; return; }
+            await carregarAprovadoresRequisicao();
+        });
+        row.querySelector('.btn-remover').addEventListener('click', async () => {
+            if (!confirm('Remover este aprovador?')) return;
+            const { error } = await sb.from('estoque_requisicoes_aprovadores').delete().eq('id', row.dataset.id);
+            if (error) { alert('Erro: ' + error.message); return; }
+            await carregarAprovadoresRequisicao();
+        });
+    });
+}
+
+document.getElementById('checkExigeAprovacaoReq').addEventListener('change', async (e) => {
+    const novoValor = e.target.checked;
+    const { error } = await sb.from('estoque_requisicoes_parametros')
+        .upsert({ unidade_negocio_id: meuPerfil.unidadeId, exige_aprovacao: novoValor, atualizado_em: new Date().toISOString() }, { onConflict: 'unidade_negocio_id' });
+    if (error) { alert('Erro ao salvar: ' + error.message); e.target.checked = !novoValor; return; }
+    parametroRequisicao.exigeAprovacao = novoValor;
+});
+
+document.getElementById('btnAdicionarAprovadorReq').addEventListener('click', async () => {
+    const email = document.getElementById('inputEmailNovoAprovadorReq').value.trim();
+    if (!email) { alert('Informe o e-mail do colaborador.'); return; }
+    const btn = document.getElementById('btnAdicionarAprovadorReq');
+    btn.disabled = true; btn.textContent = 'Adicionando...';
+    try {
+        const { data: userId, error: erroBusca } = await sb.rpc('fn_obter_user_id_por_email', { p_email: email });
+        if (erroBusca) throw new Error(erroBusca.message);
+        if (!userId) throw new Error('Nenhuma conta encontrada com este e-mail. A pessoa precisa ter feito login em algum módulo Servir antes.');
+
+        const { error } = await sb.from('estoque_requisicoes_aprovadores').insert({ unidade_negocio_id: meuPerfil.unidadeId, user_id: userId });
+        if (error) throw new Error(error.message);
+
+        document.getElementById('inputEmailNovoAprovadorReq').value = '';
+        await carregarAprovadoresRequisicao();
+    } catch (erro) {
+        alert('Erro ao adicionar: ' + erro.message);
+    } finally {
+        btn.disabled = false; btn.textContent = 'Adicionar';
+    }
+});
+
+// ---------------------------------------------------------------
 // ENVIAR NOVA REQUISIÇÃO
 // ---------------------------------------------------------------
 document.getElementById('btnEnviarRequisicao').addEventListener('click', async () => {
@@ -1443,6 +1909,7 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
             statusEl.style.color = 'var(--brand-2)';
             statusEl.textContent = '✓ Requisição atualizada com sucesso!';
             await carregarProdutosESaldos();
+            renderizarPainelProdutosAlmoxarifado();
             if (document.getElementById('aba-btn-atender').style.display !== 'none') await carregarRequisicoesAtender();
             btn.disabled = false; btn.textContent = 'Enviar requisição';
 
@@ -1466,7 +1933,10 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
             solicitante,
             numero_externo: numeroExterno || null,
             tipo: tipoRequisicaoAtual,
-            criado_por: meuPerfil.userId
+            criado_por: meuPerfil.userId,
+            // Unidade pode dispensar a aprovação (parâmetro na aba
+            // Aprovadores) -- nesse caso já nasce liberada pra atender.
+            status: parametroRequisicao.exigeAprovacao ? 'pendente' : 'aprovada'
         }).select().single();
         if (e1) throw e1;
 
@@ -1501,12 +1971,11 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
         itensServico = [];
         renderizarItensNovaReq();
         renderizarItensServico();
-        // Almoxarifado/Setor ficam como estavam -- é comum lançar várias
-        // requisições seguidas pro mesmo setor. Evento sempre limpa e
-        // exige escolha nova a cada requisição (continua obrigatório)
+        // Almoxarifado/Setor/Evento ficam como estavam -- é comum lançar
+        // várias requisições seguidas pro mesmo setor/evento (mudou nesta
+        // sessão: evento antes sempre limpava e exigia escolha nova a cada
+        // requisição -- ver comentário em salvarUltimaEscolha()).
         document.getElementById('campoBuscaEvento').value = '';
-        document.getElementById('eventoSelecionadoTexto').textContent = '';
-        eventoSelecionado = null;
         document.getElementById('campoNumeroExterno').value = '';
         salvarUltimaEscolha();
         statusEl.className = 'status-msg';
@@ -1560,6 +2029,10 @@ function renderizarRequisicoesAtender() {
         const almox = almoxarifados.find(a => a.id === req.almoxarifado_id);
         const setor = setores.find(s => s.id === req.setor_id);
         const itens = req.estoque_requisicoes_rapidas_itens || [];
+        // Trava de aprovação: só uma requisição 'aprovada' libera o
+        // atendimento pelo almoxarife -- 'pendente'/'reprovada' mostram os
+        // itens só pra consulta, sem o badge clicável de atender.
+        const liberadaParaAtender = req.status === 'aprovada';
         const linhasItens = itens.map(item => {
             const historico = item.estoque_requisicoes_rapidas_atendimentos || [];
             let nomeExibido;
@@ -1573,11 +2046,13 @@ function renderizarRequisicoesAtender() {
                     : `${escapeHtml(item.descricao_livre || '')} <span class="pill" style="background:var(--danger-soft); color:var(--danger); font-size:0.6rem;">novo</span>`;
             }
 
-            // sem quantidade definida (comum em serviço/abastecimento sem
-            // estimativa): não tem "restante" pra calcular -- fica sempre
-            // atendível, mostrando só quantas vezes já foi atendido
             let badgeStatus;
-            if (item.qtd_solicitada == null) {
+            if (!liberadaParaAtender) {
+                badgeStatus = `<span class="badge-restante zerado">${req.status === 'reprovada' ? 'Reprovada — não pode ser atendida' : 'Aguardando aprovação'}</span>`;
+            } else if (item.qtd_solicitada == null) {
+                // sem quantidade definida (comum em serviço/abastecimento sem
+                // estimativa): não tem "restante" pra calcular -- fica sempre
+                // atendível, mostrando só quantas vezes já foi atendido
                 badgeStatus = `<span class="badge-restante" data-atender-item="${item.id}">${historico.length > 0 ? historico.length + 'x atendido — clique pra atender de novo' : 'Atender'}</span>`;
             } else {
                 const restante = Number(item.qtd_solicitada) - Number(item.qtd_atendida || 0);
@@ -1607,22 +2082,26 @@ function renderizarRequisicoesAtender() {
                 </div>`;
         }).join('');
 
-        const temItemAtendivelEmMassa = itens.some(i => i.qtd_solicitada != null && (Number(i.qtd_solicitada) - Number(i.qtd_atendida || 0)) > 0);
+        const temItemAtendivelEmMassa = liberadaParaAtender && itens.some(i => i.qtd_solicitada != null && (Number(i.qtd_solicitada) - Number(i.qtd_atendida || 0)) > 0);
         const temAlgumItemAtendido = itens.some(i => (i.estoque_requisicoes_rapidas_atendimentos || []).length > 0);
         const podeGerenciarComoAdmin = meuPerfil.ehPrincipal || meuPerfil.papel === 'administrador';
         const podeExcluir = !temAlgumItemAtendido && (req.criado_por === meuPerfil.userId || podeGerenciarComoAdmin);
+        const podeAprovarReprovar = req.status === 'pendente' && (meuPerfil.ehPrincipal || meuPerfil.ehAprovador);
 
         return `
             <div class="card-requisicao">
                 <div class="cabecalho-req">
                     <div>
                         <strong>${escapeHtml(req.solicitante)}</strong>
-                        <span class="pill ${req.status === 'atendida' ? 'pill-atendida' : 'pill-pendente'}">${req.status}</span>
+                        <span class="pill badge-status-req pill-${req.status}">${STATUS_REQ_LABEL[req.status] || req.status}</span>
                         <span class="pill" style="background:#EEF0F1; color:var(--muted);">${req.tipo === 'servico_abastecimento' ? '⛽ serviço' : '📦 material'}</span>
                         <div class="meta">${almox ? escapeHtml(almox.nome) : '-'} ${setor ? '· ' + escapeHtml(setor.nome) : ''} ${req.evento ? '· evento ' + escapeHtml(req.evento) : ''} ${req.numero_externo ? '· nº externo ' + escapeHtml(req.numero_externo) : ''}</div>
                         <div class="meta">${new Date(req.created_at).toLocaleString('pt-BR')}</div>
+                        ${req.observacao_aprovacao ? `<div class="meta" style="font-style:italic;">💬 ${escapeHtml(req.observacao_aprovacao)}</div>` : ''}
                     </div>
                     <div style="display:flex; gap:4px; flex-wrap:wrap; justify-content:flex-end;">
+                        ${podeAprovarReprovar ? `<button type="button" class="btn" style="font-size:0.75rem; padding:6px 10px; background:var(--success-soft); color:var(--brand-2);" data-aprovar-req="${req.id}">✅ Aprovar</button>` : ''}
+                        ${podeAprovarReprovar ? `<button type="button" class="btn" style="font-size:0.75rem; padding:6px 10px; background:var(--danger-soft); color:var(--danger);" data-reprovar-req="${req.id}">❌ Reprovar</button>` : ''}
                         <button type="button" class="btn btn-cinza" data-reabrir-req="${req.id}" style="font-size:0.75rem; padding:6px 10px;">✏️ Reabrir</button>
                         ${temItemAtendivelEmMassa ? `<button type="button" class="btn btn-principal" data-atender-tudo="${req.id}" style="font-size:0.75rem; padding:6px 10px;">✅ Atender tudo</button>` : ''}
                         <button type="button" class="btn btn-cinza" data-imprimir-req="${req.id}" data-formato="a4" style="font-size:0.75rem; padding:6px 8px;">📄 A4</button>
@@ -1661,6 +2140,31 @@ function renderizarRequisicoesAtender() {
     lista.querySelectorAll('[data-desfazer]').forEach(el => {
         el.addEventListener('click', () => desfazerAtendimento(Number(el.dataset.desfazer)));
     });
+
+    lista.querySelectorAll('[data-aprovar-req]').forEach(el => {
+        el.addEventListener('click', () => aprovarOuReprovarRequisicao(el.dataset.aprovarReq, 'aprovada'));
+    });
+    lista.querySelectorAll('[data-reprovar-req]').forEach(el => {
+        el.addEventListener('click', () => aprovarOuReprovarRequisicao(el.dataset.reprovarReq, 'reprovada'));
+    });
+}
+
+// Aprova/reprova direto na lista, pra quem já é aprovador/principal e está
+// logado no app -- alternativa ao link/página pública de aprovação
+// (estoque-requisicao-aprovacao.html), que continua funcionando igual pra
+// quem recebe só o PDF/link.
+async function aprovarOuReprovarRequisicao(reqId, novoStatus) {
+    const acaoLabel = novoStatus === 'aprovada' ? 'aprovar' : 'reprovar';
+    let observacao = null;
+    if (novoStatus === 'reprovada') {
+        observacao = prompt('Motivo da reprovação (opcional):') || null;
+    } else {
+        observacao = prompt('Observação da aprovação (opcional):') || null;
+    }
+    if (!confirm(`Confirma ${acaoLabel} esta requisição?`)) return;
+    const { error } = await sb.rpc('fn_aprovar_requisicao_rapida', { p_requisicao_id: reqId, p_status: novoStatus, p_observacao: observacao });
+    if (error) { alert('Erro ao ' + acaoLabel + ': ' + error.message); return; }
+    await carregarRequisicoesAtender();
 }
 
 async function excluirRequisicaoCompleta(reqId) {
@@ -1776,6 +2280,9 @@ document.getElementById('btnCancelarEdicaoRequisicao').addEventListener('click',
 async function atenderTudoRequisicao(reqId) {
     const req = requisicoesAtender.find(r => r.id === reqId);
     if (!req) return;
+    // defesa em profundidade -- a UI já não mostra esse botão fora de
+    // 'aprovada', mas confere de novo aqui caso seja chamado de outro jeito
+    if (req.status !== 'aprovada') { alert('Essa requisição precisa estar aprovada antes de ser atendida.'); return; }
     const itens = req.estoque_requisicoes_rapidas_itens || [];
 
     // só entram no "atender tudo" os itens com quantidade definida e
@@ -1829,6 +2336,7 @@ async function atenderTudoRequisicao(reqId) {
         }
 
         await carregarProdutosESaldos();
+        renderizarPainelProdutosAlmoxarifado();
         await carregarRequisicoesAtender();
     } catch (erro) {
         alert('Erro ao atender em massa: ' + erro.message);
@@ -1843,6 +2351,8 @@ function abrirModalAtenderItem(itemId) {
         if (item) { itemAlvo = item; reqAlvo = req; break; }
     }
     if (!itemAlvo) return;
+    // defesa em profundidade -- ver comentário equivalente em atenderTudoRequisicao()
+    if (reqAlvo.status !== 'aprovada') { alert('Essa requisição precisa estar aprovada antes de ser atendida.'); return; }
     itemAtenderAtualId = itemId;
     const temQtdDefinida = itemAlvo.qtd_solicitada != null;
     const restante = temQtdDefinida ? Number(itemAlvo.qtd_solicitada) - Number(itemAlvo.qtd_atendida || 0) : null;
@@ -1995,6 +2505,7 @@ async function desfazerAtendimento(atendimentoId) {
         await registrarSentinela('desfazer_atendimento', `Desfez atendimento de ${atendimentoAlvo.qtd} de "${nomeItemParaLog}" na requisição de "${reqAlvo.solicitante}"${atendimentoAlvo.movimentacao_id && itemAlvo.produto_id != null ? ' (estoque devolvido)' : ''}`);
 
         await carregarProdutosESaldos();
+        renderizarPainelProdutosAlmoxarifado();
         await carregarRequisicoesAtender();
     } catch (erro) {
         alert('Erro ao desfazer: ' + erro.message);
@@ -2175,6 +2686,7 @@ document.getElementById('btnConfirmarAtender').addEventListener('click', async (
         }
 
         await carregarProdutosESaldos();
+        renderizarPainelProdutosAlmoxarifado();
         document.getElementById('modal-atender-item').classList.remove('aberto');
         await carregarRequisicoesAtender();
     } catch (erro) {
@@ -2329,6 +2841,41 @@ async function construirPdfRequisicao(req, itens, formato) {
         });
     }
 
+    // ── Link de aprovação embutido no próprio PDF ──────────────────
+    // Mesma correção feita na OS do Checklist Frota: o link vai dentro do
+    // PDF (clicável de verdade, via textWithLink), não só na legenda do
+    // WhatsApp -- muitos apps de destino no celular descartam a legenda
+    // quando o compartilhamento inclui um arquivo junto, então só o link
+    // no PDF garante que ele sempre chega. Aqui nem precisa de token: o
+    // link usa o próprio id da requisição -- quem abrir precisa logar e
+    // ser aprovador cadastrado (ver estoque-requisicao-aprovacao.html e
+    // a tabela estoque_requisicoes_aprovadores), então a segurança vem do
+    // login + papel, não de um segredo na URL.
+    const linkAcao = linkAcaoRequisicao(req);
+    const rotuloBox = req.status === 'aprovada'
+        ? { bobina: 'ATENDER:', a4: 'TOQUE AQUI PARA ATENDER ESTA REQUISIÇÃO:' }
+        : { bobina: 'APROVAR / REPROVAR:', a4: 'TOQUE AQUI PARA APROVAR OU REPROVAR ESTA REQUISIÇÃO:' };
+    y += formato === 'bobina' ? 3 : 4;
+    const alturaBox = formato === 'bobina' ? 10 : 12.5;
+    doc.setFillColor(234, 242, 238); doc.setDrawColor(27, 67, 50);
+    doc.roundedRect(margem, y - (formato === 'bobina' ? 4.5 : 5.5), larguraUtil, alturaBox, 1.5, 1.5, 'FD');
+    doc.setTextColor(27, 67, 50); doc.setFont('helvetica', 'bold');
+    doc.setFontSize(formato === 'bobina' ? 7 : 9);
+    doc.text(
+        formato === 'bobina' ? rotuloBox.bobina : rotuloBox.a4,
+        margem + (formato === 'bobina' ? 2 : 4), y
+    );
+    doc.setFont('helvetica', 'normal');
+    // texto exibido curto de propósito (cabe em qualquer formato/largura);
+    // quem lê é o `url`, não o texto -- o link de verdade é o completo
+    doc.textWithLink(
+        formato === 'bobina' ? 'toque aqui' : linkAcao,
+        margem + (formato === 'bobina' ? 2 : 4), y + (formato === 'bobina' ? 4 : 4.8),
+        { url: linkAcao }
+    );
+    y += alturaBox + (formato === 'bobina' ? 2 : 1);
+    doc.setTextColor(0, 0, 0);
+
     y += formato === 'bobina' ? 8 : 14;
     doc.setDrawColor(150); doc.line(margem, y, margem + larguraUtil, y);
     y += formato === 'bobina' ? 10 : 10;
@@ -2338,6 +2885,22 @@ async function construirPdfRequisicao(req, itens, formato) {
     const blob = doc.output('blob');
     const nomeArquivo = `requisicao-${(req.solicitante || 'sem-nome').replace(/\s+/g, '-').toLowerCase()}-${String(req.id).slice(0, 8)}.pdf`;
     return { blob, nomeArquivo };
+}
+
+function linkAprovacaoRequisicao(id) {
+    return window.location.href.split('?')[0].replace(/estoque-requisicao-rapida\.html$/, 'estoque-requisicao-aprovacao.html') + '?requisicao=' + id;
+}
+
+// Link do PDF muda de destino conforme o status da requisição: se ainda
+// precisa de aprovação (nasceu 'pendente'), abre a página de aprovação;
+// se já está 'aprovada' (unidade sem trava, ou já aprovada antes de
+// gerar o PDF de novo), abre direto no próprio app pra atender -- não
+// faz sentido mandar aprovar algo que já pode ser atendido.
+function linkAcaoRequisicao(req) {
+    if (req.status === 'aprovada') {
+        return window.location.href.split('?')[0] + '?atender=' + req.id;
+    }
+    return linkAprovacaoRequisicao(req.id);
 }
 
 document.getElementById('btnVerPdf').addEventListener('click', () => {
@@ -2356,8 +2919,21 @@ document.getElementById('btnCompartilharPdf').addEventListener('click', async ()
     if (!pdfGeradoAtual) return;
     try {
         const arquivo = new File([pdfGeradoAtual.blob], pdfGeradoAtual.nomeArquivo, { type: 'application/pdf' });
+        // O link já vai embutido e clicável dentro do PDF (ver
+        // construirPdfRequisicao) -- isso aqui é só reforço pra quando o
+        // app de destino preservar a legenda também (nem todos descartam).
+        const req = requisicaoAbertaNoPopup ? requisicaoAbertaNoPopup.req : null;
+        const chamada = req && req.status === 'aprovada' ? 'TOQUE AQUI PARA ATENDER' : 'TOQUE AQUI PARA APROVAR OU REPROVAR';
+        const textoWpp = req ? (
+            `📦 *REQUISIÇÃO DE ${req.tipo === 'servico_abastecimento' ? 'SERVIÇO/ABASTECIMENTO' : 'MATERIAL'}*`
+            + `\n━━━━━━━━━━━━━━━━━━━━`
+            + `\n👤 *Solicitante:* ${req.solicitante}`
+            + (req.evento ? `\n🏷️ *Evento:* ${req.evento}` : '')
+            + `\n━━━━━━━━━━━━━━━━━━━━`
+            + `\n👆 *${chamada}:*\n${linkAcaoRequisicao(req)}`
+        ) : undefined;
         if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
-            await navigator.share({ files: [arquivo], title: pdfGeradoAtual.nomeArquivo });
+            await navigator.share({ files: [arquivo], title: pdfGeradoAtual.nomeArquivo, text: textoWpp });
         } else {
             alert('Esse navegador não suporta compartilhar arquivo diretamente. Use "Baixar" e envie por WhatsApp/e-mail manualmente.');
         }
