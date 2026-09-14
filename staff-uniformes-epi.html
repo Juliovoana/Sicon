@@ -1414,6 +1414,19 @@ document.getElementById('btnSalvarCatalogo').addEventListener('click', async () 
         const { error: eCat } = await sb.from('staff_uniformes_epi_catalogo').upsert(catalogoPayload);
         if (eCat) throw eCat;
 
+        // O saldo de verdade fica em estoque_saldo_almoxarifado, por
+        // almoxarifado -- estoque_produtos.estoque_inicial é só uma
+        // coluna solta que NÃO se propaga sozinha pra lá. Sem essa
+        // atualização direta, o reprocessamento abaixo recalcula a
+        // partir do estoque_inicial ANTIGO daquele almoxarifado (o
+        // valor novo nunca chegava lá -- bug real encontrado testando
+        // em produção, saldo ficava travado no valor de quando o item
+        // foi criado).
+        const { error: eSaldo } = await sb.from('estoque_saldo_almoxarifado')
+            .update({ estoque_inicial: estoqueInicial })
+            .eq('produto_id', produto.id).eq('almoxarifado_id', almoxarifadoId);
+        if (eSaldo) throw eSaldo;
+
         const { error: eReproc } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId });
         if (eReproc) console.error('Falha ao reprocessar estoque:', eReproc);
 
