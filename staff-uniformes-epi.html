@@ -360,8 +360,8 @@
 
 <!-- ==================== MODAL: REGISTRAR ENTRADA DE ESTOQUE ==================== -->
 <div id="modal-entrada-estoque" class="modal-overlay">
-    <div class="modal-caixa">
-        <h3>Registrar entrada</h3>
+    <div class="modal-caixa" style="max-width:560px;">
+        <h3 id="entradaEstoqueTitulo">Registrar entrada</h3>
         <p class="subtitulo" id="entradaEstoqueItemTexto" style="margin-bottom:14px;"></p>
         <div class="grade">
             <div class="campo"><label>Quantidade</label><input type="number" min="1" step="1" id="campoQtdEntradaEstoque" value="1"></div>
@@ -370,10 +370,28 @@
         </div>
         <div class="campo"><label>Observação (opcional)</label><input type="text" id="campoObservacaoEntradaEstoque" placeholder="Ex: Compra NF 1234, fornecedor X"></div>
         <div style="display:flex; gap:8px; margin-top:6px;">
-            <button type="button" class="btn btn-cinza" id="btnCancelarEntradaEstoque" style="flex:1;">Cancelar</button>
+            <button type="button" class="btn btn-cinza hidden" id="btnCancelarEdicaoEntradaEstoque" style="flex:1;">Cancelar edição</button>
+            <button type="button" class="btn btn-cinza" id="btnCancelarEntradaEstoque" style="flex:1;">Fechar</button>
             <button type="button" class="btn btn-principal" id="btnConfirmarEntradaEstoque" style="flex:1;">Registrar entrada</button>
         </div>
         <p class="status-msg" id="statusEntradaEstoque"></p>
+
+        <div style="margin-top:18px; padding-top:14px; border-top:1px solid var(--border);">
+            <p class="subtitulo" style="margin:0 0 8px 0; font-weight:600; color:var(--ink);">Entradas já registradas</p>
+            <div id="listaEntradasRegistradas"></div>
+            <div id="vazioEntradasRegistradas" class="vazio hidden">Nenhuma entrada manual registrada ainda.</div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== MODAL: MOVIMENTAÇÃO DO ITEM (histórico) ==================== -->
+<div id="modal-movimento-item" class="modal-overlay">
+    <div class="modal-caixa" style="max-width:620px;">
+        <h3>Movimentação do item</h3>
+        <p class="subtitulo" id="movimentoItemTexto" style="margin-bottom:14px;"></p>
+        <div id="listaMovimentoItem" style="max-height:50vh; overflow-y:auto;"></div>
+        <div id="vazioMovimentoItem" class="vazio hidden">Nenhuma movimentação registrada ainda.</div>
+        <button type="button" class="btn btn-cinza" id="btnFecharMovimentoItem" style="width:100%; margin-top:14px;">Fechar</button>
     </div>
 </div>
 
@@ -457,7 +475,16 @@ const AJUDA_UNIFORMES_EPI = {
                 informar o <strong>estoque inicial</strong> (se já tiver peças dessa em mãos).
                 Depois de criado, reabastecer é sempre pelo botão <strong>"+ Entrada"</strong> na
                 lista -- registra data, quantidade e valor, e fica no histórico de
-                movimentações do Estoque (compra nova, reposição etc.).</li>
+                movimentações do Estoque (compra nova, reposição etc.). O próprio modal de
+                entrada lista as entradas já lançadas desse item, com <strong>Editar</strong> e
+                <strong>Excluir</strong> -- qualquer uma das duas ações recalcula o saldo/preço
+                médio automaticamente a partir do histórico (não precisa acertar manualmente).
+                Entradas geradas por devolução não aparecem nessa lista (ficam ligadas ao ciclo
+                de vida da entrega, não são editáveis por aqui).</li>
+                <li>O botão <strong>"📊 Movimento"</strong> mostra o histórico completo do item
+                (entradas e saídas), com data, quantidade, valor e a referência de cada uma
+                (fornecedor numa entrada manual, profissional numa entrega/devolução) -- só
+                consulta, não edita nada.</li>
                 <li><strong>EPI</strong> pode ter nº do CA e validade -- isso alimenta um dos
                 dois gatilhos da aba Renovações (o outro é a data prevista definida em cada
                 entrega).</li>
@@ -1096,6 +1123,7 @@ function renderizarCatalogoAdmin() {
             </div>
             <div class="acoes">
                 <button type="button" class="btn btn-cinza" data-entrada-catalogo="${c.id}">+ Entrada</button>
+                <button type="button" class="btn btn-cinza" data-movimento-catalogo="${c.id}">📊 Movimento</button>
                 <button type="button" class="btn btn-cinza" data-editar-catalogo="${c.id}">Editar</button>
             </div>
         </div>
@@ -1104,6 +1132,8 @@ function renderizarCatalogoAdmin() {
 document.getElementById('listaCatalogo').addEventListener('click', (e) => {
     const btnEntrada = e.target.closest('[data-entrada-catalogo]');
     if (btnEntrada) { abrirModalEntradaEstoque(btnEntrada.dataset.entradaCatalogo); return; }
+    const btnMovimento = e.target.closest('[data-movimento-catalogo]');
+    if (btnMovimento) { abrirModalMovimentoItem(btnMovimento.dataset.movimentoCatalogo); return; }
     const btn = e.target.closest('[data-editar-catalogo]');
     if (btn) abrirFormCatalogo(catalogo.find(c => c.id === btn.dataset.editarCatalogo));
 });
@@ -1230,21 +1260,33 @@ document.getElementById('btnSalvarCatalogo').addEventListener('click', async () 
 // ver confirmarBaixa).
 // ---------------------------------------------------------------
 let catalogoAlvoEntradaEstoque = null;
+let entradaEstoqueEmEdicaoId = null; // id da estoque_movimentacoes sendo editada, ou null = nova
+let entradasRegistradasAtual = [];
 
-function abrirModalEntradaEstoque(catalogoId) {
+function limparFormEntradaEstoque(item) {
+    entradaEstoqueEmEdicaoId = null;
+    document.getElementById('entradaEstoqueTitulo').textContent = 'Registrar entrada';
+    document.getElementById('btnConfirmarEntradaEstoque').textContent = 'Registrar entrada';
+    document.getElementById('btnCancelarEdicaoEntradaEstoque').classList.add('hidden');
+    document.getElementById('campoQtdEntradaEstoque').value = 1;
+    document.getElementById('campoValorEntradaEstoque').value = item?.estoque_produtos?.valor || '';
+    document.getElementById('campoDataEntradaEstoque').value = hojeISO();
+    document.getElementById('campoObservacaoEntradaEstoque').value = '';
+    document.getElementById('statusEntradaEstoque').textContent = '';
+}
+
+async function abrirModalEntradaEstoque(catalogoId) {
     const item = catalogo.find(c => c.id === catalogoId);
     if (!item) return;
     if (!item.produto_id) { alert('Este item não tem produto de estoque vinculado.'); return; }
     catalogoAlvoEntradaEstoque = item;
     document.getElementById('entradaEstoqueItemTexto').textContent = item.nome + (item.tamanho ? ' — ' + item.tamanho : '') + ' · Saldo atual: ' + (item.estoque_produtos?.estoque ?? 0);
-    document.getElementById('campoQtdEntradaEstoque').value = 1;
-    document.getElementById('campoValorEntradaEstoque').value = item.estoque_produtos?.valor || '';
-    document.getElementById('campoDataEntradaEstoque').value = hojeISO();
-    document.getElementById('campoObservacaoEntradaEstoque').value = '';
-    document.getElementById('statusEntradaEstoque').textContent = '';
+    limparFormEntradaEstoque(item);
     document.getElementById('modal-entrada-estoque').classList.add('aberto');
+    await carregarEntradasRegistradas(item);
 }
 document.getElementById('btnCancelarEntradaEstoque').addEventListener('click', () => document.getElementById('modal-entrada-estoque').classList.remove('aberto'));
+document.getElementById('btnCancelarEdicaoEntradaEstoque').addEventListener('click', () => limparFormEntradaEstoque(catalogoAlvoEntradaEstoque));
 
 document.getElementById('btnConfirmarEntradaEstoque').addEventListener('click', async () => {
     const statusEl = document.getElementById('statusEntradaEstoque');
@@ -1258,32 +1300,154 @@ document.getElementById('btnConfirmarEntradaEstoque').addEventListener('click', 
     const item = catalogoAlvoEntradaEstoque;
 
     const btn = document.getElementById('btnConfirmarEntradaEstoque');
-    btn.disabled = true; btn.textContent = 'Registrando...';
+    btn.disabled = true; btn.textContent = entradaEstoqueEmEdicaoId ? 'Salvando...' : 'Registrando...';
     try {
-        const { error: eMov } = await sb.from('estoque_movimentacoes').insert({
-            data, produto_id: item.produto_id, tipo: 'entrada',
-            qtd: quantidade, valor_unit: valorUnit, almoxarifado: 1, almoxarifado_id: item.estoque_produtos?.almoxarifado_padrao_id || null,
-            observacao: 'Entrada de estoque — ' + item.nome + (observacao ? ' — ' + observacao : ''),
-            responsavel: meuPerfil.nomeOperador, fornecedor_nome: observacao || null,
-            unidade_negocio_id: meuPerfil.unidadeId
-        });
-        if (eMov) throw eMov;
-        const { error: eEntrada } = await sb.rpc('fabrica_registrar_entrada_precos', {
-            p_produto_id: item.produto_id, p_qtd: quantidade, p_valor_unit: valorUnit,
-            p_almoxarifado_id: item.estoque_produtos?.almoxarifado_padrao_id || null
-        });
-        if (eEntrada) throw eEntrada;
+        if (entradaEstoqueEmEdicaoId) {
+            // Editar uma entrada já lançada: só corrige a linha de
+            // estoque_movimentacoes e manda reprocessar -- é o mesmo
+            // mecanismo que o próprio Estoque usa quando qualquer dado
+            // que afeta o saldo muda depois de já lançado (recalcula
+            // saldo/preço médio do zero a partir do histórico, em vez de
+            // tentar inverter deltas manualmente).
+            const { error: eUpd } = await sb.from('estoque_movimentacoes').update({
+                data, qtd: quantidade, valor_unit: valorUnit,
+                observacao: 'Entrada de estoque — ' + item.nome + (observacao ? ' — ' + observacao : ''),
+                fornecedor_nome: observacao || null
+            }).eq('id', entradaEstoqueEmEdicaoId);
+            if (eUpd) throw eUpd;
+        } else {
+            const { error: eMov } = await sb.from('estoque_movimentacoes').insert({
+                data, produto_id: item.produto_id, tipo: 'entrada',
+                qtd: quantidade, valor_unit: valorUnit, almoxarifado: 1, almoxarifado_id: item.estoque_produtos?.almoxarifado_padrao_id || null,
+                observacao: 'Entrada de estoque — ' + item.nome + (observacao ? ' — ' + observacao : ''),
+                responsavel: meuPerfil.nomeOperador, fornecedor_nome: observacao || null,
+                unidade_negocio_id: meuPerfil.unidadeId
+            });
+            if (eMov) throw eMov;
+        }
+        // Reprocessar cobre tanto o registro novo quanto a edição --
+        // recalcula estoque_produtos.estoque/preço médio a partir de
+        // TODO o histórico de movimentações desse produto
+        const { error: eReproc } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId, p_produto_id: item.produto_id });
+        if (eReproc) throw eReproc;
 
-        await registrarSentinela('entrada_estoque_uniforme_epi', `+${quantidade}x ${item.nome}`);
-        document.getElementById('modal-entrada-estoque').classList.remove('aberto');
+        await registrarSentinela('entrada_estoque_uniforme_epi', (entradaEstoqueEmEdicaoId ? 'Editada: ' : '+') + `${quantidade}x ${item.nome}`);
         await carregarCatalogo();
         renderizarCatalogoAdmin();
+        const itemAtualizado = catalogo.find(c => c.id === item.id) || item;
+        catalogoAlvoEntradaEstoque = itemAtualizado;
+        document.getElementById('entradaEstoqueItemTexto').textContent = itemAtualizado.nome + (itemAtualizado.tamanho ? ' — ' + itemAtualizado.tamanho : '') + ' · Saldo atual: ' + (itemAtualizado.estoque_produtos?.estoque ?? 0);
+        limparFormEntradaEstoque(itemAtualizado);
+        await carregarEntradasRegistradas(itemAtualizado);
     } catch (e) {
-        statusEl.textContent = 'Erro ao registrar: ' + (e.message || e);
+        statusEl.textContent = 'Erro ao salvar: ' + (e.message || e);
     } finally {
-        btn.disabled = false; btn.textContent = 'Registrar entrada';
+        btn.disabled = false; btn.textContent = entradaEstoqueEmEdicaoId ? 'Salvar edição' : 'Registrar entrada';
     }
 });
+
+// Carrega as entradas manuais desse item (exclui as que vieram de
+// devolução -- essas são geridas pelo ciclo de vida da entrega, não
+// editáveis por aqui) pra listar com Editar/Excluir.
+async function carregarEntradasRegistradas(item) {
+    const [{ data: movs }, { data: entregasComBaixa }] = await Promise.all([
+        sb.from('estoque_movimentacoes').select('*').eq('produto_id', item.produto_id).eq('tipo', 'entrada').order('data', { ascending: false }),
+        sb.from('staff_uniformes_epi_entregas').select('estoque_movimentacao_baixa_id').eq('catalogo_id', item.id).not('estoque_movimentacao_baixa_id', 'is', null)
+    ]);
+    const idsDevolucao = new Set((entregasComBaixa || []).map(e => e.estoque_movimentacao_baixa_id));
+    entradasRegistradasAtual = (movs || []).filter(m => !idsDevolucao.has(m.id));
+    renderizarEntradasRegistradas();
+}
+
+function renderizarEntradasRegistradas() {
+    const wrap = document.getElementById('listaEntradasRegistradas');
+    const vazio = document.getElementById('vazioEntradasRegistradas');
+    if (!entradasRegistradasAtual.length) { wrap.innerHTML = ''; vazio.classList.remove('hidden'); return; }
+    vazio.classList.add('hidden');
+    wrap.innerHTML = entradasRegistradasAtual.map(m => `
+        <div class="item-linha">
+            <div class="info">
+                <div class="nome">${formatarDataSemFuso(m.data)} · ${m.qtd}x ${formatarMoeda(m.valor_unit)}</div>
+                <div class="meta">${escapeHtml(m.fornecedor_nome || m.observacao || '')}</div>
+            </div>
+            <div class="acoes">
+                <button type="button" class="btn btn-cinza" data-editar-entrada="${m.id}">Editar</button>
+                <button type="button" class="btn btn-perigo" data-excluir-entrada="${m.id}">Excluir</button>
+            </div>
+        </div>
+    `).join('');
+}
+document.getElementById('listaEntradasRegistradas').addEventListener('click', async (e) => {
+    const btnEditar = e.target.closest('[data-editar-entrada]');
+    if (btnEditar) {
+        const mov = entradasRegistradasAtual.find(m => String(m.id) === btnEditar.dataset.editarEntrada);
+        if (!mov) return;
+        entradaEstoqueEmEdicaoId = mov.id;
+        document.getElementById('entradaEstoqueTitulo').textContent = 'Editar entrada';
+        document.getElementById('btnConfirmarEntradaEstoque').textContent = 'Salvar edição';
+        document.getElementById('btnCancelarEdicaoEntradaEstoque').classList.remove('hidden');
+        document.getElementById('campoQtdEntradaEstoque').value = mov.qtd;
+        document.getElementById('campoValorEntradaEstoque').value = mov.valor_unit;
+        document.getElementById('campoDataEntradaEstoque').value = String(mov.data).slice(0, 10);
+        document.getElementById('campoObservacaoEntradaEstoque').value = mov.fornecedor_nome || '';
+        document.getElementById('statusEntradaEstoque').textContent = '';
+        return;
+    }
+    const btnExcluir = e.target.closest('[data-excluir-entrada]');
+    if (btnExcluir) {
+        const mov = entradasRegistradasAtual.find(m => String(m.id) === btnExcluir.dataset.excluirEntrada);
+        if (!mov) return;
+        if (!confirm(`Excluir essa entrada de ${mov.qtd}x em ${formatarDataSemFuso(mov.data)}? O estoque é recalculado automaticamente.`)) return;
+        const item = catalogoAlvoEntradaEstoque;
+        try {
+            const { error: eDel } = await sb.from('estoque_movimentacoes').delete().eq('id', mov.id);
+            if (eDel) throw eDel;
+            const { error: eReproc } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId, p_produto_id: item.produto_id });
+            if (eReproc) throw eReproc;
+            await registrarSentinela('entrada_estoque_uniforme_epi_excluida', `-${mov.qtd}x ${item.nome}`);
+            await carregarCatalogo();
+            renderizarCatalogoAdmin();
+            const itemAtualizado = catalogo.find(c => c.id === item.id) || item;
+            catalogoAlvoEntradaEstoque = itemAtualizado;
+            document.getElementById('entradaEstoqueItemTexto').textContent = itemAtualizado.nome + (itemAtualizado.tamanho ? ' — ' + itemAtualizado.tamanho : '') + ' · Saldo atual: ' + (itemAtualizado.estoque_produtos?.estoque ?? 0);
+            await carregarEntradasRegistradas(itemAtualizado);
+        } catch (e) {
+            alert('Erro ao excluir: ' + (e.message || e));
+        }
+    }
+});
+
+// ---------------------------------------------------------------
+// MOVIMENTAÇÃO DO ITEM -- histórico completo (entradas + saídas) de um
+// produto, com a referência (fornecedor numa entrada manual, profissional
+// numa entrega/devolução) já embutida no texto da observação de cada
+// movimento -- ver registrarNovaEntrega/confirmarBaixa/entrada de estoque
+// acima, todos escrevem observação legível na hora de gravar.
+// ---------------------------------------------------------------
+async function abrirModalMovimentoItem(catalogoId) {
+    const item = catalogo.find(c => c.id === catalogoId);
+    if (!item || !item.produto_id) return;
+    document.getElementById('movimentoItemTexto').textContent = item.nome + (item.tamanho ? ' — ' + item.tamanho : '') + ' · Saldo atual: ' + (item.estoque_produtos?.estoque ?? 0);
+    document.getElementById('modal-movimento-item').classList.add('aberto');
+    const { data, error } = await sb.from('estoque_movimentacoes').select('*').eq('produto_id', item.produto_id).order('data', { ascending: false });
+    renderizarMovimentoItem(error ? [] : (data || []));
+}
+document.getElementById('btnFecharMovimentoItem').addEventListener('click', () => document.getElementById('modal-movimento-item').classList.remove('aberto'));
+
+function renderizarMovimentoItem(movs) {
+    const wrap = document.getElementById('listaMovimentoItem');
+    const vazio = document.getElementById('vazioMovimentoItem');
+    if (!movs.length) { wrap.innerHTML = ''; vazio.classList.remove('hidden'); return; }
+    vazio.classList.add('hidden');
+    wrap.innerHTML = movs.map(m => `
+        <div class="item-linha">
+            <div class="info">
+                <div class="nome"><span class="pill ${m.tipo === 'entrada' ? 'pill-devolvido' : 'pill-entregue'}">${m.tipo === 'entrada' ? 'Entrada' : 'Saída'}</span> ${formatarDataSemFuso(m.data)} · ${m.qtd}x ${formatarMoeda(m.valor_unit)}</div>
+                <div class="meta">${escapeHtml(m.observacao || m.fornecedor_nome || '—')}${m.responsavel ? ' · Registrado por ' + escapeHtml(m.responsavel) : ''}</div>
+            </div>
+        </div>
+    `).join('');
+}
 
 // ---------------------------------------------------------------
 // RENOVAÇÕES -- dois gatilhos independentes (ver plano/CLAUDE.md):
