@@ -332,6 +332,12 @@
             <select id="campoAlmoxarifadoCatalogo"></select>
         </div>
 
+        <div class="campo" id="blocoEstoqueInicialCatalogo">
+            <label>Estoque inicial</label>
+            <input type="number" min="0" step="1" id="campoEstoqueInicialCatalogo" value="0">
+        </div>
+        <p class="subtitulo hidden" id="textoSaldoAtualCatalogo" style="margin:-8px 0 14px 0;"></p>
+
         <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; margin-bottom:14px;">
             <input type="checkbox" id="campoAtivoCatalogo" checked style="width:16px; height:16px;">
             Ativo (aparece na busca ao registrar entregas)
@@ -342,6 +348,25 @@
             <button type="button" class="btn btn-principal" id="btnSalvarCatalogo" style="flex:1;">Salvar</button>
         </div>
         <p class="status-msg" id="statusCatalogo"></p>
+    </div>
+</div>
+
+<!-- ==================== MODAL: REGISTRAR ENTRADA DE ESTOQUE ==================== -->
+<div id="modal-entrada-estoque" class="modal-overlay">
+    <div class="modal-caixa">
+        <h3>Registrar entrada</h3>
+        <p class="subtitulo" id="entradaEstoqueItemTexto" style="margin-bottom:14px;"></p>
+        <div class="grade">
+            <div class="campo"><label>Quantidade</label><input type="number" min="1" step="1" id="campoQtdEntradaEstoque" value="1"></div>
+            <div class="campo"><label>Valor unitário (R$)</label><input type="number" min="0" step="0.01" id="campoValorEntradaEstoque"></div>
+            <div class="campo"><label>Data</label><input type="date" id="campoDataEntradaEstoque"></div>
+        </div>
+        <div class="campo"><label>Observação (opcional)</label><input type="text" id="campoObservacaoEntradaEstoque" placeholder="Ex: Compra NF 1234, fornecedor X"></div>
+        <div style="display:flex; gap:8px; margin-top:6px;">
+            <button type="button" class="btn btn-cinza" id="btnCancelarEntradaEstoque" style="flex:1;">Cancelar</button>
+            <button type="button" class="btn btn-principal" id="btnConfirmarEntradaEstoque" style="flex:1;">Registrar entrada</button>
+        </div>
+        <p class="status-msg" id="statusEntradaEstoque"></p>
     </div>
 </div>
 
@@ -413,7 +438,11 @@ const AJUDA_UNIFORMES_EPI = {
                 dedicado</strong> "Uniformes / EPI" (um botão aparece automaticamente enquanto
                 ele não existir).</li>
                 <li>Cada item cadastrado aqui cria também um produto real no Estoque, ligado a
-                esse almoxarifado -- é lá que fica o saldo/preço médio.</li>
+                esse almoxarifado -- é lá que fica o saldo/preço médio. Ao criar, dá pra
+                informar o <strong>estoque inicial</strong> (se já tiver peças dessa em mãos).
+                Depois de criado, reabastecer é sempre pelo botão <strong>"+ Entrada"</strong> na
+                lista -- registra data, quantidade e valor, e fica no histórico de
+                movimentações do Estoque (compra nova, reposição etc.).</li>
                 <li><strong>EPI</strong> pode ter nº do CA e validade -- isso alimenta um dos
                 dois gatilhos da aba Renovações (o outro é a data prevista definida em cada
                 entrega).</li>
@@ -1022,11 +1051,16 @@ function renderizarCatalogoAdmin() {
                 <div class="nome">${escapeHtml(c.nome)}${c.tamanho ? ' — ' + escapeHtml(c.tamanho) : ''} <span class="pill pill-${c.tipo}">${c.tipo}</span>${!c.ativo ? ' <span class="pill" style="background:#EEF0F1;color:var(--muted)">inativo</span>' : ''}</div>
                 <div class="meta">Saldo: ${c.estoque_produtos?.estoque ?? 0}${c.numero_ca ? ' · CA ' + escapeHtml(c.numero_ca) : ''}${c.validade_ca ? ' · Validade CA: ' + formatarDataSemFuso(c.validade_ca) : ''}${c.vida_util_dias ? ' · Vida útil: ' + c.vida_util_dias + ' dias' : ''}</div>
             </div>
-            <div class="acoes"><button type="button" class="btn btn-cinza" data-editar-catalogo="${c.id}">Editar</button></div>
+            <div class="acoes">
+                <button type="button" class="btn btn-cinza" data-entrada-catalogo="${c.id}">+ Entrada</button>
+                <button type="button" class="btn btn-cinza" data-editar-catalogo="${c.id}">Editar</button>
+            </div>
         </div>
     `).join('');
 }
 document.getElementById('listaCatalogo').addEventListener('click', (e) => {
+    const btnEntrada = e.target.closest('[data-entrada-catalogo]');
+    if (btnEntrada) { abrirModalEntradaEstoque(btnEntrada.dataset.entradaCatalogo); return; }
     const btn = e.target.closest('[data-editar-catalogo]');
     if (btn) abrirFormCatalogo(catalogo.find(c => c.id === btn.dataset.editarCatalogo));
 });
@@ -1060,6 +1094,24 @@ function abrirFormCatalogo(item) {
     document.getElementById('campoValidadeCaCatalogo').value = item ? (item.validade_ca || '') : '';
     document.getElementById('campoAtivoCatalogo').checked = item ? item.ativo : true;
     if (item && item.estoque_produtos?.almoxarifado_padrao_id) document.getElementById('campoAlmoxarifadoCatalogo').value = item.estoque_produtos.almoxarifado_padrao_id;
+
+    // Estoque inicial só faz sentido ao CRIAR o item (sem movimentação
+    // ainda). Depois de criado, reabastecer é sempre via "Registrar
+    // entrada" (fica no histórico de movimentações, com valor/data/nota
+    // -- editar estoque_inicial de um item que já teve entrega/devolução
+    // no meio bagunçaria o reprocessamento).
+    const blocoInicial = document.getElementById('blocoEstoqueInicialCatalogo');
+    const textoSaldo = document.getElementById('textoSaldoAtualCatalogo');
+    if (item) {
+        blocoInicial.classList.add('hidden');
+        textoSaldo.classList.remove('hidden');
+        textoSaldo.textContent = 'Saldo atual: ' + (item.estoque_produtos?.estoque ?? 0) + ' — pra adicionar mais, use "Registrar entrada" na lista.';
+    } else {
+        blocoInicial.classList.remove('hidden');
+        textoSaldo.classList.add('hidden');
+        document.getElementById('campoEstoqueInicialCatalogo').value = 0;
+    }
+
     document.getElementById('statusCatalogo').textContent = '';
     document.getElementById('modal-catalogo-item').classList.add('aberto');
 }
@@ -1082,10 +1134,14 @@ document.getElementById('btnSalvarCatalogo').addEventListener('click', async () 
     try {
         const itemAtual = catalogoEmEdicaoId ? catalogo.find(c => c.id === catalogoEmEdicaoId) : null;
         const valor = Number(document.getElementById('campoValorCatalogo').value) || 0;
+        // Estoque inicial só é lido/gravado na criação -- ver comentário
+        // em abrirFormCatalogo(). Editando, omite os dois campos do
+        // payload pra não sobrescrever o saldo já movimentado.
+        const estoqueInicial = itemAtual ? undefined : (Number(document.getElementById('campoEstoqueInicialCatalogo').value) || 0);
 
         const produtoPayload = {
             nome, un: 'UN', valor, grupo: 1,
-            estoque_inicial: itemAtual ? undefined : 0, estoque: itemAtual ? undefined : 0,
+            estoque_inicial: estoqueInicial, estoque: estoqueInicial,
             almoxarifado_padrao_id: almoxarifadoId,
             unidade_negocio_id: meuPerfil.unidadeId
         };
@@ -1119,6 +1175,70 @@ document.getElementById('btnSalvarCatalogo').addEventListener('click', async () 
         statusEl.textContent = 'Erro ao salvar: ' + (e.message || e);
     } finally {
         btn.disabled = false; btn.textContent = 'Salvar';
+    }
+});
+
+// ---------------------------------------------------------------
+// REGISTRAR ENTRADA DE ESTOQUE -- reabastecimento de um item de
+// catálogo já existente (compra nova, reposição etc.). Igual uma
+// entrada de verdade no Estoque: chama fabrica_registrar_entrada_precos
+// (soma no saldo E recalcula preço médio/última compra), diferente da
+// baixa de devolução (que só ajusta quantidade, sem mexer em preço --
+// ver confirmarBaixa).
+// ---------------------------------------------------------------
+let catalogoAlvoEntradaEstoque = null;
+
+function abrirModalEntradaEstoque(catalogoId) {
+    const item = catalogo.find(c => c.id === catalogoId);
+    if (!item) return;
+    if (!item.produto_id) { alert('Este item não tem produto de estoque vinculado.'); return; }
+    catalogoAlvoEntradaEstoque = item;
+    document.getElementById('entradaEstoqueItemTexto').textContent = item.nome + (item.tamanho ? ' — ' + item.tamanho : '') + ' · Saldo atual: ' + (item.estoque_produtos?.estoque ?? 0);
+    document.getElementById('campoQtdEntradaEstoque').value = 1;
+    document.getElementById('campoValorEntradaEstoque').value = item.estoque_produtos?.valor || '';
+    document.getElementById('campoDataEntradaEstoque').value = hojeISO();
+    document.getElementById('campoObservacaoEntradaEstoque').value = '';
+    document.getElementById('statusEntradaEstoque').textContent = '';
+    document.getElementById('modal-entrada-estoque').classList.add('aberto');
+}
+document.getElementById('btnCancelarEntradaEstoque').addEventListener('click', () => document.getElementById('modal-entrada-estoque').classList.remove('aberto'));
+
+document.getElementById('btnConfirmarEntradaEstoque').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusEntradaEstoque');
+    statusEl.textContent = '';
+    if (!catalogoAlvoEntradaEstoque) return;
+    const quantidade = Number(document.getElementById('campoQtdEntradaEstoque').value) || 0;
+    if (quantidade < 1) { statusEl.textContent = 'Quantidade precisa ser pelo menos 1.'; return; }
+    const valorUnit = Number(document.getElementById('campoValorEntradaEstoque').value) || 0;
+    const data = document.getElementById('campoDataEntradaEstoque').value || hojeISO();
+    const observacao = document.getElementById('campoObservacaoEntradaEstoque').value.trim();
+    const item = catalogoAlvoEntradaEstoque;
+
+    const btn = document.getElementById('btnConfirmarEntradaEstoque');
+    btn.disabled = true; btn.textContent = 'Registrando...';
+    try {
+        const { error: eMov } = await sb.from('estoque_movimentacoes').insert({
+            data, produto_id: item.produto_id, tipo: 'entrada',
+            qtd: quantidade, valor_unit: valorUnit, almoxarifado: 1, almoxarifado_id: item.estoque_produtos?.almoxarifado_padrao_id || null,
+            observacao: 'Entrada de estoque — ' + item.nome + (observacao ? ' — ' + observacao : ''),
+            responsavel: meuPerfil.nomeOperador, fornecedor_nome: observacao || null,
+            unidade_negocio_id: meuPerfil.unidadeId
+        });
+        if (eMov) throw eMov;
+        const { error: eEntrada } = await sb.rpc('fabrica_registrar_entrada_precos', {
+            p_produto_id: item.produto_id, p_qtd: quantidade, p_valor_unit: valorUnit,
+            p_almoxarifado_id: item.estoque_produtos?.almoxarifado_padrao_id || null
+        });
+        if (eEntrada) throw eEntrada;
+
+        await registrarSentinela('entrada_estoque_uniforme_epi', `+${quantidade}x ${item.nome}`);
+        document.getElementById('modal-entrada-estoque').classList.remove('aberto');
+        await carregarCatalogo();
+        renderizarCatalogoAdmin();
+    } catch (e) {
+        statusEl.textContent = 'Erro ao registrar: ' + (e.message || e);
+    } finally {
+        btn.disabled = false; btn.textContent = 'Registrar entrada';
     }
 });
 
