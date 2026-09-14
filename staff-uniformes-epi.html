@@ -1185,30 +1185,40 @@ async function excluirEntregaAberta(entregaId) {
     if (!confirm(`Excluir a entrega de "${nome}" pra ${profissionalSelecionado.nome_completo}? Use isso só quando a entrega nunca deveria ter sido registrada (profissional/quantidade errada) -- se a peça foi devolvida ou descartada de verdade, use os botões correspondentes.`)) return;
 
     try {
+        // Calcula ANTES de apagar nada (precisa saber se sobra irmã no
+        // lote), mas só EXECUTA a mudança em estoque_movimentacoes
+        // DEPOIS de apagar esta linha de staff_uniformes_epi_entregas --
+        // senão a FK estoque_movimentacao_entrega__fkey rejeita
+        // apagar/reduzir um movimento que essa própria linha ainda
+        // referencia (era essa a causa do erro reportado).
+        let produtoId = null, restantes = 0;
         if (item.catalogo_id && item.estoque_movimentacao_entrega_id) {
             const catItem = catalogo.find(c => c.id === item.catalogo_id);
-            const produtoId = catItem?.estoque_produtos?.id;
+            produtoId = catItem?.estoque_produtos?.id || null;
             if (produtoId) {
                 // conta quantas outras linhas (qualquer status) ainda
                 // referenciam o mesmo movimento -- pra saber se essa é a
                 // última peça do lote ou se sobram outras
                 const { data: irmas } = await sb.from('staff_uniformes_epi_entregas')
                     .select('id').eq('estoque_movimentacao_entrega_id', item.estoque_movimentacao_entrega_id).neq('id', entregaId);
-                const restantes = (irmas || []).length;
-                if (restantes > 0) {
-                    const { error: eUpd } = await sb.from('estoque_movimentacoes').update({ qtd: restantes }).eq('id', item.estoque_movimentacao_entrega_id);
-                    if (eUpd) throw eUpd;
-                } else {
-                    const { error: eDel } = await sb.from('estoque_movimentacoes').delete().eq('id', item.estoque_movimentacao_entrega_id);
-                    if (eDel) throw eDel;
-                }
-                const { error: eReproc } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId, p_produto_id: produtoId });
-                if (eReproc) throw eReproc;
+                restantes = (irmas || []).length;
             }
         }
 
         const { error: eDelEnt } = await sb.from('staff_uniformes_epi_entregas').delete().eq('id', entregaId);
         if (eDelEnt) throw eDelEnt;
+
+        if (produtoId) {
+            if (restantes > 0) {
+                const { error: eUpd } = await sb.from('estoque_movimentacoes').update({ qtd: restantes }).eq('id', item.estoque_movimentacao_entrega_id);
+                if (eUpd) throw eUpd;
+            } else {
+                const { error: eDel } = await sb.from('estoque_movimentacoes').delete().eq('id', item.estoque_movimentacao_entrega_id);
+                if (eDel) throw eDel;
+            }
+            const { error: eReproc } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId, p_produto_id: produtoId });
+            if (eReproc) throw eReproc;
+        }
 
         await registrarSentinela('entrega_uniforme_epi_excluida', `Excluída: ${nome} de ${profissionalSelecionado.nome_completo}`);
         await carregarItensAbertos(profissionalSelecionado.id);
@@ -1237,22 +1247,28 @@ async function reverterBaixa(entregaId) {
     if (!confirm(`Reverter ${acao} de "${nome}"? O item volta pra "em aberto" com ${profissionalSelecionado.nome_completo}.`)) return;
 
     try {
-        if (item.tipo_baixa === 'devolucao' && item.estoque_movimentacao_baixa_id) {
-            const catItem = catalogo.find(c => c.id === item.catalogo_id);
-            const produtoId = catItem?.estoque_produtos?.id;
-            const { error: eDel } = await sb.from('estoque_movimentacoes').delete().eq('id', item.estoque_movimentacao_baixa_id);
-            if (eDel) throw eDel;
-            if (produtoId) {
-                const { error: eReproc } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId, p_produto_id: produtoId });
-                if (eReproc) throw eReproc;
-            }
-        }
+        // Mesma ordem invertida do excluirEntregaAberta: primeiro tira a
+        // referência (zera estoque_movimentacao_baixa_id nesta linha),
+        // só DEPOIS apaga o movimento -- senão a FK rejeita apagar um
+        // movimento que essa própria linha ainda aponta.
+        const movBaixaId = item.tipo_baixa === 'devolucao' ? item.estoque_movimentacao_baixa_id : null;
+        const catItem = catalogo.find(c => c.id === item.catalogo_id);
+        const produtoId = catItem?.estoque_produtos?.id || null;
 
         const { error } = await sb.from('staff_uniformes_epi_entregas').update({
             status: 'entregue', data_baixa: null, tipo_baixa: null, motivo_baixa: null,
             condicao_devolucao: null, estoque_movimentacao_baixa_id: null
         }).eq('id', entregaId);
         if (error) throw error;
+
+        if (movBaixaId) {
+            const { error: eDel } = await sb.from('estoque_movimentacoes').delete().eq('id', movBaixaId);
+            if (eDel) throw eDel;
+            if (produtoId) {
+                const { error: eReproc } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId, p_produto_id: produtoId });
+                if (eReproc) throw eReproc;
+            }
+        }
 
         await registrarSentinela(item.tipo_baixa === 'devolucao' ? 'devolucao_uniforme_epi_revertida' : 'descarte_uniforme_epi_revertido',
             `Reversão de ${acao} de ${nome} de ${profissionalSelecionado.nome_completo}`);
