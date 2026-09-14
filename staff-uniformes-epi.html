@@ -217,6 +217,12 @@
                 <div id="listaItensAbertos"></div>
                 <div id="vazioItensAbertos" class="vazio hidden">Nenhum item em aberto com este profissional.</div>
             </div>
+
+            <div class="cartao">
+                <h2>Histórico (devolvidos / descartados)</h2>
+                <div id="listaHistoricoProfissional"></div>
+                <div id="vazioHistoricoProfissional" class="vazio hidden">Nada devolvido ou descartado ainda.</div>
+            </div>
         </div>
     </div>
 
@@ -461,6 +467,15 @@ const AJUDA_UNIFORMES_EPI = {
                 Descartar não pergunta condição (a peça já não volta pro estoque de jeito
                 nenhum) e não gera nenhum movimento -- ela já tinha saído do saldo na
                 entrega.</li>
+                <li>Devolvidos e descartados saem da lista "em aberto" e vão pro
+                <strong>Histórico</strong>, logo abaixo, na ficha do profissional -- com data,
+                condição e motivo. De lá dá pra <strong>↩️ Reverter</strong>, se foi engano
+                (devolveu ou descartou o item errado, por exemplo) -- volta pra "em aberto" e
+                desfaz o efeito no estoque, se tinha algum.</li>
+                <li><strong>✕ Excluir</strong> (nos itens em aberto) é diferente de devolver/
+                descartar -- use só quando a entrega nunca deveria ter sido registrada
+                (profissional ou quantidade errada). Some com o registro e corrige o estoque de
+                volta, sem deixar rastro de devolução.</li>
             </ul>
         ` },
         { id: 'catalogo', titulo: 'Catálogo', corpo: `
@@ -802,6 +817,7 @@ async function selecionarProfissional(id) {
     document.getElementById('fichaProfissionalFuncao').textContent = p.staff_funcoes?.nome || '';
     document.getElementById('blocoProfissional').classList.remove('hidden');
     await carregarItensAbertos(p.id);
+    await carregarHistoricoProfissional(p.id);
 }
 
 async function carregarItensAbertos(profissionalId) {
@@ -813,6 +829,42 @@ async function carregarItensAbertos(profissionalId) {
     itensAbertosAtual = error ? [] : (data || []);
     renderizarItensAbertos();
 }
+
+// Devolvidos/descartados não aparecem mais em "em aberto" -- ficam
+// aqui, com opção de reverter (engano ao devolver/descartar).
+let historicoProfissionalAtual = [];
+async function carregarHistoricoProfissional(profissionalId) {
+    const { data, error } = await sb.from('staff_uniformes_epi_entregas')
+        .select('*, staff_uniformes_epi_catalogo(nome, tipo, tamanho)')
+        .eq('profissional_id', profissionalId)
+        .neq('status', 'entregue')
+        .order('data_baixa', { ascending: false });
+    historicoProfissionalAtual = error ? [] : (data || []);
+    renderizarHistoricoProfissional();
+}
+
+function renderizarHistoricoProfissional() {
+    const wrap = document.getElementById('listaHistoricoProfissional');
+    const vazio = document.getElementById('vazioHistoricoProfissional');
+    if (!historicoProfissionalAtual.length) { wrap.innerHTML = ''; vazio.classList.remove('hidden'); return; }
+    vazio.classList.add('hidden');
+    wrap.innerHTML = historicoProfissionalAtual.map(it => {
+        const cat = it.staff_uniformes_epi_catalogo;
+        const nome = cat ? cat.nome : (it.descricao_avulsa + ' (avulso)');
+        const condicaoTexto = it.tipo_baixa === 'devolucao' ? (' · ' + (it.condicao_devolucao === 'usado' ? 'Usado' : 'Sem uso')) : '';
+        return `<div class="item-linha">
+            <div class="info">
+                <div class="nome">${escapeHtml(nome)} <span class="pill pill-${it.status}">${it.status === 'devolvido' ? 'Devolvido' : 'Descartado'}</span></div>
+                <div class="meta">${it.tamanho ? 'Tamanho ' + escapeHtml(it.tamanho) + ' · ' : ''}${formatarDataSemFuso(it.data_baixa)}${condicaoTexto}${it.motivo_baixa ? ' · ' + escapeHtml(it.motivo_baixa) : ''}</div>
+            </div>
+            <div class="acoes"><button type="button" class="btn btn-cinza" data-reverter-baixa="${it.id}">↩️ Reverter</button></div>
+        </div>`;
+    }).join('');
+}
+document.getElementById('listaHistoricoProfissional').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-reverter-baixa]');
+    if (btn) reverterBaixa(btn.dataset.reverterBaixa);
+});
 
 function renderizarItensAbertos() {
     const wrap = document.getElementById('listaItensAbertos');
@@ -831,6 +883,7 @@ function renderizarItensAbertos() {
             <div class="acoes">
                 <button type="button" class="btn btn-cinza" data-devolver="${it.id}">↩️ Devolver</button>
                 <button type="button" class="btn btn-perigo" data-descartar="${it.id}">🗑️ Descartar</button>
+                <button type="button" class="btn btn-perigo" data-excluir-entrega="${it.id}">✕ Excluir</button>
             </div>
         </div>`;
     }).join('');
@@ -839,8 +892,10 @@ function renderizarItensAbertos() {
 document.getElementById('listaItensAbertos').addEventListener('click', (e) => {
     const btnDev = e.target.closest('[data-devolver]');
     const btnDesc = e.target.closest('[data-descartar]');
+    const btnExcluir = e.target.closest('[data-excluir-entrega]');
     if (btnDev) abrirModalBaixa(btnDev.dataset.devolver, 'devolucao');
     if (btnDesc) abrirModalBaixa(btnDesc.dataset.descartar, 'descarte');
+    if (btnExcluir) excluirEntregaAberta(btnExcluir.dataset.excluirEntrega);
 });
 
 // ---------------------------------------------------------------
@@ -1054,6 +1109,7 @@ document.getElementById('btnConfirmarBaixa').addEventListener('click', async () 
         await confirmarBaixa(entregaAlvoBaixa.id, entregaAlvoBaixa.tipoBaixa, dataBaixa, motivo, condicaoDevolucaoAtual);
         document.getElementById('modal-baixa').classList.remove('aberto');
         await carregarItensAbertos(profissionalSelecionado.id);
+        await carregarHistoricoProfissional(profissionalSelecionado.id);
         // Ver comentário equivalente em btnSalvarNovaEntrega -- precisa
         // re-renderizar, carregarCatalogo() sozinho não atualiza a tela
         await carregarCatalogo();
@@ -1110,6 +1166,104 @@ async function confirmarBaixa(entregaId, tipoBaixa, dataBaixa, motivo, condicaoD
     await registrarSentinela(tipoBaixa === 'devolucao' ? 'devolucao_uniforme_epi' : 'descarte_uniforme_epi',
         (tipoBaixa === 'devolucao' ? 'Devolução (' + (condicaoDevolucao === 'usado' ? 'usado' : 'sem uso') + ')' : 'Descarte') +
         ' de ' + nomeItemBaixa + ' de ' + profissionalSelecionado.nome_completo + (motivo ? ' — motivo: ' + motivo : ''));
+}
+
+// ---------------------------------------------------------------
+// EXCLUIR ENTREGA ABERTA -- corrige um registro que nunca deveria ter
+// existido (entregou pro profissional errado, quantidade errada etc.),
+// diferente de devolver/descartar (que assumem a entrega aconteceu de
+// verdade). Reduz -- ou remove, se era a última peça do lote -- a
+// quantidade do movimento de estoque original em vez de ajustar saldo
+// manualmente, e manda reprocessar (mesmo mecanismo já usado em editar/
+// excluir entrada de estoque).
+// ---------------------------------------------------------------
+async function excluirEntregaAberta(entregaId) {
+    const item = itensAbertosAtual.find(i => i.id === entregaId);
+    if (!item) return;
+    const cat = item.staff_uniformes_epi_catalogo;
+    const nome = cat ? cat.nome + (item.tamanho ? ' — ' + item.tamanho : '') : (item.descricao_avulsa + ' (avulso)');
+    if (!confirm(`Excluir a entrega de "${nome}" pra ${profissionalSelecionado.nome_completo}? Use isso só quando a entrega nunca deveria ter sido registrada (profissional/quantidade errada) -- se a peça foi devolvida ou descartada de verdade, use os botões correspondentes.`)) return;
+
+    try {
+        if (item.catalogo_id && item.estoque_movimentacao_entrega_id) {
+            const catItem = catalogo.find(c => c.id === item.catalogo_id);
+            const produtoId = catItem?.estoque_produtos?.id;
+            if (produtoId) {
+                // conta quantas outras linhas (qualquer status) ainda
+                // referenciam o mesmo movimento -- pra saber se essa é a
+                // última peça do lote ou se sobram outras
+                const { data: irmas } = await sb.from('staff_uniformes_epi_entregas')
+                    .select('id').eq('estoque_movimentacao_entrega_id', item.estoque_movimentacao_entrega_id).neq('id', entregaId);
+                const restantes = (irmas || []).length;
+                if (restantes > 0) {
+                    const { error: eUpd } = await sb.from('estoque_movimentacoes').update({ qtd: restantes }).eq('id', item.estoque_movimentacao_entrega_id);
+                    if (eUpd) throw eUpd;
+                } else {
+                    const { error: eDel } = await sb.from('estoque_movimentacoes').delete().eq('id', item.estoque_movimentacao_entrega_id);
+                    if (eDel) throw eDel;
+                }
+                const { error: eReproc } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId, p_produto_id: produtoId });
+                if (eReproc) throw eReproc;
+            }
+        }
+
+        const { error: eDelEnt } = await sb.from('staff_uniformes_epi_entregas').delete().eq('id', entregaId);
+        if (eDelEnt) throw eDelEnt;
+
+        await registrarSentinela('entrega_uniforme_epi_excluida', `Excluída: ${nome} de ${profissionalSelecionado.nome_completo}`);
+        await carregarItensAbertos(profissionalSelecionado.id);
+        await carregarCatalogo();
+        renderizarCatalogoAdmin();
+        await carregarRenovacoes();
+    } catch (e) {
+        alert('Erro ao excluir: ' + (e.message || e));
+    }
+}
+
+// ---------------------------------------------------------------
+// REVERTER BAIXA -- desfaz uma devolução ou descarte feito por engano,
+// volta o item pra "em aberto". Devolução tinha criado um movimento de
+// entrada (estoque_movimentacao_baixa_id) -- reverter apaga esse
+// movimento e reprocessa, senão o saldo ficaria contando a peça duas
+// vezes (uma da entrega original, outra da devolução desfeita errado).
+// Descarte nunca criou movimento, reverter só muda o status de volta.
+// ---------------------------------------------------------------
+async function reverterBaixa(entregaId) {
+    const item = historicoProfissionalAtual.find(i => i.id === entregaId);
+    if (!item) return;
+    const cat = item.staff_uniformes_epi_catalogo;
+    const nome = cat ? cat.nome + (item.tamanho ? ' — ' + item.tamanho : '') : (item.descricao_avulsa + ' (avulso)');
+    const acao = item.tipo_baixa === 'devolucao' ? 'devolução' : 'descarte';
+    if (!confirm(`Reverter ${acao} de "${nome}"? O item volta pra "em aberto" com ${profissionalSelecionado.nome_completo}.`)) return;
+
+    try {
+        if (item.tipo_baixa === 'devolucao' && item.estoque_movimentacao_baixa_id) {
+            const catItem = catalogo.find(c => c.id === item.catalogo_id);
+            const produtoId = catItem?.estoque_produtos?.id;
+            const { error: eDel } = await sb.from('estoque_movimentacoes').delete().eq('id', item.estoque_movimentacao_baixa_id);
+            if (eDel) throw eDel;
+            if (produtoId) {
+                const { error: eReproc } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId, p_produto_id: produtoId });
+                if (eReproc) throw eReproc;
+            }
+        }
+
+        const { error } = await sb.from('staff_uniformes_epi_entregas').update({
+            status: 'entregue', data_baixa: null, tipo_baixa: null, motivo_baixa: null,
+            condicao_devolucao: null, estoque_movimentacao_baixa_id: null
+        }).eq('id', entregaId);
+        if (error) throw error;
+
+        await registrarSentinela(item.tipo_baixa === 'devolucao' ? 'devolucao_uniforme_epi_revertida' : 'descarte_uniforme_epi_revertido',
+            `Reversão de ${acao} de ${nome} de ${profissionalSelecionado.nome_completo}`);
+        await carregarItensAbertos(profissionalSelecionado.id);
+        await carregarHistoricoProfissional(profissionalSelecionado.id);
+        await carregarCatalogo();
+        renderizarCatalogoAdmin();
+        await carregarRenovacoes();
+    } catch (e) {
+        alert('Erro ao reverter: ' + (e.message || e));
+    }
 }
 
 // ---------------------------------------------------------------
