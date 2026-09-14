@@ -1209,13 +1209,15 @@ async function excluirEntregaAberta(entregaId) {
         if (eDelEnt) throw eDelEnt;
 
         if (produtoId) {
-            if (restantes > 0) {
-                const { error: eUpd } = await sb.from('estoque_movimentacoes').update({ qtd: restantes }).eq('id', item.estoque_movimentacao_entrega_id);
-                if (eUpd) throw eUpd;
-            } else {
-                const { error: eDel } = await sb.from('estoque_movimentacoes').delete().eq('id', item.estoque_movimentacao_entrega_id);
-                if (eDel) throw eDel;
-            }
+            // Nunca apaga a linha de estoque_movimentacoes aqui -- só
+            // reduz a quantidade (mesmo quando restantes chega a 0).
+            // Apagar exige que NENHUMA linha em staff_uniformes_epi_entregas
+            // aponte pra ela via estoque_movimentacao_entrega_id/baixa_id, e
+            // qualquer contagem feita do lado do cliente é frágil (corrida
+            // com outra aba, engano na contagem, vínculo que não previmos)
+            // -- só reduzir evita esse tipo de violação de FK de vez.
+            const { error: eUpd } = await sb.from('estoque_movimentacoes').update({ qtd: restantes }).eq('id', item.estoque_movimentacao_entrega_id);
+            if (eUpd) throw eUpd;
             const { error: eReproc } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId, p_produto_id: produtoId });
             if (eReproc) throw eReproc;
         }
