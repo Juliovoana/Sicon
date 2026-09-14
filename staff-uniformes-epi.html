@@ -294,6 +294,13 @@
     <div class="modal-caixa">
         <h3 id="modalBaixaTitulo">Devolver item</h3>
         <p class="subtitulo" id="modalBaixaItemTexto" style="margin-bottom:14px;"></p>
+        <div id="blocoCondicaoDevolucao" class="campo">
+            <label>Condição da peça devolvida</label>
+            <div style="display:flex; gap:8px;">
+                <button type="button" class="btn tipo-item-btn ativa" data-condicao-devolucao="novo" style="flex:1;">📦 Sem uso (como novo)</button>
+                <button type="button" class="btn tipo-item-btn" data-condicao-devolucao="usado" style="flex:1;">♻️ Usado</button>
+            </div>
+        </div>
         <div class="campo"><label>Data</label><input type="date" id="campoDataBaixa"></div>
         <div class="campo"><label>Motivo / observação</label><input type="text" id="campoMotivoBaixa"></div>
         <div style="display:flex; gap:8px; margin-top:6px;">
@@ -428,6 +435,14 @@ const AJUDA_UNIFORMES_EPI = {
                 estoque</strong> nenhum -- não existe produto de catálogo pra afetar.</li>
                 <li><strong>Data prevista p/ nova aquisição</strong> é sugerida automaticamente
                 quando o item de catálogo tem "vida útil" cadastrada, mas pode ser trocada.</li>
+                <li>Na ficha do profissional, cada item em aberto tem <strong>Devolver</strong> e
+                <strong>Descartar</strong>. Devolver pergunta a condição da peça --
+                <strong>"Sem uso (como novo)"</strong> ou <strong>"Usado"</strong> -- em
+                qualquer uma das duas a peça volta fisicamente pro saldo do almoxarifado; a
+                condição é só um registro pra triagem futura, não trava o reaproveitamento.
+                Descartar não pergunta condição (a peça já não volta pro estoque de jeito
+                nenhum) e não gera nenhum movimento -- ela já tinha saído do saldo na
+                entrega.</li>
             </ul>
         ` },
         { id: 'catalogo', titulo: 'Catálogo', corpo: `
@@ -893,7 +908,13 @@ document.getElementById('btnSalvarNovaEntrega').addEventListener('click', async 
         });
         document.getElementById('modal-nova-entrega').classList.remove('aberto');
         await carregarItensAbertos(profissionalSelecionado.id);
+        // Recarrega e RE-RENDERIZA o catálogo -- carregarCatalogo() só
+        // atualiza o array em memória, quem desenha a lista na tela é
+        // renderizarCatalogoAdmin(); sem isso o saldo mostrado fica
+        // desatualizado até trocar de aba (bug reportado -- "não deu
+        // baixa no estoque" era só a tela não ter sido redesenhada).
         await carregarCatalogo();
+        renderizarCatalogoAdmin();
         await carregarRenovacoes();
     } catch (e) {
         statusEl.textContent = 'Erro ao registrar: ' + (e.message || e);
@@ -965,6 +986,8 @@ async function registrarNovaEntrega({ profissionalId, catalogoId, descricaoAvuls
 // ---------------------------------------------------------------
 // DEVOLVER / DESCARTAR
 // ---------------------------------------------------------------
+let condicaoDevolucaoAtual = 'novo';
+
 function abrirModalBaixa(entregaId, tipoBaixa) {
     const item = itensAbertosAtual.find(i => i.id === entregaId);
     if (!item) return;
@@ -973,11 +996,22 @@ function abrirModalBaixa(entregaId, tipoBaixa) {
     const nome = cat ? cat.nome : (item.descricao_avulsa + ' (avulso)');
     document.getElementById('modalBaixaTitulo').textContent = tipoBaixa === 'devolucao' ? 'Devolver item' : 'Descartar item';
     document.getElementById('modalBaixaItemTexto').textContent = nome + (item.tamanho ? ' — ' + item.tamanho : '');
+    // Condição só faz sentido pra devolução -- descarte já é
+    // implicitamente "não reaproveitável", não precisa perguntar
+    document.getElementById('blocoCondicaoDevolucao').classList.toggle('hidden', tipoBaixa !== 'devolucao');
+    condicaoDevolucaoAtual = 'novo';
+    document.querySelectorAll('#blocoCondicaoDevolucao [data-condicao-devolucao]').forEach(b => b.classList.toggle('ativa', b.dataset.condicaoDevolucao === 'novo'));
     document.getElementById('campoDataBaixa').value = hojeISO();
     document.getElementById('campoMotivoBaixa').value = '';
     document.getElementById('statusBaixa').textContent = '';
     document.getElementById('modal-baixa').classList.add('aberto');
 }
+document.querySelectorAll('#blocoCondicaoDevolucao [data-condicao-devolucao]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        condicaoDevolucaoAtual = btn.dataset.condicaoDevolucao;
+        document.querySelectorAll('#blocoCondicaoDevolucao [data-condicao-devolucao]').forEach(b => b.classList.toggle('ativa', b === btn));
+    });
+});
 document.getElementById('btnCancelarBaixa').addEventListener('click', () => document.getElementById('modal-baixa').classList.remove('aberto'));
 
 document.getElementById('btnConfirmarBaixa').addEventListener('click', async () => {
@@ -988,10 +1022,13 @@ document.getElementById('btnConfirmarBaixa').addEventListener('click', async () 
     const btn = document.getElementById('btnConfirmarBaixa');
     btn.disabled = true; btn.textContent = 'Confirmando...';
     try {
-        await confirmarBaixa(entregaAlvoBaixa.id, entregaAlvoBaixa.tipoBaixa, dataBaixa, motivo);
+        await confirmarBaixa(entregaAlvoBaixa.id, entregaAlvoBaixa.tipoBaixa, dataBaixa, motivo, condicaoDevolucaoAtual);
         document.getElementById('modal-baixa').classList.remove('aberto');
         await carregarItensAbertos(profissionalSelecionado.id);
+        // Ver comentário equivalente em btnSalvarNovaEntrega -- precisa
+        // re-renderizar, carregarCatalogo() sozinho não atualiza a tela
         await carregarCatalogo();
+        renderizarCatalogoAdmin();
         await carregarRenovacoes();
     } catch (e) {
         statusEl.textContent = 'Erro: ' + (e.message || e);
@@ -1000,21 +1037,27 @@ document.getElementById('btnConfirmarBaixa').addEventListener('click', async () 
     }
 });
 
-async function confirmarBaixa(entregaId, tipoBaixa, dataBaixa, motivo) {
+async function confirmarBaixa(entregaId, tipoBaixa, dataBaixa, motivo, condicaoDevolucao) {
     const item = itensAbertosAtual.find(i => i.id === entregaId);
     if (!item) throw new Error('Item não encontrado.');
 
-    const atualizacao = { status: tipoBaixa === 'devolucao' ? 'devolvido' : 'descartado', data_baixa: dataBaixa, tipo_baixa: tipoBaixa, motivo_baixa: motivo || null };
+    const atualizacao = {
+        status: tipoBaixa === 'devolucao' ? 'devolvido' : 'descartado', data_baixa: dataBaixa, tipo_baixa: tipoBaixa, motivo_baixa: motivo || null,
+        condicao_devolucao: tipoBaixa === 'devolucao' ? condicaoDevolucao : null
+    };
 
     if (tipoBaixa === 'devolucao' && item.catalogo_id) {
         // devolução de item catalogado: volta pro saldo do almoxarifado
+        // -- independente da condição (novo ou usado), a peça volta
+        // fisicamente pro almoxarifado; condição é só pra registro/
+        // triagem, não impede reaproveitar (ver AJUDA_UNIFORMES_EPI)
         const catItem = catalogo.find(c => c.id === item.catalogo_id);
         const produtoId = catItem?.estoque_produtos?.id;
         if (produtoId) {
             const { data: mov, error: eMov } = await sb.from('estoque_movimentacoes').insert({
                 data: dataBaixa, produto_id: produtoId, tipo: 'entrada',
                 qtd: 1, valor_unit: item.valor_unitario || 0, almoxarifado: 1, almoxarifado_id: item.almoxarifado_id,
-                observacao: 'Devolução uniforme/EPI — ' + profissionalSelecionado.nome_completo + (motivo ? ' — ' + motivo : ''),
+                observacao: 'Devolução uniforme/EPI (' + (condicaoDevolucao === 'usado' ? 'usado' : 'sem uso') + ') — ' + profissionalSelecionado.nome_completo + (motivo ? ' — ' + motivo : ''),
                 responsavel: meuPerfil.nomeOperador, fornecedor_nome: 'Uniformes/EPI',
                 afeta_preco_medio: false,
                 unidade_negocio_id: meuPerfil.unidadeId
@@ -1034,7 +1077,7 @@ async function confirmarBaixa(entregaId, tipoBaixa, dataBaixa, motivo) {
     if (error) throw error;
 
     await registrarSentinela(tipoBaixa === 'devolucao' ? 'devolucao_uniforme_epi' : 'descarte_uniforme_epi',
-        (tipoBaixa === 'devolucao' ? 'Devolução' : 'Descarte') + ' de item de ' + profissionalSelecionado.nome_completo + (motivo ? ' — ' + motivo : ''));
+        (tipoBaixa === 'devolucao' ? 'Devolução (' + (condicaoDevolucao === 'usado' ? 'usado' : 'sem uso') + ')' : 'Descarte') + ' de item de ' + profissionalSelecionado.nome_completo + (motivo ? ' — ' + motivo : ''));
 }
 
 // ---------------------------------------------------------------
