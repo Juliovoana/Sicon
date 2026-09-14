@@ -471,11 +471,13 @@ const AJUDA_UNIFORMES_EPI = {
                 dedicado</strong> "Uniformes / EPI" (um botão aparece automaticamente enquanto
                 ele não existir).</li>
                 <li>Cada item cadastrado aqui cria também um produto real no Estoque, ligado a
-                esse almoxarifado -- é lá que fica o saldo/preço médio. Ao criar, dá pra
-                informar o <strong>estoque inicial</strong> (se já tiver peças dessa em mãos).
-                Depois de criado, reabastecer é sempre pelo botão <strong>"+ Entrada"</strong> na
+                esse almoxarifado -- é lá que fica o saldo/preço médio. O campo
+                <strong>estoque inicial</strong> pode ser editado a qualquer momento (útil pra
+                corrigir um valor digitado errado, por exemplo) -- o saldo é recalculado
+                automaticamente a partir dele. Pra reabastecer no dia a dia (compra nova,
+                reposição), prefira sempre o botão <strong>"+ Entrada"</strong> na
                 lista -- registra data, quantidade e valor, e fica no histórico de
-                movimentações do Estoque (compra nova, reposição etc.). O próprio modal de
+                movimentações do Estoque. O próprio modal de
                 entrada lista as entradas já lançadas desse item, com <strong>Editar</strong> e
                 <strong>Excluir</strong> -- qualquer uma das duas ações recalcula o saldo/preço
                 médio automaticamente a partir do histórico (não precisa acertar manualmente).
@@ -730,7 +732,7 @@ async function carregarAlmoxarifados() {
 
 async function carregarCatalogo() {
     const { data, error } = await sb.from('staff_uniformes_epi_catalogo')
-        .select('*, estoque_produtos(id, nome, estoque, valor, almoxarifado_padrao_id)')
+        .select('*, estoque_produtos(id, nome, estoque, estoque_inicial, valor, almoxarifado_padrao_id)')
         .eq('unidade_negocio_id', meuPerfil.unidadeId)
         .order('nome');
     catalogo = error ? [] : (data || []);
@@ -1171,22 +1173,18 @@ function abrirFormCatalogo(item) {
     document.getElementById('campoAtivoCatalogo').checked = item ? item.ativo : true;
     if (item && item.estoque_produtos?.almoxarifado_padrao_id) document.getElementById('campoAlmoxarifadoCatalogo').value = item.estoque_produtos.almoxarifado_padrao_id;
 
-    // Estoque inicial só faz sentido ao CRIAR o item (sem movimentação
-    // ainda). Depois de criado, reabastecer é sempre via "Registrar
-    // entrada" (fica no histórico de movimentações, com valor/data/nota
-    // -- editar estoque_inicial de um item que já teve entrega/devolução
-    // no meio bagunçaria o reprocessamento).
-    const blocoInicial = document.getElementById('blocoEstoqueInicialCatalogo');
-    const textoSaldo = document.getElementById('textoSaldoAtualCatalogo');
-    if (item) {
-        blocoInicial.classList.add('hidden');
-        textoSaldo.classList.remove('hidden');
-        textoSaldo.textContent = 'Saldo atual: ' + (item.estoque_produtos?.estoque ?? 0) + ' — pra adicionar mais, use "Registrar entrada" na lista.';
-    } else {
-        blocoInicial.classList.remove('hidden');
-        textoSaldo.classList.add('hidden');
-        document.getElementById('campoEstoqueInicialCatalogo').value = 0;
-    }
+    // Estoque inicial é editável a qualquer momento (igual o próprio
+    // Estoque já permite no cadastro de produto) -- o reprocessamento
+    // (fn_estoque_reprocessar_movimentos, chamado logo depois de salvar)
+    // recalcula "estoque" do zero a partir de estoque_inicial + todo o
+    // histórico de movimentações, então corrigir um valor digitado errado
+    // aqui é seguro. Pra reabastecer no dia a dia (compra nova, etc.),
+    // continua sendo melhor usar "Registrar entrada" -- fica registrado
+    // no histórico com data/valor/fornecedor, em vez de só mudar o
+    // número base.
+    document.getElementById('campoEstoqueInicialCatalogo').value = item ? (item.estoque_produtos?.estoque_inicial ?? 0) : 0;
+    document.getElementById('textoSaldoAtualCatalogo').classList.toggle('hidden', !item);
+    if (item) document.getElementById('textoSaldoAtualCatalogo').textContent = 'Saldo atual: ' + (item.estoque_produtos?.estoque ?? 0) + ' — pra reabastecer no dia a dia, prefira "Registrar entrada" na lista (fica no histórico).';
 
     document.getElementById('statusCatalogo').textContent = '';
     document.getElementById('modal-catalogo-item').classList.add('aberto');
@@ -1210,14 +1208,18 @@ document.getElementById('btnSalvarCatalogo').addEventListener('click', async () 
     try {
         const itemAtual = catalogoEmEdicaoId ? catalogo.find(c => c.id === catalogoEmEdicaoId) : null;
         const valor = Number(document.getElementById('campoValorCatalogo').value) || 0;
-        // Estoque inicial só é lido/gravado na criação -- ver comentário
-        // em abrirFormCatalogo(). Editando, omite os dois campos do
-        // payload pra não sobrescrever o saldo já movimentado.
-        const estoqueInicial = itemAtual ? undefined : (Number(document.getElementById('campoEstoqueInicialCatalogo').value) || 0);
+        // Estoque inicial é editável sempre -- ver comentário em
+        // abrirFormCatalogo(). "estoque" (saldo atual computado) só é
+        // enviado na CRIAÇÃO, igual ao estoque_inicial (sem movimento
+        // nenhum ainda os dois são o mesmo número); editando, não
+        // sobrescreve "estoque" diretamente -- o reprocessamento logo
+        // abaixo é quem recalcula esse valor a partir do novo
+        // estoque_inicial + todo o histórico de movimentações.
+        const estoqueInicial = Number(document.getElementById('campoEstoqueInicialCatalogo').value) || 0;
 
         const produtoPayload = {
             nome, un: 'UN', valor, grupo: 1,
-            estoque_inicial: estoqueInicial, estoque: estoqueInicial,
+            estoque_inicial: estoqueInicial, estoque: itemAtual ? undefined : estoqueInicial,
             almoxarifado_padrao_id: almoxarifadoId,
             unidade_negocio_id: meuPerfil.unidadeId
         };
