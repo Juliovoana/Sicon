@@ -651,29 +651,55 @@
   }
 
   function bloquearAcessoTotal(mensagem){
-    document.body.innerHTML = `
-      <div style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; font-family:Arial,Helvetica,sans-serif; background:#F6F7F9;">
-        <div style="background:#fff; border-radius:16px; padding:36px; max-width:440px; text-align:center; box-shadow:0 8px 28px rgba(20,30,50,.1);">
-          <div style="font-size:2.5rem; margin-bottom:12px;">🔒</div>
-          <h2 style="color:#C0392B; margin-bottom:12px; font-size:1.2rem;">Acesso bloqueado</h2>
-          <p style="color:#333; font-size:.92rem; line-height:1.5;">${mensagem}</p>
+    if(document.getElementById('overlayBloqueioLicenca')) return; // já mostrado, não duplica
+    // detecta se esse app tem algum jeito de trocar de unidade (nome do
+    // botão varia entre os apps -- reaproveita o que já existir, sem
+    // precisar reconstruir a tela de seleção do zero
+    const botaoTrocar = document.getElementById('btnTrocarAgencia') || document.getElementById('btnTrocarUnidade') || document.getElementById('btn-trocar-unidade');
+    const temTrocar = botaoTrocar && botaoTrocar.style.display !== 'none';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'overlayBloqueioLicenca';
+    overlay.style.cssText = 'position:fixed; inset:0; z-index:999999; background:#F6F7F9; display:flex; align-items:center; justify-content:center; padding:20px; font-family:Arial,Helvetica,sans-serif;';
+    overlay.innerHTML = `
+      <div style="background:#fff; border-radius:16px; padding:36px; max-width:440px; text-align:center; box-shadow:0 8px 28px rgba(20,30,50,.1);">
+        <div style="font-size:2.5rem; margin-bottom:12px;">🔒</div>
+        <h2 style="color:#C0392B; margin-bottom:12px; font-size:1.2rem;">Acesso bloqueado</h2>
+        <p style="color:#333; font-size:.92rem; line-height:1.5; margin-bottom:20px;">${mensagem}</p>
+        <div style="display:flex; gap:10px; flex-direction:column;">
+          ${temTrocar ? '<button id="btnTrocarUnidadeBloqueio" style="padding:10px; border-radius:8px; border:1.5px solid #1B4332; background:none; color:#1B4332; font-weight:600; cursor:pointer; font-family:inherit;">🔄 Escolher outra unidade</button>' : ''}
+          <button id="btnSairBloqueio" style="padding:10px; border-radius:8px; border:none; background:#1B4332; color:#fff; font-weight:600; cursor:pointer; font-family:inherit;">Sair</button>
         </div>
       </div>`;
+    document.body.appendChild(overlay);
+
+    if(temTrocar){
+      document.getElementById('btnTrocarUnidadeBloqueio').addEventListener('click', () => {
+        overlay.remove();
+        botaoTrocar.click();
+      });
+    }
+    document.getElementById('btnSairBloqueio').addEventListener('click', async () => {
+      await sb.auth.signOut();
+      location.reload();
+    });
   }
 
   async function verificarPendenciaLicenca(unidadeIdAlvo, moduloChave){
     try{
       const { data, error } = await sb.rpc('fn_verificar_pendencia_licenca', { p_unidade_negocio_id: unidadeIdAlvo, p_modulo_chave: moduloChave });
-      if(error || !data) return;
-      if(data.bloqueia) bloquearAcessoTotal(data.mensagem);
-      else mostrarAvisoLicenca(data.mensagem);
+      if(error || !data) return false;
+      if(data.bloqueia){ bloquearAcessoTotal(data.mensagem); return true; }
+      mostrarAvisoLicenca(data.mensagem);
+      return false;
     } catch(erro){
       console.warn('Não consegui checar pendência de licença:', erro.message);
+      return false;
     }
   }
 
   async function carregarTudo(){
-    await verificarPendenciaLicenca(unidadeId, 'compras');
+    if(await verificarPendenciaLicenca(unidadeId, 'compras')) return;
     await Promise.all([carregarSolicitacoes(), carregarAprovadores()]);
     if(idSolicitacaoDireta && !jaAbriuSolicitacaoDireta){
       const existe = todasSolicitacoes.find(s => s.id === idSolicitacaoDireta);
