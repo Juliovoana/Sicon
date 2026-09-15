@@ -529,6 +529,18 @@ function parseNumeroPtBr(str) {
     if (str == null) return NaN;
     return Number(String(str).trim().replace(',', '.'));
 }
+// lembra o último profissional selecionado numa visita (por unidade,
+// só neste navegador) -- pré-preenche a próxima "Nova visita" pra não
+// precisar buscar de novo quando é o mesmo técnico atendendo em
+// sequência; não afeta edição de visita já existente, que sempre
+// mostra o profissional que de fato está gravado nela.
+function chaveUltimoProfissional() { return 'prontuario_ultimo_profissional_' + meuPerfil.unidadeId; }
+function salvarUltimoProfissional(profissionalId) {
+    try { localStorage.setItem(chaveUltimoProfissional(), profissionalId); } catch (e) { /* localStorage indisponível (modo privado etc.) -- ignora */ }
+}
+function obterUltimoProfissional() {
+    try { return localStorage.getItem(chaveUltimoProfissional()); } catch (e) { return null; }
+}
 function slugTexto(texto) {
     const semAcento = String(texto || '').toLowerCase().split('').map(c => MAPA_ACENTOS_SLUG[c] || c).join('');
     return semAcento.replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'arquivo';
@@ -1424,10 +1436,19 @@ async function abrirFormVisita(visita) {
     document.getElementById('statusVisita').textContent = '';
     document.getElementById('btnSalvarVisita').textContent = visita ? 'Salvar alterações' : 'Registrar visita';
 
-    const profissionalDaVisita = visita && visita.profissional_id ? profissionaisStaff.find(p => p.id === visita.profissional_id) : null;
-    profissionalVisitaSelecionado = profissionalDaVisita || null;
-    document.getElementById('profissionalVisitaIdSelecionado').value = profissionalDaVisita ? profissionalDaVisita.id : '';
-    document.getElementById('campoBuscaProfissionalVisita').value = profissionalDaVisita ? profissionalDaVisita.nome_completo : (visita ? (visita.tecnico_nome || '') : '');
+    // edição sempre mostra o profissional gravado na visita; visita
+    // nova tenta lembrar o último usado (mesmo técnico atendendo em
+    // sequência não precisa buscar de novo toda hora)
+    let profissionalPreSelecionado = null;
+    if (visita && visita.profissional_id) {
+        profissionalPreSelecionado = profissionaisStaff.find(p => p.id === visita.profissional_id) || null;
+    } else if (!visita) {
+        const ultimoId = obterUltimoProfissional();
+        if (ultimoId) profissionalPreSelecionado = profissionaisStaff.find(p => p.id === ultimoId) || null;
+    }
+    profissionalVisitaSelecionado = profissionalPreSelecionado;
+    document.getElementById('profissionalVisitaIdSelecionado').value = profissionalPreSelecionado ? profissionalPreSelecionado.id : '';
+    document.getElementById('campoBuscaProfissionalVisita').value = profissionalPreSelecionado ? profissionalPreSelecionado.nome_completo : (visita ? (visita.tecnico_nome || '') : '');
 
     let itensSalvos = [];
     if (visita) {
@@ -1708,6 +1729,7 @@ document.getElementById('btnSalvarVisita').addEventListener('click', async () =>
         }
 
         await registrarSentinela(editando ? 'visita_editada' : 'visita_registrada', (editando ? 'Visita editada de ' : 'Visita de ') + pacienteSelecionado.nome + ' em ' + formatarDataSemFuso(data) + ' · profissional: ' + profissionalVisitaSelecionado.nome_completo);
+        salvarUltimoProfissional(profissionalVisitaSelecionado.id);
         document.getElementById('modal-visita').classList.remove('aberto');
         await carregarVisitas(pacienteSelecionado.id);
     } catch (e) {
