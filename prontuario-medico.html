@@ -111,6 +111,19 @@
     .tipo-item-btn { background: #EEF0F1; color: var(--muted); }
     .tipo-item-btn.ativa { background: var(--brand); color: white; }
 
+    /* ---- relatório cruzado: item de medição em linha, data em coluna ---- */
+    .tabela-cruzada-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+    .tabela-cruzada { border-collapse: collapse; width: 100%; font-size: 0.82rem; white-space: nowrap; }
+    .tabela-cruzada th, .tabela-cruzada td { padding: 8px 12px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); text-align: center; }
+    .tabela-cruzada thead th { background: var(--brand-soft); color: var(--brand); font-weight: 700; position: sticky; top: 0; }
+    .tabela-cruzada .col-grupo, .tabela-cruzada .col-item { text-align: left; position: sticky; background: var(--surface); font-weight: 600; }
+    .tabela-cruzada .col-grupo { left: 0; min-width: 130px; color: var(--muted); font-size: 0.76rem; font-weight: 500; }
+    .tabela-cruzada .col-item { left: 130px; min-width: 170px; }
+    .tabela-cruzada thead .col-grupo, .tabela-cruzada thead .col-item { background: var(--brand-soft); z-index: 2; }
+    .tabela-cruzada tbody .col-grupo, .tabela-cruzada tbody .col-item { z-index: 1; }
+    .tabela-cruzada td.fora-referencia { color: var(--danger); font-weight: 700; }
+    .tabela-cruzada td.vazio-celula { color: var(--muted); }
+
     .pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
     .pill-ok { background: var(--success-soft); color: var(--brand-2); }
     .pill-fora { background: var(--danger-soft); color: var(--danger); }
@@ -303,6 +316,7 @@
                     <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
                         <h2 style="margin:0;">Histórico de visitas</h2>
                         <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button type="button" class="btn btn-cinza" id="btnRelatorioCruzado" style="width:auto; white-space:nowrap;">📊 Relatório cruzado</button>
                             <button type="button" class="btn btn-cinza" id="btnGerarPdfHistorico" style="width:auto; white-space:nowrap;">🖨️ Imprimir / Gerar PDF</button>
                         </div>
                     </div>
@@ -475,6 +489,26 @@
 </div>
 
 <!-- ==================== MODAL: AÇÕES DO PDF (padrão da plataforma) ==================== -->
+<!-- ==================== MODAL: RELATÓRIO CRUZADO (itens x datas) ==================== -->
+<div id="modal-relatorio-cruzado" class="modal-overlay">
+    <div class="modal-caixa larga" style="max-width:96vw; width:1100px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+            <div>
+                <h3 style="margin:0;">Relatório cruzado</h3>
+                <p class="subtitulo" id="relatorioCruzadoPacienteTexto" style="margin-top:2px;"></p>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" class="btn btn-cinza" id="btnGerarPdfRelatorioCruzado" style="width:auto; white-space:nowrap;">🖨️ Gerar PDF</button>
+                <button type="button" class="btn btn-cinza" id="btnFecharRelatorioCruzado" style="width:auto;">✕ Fechar</button>
+            </div>
+        </div>
+        <div class="tabela-cruzada-wrap" style="margin-top:14px;">
+            <table class="tabela-cruzada" id="tabelaRelatorioCruzado"></table>
+        </div>
+        <div id="vazioRelatorioCruzado" class="vazio hidden">Nenhum item registrado nas visitas desse paciente ainda.</div>
+    </div>
+</div>
+
 <div id="modal-acoes-pdf" class="modal-overlay">
     <div class="modal-caixa">
         <h3 id="tituloModalAcoesPdf">PDF gerado</h3>
@@ -574,6 +608,10 @@ const AJUDA_PRONTUARIO = {
                 unidade -- é o dia a dia do técnico em campo.</li>
                 <li>Alergias/comorbidades aparecem em destaque (vermelho) na ficha, pra
                 qualquer técnico ver antes de atender.</li>
+                <li>Na aba <strong>Histórico</strong>, o botão <strong>"📊 Relatório
+                cruzado"</strong> mostra cada item de medição numa linha e cada data de
+                visita numa coluna -- bom pra acompanhar a evolução de um valor (ex: peso,
+                pressão) ao longo do tempo de uma vez só. Também dá pra gerar em PDF.</li>
             </ul>
         ` },
         { id: 'visita', titulo: 'Registrar visita', corpo: `
@@ -1967,6 +2005,147 @@ document.getElementById('btnGerarPdfHistorico').addEventListener('click', async 
         alert('Erro ao gerar PDF: ' + (e.message || e));
     } finally {
         btn.disabled = false; btn.textContent = '🖨️ Imprimir / Gerar PDF';
+    }
+});
+
+// ---------------------------------------------------------------
+// RELATÓRIO CRUZADO -- item de medição em linha, data da visita em
+// coluna, valor na célula correspondente (visão de tendência do
+// paciente ao longo do tempo, tipo planilha de acompanhamento)
+// ---------------------------------------------------------------
+let dadosRelatorioCruzado = null; // guarda o último cálculo pra reaproveitar no PDF sem reconsultar
+
+// ordem do item DENTRO do grupo, buscando no cadastro atual de Itens
+// de Modelo (mesmo item/grupo, comparação sem diferenciar maiúsculas)
+// -- item que já foi excluído do cadastro mas tem histórico antigo
+// cai no fim do grupo (ordem alta), não some do relatório
+function ordemDoItemNoModelo(grupo, nomeItem) {
+    const it = itensModelo.find(x => x.grupo.trim().toLowerCase() === grupo.trim().toLowerCase() && x.item.trim().toLowerCase() === nomeItem.trim().toLowerCase());
+    return it ? it.ordem : 999999;
+}
+
+async function montarDadosRelatorioCruzado() {
+    if (!visitasPacienteAtual.length) return null;
+    const { data: itens, error } = await sb.from('prontuario_visitas_itens')
+        .select('*').in('visita_id', visitasPacienteAtual.map(v => v.id));
+    if (error) throw error;
+    if (!itens || !itens.length) return { colunas: [], linhas: [], mapaValores: {} };
+
+    // colunas = visitas em ordem cronológica (mais antiga primeiro,
+    // leitura de tendência da esquerda pra direita); mostra hora
+    // também só se houver mais de uma visita no mesmo dia
+    const visitasOrdenadas = [...visitasPacienteAtual].sort((a, b) => (a.data + (a.hora || '')).localeCompare(b.data + (b.hora || '')));
+    const contagemPorData = {};
+    visitasOrdenadas.forEach(v => { contagemPorData[v.data] = (contagemPorData[v.data] || 0) + 1; });
+    const colunas = visitasOrdenadas.map(v => ({
+        visitaId: v.id,
+        rotulo: formatarDataSemFuso(v.data) + (contagemPorData[v.data] > 1 ? ' ' + (v.hora || '').slice(0, 5) : '')
+    }));
+
+    // linhas = todo par (grupo, item) que já apareceu em alguma visita
+    // desse paciente, ordenado pelo cadastro atual de grupos/itens
+    const chaves = new Map();
+    itens.forEach(it => {
+        const chave = it.grupo + '||' + it.nome_item;
+        if (!chaves.has(chave)) chaves.set(chave, { grupo: it.grupo, item: it.nome_item });
+    });
+    const linhas = [...chaves.values()].sort((a, b) => {
+        const diffGrupo = ordemDoGrupo(a.grupo) - ordemDoGrupo(b.grupo) || a.grupo.localeCompare(b.grupo, 'pt-BR');
+        if (diffGrupo !== 0) return diffGrupo;
+        return ordemDoItemNoModelo(a.grupo, a.item) - ordemDoItemNoModelo(b.grupo, b.item) || a.item.localeCompare(b.item, 'pt-BR');
+    });
+
+    const mapaValores = {}; // "grupo||item||visitaId" -> linha de prontuario_visitas_itens
+    itens.forEach(it => { mapaValores[it.grupo + '||' + it.nome_item + '||' + it.visita_id] = it; });
+
+    return { colunas, linhas, mapaValores };
+}
+
+function renderizarTabelaRelatorioCruzado(dados) {
+    const tabela = document.getElementById('tabelaRelatorioCruzado');
+    const vazio = document.getElementById('vazioRelatorioCruzado');
+    if (!dados || !dados.linhas.length) { tabela.innerHTML = ''; vazio.classList.remove('hidden'); return; }
+    vazio.classList.add('hidden');
+
+    tabela.innerHTML = `
+        <thead><tr>
+            <th class="col-grupo">Grupo</th>
+            <th class="col-item">Item</th>
+            ${dados.colunas.map(c => `<th>${escapeHtml(c.rotulo)}</th>`).join('')}
+        </tr></thead>
+        <tbody>${dados.linhas.map(l => `
+            <tr>
+                <td class="col-grupo">${escapeHtml(l.grupo)}</td>
+                <td class="col-item">${escapeHtml(l.item)}</td>
+                ${dados.colunas.map(c => {
+                    const cel = dados.mapaValores[l.grupo + '||' + l.item + '||' + c.visitaId];
+                    return cel
+                        ? `<td class="${cel.fora_da_referencia ? 'fora-referencia' : ''}">${escapeHtml(cel.valor_texto || '—')}</td>`
+                        : '<td class="vazio-celula">—</td>';
+                }).join('')}
+            </tr>
+        `).join('')}</tbody>
+    `;
+}
+
+document.getElementById('btnRelatorioCruzado').addEventListener('click', async () => {
+    if (!pacienteSelecionado) return;
+    document.getElementById('relatorioCruzadoPacienteTexto').textContent = pacienteSelecionado.nome;
+    document.getElementById('tabelaRelatorioCruzado').innerHTML = '';
+    document.getElementById('vazioRelatorioCruzado').classList.add('hidden');
+    document.getElementById('modal-relatorio-cruzado').classList.add('aberto');
+    try {
+        dadosRelatorioCruzado = await montarDadosRelatorioCruzado();
+        renderizarTabelaRelatorioCruzado(dadosRelatorioCruzado);
+    } catch (e) {
+        alert('Erro ao montar relatório: ' + (e.message || e));
+    }
+});
+document.getElementById('btnFecharRelatorioCruzado').addEventListener('click', () => {
+    document.getElementById('modal-relatorio-cruzado').classList.remove('aberto');
+});
+
+document.getElementById('btnGerarPdfRelatorioCruzado').addEventListener('click', async () => {
+    if (!dadosRelatorioCruzado || !dadosRelatorioCruzado.linhas.length) { alert('Nada pra gerar ainda.'); return; }
+    const btn = document.getElementById('btnGerarPdfRelatorioCruzado');
+    btn.disabled = true; btn.textContent = 'Gerando...';
+    try {
+        await carregarJsPdf();
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape' });
+        let y = await montarCabecalhoPdf(doc, 'Relatório cruzado — ' + pacienteSelecionado.nome);
+
+        const head = [['Grupo', 'Item', ...dadosRelatorioCruzado.colunas.map(c => c.rotulo)]];
+        const body = dadosRelatorioCruzado.linhas.map(l => [
+            l.grupo, l.item,
+            ...dadosRelatorioCruzado.colunas.map(c => {
+                const cel = dadosRelatorioCruzado.mapaValores[l.grupo + '||' + l.item + '||' + c.visitaId];
+                return cel ? (cel.valor_texto || '—') : '—';
+            })
+        ]);
+
+        doc.autoTable({
+            startY: y,
+            head, body,
+            styles: { fontSize: 7 },
+            headStyles: { fillColor: [45, 90, 142] },
+            margin: { left: 10, right: 10 },
+            didParseCell: (dadosCelula) => {
+                if (dadosCelula.section === 'body' && dadosCelula.column.index >= 2) {
+                    const linha = dadosRelatorioCruzado.linhas[dadosCelula.row.index];
+                    const coluna = dadosRelatorioCruzado.colunas[dadosCelula.column.index - 2];
+                    const cel = dadosRelatorioCruzado.mapaValores[linha.grupo + '||' + linha.item + '||' + coluna.visitaId];
+                    if (cel && cel.fora_da_referencia) dadosCelula.cell.styles.textColor = [180, 40, 40];
+                }
+            }
+        });
+
+        const nomeArquivo = 'relatorio-cruzado-' + slugTexto(pacienteSelecionado.nome) + '-' + new Date().toISOString().slice(0, 10) + '.pdf';
+        mostrarPopupAcoesPdf('Relatório cruzado — ' + pacienteSelecionado.nome, doc.output('blob'), nomeArquivo);
+    } catch (e) {
+        alert('Erro ao gerar PDF: ' + (e.message || e));
+    } finally {
+        btn.disabled = false; btn.textContent = '🖨️ Gerar PDF';
     }
 });
 
