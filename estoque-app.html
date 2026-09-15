@@ -1090,19 +1090,22 @@
                 <div class="campo"><label>Responsável</label><input type="text" id="nfeResponsavel"></div>
                 <div class="campo"><label>Tag (opcional)</label><input type="text" id="nfeTag"></div>
                 <div class="campo" style="position:relative;">
-                    <label>Evento (opcional)</label>
+                    <label>Evento</label>
                     <input type="text" id="nfeEventoBusca" placeholder="Buscar evento..." autocomplete="off">
                     <div id="nfeEventoResultados" class="dropdown-busca-evento"></div>
                     <p class="subtitulo" id="nfeEventoSelecionado" style="margin-top:4px;"></p>
                 </div>
             </div>
-            <div class="campo" style="margin-top:8px;"><label>Observação</label><input type="text" id="nfeObservacao"></div>
+            <div class="campo" style="margin-top:8px;">
+                <label>Observação</label>
+                <input type="text" id="nfeObservacao" list="listaObservacoesGenericas">
+            </div>
 
-            <p class="subtitulo" style="margin-top:14px; margin-bottom:4px;">Destinação (só é usada se escolher "Baixa Direta" abaixo):</p>
+            <p class="subtitulo" style="margin-top:14px; margin-bottom:4px;">Classificação da nota — Setor e Plano de Contas obrigatórios (gravados na nota, usados no rateio financeiro); Subsetor/Veículo/KM só se aplicam ao escolher "Baixa Direta":</p>
             <div class="grade col4">
                 <div class="campo"><label>Setor</label><select id="nfeSetor"><option value="">-</option></select></div>
-                <div class="campo"><label>Subsetor</label><select id="nfeSubsetor"><option value="">-</option></select></div>
-                <div class="campo"><label>Veículo / Equipamento</label><select id="nfeVeiculo"><option value="">-</option></select></div>
+                <div class="campo"><label>Subsetor (opcional)</label><select id="nfeSubsetor"><option value="">-</option></select></div>
+                <div class="campo"><label>Veículo / Equipamento (opcional)</label><select id="nfeVeiculo"><option value="">-</option></select></div>
                 <div class="campo" style="position:relative;">
                     <label>Plano de Contas</label>
                     <input type="text" id="nfePlanoContasBusca" placeholder="Buscar código ou descrição..." autocomplete="off">
@@ -1343,7 +1346,21 @@
             <div class="campo" style="align-self:end;"><span class="subtitulo" id="notaValorTotalDica"></span></div>
         </div>
         <p class="subtitulo" id="statusRateioNotaManual" style="margin-top:4px;"></p>
-        <div class="campo" style="margin-top:10px;"><label>Observações</label><input type="text" id="notaObservacoes"></div>
+        <div class="campo" style="margin-top:10px;">
+            <label>Observações</label>
+            <input type="text" id="notaObservacoes" list="listaObservacoesGenericas">
+            <!-- dicas genéricas reutilizadas em todo campo de observação de
+                 entrada (nota manual e importação de XML) -- datalist só
+                 sugere ao digitar/clicar na setinha, não trava o texto livre -->
+            <datalist id="listaObservacoesGenericas">
+                <option value="Compra de material de escritório">
+                <option value="Compra de material para almoxarifado">
+                <option value="Compra de material de limpeza">
+                <option value="Compra de EPI">
+                <option value="Compra de peças/manutenção">
+                <option value="Reposição de estoque">
+            </datalist>
+        </div>
 
         <div style="margin-top:14px; text-align:right;">
             <button class="btn btn-verde" id="btnSalvarCabecalhoNota">💾 Salvar cabeçalho</button>
@@ -2396,7 +2413,10 @@ async function chamarPost(acao, d) {
             informacoes_fiscais: n.informacoesFiscais || null,
             xml_original: n.xmlOriginal || null,
             responsavel: n.responsavel || null,
-            observacoes: n.observacoes || null
+            observacoes: n.observacoes || null,
+            setor_id: n.setorId || null,
+            evento: n.evento || null,
+            plano_contas_id: n.planoContasId || null
         };
         // "id" é generated always as identity — não pode aparecer num INSERT
         // (nem por baixo de um upsert), por isso aqui é insert OU update,
@@ -3836,8 +3856,10 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
         const mapeamentosFornecedor = nfe.emitCnpj ? await chamarGet('listarMapeamentosFornecedor', { cnpjFornecedor: nfe.emitCnpj }) : [];
         const mapaCodigoParaProdutoId = new Map((mapeamentosFornecedor || []).map(m => [m.codigo_fornecedor, m.produto_id]));
 
-        // popula os selects de destinação (setor/subsetor/veículo/plano de
-        // contas), usados só se a pessoa escolher "Baixa Direta" depois
+        // popula os selects de classificação (setor/subsetor/veículo/plano
+        // de contas) -- setor e plano de contas agora são gravados na
+        // própria nota (obrigatórios em qualquer registro); subsetor/
+        // veículo/km continuam só fazendo sentido pra "Baixa Direta"
         catalogosBaixa = await chamarGet('listarCatalogosBaixa');
         const optSetorNfe = '<option value="">-</option>' + catalogosBaixa.setores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
         const optSubsetorNfe = '<option value="">-</option>' + catalogosBaixa.subsetores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
@@ -3848,9 +3870,36 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
         document.getElementById('nfeAlmoxarifadoPadrao').innerHTML =
             '<option value="">-- selecione --</option>' + (catalogosBaixa.almoxarifados || []).map(a => `<option value="${a.id}">${escapeHtml(a.nome)}</option>`).join('');
         document.getElementById('nfeAlmoxarifadoPadrao').value = almoxarifadoTrabalho || '';
+
+        // lembra a última classificação usada nessa unidade (setor/evento/
+        // plano de contas), pra não escolher de novo a cada nota -- só
+        // aplica se o valor lembrado ainda existir no catálogo atual
+        const ultimaClassificacao = obterUltimaClassificacaoNfe();
+        const setorAindaExiste = ultimaClassificacao.setorId && catalogosBaixa.setores.some(s => String(s.id) === ultimaClassificacao.setorId);
+        document.getElementById('nfeSetor').value = setorAindaExiste ? ultimaClassificacao.setorId : '';
+        document.getElementById('nfeSetor').dispatchEvent(new Event('change'));
+
+        eventoSelecionadoNfe = ultimaClassificacao.evento ? preencherEventoSelecionadoUI('nfeEventoSelecionado', ultimaClassificacao.evento) : null;
+        if (eventoSelecionadoNfe) {
+            document.getElementById('nfeEventoSelecionado').querySelector('[data-limpar-evento]').addEventListener('click', (e) => {
+                e.preventDefault();
+                eventoSelecionadoNfe = null;
+                document.getElementById('nfeEventoSelecionado').innerHTML = '';
+            });
+        }
+
         document.getElementById('nfePlanoContasBusca').value = '';
-        document.getElementById('nfePlanoContasSelecionado').innerHTML = '';
-        planoContasSelecionadoNfe = null;
+        const planoContasAindaExiste = ultimaClassificacao.planoContasId && catalogosBaixa.planoContas.some(p => String(p.id) === ultimaClassificacao.planoContasId);
+        planoContasSelecionadoNfe = planoContasAindaExiste ? preencherPlanoContasSelecionadoUI('nfePlanoContasSelecionado', ultimaClassificacao.planoContasId) : null;
+        if (planoContasSelecionadoNfe) {
+            document.getElementById('nfePlanoContasSelecionado').querySelector('[data-limpar-planocontas]').addEventListener('click', (e) => {
+                e.preventDefault();
+                planoContasSelecionadoNfe = null;
+                document.getElementById('nfePlanoContasSelecionado').innerHTML = '';
+            });
+        } else {
+            document.getElementById('nfePlanoContasSelecionado').innerHTML = '';
+        }
 
         nfeItensParseados = nfe.itens.map(it => {
             const produtoIdMapeado = mapaCodigoParaProdutoId.get(it.cProd);
@@ -4125,29 +4174,55 @@ async function processarImportacaoNFe(tipo) {
     if (!responsavel) {
         statusEl.className = 'status-msg erro';
         statusEl.textContent = 'Informe o responsável.';
+        document.getElementById('nfeResponsavel').focus();
         return;
     }
     const tag = document.getElementById('nfeTag').value.trim();
     const evento = eventoSelecionadoNfe ? eventoSelecionadoNfe.codigo : '';
+    if (!evento) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Informe o evento.';
+        document.getElementById('nfeEventoBusca').focus();
+        return;
+    }
     const observacaoBase = document.getElementById('nfeObservacao').value.trim();
     if (!observacaoBase) {
         statusEl.className = 'status-msg erro';
         statusEl.textContent = 'Informe a observação.';
+        document.getElementById('nfeObservacao').focus();
         return;
     }
 
-    // destinação só faz sentido pra baixa direta (produto saindo) — pra
-    // entrada em estoque, fica tudo null mesmo que os campos estejam
-    // preenchidos na tela
-    const destinacao = tipo === 'saida' ? {
-        setorId: document.getElementById('nfeSetor').value || null,
-        subsetorId: document.getElementById('nfeSubsetor').value || null,
-        veiculoId: document.getElementById('nfeVeiculo').value || null,
-        planoContasId: planoContasSelecionadoNfe ? planoContasSelecionadoNfe.id : null,
-        km: document.getElementById('nfeKm').value || null,
-        kmProximaTroca: document.getElementById('nfeKmProximaTroca').value || null,
-        dtProximaTroca: document.getElementById('nfeDataProximaTroca').value || null
-    } : {};
+    // setor e plano de contas ficam gravados na NOTA (não só na baixa
+    // direta) -- vão ser usados pro rateio financeiro do módulo que
+    // ainda vamos construir, por isso são obrigatórios em qualquer
+    // registro (entrada ou baixa). Subsetor/Veículo/KM continuam só
+    // fazendo sentido pra baixa direta (produto saindo de fato)
+    const setorId = document.getElementById('nfeSetor').value || null;
+    if (!setorId) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Informe o setor.';
+        document.getElementById('nfeSetor').focus();
+        return;
+    }
+    if (!planoContasSelecionadoNfe) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Informe o plano de contas.';
+        document.getElementById('nfePlanoContasBusca').focus();
+        return;
+    }
+    const planoContasId = planoContasSelecionadoNfe.id;
+
+    const destinacao = {
+        setorId, planoContasId,
+        ...(tipo === 'saida' ? {
+            subsetorId: document.getElementById('nfeSubsetor').value || null,
+            veiculoId: document.getElementById('nfeVeiculo').value || null,
+            km: document.getElementById('nfeKm').value || null,
+            kmProximaTroca: document.getElementById('nfeKmProximaTroca').value || null,
+            dtProximaTroca: document.getElementById('nfeDataProximaTroca').value || null
+        } : {})
+    };
 
     if (tipo === 'saida' && nfeItensParseados.some(i => i.criarNovo)) {
         if (!confirm('Alguns itens estão marcados como "novo produto" e serão criados com estoque zerado antes da baixa (o estoque pode ficar negativo). Deseja continuar?')) return;
@@ -4190,7 +4265,8 @@ async function processarImportacaoNFe(tipo) {
                     informacoesFiscais: nfeDadosNota.infCpl,
                     xmlOriginal: nfeDadosNota.xmlOriginal || null,
                     responsavel,
-                    observacoes: observacaoBase || null
+                    observacoes: observacaoBase || null,
+                    setorId, evento, planoContasId
                 }
             });
             estoqueNotaId = notaCriada.id;
@@ -4317,6 +4393,7 @@ async function processarImportacaoNFe(tipo) {
             });
         }
 
+        salvarUltimaClassificacaoNfe(setorId, evento, planoContasId);
         await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
         atualizarTagContagem();
         statusEl.className = 'status-msg sucesso';
@@ -8186,9 +8263,9 @@ document.getElementById('btnSalvarCabecalhoNota').addEventListener('click', asyn
     const nome = document.getElementById('notaFornecedorNome').value.trim();
     const dataEntrada = document.getElementById('notaDataEntrada').value;
     const observacoesNota = document.getElementById('notaObservacoes').value.trim();
-    if (!nome) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o nome do fornecedor.'; return; }
-    if (!dataEntrada) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe a data de entrada.'; return; }
-    if (!observacoesNota) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe a observação.'; return; }
+    if (!nome) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o nome do fornecedor.'; document.getElementById('notaFornecedorNome').focus(); return; }
+    if (!dataEntrada) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe a data de entrada.'; document.getElementById('notaDataEntrada').focus(); return; }
+    if (!observacoesNota) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe a observação.'; document.getElementById('notaObservacoes').focus(); return; }
 
     statusEl.className = '';
     statusEl.textContent = 'Salvando...';
@@ -8519,6 +8596,27 @@ function salvarAlmoxarifadoTrabalho(id) {
         if (id) localStorage.setItem(chaveAlmoxarifadoTrabalho(), String(id));
         else localStorage.removeItem(chaveAlmoxarifadoTrabalho());
     } catch (e) { /* se não conseguir salvar, só não persiste entre sessões -- não trava o uso */ }
+}
+
+// mesma ideia, pra lembrar a última classificação (setor/evento/plano de
+// contas) usada na importação de XML/NF-e -- evita escolher de novo toda
+// nota, já que normalmente vem tudo da mesma origem em sequência
+function chaveClassificacaoNfe(campo) { return `nfe_ultimo_${campo}_${meuPerfil.unidadeId}`; }
+function salvarUltimaClassificacaoNfe(setorId, evento, planoContasId) {
+    try {
+        localStorage.setItem(chaveClassificacaoNfe('setor'), setorId != null ? String(setorId) : '');
+        localStorage.setItem(chaveClassificacaoNfe('evento'), evento || '');
+        localStorage.setItem(chaveClassificacaoNfe('planocontas'), planoContasId != null ? String(planoContasId) : '');
+    } catch (e) { /* não persiste entre sessões, mas não trava o uso */ }
+}
+function obterUltimaClassificacaoNfe() {
+    try {
+        return {
+            setorId: localStorage.getItem(chaveClassificacaoNfe('setor')) || '',
+            evento: localStorage.getItem(chaveClassificacaoNfe('evento')) || '',
+            planoContasId: localStorage.getItem(chaveClassificacaoNfe('planocontas')) || ''
+        };
+    } catch (e) { return { setorId: '', evento: '', planoContasId: '' }; }
 }
 
 async function carregarSaldosAlmoxarifado() {
