@@ -1386,7 +1386,21 @@
                 </div>
                 <div class="grade col4" style="margin-top:8px;">
                     <div class="campo"><label>Almoxarifado</label><select id="notaItemAlmoxarifado"><option value="">-- selecione --</option></select></div>
+                    <div class="campo"><label>Setor</label><select id="notaItemSetor"><option value="">-- selecione --</option></select></div>
+                    <div class="campo" style="position:relative;">
+                        <label>Evento</label>
+                        <input type="text" id="notaItemEventoBusca" placeholder="Buscar evento..." autocomplete="off">
+                        <div id="notaItemEventoResultados" class="dropdown-busca-evento"></div>
+                        <p class="subtitulo" id="notaItemEventoSelecionado" style="margin-top:4px;"></p>
+                    </div>
+                    <div class="campo" style="position:relative;">
+                        <label>Plano de Contas</label>
+                        <input type="text" id="notaItemPlanoContasBusca" placeholder="Buscar código ou descrição..." autocomplete="off">
+                        <div id="notaItemPlanoContasResultados" class="dropdown-busca-evento"></div>
+                        <p class="subtitulo" id="notaItemPlanoContasSelecionado" style="margin-top:4px;"></p>
+                    </div>
                 </div>
+                <p class="subtitulo" style="margin-top:4px;">Almoxarifado, Setor, Evento e Plano de Contas são obrigatórios — ficam gravados em cada movimento de entrada, usados no rateio financeiro.</p>
                 <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
                     <span class="subtitulo" id="notaItemProdutoSelecionado"></span>
                     <button class="btn btn-azul btn-pequeno" id="btnAdicionarItemNota">+ Adicionar item</button>
@@ -3874,7 +3888,7 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
         // lembra a última classificação usada nessa unidade (setor/evento/
         // plano de contas), pra não escolher de novo a cada nota -- só
         // aplica se o valor lembrado ainda existir no catálogo atual
-        const ultimaClassificacao = obterUltimaClassificacaoNfe();
+        const ultimaClassificacao = obterUltimaClassificacaoEntrada();
         const setorAindaExiste = ultimaClassificacao.setorId && catalogosBaixa.setores.some(s => String(s.id) === ultimaClassificacao.setorId);
         document.getElementById('nfeSetor').value = setorAindaExiste ? ultimaClassificacao.setorId : '';
         document.getElementById('nfeSetor').dispatchEvent(new Event('change'));
@@ -4393,7 +4407,7 @@ async function processarImportacaoNFe(tipo) {
             });
         }
 
-        salvarUltimaClassificacaoNfe(setorId, evento, planoContasId);
+        salvarUltimaClassificacaoEntrada(setorId, evento, planoContasId);
         await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
         atualizarTagContagem();
         statusEl.className = 'status-msg sucesso';
@@ -5188,6 +5202,8 @@ let planoContasSelecionadoBaixa = null;
 let planoContasSelecionadoReqCompleta = null;
 let planoContasSelecionadoEditMovGeral = null;
 let planoContasSelecionadoNfe = null;
+let eventoSelecionadoNotaItem = null;
+let planoContasSelecionadoNotaItem = null;
 
 // preenche a UI de "Selecionado: ..." a partir de um código de evento já
 // salvo (ex: ao abrir um item pra editar) — devolve o objeto evento
@@ -5301,6 +5317,9 @@ configurarBuscaEvento('reqCompletaEventoBusca', 'reqCompletaEventoResultados', '
 configurarBuscaEvento('nfeEventoBusca', 'nfeEventoResultados', 'nfeEventoSelecionado', (ev) => {
     eventoSelecionadoNfe = ev;
 });
+configurarBuscaEvento('notaItemEventoBusca', 'notaItemEventoResultados', 'notaItemEventoSelecionado', (ev) => {
+    eventoSelecionadoNotaItem = ev;
+});
 configurarBuscaEvento('baixaDiretaEventoBusca', 'baixaDiretaEventoResultados', 'baixaDiretaEventoSelecionado', (ev) => {
     eventoSelecionadoBaixaDireta = ev;
 });
@@ -5321,6 +5340,9 @@ configurarBuscaPlanoContas('editMovGeralPlanoContasBusca', 'editMovGeralPlanoCon
 });
 configurarBuscaPlanoContas('nfePlanoContasBusca', 'nfePlanoContasResultados', 'nfePlanoContasSelecionado', (p) => {
     planoContasSelecionadoNfe = p;
+});
+configurarBuscaPlanoContas('notaItemPlanoContasBusca', 'notaItemPlanoContasResultados', 'notaItemPlanoContasSelecionado', (p) => {
+    planoContasSelecionadoNotaItem = p;
 });
 
 function buscarEventos(termo) {
@@ -7991,6 +8013,47 @@ document.getElementById('btnRemoverNotaEntrada').addEventListener('click', async
     }
 });
 
+// popula Almoxarifado/Setor/Evento/Plano de Contas do bloco "Adicionar
+// item" e pré-preenche com a última classificação lembrada (mesmo
+// princípio do "almoxarifado de trabalho") -- usado tanto ao abrir uma
+// nota nova quanto uma já existente
+async function prepararCamposClassificacaoItemNota() {
+    if (!catalogosBaixa.almoxarifados || !catalogosBaixa.almoxarifados.length) catalogosBaixa = await chamarGet('listarCatalogosBaixa');
+    document.getElementById('notaItemAlmoxarifado').innerHTML =
+        '<option value="">-- selecione --</option>' + (catalogosBaixa.almoxarifados || []).map(a => `<option value="${a.id}">${escapeHtml(a.nome)}</option>`).join('');
+    document.getElementById('notaItemAlmoxarifado').value = almoxarifadoTrabalho || '';
+
+    document.getElementById('notaItemSetor').innerHTML =
+        '<option value="">-- selecione --</option>' + (catalogosBaixa.setores || []).map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+
+    const ultimaClassificacao = obterUltimaClassificacaoEntrada();
+    const setorAindaExiste = ultimaClassificacao.setorId && (catalogosBaixa.setores || []).some(s => String(s.id) === ultimaClassificacao.setorId);
+    document.getElementById('notaItemSetor').value = setorAindaExiste ? ultimaClassificacao.setorId : '';
+
+    document.getElementById('notaItemEventoBusca').value = '';
+    eventoSelecionadoNotaItem = ultimaClassificacao.evento ? preencherEventoSelecionadoUI('notaItemEventoSelecionado', ultimaClassificacao.evento) : null;
+    if (eventoSelecionadoNotaItem) {
+        document.getElementById('notaItemEventoSelecionado').querySelector('[data-limpar-evento]').addEventListener('click', (e) => {
+            e.preventDefault();
+            eventoSelecionadoNotaItem = null;
+            document.getElementById('notaItemEventoSelecionado').innerHTML = '';
+        });
+    }
+
+    document.getElementById('notaItemPlanoContasBusca').value = '';
+    const planoContasAindaExiste = ultimaClassificacao.planoContasId && (catalogosBaixa.planoContas || []).some(p => String(p.id) === ultimaClassificacao.planoContasId);
+    planoContasSelecionadoNotaItem = planoContasAindaExiste ? preencherPlanoContasSelecionadoUI('notaItemPlanoContasSelecionado', ultimaClassificacao.planoContasId) : null;
+    if (planoContasSelecionadoNotaItem) {
+        document.getElementById('notaItemPlanoContasSelecionado').querySelector('[data-limpar-planocontas]').addEventListener('click', (e) => {
+            e.preventDefault();
+            planoContasSelecionadoNotaItem = null;
+            document.getElementById('notaItemPlanoContasSelecionado').innerHTML = '';
+        });
+    } else {
+        document.getElementById('notaItemPlanoContasSelecionado').innerHTML = '';
+    }
+}
+
 async function limparFormularioNota() {
     ['notaNumeroNf', 'notaSerie', 'notaDataEmissao', 'notaDataEntrada', 'notaFornecedorNome', 'notaFornecedorCnpj',
      'notaResponsavel', 'notaChaveAcesso', 'notaObservacoes'].forEach(id => document.getElementById(id).value = '');
@@ -8000,10 +8063,7 @@ async function limparFormularioNota() {
     document.getElementById('notaValorTotalDica').textContent = '';
     document.getElementById('notaDataEntrada').value = hojeISO();
     document.getElementById('statusNotaEntrada').textContent = '';
-    if (!catalogosBaixa.almoxarifados || !catalogosBaixa.almoxarifados.length) catalogosBaixa = await chamarGet('listarCatalogosBaixa');
-    document.getElementById('notaItemAlmoxarifado').innerHTML =
-        '<option value="">-- selecione --</option>' + (catalogosBaixa.almoxarifados || []).map(a => `<option value="${a.id}">${escapeHtml(a.nome)}</option>`).join('');
-    document.getElementById('notaItemAlmoxarifado').value = almoxarifadoTrabalho || '';
+    await prepararCamposClassificacaoItemNota();
 }
 
 async function abrirNovaNotaEntrada() {
@@ -8046,10 +8106,7 @@ async function abrirNotaEntradaExistente(notaId) {
         document.getElementById('notaChaveAcesso').value = nota.chave_acesso || '';
         document.getElementById('notaObservacoes').value = nota.observacoes || '';
         document.getElementById('statusNotaEntrada').textContent = '';
-        if (!catalogosBaixa.almoxarifados || !catalogosBaixa.almoxarifados.length) catalogosBaixa = await chamarGet('listarCatalogosBaixa');
-        document.getElementById('notaItemAlmoxarifado').innerHTML =
-            '<option value="">-- selecione --</option>' + (catalogosBaixa.almoxarifados || []).map(a => `<option value="${a.id}">${escapeHtml(a.nome)}</option>`).join('');
-        document.getElementById('notaItemAlmoxarifado').value = almoxarifadoTrabalho || '';
+        await prepararCamposClassificacaoItemNota();
 
         document.getElementById('blocoItensTitulosNota').style.display = 'block';
         document.getElementById('blocoAdicionarItemNota').style.display = '';
@@ -8319,8 +8376,19 @@ document.getElementById('btnAdicionarItemNota').addEventListener('click', async 
     const qtd = parseFloat(document.getElementById('notaItemQtd').value);
     const valorUnit = parseFloat(document.getElementById('notaItemValor').value);
     const nomeDigitado = document.getElementById('notaItemProdutoBusca').value.trim();
-    if (!nomeDigitado) { alert('Busque ou digite o nome do produto.'); return; }
-    if (isNaN(qtd) || qtd <= 0 || isNaN(valorUnit) || valorUnit < 0) { alert('Preencha quantidade e valor corretamente.'); return; }
+    if (!nomeDigitado) { alert('Busque ou digite o nome do produto.'); document.getElementById('notaItemProdutoBusca').focus(); return; }
+    if (isNaN(qtd) || qtd <= 0 || isNaN(valorUnit) || valorUnit < 0) { alert('Preencha quantidade e valor corretamente.'); document.getElementById('notaItemQtd').focus(); return; }
+
+    // Almoxarifado, Setor, Evento e Plano de Contas ficam gravados em
+    // cada movimento -- obrigatórios (almoxarifado em especial: sem ele
+    // o ajuste de estoque não sabe em qual saldo mexer, e o produto
+    // parece "não ter dado entrada" mesmo a movimentação existindo)
+    const almoxarifadoId = document.getElementById('notaItemAlmoxarifado').value;
+    if (!almoxarifadoId) { alert('Selecione o almoxarifado.'); document.getElementById('notaItemAlmoxarifado').focus(); return; }
+    const setorId = document.getElementById('notaItemSetor').value;
+    if (!setorId) { alert('Selecione o setor.'); document.getElementById('notaItemSetor').focus(); return; }
+    if (!eventoSelecionadoNotaItem) { alert('Informe o evento.'); document.getElementById('notaItemEventoBusca').focus(); return; }
+    if (!planoContasSelecionadoNotaItem) { alert('Informe o plano de contas.'); document.getElementById('notaItemPlanoContasBusca').focus(); return; }
 
     const btn = document.getElementById('btnAdicionarItemNota');
     btn.disabled = true;
@@ -8338,7 +8406,8 @@ document.getElementById('btnAdicionarItemNota').addEventListener('click', async 
         await chamarPost('registrarMovimentacao', {
             movimentacao: {
                 data: document.getElementById('notaDataEntrada').value, produtoId, qtd, valorUnit, tipo: notaTipoEmEdicao,
-                almoxarifadoId: document.getElementById('notaItemAlmoxarifado').value ? Number(document.getElementById('notaItemAlmoxarifado').value) : null,
+                almoxarifadoId: Number(almoxarifadoId),
+                setorId: Number(setorId), evento: eventoSelecionadoNotaItem.codigo, planoContasId: planoContasSelecionadoNotaItem.id,
                 observacao: `${notaTipoEmEdicao === 'saida' ? 'Saída' : 'Entrada direta'} — NF ${document.getElementById('notaNumeroNf').value || ''}`.trim(),
                 responsavel: document.getElementById('notaResponsavel').value.trim().toUpperCase(),
                 fornecedorCnpj: document.getElementById('notaFornecedorCnpj').value.trim(),
@@ -8346,12 +8415,16 @@ document.getElementById('btnAdicionarItemNota').addEventListener('click', async 
                 estoqueNotaId: notaEmEdicaoId
             }
         });
+        salvarUltimaClassificacaoEntrada(setorId, eventoSelecionadoNotaItem.codigo, planoContasSelecionadoNotaItem.id);
 
         document.getElementById('notaItemProdutoBusca').value = '';
         document.getElementById('notaItemProdutoSelecionado').textContent = '';
         document.getElementById('notaItemQtd').value = 1;
         document.getElementById('notaItemValor').value = '';
         produtoSelecionadoItemNota = null;
+        // Almoxarifado/Setor/Evento/Plano de Contas ficam como estavam de
+        // propósito -- é comum lançar vários itens seguidos pro mesmo
+        // destino na mesma nota
 
         await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
         await carregarItensETitulosDaNota(notaEmEdicaoId);
@@ -8599,22 +8672,24 @@ function salvarAlmoxarifadoTrabalho(id) {
 }
 
 // mesma ideia, pra lembrar a última classificação (setor/evento/plano de
-// contas) usada na importação de XML/NF-e -- evita escolher de novo toda
-// nota, já que normalmente vem tudo da mesma origem em sequência
-function chaveClassificacaoNfe(campo) { return `nfe_ultimo_${campo}_${meuPerfil.unidadeId}`; }
-function salvarUltimaClassificacaoNfe(setorId, evento, planoContasId) {
+// contas) usada numa entrada -- compartilhada entre a importação de
+// XML/NF-e e a Nota de Entrada manual (mesmo operador tende a lançar
+// tudo pro mesmo setor/plano de contas em sequência, não importa a
+// origem)
+function chaveClassificacaoEntrada(campo) { return `entrada_ultimo_${campo}_${meuPerfil.unidadeId}`; }
+function salvarUltimaClassificacaoEntrada(setorId, evento, planoContasId) {
     try {
-        localStorage.setItem(chaveClassificacaoNfe('setor'), setorId != null ? String(setorId) : '');
-        localStorage.setItem(chaveClassificacaoNfe('evento'), evento || '');
-        localStorage.setItem(chaveClassificacaoNfe('planocontas'), planoContasId != null ? String(planoContasId) : '');
+        localStorage.setItem(chaveClassificacaoEntrada('setor'), setorId != null ? String(setorId) : '');
+        localStorage.setItem(chaveClassificacaoEntrada('evento'), evento || '');
+        localStorage.setItem(chaveClassificacaoEntrada('planocontas'), planoContasId != null ? String(planoContasId) : '');
     } catch (e) { /* não persiste entre sessões, mas não trava o uso */ }
 }
-function obterUltimaClassificacaoNfe() {
+function obterUltimaClassificacaoEntrada() {
     try {
         return {
-            setorId: localStorage.getItem(chaveClassificacaoNfe('setor')) || '',
-            evento: localStorage.getItem(chaveClassificacaoNfe('evento')) || '',
-            planoContasId: localStorage.getItem(chaveClassificacaoNfe('planocontas')) || ''
+            setorId: localStorage.getItem(chaveClassificacaoEntrada('setor')) || '',
+            evento: localStorage.getItem(chaveClassificacaoEntrada('evento')) || '',
+            planoContasId: localStorage.getItem(chaveClassificacaoEntrada('planocontas')) || ''
         };
     } catch (e) { return { setorId: '', evento: '', planoContasId: '' }; }
 }
