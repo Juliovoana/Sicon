@@ -342,6 +342,12 @@
     <div class="modal-caixa larga">
         <h3>Nova visita</h3>
         <p class="subtitulo" id="visitaPacienteTexto" style="margin-bottom:14px;"></p>
+        <div class="campo linha-busca">
+            <label>Profissional responsável pelo atendimento</label>
+            <input type="text" id="campoBuscaProfissionalVisita" placeholder="Digite o nome do profissional (Staff)..." autocomplete="off">
+            <input type="hidden" id="profissionalVisitaIdSelecionado">
+            <div id="resultadosBuscaProfissionalVisita" class="resultados-busca"></div>
+        </div>
         <div class="grade">
             <div class="campo"><label>Data</label><input type="date" id="campoDataVisita"></div>
             <div class="campo"><label>Hora</label><input type="time" id="campoHoraVisita"></div>
@@ -602,6 +608,8 @@ let pacientes = [];
 let itensModelo = [];
 let grupoOrdens = []; // [{id, nome, ordem}] -- ordem de exibição dos grupos (prontuario_grupos)
 let logoUnidadeUrl = null; // logo da unidade (servir_unidades_negocio.logo_url), pro cabeçalho do PDF
+let profissionaisStaff = []; // cadastro de profissionais do Staff (staff_profissionais) -- quem de fato atende
+let profissionalVisitaSelecionado = null;
 let pacienteSelecionado = null;
 let visitasPacienteAtual = [];
 
@@ -766,7 +774,7 @@ async function iniciarApp() {
     document.getElementById('aba-btn-itens').style.display = ehAdministradorOuPrincipal() ? '' : 'none';
     document.getElementById('btnEditarPaciente').style.display = ehAdministradorOuPrincipal() ? '' : 'none';
 
-    await Promise.all([carregarPacientes(), carregarItensModelo(), carregarLogoUnidade()]);
+    await Promise.all([carregarPacientes(), carregarItensModelo(), carregarLogoUnidade(), carregarProfissionaisStaff()]);
     await backfillGrupoOrdens();
     renderizarItensModeloAdmin();
 }
@@ -774,6 +782,15 @@ async function iniciarApp() {
 async function carregarLogoUnidade() {
     const { data } = await sb.from('servir_unidades_negocio').select('logo_url').eq('id', meuPerfil.unidadeId).single();
     logoUnidadeUrl = data ? data.logo_url : null;
+}
+
+// profissional que de fato atende o paciente -- vem do cadastro do
+// Staff (staff_profissionais), não do operador logado no app
+async function carregarProfissionaisStaff() {
+    const { data, error } = await sb.from('staff_profissionais')
+        .select('id, nome_completo, staff_funcoes(nome)')
+        .eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome_completo');
+    profissionaisStaff = error ? [] : (data || []);
 }
 
 async function carregarPacientes() {
@@ -1317,10 +1334,43 @@ document.getElementById('btnNovaVisita').addEventListener('click', () => {
     document.getElementById('campoHoraVisita').value = agoraHora();
     document.getElementById('campoObsGeraisVisita').value = '';
     document.getElementById('statusVisita').textContent = '';
+    profissionalVisitaSelecionado = null;
+    document.getElementById('profissionalVisitaIdSelecionado').value = '';
+    document.getElementById('campoBuscaProfissionalVisita').value = '';
     montarFormularioVisita();
     document.getElementById('modal-visita').classList.add('aberto');
 });
 document.getElementById('btnCancelarVisita').addEventListener('click', () => document.getElementById('modal-visita').classList.remove('aberto'));
+
+// ---------------------------------------------------------------
+// BUSCA DE PROFISSIONAL (Staff) PRA VISITA -- mesmo padrão de
+// autocomplete já usado na busca de paciente
+// ---------------------------------------------------------------
+const campoBuscaProfissionalVisita = document.getElementById('campoBuscaProfissionalVisita');
+const resultadosBuscaProfissionalVisita = document.getElementById('resultadosBuscaProfissionalVisita');
+campoBuscaProfissionalVisita.addEventListener('input', () => {
+    profissionalVisitaSelecionado = null;
+    document.getElementById('profissionalVisitaIdSelecionado').value = '';
+    const termo = campoBuscaProfissionalVisita.value.trim().toLowerCase();
+    if (!termo) { resultadosBuscaProfissionalVisita.classList.remove('aberto'); return; }
+    const achados = profissionaisStaff.filter(p => p.nome_completo.toLowerCase().includes(termo)).slice(0, 8);
+    resultadosBuscaProfissionalVisita.innerHTML = achados.length
+        ? achados.map(p => `<div class="resultado-item" data-id="${p.id}">${escapeHtml(p.nome_completo)}<div class="sub">${escapeHtml(p.staff_funcoes?.nome || '')}</div></div>`).join('')
+        : '<div class="resultado-item">Nenhum profissional encontrado -- cadastre em Staff primeiro</div>';
+    resultadosBuscaProfissionalVisita.classList.add('aberto');
+});
+resultadosBuscaProfissionalVisita.addEventListener('mousedown', (e) => {
+    const item = e.target.closest('.resultado-item[data-id]');
+    if (!item) return;
+    e.preventDefault();
+    const p = profissionaisStaff.find(x => x.id === item.dataset.id);
+    if (!p) return;
+    profissionalVisitaSelecionado = p;
+    document.getElementById('profissionalVisitaIdSelecionado').value = p.id;
+    campoBuscaProfissionalVisita.value = p.nome_completo;
+    resultadosBuscaProfissionalVisita.classList.remove('aberto');
+});
+campoBuscaProfissionalVisita.addEventListener('blur', () => setTimeout(() => resultadosBuscaProfissionalVisita.classList.remove('aberto'), 200));
 
 function montarFormularioVisita() {
     estVisita = {};
@@ -1421,6 +1471,8 @@ document.getElementById('btnSalvarVisita').addEventListener('click', async () =>
     const hora = document.getElementById('campoHoraVisita').value || agoraHora();
     const obsGerais = document.getElementById('campoObsGeraisVisita').value.trim();
 
+    if (!profissionalVisitaSelecionado) { statusEl.textContent = 'Selecione o profissional responsável pelo atendimento.'; return; }
+
     const faltando = itensModelo.filter(it => it.ativo && it.obrigatorio).find(it => {
         const e = estVisita[it.id];
         return it.tipo_resposta === 'sim_nao' ? !e.simNao : !String(e.valor || '').trim();
@@ -1432,7 +1484,8 @@ document.getElementById('btnSalvarVisita').addEventListener('click', async () =>
     try {
         const { data: visita, error: eVisita } = await sb.from('prontuario_visitas').insert({
             unidade_negocio_id: meuPerfil.unidadeId, paciente_id: pacienteSelecionado.id,
-            tecnico_user_id: meuPerfil.userId, tecnico_nome: meuPerfil.nomeOperador,
+            profissional_id: profissionalVisitaSelecionado.id,
+            tecnico_user_id: meuPerfil.userId, tecnico_nome: profissionalVisitaSelecionado.nome_completo,
             data, hora, observacoes_gerais: obsGerais || null
         }).select().single();
         if (eVisita) throw eVisita;
@@ -1460,7 +1513,7 @@ document.getElementById('btnSalvarVisita').addEventListener('click', async () =>
             }
         }
 
-        await registrarSentinela('visita_registrada', 'Visita de ' + pacienteSelecionado.nome + ' em ' + formatarDataSemFuso(data));
+        await registrarSentinela('visita_registrada', 'Visita de ' + pacienteSelecionado.nome + ' em ' + formatarDataSemFuso(data) + ' · profissional: ' + profissionalVisitaSelecionado.nome_completo);
         document.getElementById('modal-visita').classList.remove('aberto');
         await carregarVisitas(pacienteSelecionado.id);
     } catch (e) {
