@@ -258,7 +258,10 @@
         <div class="cartao">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
                 <h2 style="margin:0;">Itens de modelo</h2>
-                <button type="button" class="btn btn-principal" id="btnNovoItemModelo" style="width:auto;">+ Novo item</button>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button type="button" class="btn btn-cinza" id="btnModeloPadrao" style="width:auto;">✨ Cadastro padrão do Servir</button>
+                    <button type="button" class="btn btn-principal" id="btnNovoItemModelo" style="width:auto;">+ Novo item</button>
+                </div>
             </div>
             <p class="subtitulo" style="margin:8px 0 0 0;">Cada item vira um campo pra preencher em toda visita — agrupe por "Sinais Vitais", "Medicação", "Cuidados" etc. como fizer sentido pra sua operação.</p>
             <div id="listaItensModelo" style="margin-top:14px;"></div>
@@ -367,6 +370,24 @@
     </div>
 </div>
 
+<!-- ==================== MODAL: CADASTRO PADRÃO DO SERVIR ==================== -->
+<div id="modal-modelo-padrao" class="modal-overlay">
+    <div class="modal-caixa larga">
+        <h3>Cadastro padrão do Servir</h3>
+        <p class="subtitulo" style="margin-bottom:14px;">Uma lista de itens comuns em home care, pronta pra usar como ponto de partida. Desmarque o que não fizer sentido pra sua operação — só o que estiver marcado é adicionado.</p>
+        <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button type="button" class="btn btn-cinza" id="btnMarcarTodosModeloPadrao" style="width:auto;">Marcar todos</button>
+            <button type="button" class="btn btn-cinza" id="btnDesmarcarTodosModeloPadrao" style="width:auto;">Desmarcar todos</button>
+        </div>
+        <div id="listaModeloPadrao"></div>
+        <div style="display:flex; gap:8px; margin-top:14px;">
+            <button type="button" class="btn btn-cinza" id="btnCancelarModeloPadrao" style="flex:1;">Cancelar</button>
+            <button type="button" class="btn btn-principal" id="btnConfirmarModeloPadrao" style="flex:1;">Adicionar selecionados</button>
+        </div>
+        <p class="status-msg" id="statusModeloPadrao"></p>
+    </div>
+</div>
+
 <script>
 // ---------------------------------------------------------------
 // CONFIG
@@ -447,6 +468,11 @@ const AJUDA_PRONTUARIO = {
         { id: 'itens', titulo: 'Itens de Modelo', corpo: `
             <p>Só Administrador/Principal vê e mexe nessa aba.</p>
             <ul>
+                <li><strong>"✨ Cadastro padrão do Servir"</strong> abre uma lista pronta de
+                itens comuns em home care (sinais vitais, medicação, cuidados, avaliação
+                clínica) -- desmarque o que não fizer sentido pra sua operação antes de
+                confirmar. Item que já existe (mesmo grupo + nome) aparece travado, marcado
+                como "já cadastrado", pra não duplicar.</li>
                 <li>Cada item pertence a um <strong>grupo</strong> (texto livre -- "Sinais
                 Vitais", "Medicação", "Cuidados", o que fizer sentido pra sua operação).</li>
                 <li><strong>Tipo de resposta</strong>: Número (com unidade e faixa de
@@ -923,6 +949,116 @@ document.getElementById('btnSalvarItemModelo').addEventListener('click', async (
         statusEl.textContent = 'Erro ao salvar: ' + (e.message || e);
     } finally {
         btn.disabled = false; btn.textContent = 'Salvar';
+    }
+});
+
+// ---------------------------------------------------------------
+// CADASTRO PADRÃO DO SERVIR -- lista pronta de itens comuns em home
+// care; o operador escolhe o que faz sentido pra unidade dele. Item
+// já cadastrado (mesmo grupo+nome) aparece marcado e travado, pra não
+// duplicar -- não existe constraint de unicidade no banco pra isso,
+// então a checagem é client-side (mesmo espírito do "duplicar grupo"
+// do checklist-equipamentos, que também evita duplicata comparando
+// pelo nome, não por id).
+// ---------------------------------------------------------------
+const ITENS_PADRAO_SERVIR = [
+    { grupo: 'Sinais Vitais', item: 'Pressão Arterial Sistólica', unidade_medida: 'mmHg', tipo_resposta: 'numero', valor_min_referencia: 90, valor_max_referencia: 140, ordem: 1, obrigatorio: true },
+    { grupo: 'Sinais Vitais', item: 'Pressão Arterial Diastólica', unidade_medida: 'mmHg', tipo_resposta: 'numero', valor_min_referencia: 60, valor_max_referencia: 90, ordem: 2, obrigatorio: true },
+    { grupo: 'Sinais Vitais', item: 'Frequência Cardíaca', unidade_medida: 'bpm', tipo_resposta: 'numero', valor_min_referencia: 60, valor_max_referencia: 100, ordem: 3, obrigatorio: false },
+    { grupo: 'Sinais Vitais', item: 'Frequência Respiratória', unidade_medida: 'irpm', tipo_resposta: 'numero', valor_min_referencia: 12, valor_max_referencia: 20, ordem: 4, obrigatorio: false },
+    { grupo: 'Sinais Vitais', item: 'Temperatura Corporal', unidade_medida: '°C', tipo_resposta: 'numero', valor_min_referencia: 36.0, valor_max_referencia: 37.5, ordem: 5, obrigatorio: true },
+    { grupo: 'Sinais Vitais', item: 'Saturação de Oxigênio (SpO2)', unidade_medida: '%', tipo_resposta: 'numero', valor_min_referencia: 95, valor_max_referencia: 100, ordem: 6, obrigatorio: false },
+    { grupo: 'Sinais Vitais', item: 'Glicemia Capilar', unidade_medida: 'mg/dL', tipo_resposta: 'numero', valor_min_referencia: 70, valor_max_referencia: 140, ordem: 7, obrigatorio: false },
+    { grupo: 'Sinais Vitais', item: 'Peso', unidade_medida: 'kg', tipo_resposta: 'numero', valor_min_referencia: null, valor_max_referencia: null, ordem: 8, obrigatorio: false },
+    { grupo: 'Sinais Vitais', item: 'Escala de Dor (0 a 10)', unidade_medida: 'pontos', tipo_resposta: 'numero', valor_min_referencia: 0, valor_max_referencia: 3, ordem: 9, obrigatorio: false },
+    { grupo: 'Medicação', item: 'Medicação administrada conforme prescrição?', tipo_resposta: 'sim_nao', ordem: 1, obrigatorio: false },
+    { grupo: 'Medicação', item: 'Reação adversa à medicação?', tipo_resposta: 'sim_nao', ordem: 2, obrigatorio: false },
+    { grupo: 'Medicação', item: 'Horário da medicação', tipo_resposta: 'texto', ordem: 3, obrigatorio: false },
+    { grupo: 'Medicação', item: 'Observações sobre a medicação', tipo_resposta: 'texto', ordem: 4, obrigatorio: false },
+    { grupo: 'Cuidados', item: 'Higiene pessoal realizada?', tipo_resposta: 'sim_nao', ordem: 1, obrigatorio: false },
+    { grupo: 'Cuidados', item: 'Mudança de decúbito realizada?', tipo_resposta: 'sim_nao', ordem: 2, obrigatorio: false },
+    { grupo: 'Cuidados', item: 'Curativo realizado?', tipo_resposta: 'sim_nao', ordem: 3, obrigatorio: false },
+    { grupo: 'Cuidados', item: 'Alimentação/hidratação adequada?', tipo_resposta: 'sim_nao', ordem: 4, obrigatorio: false },
+    { grupo: 'Cuidados', item: 'Eliminações (urina/fezes)', tipo_resposta: 'texto', ordem: 5, obrigatorio: false },
+    { grupo: 'Cuidados', item: 'Observações de cuidados', tipo_resposta: 'texto', ordem: 6, obrigatorio: false },
+    { grupo: 'Avaliação Clínica', item: 'Nível de consciência', tipo_resposta: 'texto', ordem: 1, obrigatorio: false },
+    { grupo: 'Avaliação Clínica', item: 'Estado emocional/humor', tipo_resposta: 'texto', ordem: 2, obrigatorio: false },
+    { grupo: 'Avaliação Clínica', item: 'Queixas relatadas pelo paciente', tipo_resposta: 'texto', ordem: 3, obrigatorio: false }
+];
+
+function itemModeloJaExiste(grupo, item) {
+    return itensModelo.some(it => it.grupo.trim().toLowerCase() === grupo.trim().toLowerCase() && it.item.trim().toLowerCase() === item.trim().toLowerCase());
+}
+
+function abrirModalModeloPadrao() {
+    const wrap = document.getElementById('listaModeloPadrao');
+    const grupos = {};
+    ITENS_PADRAO_SERVIR.forEach(it => { (grupos[it.grupo] = grupos[it.grupo] || []).push(it); });
+
+    wrap.innerHTML = Object.keys(grupos).map(grupo => `
+        <div class="grupo-acordeao">
+            <div class="grupo-cab" style="cursor:default;"><span class="titulo">${escapeHtml(grupo)}</span></div>
+            <div class="grupo-corpo on">
+                ${grupos[grupo].map((it, idx) => {
+                    const existe = itemModeloJaExiste(it.grupo, it.item);
+                    const detalhe = it.tipo_resposta === 'numero'
+                        ? 'Número' + (it.unidade_medida ? ' (' + escapeHtml(it.unidade_medida) + ')' : '') + (it.valor_min_referencia != null || it.valor_max_referencia != null ? ' · ref: ' + (it.valor_min_referencia ?? '—') + ' a ' + (it.valor_max_referencia ?? '—') : '')
+                        : it.tipo_resposta === 'sim_nao' ? 'Sim/Não' : 'Texto livre';
+                    return `<label class="item-linha" style="cursor:${existe ? 'default' : 'pointer'}; align-items:center;">
+                        <input type="checkbox" data-item-padrao="${escapeHtml(it.grupo)}|${escapeHtml(it.item)}" ${existe ? 'checked disabled' : 'checked'} style="width:16px; height:16px; margin-right:10px;">
+                        <div class="info">
+                            <div class="nome">${escapeHtml(it.item)}${existe ? ' <span class="pill pill-inativo">já cadastrado</span>' : ''}</div>
+                            <div class="meta">${detalhe}</div>
+                        </div>
+                    </label>`;
+                }).join('')}
+            </div>
+        </div>
+    `).join('');
+    document.getElementById('statusModeloPadrao').textContent = '';
+    document.getElementById('modal-modelo-padrao').classList.add('aberto');
+}
+document.getElementById('btnModeloPadrao').addEventListener('click', abrirModalModeloPadrao);
+document.getElementById('btnCancelarModeloPadrao').addEventListener('click', () => document.getElementById('modal-modelo-padrao').classList.remove('aberto'));
+document.getElementById('btnMarcarTodosModeloPadrao').addEventListener('click', () => {
+    document.querySelectorAll('#listaModeloPadrao input[type=checkbox]:not(:disabled)').forEach(c => c.checked = true);
+});
+document.getElementById('btnDesmarcarTodosModeloPadrao').addEventListener('click', () => {
+    document.querySelectorAll('#listaModeloPadrao input[type=checkbox]:not(:disabled)').forEach(c => c.checked = false);
+});
+
+document.getElementById('btnConfirmarModeloPadrao').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusModeloPadrao');
+    statusEl.textContent = '';
+    const selecionados = [...document.querySelectorAll('#listaModeloPadrao input[type=checkbox]:checked:not(:disabled)')]
+        .map(c => {
+            const [grupo, item] = c.dataset.itemPadrao.split('|');
+            return ITENS_PADRAO_SERVIR.find(it => it.grupo === grupo && it.item === item);
+        }).filter(Boolean);
+    if (!selecionados.length) { statusEl.textContent = 'Nenhum item novo selecionado.'; return; }
+
+    const btn = document.getElementById('btnConfirmarModeloPadrao');
+    btn.disabled = true; btn.textContent = 'Adicionando...';
+    try {
+        const registros = selecionados.map(it => ({
+            unidade_negocio_id: meuPerfil.unidadeId, grupo: it.grupo, item: it.item,
+            unidade_medida: it.unidade_medida || null,
+            tipo_resposta: it.tipo_resposta,
+            valor_min_referencia: it.valor_min_referencia ?? null,
+            valor_max_referencia: it.valor_max_referencia ?? null,
+            ordem: it.ordem || 0, obrigatorio: !!it.obrigatorio, ativo: true
+        }));
+        const { error } = await sb.from('prontuario_itens_modelo').insert(registros);
+        if (error) throw error;
+
+        await registrarSentinela('itens_modelo_padrao_adicionados', `${selecionados.length} item(ns) do cadastro padrão do Servir`);
+        document.getElementById('modal-modelo-padrao').classList.remove('aberto');
+        await carregarItensModelo();
+        renderizarItensModeloAdmin();
+    } catch (e) {
+        statusEl.textContent = 'Erro ao adicionar: ' + (e.message || e);
+    } finally {
+        btn.disabled = false; btn.textContent = 'Adicionar selecionados';
     }
 });
 
