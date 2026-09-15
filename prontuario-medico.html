@@ -261,6 +261,7 @@
             <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
                 <h2 style="margin:0;">Itens de modelo</h2>
                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button type="button" class="btn btn-cinza" id="btnOrdenarGrupos" style="width:auto;">↕ Ordenar grupos</button>
                     <button type="button" class="btn btn-cinza" id="btnModeloPadrao" style="width:auto;">✨ Cadastro padrão do Servir</button>
                     <button type="button" class="btn btn-principal" id="btnNovoItemModelo" style="width:auto;">+ Novo item</button>
                 </div>
@@ -387,6 +388,19 @@
             <button type="button" class="btn btn-principal" id="btnConfirmarModeloPadrao" style="flex:1;">Adicionar selecionados</button>
         </div>
         <p class="status-msg" id="statusModeloPadrao"></p>
+    </div>
+</div>
+
+<!-- ==================== MODAL: ORDENAR GRUPOS ==================== -->
+<div id="modal-ordenar-grupos" class="modal-overlay">
+    <div class="modal-caixa larga">
+        <h3>Ordenar grupos</h3>
+        <p class="subtitulo" style="margin-bottom:14px;">Define a ordem de exibição dos grupos nos itens de modelo e no formulário de visita, sem precisar renomear nada.</p>
+        <div id="listaOrdenarGrupos"></div>
+        <div style="display:flex; gap:8px; margin-top:14px;">
+            <button type="button" class="btn btn-principal" id="btnFecharOrdenarGrupos" style="flex:1;">Concluído</button>
+        </div>
+        <p class="status-msg" id="statusOrdenarGrupos"></p>
     </div>
 </div>
 
@@ -536,6 +550,7 @@ let meuPerfil = { unidadeId: null, unidadeNome: '', ehPrincipal: false, papel: n
 let vinculosGlobais = [];
 let pacientes = [];
 let itensModelo = [];
+let grupoOrdens = []; // [{id, nome, ordem}] -- ordem de exibição dos grupos (prontuario_grupos)
 let pacienteSelecionado = null;
 let visitasPacienteAtual = [];
 
@@ -701,6 +716,7 @@ async function iniciarApp() {
     document.getElementById('btnEditarPaciente').style.display = ehAdministradorOuPrincipal() ? '' : 'none';
 
     await Promise.all([carregarPacientes(), carregarItensModelo()]);
+    await backfillGrupoOrdens();
     renderizarItensModeloAdmin();
 }
 
@@ -715,6 +731,97 @@ async function carregarItensModelo() {
         .select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('grupo').order('ordem');
     itensModelo = error ? [] : (data || []);
 }
+
+// ---------------------------------------------------------------
+// ORDEM DOS GRUPOS -- "grupo" é texto livre no item, essa tabela só
+// guarda a posição de exibição de cada nome de grupo pra unidade,
+// pra não depender de ordem alfabética.
+// ---------------------------------------------------------------
+async function carregarGrupoOrdens() {
+    const { data, error } = await sb.from('prontuario_grupos')
+        .select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('ordem');
+    grupoOrdens = error ? [] : (data || []);
+}
+
+// garante que todo grupo em uso já tenha uma linha de ordem -- grupo
+// novo (criado num item, seja manual ou pelo cadastro padrão) entra
+// no fim da lista automaticamente, sem exigir passo manual
+async function backfillGrupoOrdens() {
+    await carregarGrupoOrdens();
+    const nomesEmUso = [...new Set(itensModelo.map(it => it.grupo))];
+    const faltando = nomesEmUso.filter(nome => !grupoOrdens.some(g => g.nome === nome));
+    if (!faltando.length) return;
+    let proximaOrdem = grupoOrdens.length ? Math.max(...grupoOrdens.map(g => g.ordem)) + 1 : 0;
+    const novos = faltando.map(nome => ({ unidade_negocio_id: meuPerfil.unidadeId, nome, ordem: proximaOrdem++ }));
+    const { error } = await sb.from('prontuario_grupos').insert(novos);
+    if (error) { console.error('Falha ao registrar ordem de grupos novos:', error); return; }
+    await carregarGrupoOrdens();
+}
+
+function ordemDoGrupo(nome) {
+    const g = grupoOrdens.find(g => g.nome === nome);
+    return g ? g.ordem : 999999; // grupo ainda não classificado vai pro fim
+}
+function ordenarNomesDeGrupo(nomes) {
+    return [...nomes].sort((a, b) => ordemDoGrupo(a) - ordemDoGrupo(b) || a.localeCompare(b));
+}
+
+function renderizarModalOrdenarGrupos() {
+    const wrap = document.getElementById('listaOrdenarGrupos');
+    const nomesEmUso = [...new Set(itensModelo.map(it => it.grupo))];
+    const ordenados = ordenarNomesDeGrupo(nomesEmUso);
+    if (!ordenados.length) { wrap.innerHTML = '<div class="vazio">Nenhum grupo cadastrado ainda.</div>'; return; }
+    wrap.innerHTML = ordenados.map((nome, i) => `
+        <div class="item-linha">
+            <div class="info"><div class="nome">${escapeHtml(nome)}</div></div>
+            <div class="acoes">
+                <button type="button" class="btn btn-cinza" data-subir-grupo="${escapeHtml(nome)}" ${i === 0 ? 'disabled' : ''} style="padding:7px 12px;">▲</button>
+                <button type="button" class="btn btn-cinza" data-descer-grupo="${escapeHtml(nome)}" ${i === ordenados.length - 1 ? 'disabled' : ''} style="padding:7px 12px;">▼</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async function moverGrupo(nome, direcao) {
+    const nomesEmUso = [...new Set(itensModelo.map(it => it.grupo))];
+    const ordenados = ordenarNomesDeGrupo(nomesEmUso);
+    const i = ordenados.indexOf(nome);
+    const j = i + direcao;
+    if (i < 0 || j < 0 || j >= ordenados.length) return;
+    const nomeVizinho = ordenados[j];
+
+    const grupoAtual = grupoOrdens.find(g => g.nome === nome);
+    const grupoVizinho = grupoOrdens.find(g => g.nome === nomeVizinho);
+    if (!grupoAtual || !grupoVizinho) return; // não deveria acontecer após backfill
+
+    const statusEl = document.getElementById('statusOrdenarGrupos');
+    statusEl.textContent = '';
+    try {
+        const ordemAtual = grupoAtual.ordem;
+        const { error: e1 } = await sb.from('prontuario_grupos').update({ ordem: grupoVizinho.ordem }).eq('id', grupoAtual.id);
+        if (e1) throw e1;
+        const { error: e2 } = await sb.from('prontuario_grupos').update({ ordem: ordemAtual }).eq('id', grupoVizinho.id);
+        if (e2) throw e2;
+        await carregarGrupoOrdens();
+        renderizarModalOrdenarGrupos();
+        renderizarItensModeloAdmin();
+    } catch (e) {
+        statusEl.textContent = 'Erro ao reordenar: ' + (e.message || e);
+    }
+}
+
+document.getElementById('btnOrdenarGrupos').addEventListener('click', () => {
+    document.getElementById('statusOrdenarGrupos').textContent = '';
+    renderizarModalOrdenarGrupos();
+    document.getElementById('modal-ordenar-grupos').classList.add('aberto');
+});
+document.getElementById('btnFecharOrdenarGrupos').addEventListener('click', () => document.getElementById('modal-ordenar-grupos').classList.remove('aberto'));
+document.getElementById('listaOrdenarGrupos').addEventListener('click', (e) => {
+    const btnSubir = e.target.closest('[data-subir-grupo]');
+    if (btnSubir) { moverGrupo(btnSubir.dataset.subirGrupo, -1); return; }
+    const btnDescer = e.target.closest('[data-descer-grupo]');
+    if (btnDescer) { moverGrupo(btnDescer.dataset.descerGrupo, 1); }
+});
 
 // ---------------------------------------------------------------
 // ABAS
@@ -853,7 +960,7 @@ function renderizarItensModeloAdmin() {
     const grupos = {};
     itensModelo.forEach(it => { (grupos[it.grupo] = grupos[it.grupo] || []).push(it); });
 
-    wrap.innerHTML = Object.keys(grupos).sort().map(grupo => `
+    wrap.innerHTML = ordenarNomesDeGrupo(Object.keys(grupos)).map(grupo => `
         <div class="grupo-acordeao">
             <div class="grupo-cab" data-toggle-grupo="${escapeHtml(grupo)}">
                 <span class="titulo">${escapeHtml(grupo)} <span style="color:var(--muted); font-weight:500;">(${grupos[grupo].length})</span></span>
@@ -946,6 +1053,7 @@ document.getElementById('btnSalvarItemModelo').addEventListener('click', async (
         await registrarSentinela('item_modelo_editado', (itemModeloEmEdicaoId ? 'Editado: ' : 'Criado: ') + grupo + ' — ' + item);
         document.getElementById('modal-item-modelo').classList.remove('aberto');
         await carregarItensModelo();
+        await backfillGrupoOrdens();
         renderizarItensModeloAdmin();
     } catch (e) {
         statusEl.textContent = 'Erro ao salvar: ' + (e.message || e);
@@ -1056,6 +1164,7 @@ document.getElementById('btnConfirmarModeloPadrao').addEventListener('click', as
         await registrarSentinela('itens_modelo_padrao_adicionados', `${selecionados.length} item(ns) do cadastro padrão do Servir`);
         document.getElementById('modal-modelo-padrao').classList.remove('aberto');
         await carregarItensModelo();
+        await backfillGrupoOrdens();
         renderizarItensModeloAdmin();
     } catch (e) {
         statusEl.textContent = 'Erro ao adicionar: ' + (e.message || e);
@@ -1139,7 +1248,7 @@ function montarFormularioVisita() {
         return e && (String(e.valor || '').trim() || e.simNao || e.observacao.trim() || e.fotos.length);
     });
 
-    wrap.innerHTML = Object.keys(grupos).sort().map(grupo => {
+    wrap.innerHTML = ordenarNomesDeGrupo(Object.keys(grupos)).map(grupo => {
         const aberto = grupoTemAlgoPreenchido(grupos[grupo]);
         return `
         <div class="grupo-acordeao">
