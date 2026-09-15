@@ -1,0 +1,1177 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Prontuário Médico — Servir</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjAwIDIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYmdHcmFkIiB4MT0iMCUiIHkxPSIwJSIgeDI9IjEwMCUiIHkyPSIxMDAlIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iI0U5RjRFRSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiNDREU4RDkiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgogIDxyZWN0IHg9IjAiIHk9IjAiIHdpZHRoPSIyMDAiIGhlaWdodD0iMjAwIiByeD0iNDYiIGZpbGw9InVybCgjYmdHcmFkKSIvPgogIDxwYXRoIGQ9Ik0xMDAgNDVjLTMwIDAtNTUgMjUtNTUgNTVzMjUgNTUgNTUgNTUgNTUtMjUgNTUtNTUtMjUtNTUtNTUtNTV6bTE4IDYwaC0xM3YxM2gtMTB2LTEzaC0xM3YtMTBoMTN2LTEzaDEwdjEzaDEzeiIgZmlsbD0iIzFCNDMzMiIvPgo8L3N2Zz4K">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+    :root {
+        --ink:#171E1A; --bg:#F6F7F9; --surface:#FFFFFF; --border:#E8EAED;
+        --muted:#6B7280; --brand:#1B4332; --brand-2:#2D6A4F; --brand-soft:#EAF2EE;
+        --accent:#F2A93B; --accent-ink:#8A5E12; --danger:#C0392B; --danger-soft:#FBEAE8;
+        --success-soft:#E8F3EC;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Inter', sans-serif; }
+    .hidden { display: none !important; }
+
+    /* ---- tela de login (mesmo padrão do resto do Sicon) ---- */
+    #tela-login { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(160deg, var(--brand), #0f2a1d); }
+    .caixa-login { background: var(--surface); border-radius: 16px; padding: 32px 28px; width: 100%; max-width: 360px; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
+    .caixa-login h1 { font-family: 'Fraunces', serif; font-size: 1.4rem; color: var(--brand); margin: 0 0 4px 0; }
+    .caixa-login .subtitulo { color: var(--muted); font-size: 0.85rem; margin: 0 0 20px 0; }
+    .campo { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .campo label { font-size: 0.82rem; font-weight: 600; }
+    .campo input, .campo select, .campo textarea {
+        font-family: 'Inter', sans-serif; font-size: 0.92rem; padding: 10px 12px;
+        border: 1.5px solid var(--border); border-radius: 9px; width: 100%; background: var(--surface); color: var(--ink);
+    }
+    .campo textarea { resize: vertical; min-height: 60px; }
+    .campo input:focus, .campo select:focus, .campo textarea:focus { outline: none; border-color: var(--brand-2); }
+    .btn { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.92rem; border: none; border-radius: 9px; padding: 11px 18px; cursor: pointer; }
+    .btn-principal { background: var(--brand); color: white; width: 100%; padding: 13px; }
+    .btn-principal:hover { background: var(--brand-2); }
+    .btn-principal:disabled { background: var(--muted); cursor: not-allowed; }
+    .btn-cinza { background: #EEF0F1; color: var(--ink); }
+    .btn-perigo { background: var(--danger-soft); color: var(--danger); }
+    .status-msg { font-size: 0.85rem; margin-top: 10px; text-align: center; }
+    .campo-senha-wrap { position: relative; }
+    .campo-senha-wrap input { padding-right: 38px; }
+    .btn-olho-senha { position: absolute; top: 50%; right: 5px; transform: translateY(-50%); background: none; border: none; padding: 6px; cursor: pointer; color: var(--muted); display: flex; align-items: center; justify-content: center; border-radius: 6px; }
+    .btn-olho-senha svg { width: 17px; height: 17px; }
+    .status-erro { color: var(--danger); }
+
+    /* ---- app principal ---- */
+    #app { max-width: 820px; margin: 0 auto; padding: 20px 16px 60px; }
+    .topo { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; flex-wrap: wrap; gap: 10px; }
+    .topo h1 { font-family: 'Fraunces', serif; font-size: 1.35rem; color: var(--brand); margin: 0; }
+    .topo .subtitulo { color: var(--muted); font-size: 0.85rem; margin: 2px 0 0 0; }
+    .abas { display: flex; gap: 6px; margin-bottom: 18px; border-bottom: 2px solid var(--border); flex-wrap: wrap; }
+    .aba-btn { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.9rem; color: var(--muted); background: none; border: none; padding: 10px 4px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -2px; }
+    .aba-btn.ativa { color: var(--brand); border-bottom-color: var(--brand); }
+    .conteudo-aba { display: none; }
+    .conteudo-aba.ativa { display: block; }
+
+    .cartao { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+    .cartao h2 { font-family: 'Fraunces', serif; font-size: 1.02rem; font-weight: 600; margin: 0 0 14px 0; }
+    .grade { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 520px) { .grade { grid-template-columns: 1fr; } }
+
+    .linha-busca { position: relative; }
+    .resultados-busca { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; max-height: 220px; overflow-y: auto; display: none; margin-top: 4px; box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+    .resultados-busca.aberto { display: block; }
+    .resultado-item { padding: 10px 12px; cursor: pointer; font-size: 0.88rem; border-bottom: 1px solid var(--border); }
+    .resultado-item:last-child { border-bottom: none; }
+    .resultado-item:hover { background: var(--brand-soft); }
+    .resultado-item .sub { color: var(--muted); font-size: 0.78rem; }
+    .selecionado-texto { font-size: 0.82rem; color: var(--brand-2); margin-top: 4px; }
+    .vazio { text-align: center; padding: 24px 0; color: var(--muted); font-size: 0.88rem; }
+
+    .tipo-item-btn { background: #EEF0F1; color: var(--muted); }
+    .tipo-item-btn.ativa { background: var(--brand); color: white; }
+
+    .pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
+    .pill-ok { background: var(--success-soft); color: var(--brand-2); }
+    .pill-fora { background: var(--danger-soft); color: var(--danger); }
+    .pill-inativo { background: #EEF0F1; color: var(--muted); }
+
+    .item-linha { border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .item-linha .info { flex: 1; min-width: 200px; }
+    .item-linha .nome { font-weight: 600; font-size: 0.92rem; }
+    .item-linha .meta { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+    .item-linha .acoes { display: flex; gap: 6px; }
+    .item-linha .acoes .btn { padding: 7px 10px; font-size: 0.78rem; }
+
+    .ficha-paciente { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; background: var(--brand-soft); border-radius: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+    .ficha-paciente .nome { font-weight: 700; font-family: 'Fraunces', serif; color: var(--brand); font-size: 1.05rem; }
+    .ficha-paciente .sub { font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+    .ficha-paciente .alerta-clinico { font-size: 0.8rem; color: var(--danger); margin-top: 6px; }
+
+    /* ---- acordeão (itens de modelo, agrupados por "grupo") ---- */
+    .grupo-acordeao { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 10px; }
+    .grupo-cab { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; cursor: pointer; user-select: none; background: var(--surface); }
+    .grupo-cab .titulo { font-weight: 700; font-size: 0.9rem; }
+    .grupo-corpo { display: none; border-top: 1px solid var(--border); padding: 6px 12px; }
+    .grupo-corpo.on { display: block; }
+
+    /* ---- formulário de visita: um bloco por item ---- */
+    .item-visita { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+    .item-visita .item-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .item-visita .item-nome { font-weight: 600; font-size: 0.9rem; }
+    .item-visita .item-unidade { font-size: 0.76rem; color: var(--muted); }
+    .item-visita input[type=text], .item-visita input[type=number] { font-family: inherit; font-size: 0.9rem; padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 8px; width: 100%; }
+    .sim-nao-btns { display: flex; gap: 6px; }
+    .sim-nao-btns .btn { flex: 1; padding: 8px; font-size: 0.85rem; background: #EEF0F1; color: var(--muted); }
+    .sim-nao-btns .btn.ativo-sim { background: var(--success-soft); color: var(--brand-2); }
+    .sim-nao-btns .btn.ativo-nao { background: var(--danger-soft); color: var(--danger); }
+
+    /* ---- fotos ---- */
+    .frow { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 8px; }
+    .fbtn { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); border: 1px dashed var(--border); border-radius: 8px; padding: 7px 12px; cursor: pointer; background: transparent; font-family: inherit; }
+    .fth { width: 54px; height: 54px; border-radius: 8px; object-fit: cover; border: 1px solid var(--border); cursor: pointer; }
+    .fmodal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 200; align-items: center; justify-content: center; flex-direction: column; gap: 12px; padding: 20px; }
+    .fmodal.on { display: flex; }
+    .fmodal img { max-width: 92vw; max-height: 80vh; border-radius: 8px; }
+    .fmodal-close { background: #fff; border: none; border-radius: 20px; padding: 8px 20px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+
+    /* ---- modais ---- */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; padding: 16px; }
+    .modal-overlay.aberto { display: flex; }
+    .modal-caixa { background: var(--surface); border-radius: 14px; padding: 24px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; }
+    .modal-caixa.larga { max-width: 640px; }
+    .modal-caixa h3 { font-family: 'Fraunces', serif; margin: 0 0 4px 0; color: var(--brand); }
+
+    /* ---- modal de Ajuda (mesmo padrão dos outros módulos Servir) ---- */
+    .btn-ajuda-modulo{ display:flex; align-items:center; gap:6px; background:none; border:1.5px solid var(--border); color:var(--muted); font-size:.8rem; font-weight:600; padding:7px 12px; border-radius:8px; cursor:pointer; flex-shrink:0; }
+    .btn-ajuda-modulo:hover{ background:var(--brand-soft); color:var(--ink); }
+    .modal-ajuda-head{ display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border); }
+    .modal-ajuda-head h3{ font-family:'Fraunces', serif; margin:0; color:var(--brand); font-size:1.05rem; }
+    .modal-ajuda-body{ display:flex; flex:1; min-height:0; overflow:hidden; }
+    .modal-ajuda-nav{ width:210px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface); overflow-y:auto; padding:10px; }
+    .modal-ajuda-nav-item{ display:block; width:100%; text-align:left; background:none; border:none; color:var(--muted); font-size:.82rem; font-weight:600; padding:9px 10px; border-radius:8px; cursor:pointer; margin-bottom:2px; font-family:'Inter', sans-serif; }
+    .modal-ajuda-nav-item:hover{ background:var(--brand-soft); color:var(--ink); }
+    .modal-ajuda-nav-item.ativo{ background:var(--brand); color:#fff; }
+    .modal-ajuda-conteudo{ flex:1; overflow-y:auto; padding:22px 26px; font-size:.88rem; line-height:1.55; color:var(--ink); }
+    .modal-ajuda-conteudo h4{ font-size:1rem; font-weight:700; margin-bottom:10px; }
+    .modal-ajuda-conteudo p{ margin-bottom:10px; }
+    .modal-ajuda-conteudo ul{ margin:0 0 12px 18px; }
+    .modal-ajuda-conteudo li{ margin-bottom:6px; }
+    .modal-ajuda-conteudo strong{ color:var(--ink); }
+    .modal-ajuda-conteudo .ajuda-atualizado{ font-size:.72rem; color:var(--muted); margin-top:18px; padding-top:12px; border-top:1px solid var(--border); }
+    @media (max-width:680px){
+        .modal-ajuda-body{ flex-direction:column; }
+        .modal-ajuda-nav{ width:100%; border-right:none; border-bottom:1px solid var(--border); display:flex; overflow-x:auto; gap:4px; padding:8px; white-space:nowrap; }
+        .modal-ajuda-nav-item{ margin-bottom:0; flex-shrink:0; }
+    }
+</style>
+</head>
+<body>
+
+<div id="tela-login">
+    <div class="caixa-login">
+        <h1>Prontuário Médico</h1>
+        <p class="subtitulo">Entre com seu usuário do Servir</p>
+        <div class="campo"><label>E-mail</label><input type="email" id="login-email" autocomplete="email"></div>
+        <div class="campo"><label>Senha</label>
+            <div class="campo-senha-wrap">
+                <input type="password" id="login-senha" autocomplete="current-password">
+                <button type="button" class="btn-olho-senha" data-alvo="login-senha" aria-label="Mostrar senha"></button>
+            </div>
+        </div>
+        <button class="btn btn-principal" id="btn-login">Entrar</button>
+        <p class="status-msg status-erro" id="status-login"></p>
+        <p class="subtitulo" style="text-align:center; margin-top:10px;">
+            <a href="#" id="link-esqueci-senha" style="color:var(--brand-2);">Esqueci minha senha</a>
+        </p>
+    </div>
+</div>
+
+<div id="tela-sem-acesso" class="hidden" style="min-height:100vh; display:flex; align-items:center; justify-content:center; text-align:center; padding:24px;">
+    <div>
+        <h2 style="font-family:'Fraunces',serif; color:var(--brand);">Sem acesso ao Prontuário Médico</h2>
+        <p class="subtitulo" style="max-width:360px;" id="textoSemAcesso">Sua conta está vinculada a esta unidade, mas não tem acesso liberado a este módulo. Fale com o administrador da unidade.</p>
+        <button class="btn btn-cinza" id="btn-sair-sem-acesso" style="margin-top:10px;">Sair</button>
+    </div>
+</div>
+
+<div id="modal-ajuda" class="modal-overlay">
+    <div class="modal-caixa" style="max-width:820px; height:min(640px, 85vh); padding:0; display:flex; flex-direction:column;">
+        <div class="modal-ajuda-head">
+            <h3 id="modalAjudaTitulo">❓ Ajuda — Prontuário Médico</h3>
+            <button type="button" class="btn btn-cinza" id="btnFecharModalAjuda" style="width:auto; padding:6px 12px;">✕</button>
+        </div>
+        <div class="modal-ajuda-body">
+            <nav class="modal-ajuda-nav" id="ajudaModuloNav"></nav>
+            <div class="modal-ajuda-conteudo" id="ajudaModuloConteudo"></div>
+        </div>
+    </div>
+</div>
+
+<div id="modal-unidade" class="modal-overlay">
+    <div class="modal-caixa">
+        <h3>Escolha a unidade</h3>
+        <div id="lista-unidades-escolha" style="display:flex; flex-direction:column; gap:8px; margin-top:14px;"></div>
+    </div>
+</div>
+
+<div class="fmodal" id="fmodal"><img id="fmodal-img" src=""><button class="fmodal-close" onclick="fecharFoto()">Fechar</button></div>
+
+<div id="app" class="hidden">
+    <div class="topo">
+        <div>
+            <h1>Prontuário Médico</h1>
+            <p class="subtitulo" id="unidade-logada"></p>
+        </div>
+        <div style="display:flex; gap:8px;">
+            <button type="button" class="btn-ajuda-modulo" id="btnAjudaModulo">❓ Ajuda</button>
+            <button class="btn btn-cinza" id="btn-trocar-unidade" style="display:none;">⇄ Trocar unidade</button>
+            <button class="btn btn-cinza" id="btn-sair">Sair</button>
+        </div>
+    </div>
+
+    <div class="abas">
+        <button class="aba-btn ativa" data-aba="pacientes">🩺 Pacientes</button>
+        <button class="aba-btn" data-aba="itens" id="aba-btn-itens" style="display:none;">📋 Itens de Modelo</button>
+    </div>
+
+    <!-- ==================== ABA PACIENTES ==================== -->
+    <div class="conteudo-aba ativa" id="aba-pacientes">
+        <div class="cartao">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                <h2 style="margin:0;">Buscar paciente</h2>
+                <button type="button" class="btn btn-principal" id="btnNovoPaciente" style="width:auto;">+ Novo paciente</button>
+            </div>
+            <div class="campo linha-busca" style="margin-top:12px; margin-bottom:0;">
+                <input type="text" id="campoBuscaPaciente" placeholder="Digite o nome do paciente..." autocomplete="off">
+                <input type="hidden" id="pacienteIdSelecionado">
+                <div id="resultadosBuscaPaciente" class="resultados-busca"></div>
+            </div>
+        </div>
+
+        <div id="blocoPaciente" class="hidden">
+            <div class="ficha-paciente">
+                <div style="flex:1; min-width:200px;">
+                    <div class="nome" id="fichaPacienteNome"></div>
+                    <div class="sub" id="fichaPacienteSub"></div>
+                    <div class="alerta-clinico hidden" id="fichaPacienteAlerta"></div>
+                </div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <button type="button" class="btn btn-cinza" id="btnEditarPaciente" style="width:auto;">✏️ Editar</button>
+                    <button type="button" class="btn btn-principal" id="btnNovaVisita" style="width:auto; white-space:nowrap;">+ Nova visita</button>
+                </div>
+            </div>
+
+            <div class="cartao">
+                <h2>Histórico de visitas</h2>
+                <div id="listaVisitas"></div>
+                <div id="vazioVisitas" class="vazio hidden">Nenhuma visita registrada ainda.</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== ABA ITENS DE MODELO ==================== -->
+    <div class="conteudo-aba" id="aba-itens">
+        <div class="cartao">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                <h2 style="margin:0;">Itens de modelo</h2>
+                <button type="button" class="btn btn-principal" id="btnNovoItemModelo" style="width:auto;">+ Novo item</button>
+            </div>
+            <p class="subtitulo" style="margin:8px 0 0 0;">Cada item vira um campo pra preencher em toda visita — agrupe por "Sinais Vitais", "Medicação", "Cuidados" etc. como fizer sentido pra sua operação.</p>
+            <div id="listaItensModelo" style="margin-top:14px;"></div>
+            <div id="vazioItensModelo" class="vazio hidden">Nenhum item cadastrado ainda.</div>
+        </div>
+    </div>
+</div>
+
+<!-- ==================== MODAL: PACIENTE (novo/editar) ==================== -->
+<div id="modal-paciente" class="modal-overlay">
+    <div class="modal-caixa larga">
+        <h3 id="modalPacienteTitulo">Novo paciente</h3>
+        <div class="grade">
+            <div class="campo"><label>Nome</label><input type="text" id="campoNomePaciente"></div>
+            <div class="campo"><label>Data de nascimento</label><input type="date" id="campoNascimentoPaciente"></div>
+            <div class="campo"><label>CPF</label><input type="text" id="campoCpfPaciente"></div>
+            <div class="campo"><label>Telefone</label><input type="text" id="campoTelefonePaciente"></div>
+        </div>
+        <div class="campo"><label>Endereço</label><input type="text" id="campoEnderecoPaciente"></div>
+        <div class="grade">
+            <div class="campo"><label>Contato de emergência — nome</label><input type="text" id="campoContatoEmergenciaNome"></div>
+            <div class="campo"><label>Contato de emergência — telefone</label><input type="text" id="campoContatoEmergenciaTelefone"></div>
+            <div class="campo"><label>Convênio</label><input type="text" id="campoConvenioPaciente"></div>
+            <div class="campo"><label>Nº carteirinha</label><input type="text" id="campoCarteirinhaPaciente"></div>
+        </div>
+        <div class="campo"><label>Médico responsável</label><input type="text" id="campoMedicoResponsavel"></div>
+        <div class="campo"><label>Alergias</label><textarea id="campoAlergiasPaciente"></textarea></div>
+        <div class="campo"><label>Comorbidades</label><textarea id="campoComorbidadesPaciente"></textarea></div>
+        <div class="campo"><label>Observações gerais</label><textarea id="campoObsPaciente"></textarea></div>
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; margin-bottom:14px;">
+            <input type="checkbox" id="campoAtivoPaciente" checked style="width:16px; height:16px;">
+            Ativo
+        </label>
+        <div style="display:flex; gap:8px;">
+            <button type="button" class="btn btn-cinza" id="btnCancelarPaciente" style="flex:1;">Cancelar</button>
+            <button type="button" class="btn btn-principal" id="btnSalvarPaciente" style="flex:1;">Salvar</button>
+        </div>
+        <p class="status-msg" id="statusPaciente"></p>
+    </div>
+</div>
+
+<!-- ==================== MODAL: NOVA VISITA ==================== -->
+<div id="modal-visita" class="modal-overlay">
+    <div class="modal-caixa larga">
+        <h3>Nova visita</h3>
+        <p class="subtitulo" id="visitaPacienteTexto" style="margin-bottom:14px;"></p>
+        <div class="grade">
+            <div class="campo"><label>Data</label><input type="date" id="campoDataVisita"></div>
+            <div class="campo"><label>Hora</label><input type="time" id="campoHoraVisita"></div>
+        </div>
+        <div id="listaItensVisita"></div>
+        <div id="vazioItensVisita" class="vazio hidden">Nenhum item de modelo cadastrado ainda — cadastre em "Itens de Modelo" antes de registrar uma visita.</div>
+        <div class="campo"><label>Observações gerais da visita (evolução clínica)</label><textarea id="campoObsGeraisVisita" style="min-height:90px;"></textarea></div>
+        <div style="display:flex; gap:8px; margin-top:6px;">
+            <button type="button" class="btn btn-cinza" id="btnCancelarVisita" style="flex:1;">Cancelar</button>
+            <button type="button" class="btn btn-principal" id="btnSalvarVisita" style="flex:1;">Registrar visita</button>
+        </div>
+        <p class="status-msg" id="statusVisita"></p>
+    </div>
+</div>
+
+<!-- ==================== MODAL: DETALHE DA VISITA (somente leitura) ==================== -->
+<div id="modal-detalhe-visita" class="modal-overlay">
+    <div class="modal-caixa larga">
+        <h3>Visita</h3>
+        <p class="subtitulo" id="detalheVisitaTexto" style="margin-bottom:14px;"></p>
+        <div id="listaDetalheVisita"></div>
+        <div id="detalheVisitaObsGerais" style="margin-top:10px; font-size:0.88rem;"></div>
+        <button type="button" class="btn btn-cinza" id="btnFecharDetalheVisita" style="width:100%; margin-top:14px;">Fechar</button>
+    </div>
+</div>
+
+<!-- ==================== MODAL: ITEM DE MODELO (novo/editar) ==================== -->
+<div id="modal-item-modelo" class="modal-overlay">
+    <div class="modal-caixa">
+        <h3 id="modalItemModeloTitulo">Novo item de modelo</h3>
+        <div class="campo"><label>Grupo</label><input type="text" id="campoGrupoItemModelo" placeholder="Ex: Sinais Vitais, Medicação, Cuidados" list="listaGruposExistentes"><datalist id="listaGruposExistentes"></datalist></div>
+        <div class="campo"><label>Nome do item</label><input type="text" id="campoNomeItemModelo" placeholder="Ex: Pressão Arterial"></div>
+        <div class="campo"><label>Tipo de resposta</label>
+            <select id="campoTipoRespostaItemModelo">
+                <option value="numero">Número (com unidade e faixa de referência)</option>
+                <option value="texto">Texto livre</option>
+                <option value="sim_nao">Sim / Não</option>
+            </select>
+        </div>
+        <div id="blocoCamposNumero" class="grade">
+            <div class="campo"><label>Unidade de medida</label><input type="text" id="campoUnidadeMedidaItemModelo" placeholder="Ex: mmHg, °C, mg/dL, bpm"></div>
+            <div class="campo"><label>Ordem</label><input type="number" step="1" id="campoOrdemItemModelo" value="0"></div>
+            <div class="campo"><label>Valor mínimo de referência</label><input type="number" step="0.01" id="campoValorMinItemModelo"></div>
+            <div class="campo"><label>Valor máximo de referência</label><input type="number" step="0.01" id="campoValorMaxItemModelo"></div>
+        </div>
+        <div id="blocoOrdemFora" class="campo hidden"><label>Ordem</label><input type="number" step="1" id="campoOrdemItemModeloAlt" value="0"></div>
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; margin-bottom:10px;">
+            <input type="checkbox" id="campoObrigatorioItemModelo" style="width:16px; height:16px;">
+            Obrigatório preencher em toda visita
+        </label>
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.88rem; cursor:pointer; margin-bottom:14px;">
+            <input type="checkbox" id="campoAtivoItemModelo" checked style="width:16px; height:16px;">
+            Ativo (aparece no formulário de nova visita)
+        </label>
+        <div style="display:flex; gap:8px;">
+            <button type="button" class="btn btn-cinza" id="btnCancelarItemModelo" style="flex:1;">Cancelar</button>
+            <button type="button" class="btn btn-principal" id="btnSalvarItemModelo" style="flex:1;">Salvar</button>
+        </div>
+        <p class="status-msg" id="statusItemModelo"></p>
+    </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------
+// CONFIG
+// ---------------------------------------------------------------
+const SUPABASE_URL = 'https://frzvcrcshkpvjdbbqkhz.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_h-JuDyjYgb5YKGYFRKtLEg_8gnJor9w';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const BUCKET_FOTOS = 'prontuario-fotos';
+
+function escapeHtml(texto) {
+    if (texto == null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(texto);
+    return div.innerHTML;
+}
+function hojeISO() { return new Date().toISOString().slice(0, 10); }
+function agoraHora() { return new Date().toTimeString().slice(0, 5); }
+function formatarDataSemFuso(dataStr) {
+    if (!dataStr) return '';
+    const m = String(dataStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : dataStr;
+}
+function calcularIdade(dataNascimento) {
+    if (!dataNascimento) return null;
+    const nasc = new Date(dataNascimento + 'T00:00:00');
+    const hoje = new Date();
+    let idade = hoje.getFullYear() - nasc.getFullYear();
+    const m = hoje.getMonth() - nasc.getMonth();
+    if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
+    return idade;
+}
+
+// ---------------------------------------------------------------
+// MODAL DE AJUDA (mesmo padrão dos outros módulos Servir -- ver
+// seção 4.6 do CLAUDE.md)
+// ---------------------------------------------------------------
+const AJUDA_PRONTUARIO = {
+    titulo: 'Prontuário Médico',
+    ultimaRevisao: '15/09/2026',
+    secoes: [
+        { id: 'geral', titulo: 'Visão geral', corpo: `
+            <p>Prontuário pra empresas de home care -- o técnico visita o paciente, registra
+            sinais vitais/medicação/cuidados e anexa fotos. Mesma arquitetura de "item
+            configurável + resposta + foto" já usada no Checklist de Equipamentos, adaptada
+            pra medição clínica (valor numérico com unidade e faixa de referência, em vez de
+            só OK/NOK).</p>
+            <p>Dado de saúde é categoria sensível -- por ora, qualquer pessoa vinculada à
+            unidade consegue ver e registrar visitas (mesmo padrão de acesso do resto da
+            plataforma); cadastrar paciente e configurar os itens de modelo fica restrito ao
+            Administrador/Principal da unidade.</p>
+        ` },
+        { id: 'pacientes', titulo: 'Pacientes', corpo: `
+            <p>Busca por nome, ficha com dados cadastrais e histórico de visitas.</p>
+            <ul>
+                <li>Cadastrar/editar paciente é restrito a Administrador/Principal --
+                inclui dados sensíveis (CPF, convênio, alergias, comorbidades).</li>
+                <li><strong>Registrar visita</strong> é aberto a qualquer pessoa vinculada à
+                unidade -- é o dia a dia do técnico em campo.</li>
+                <li>Alergias/comorbidades aparecem em destaque (vermelho) na ficha, pra
+                qualquer técnico ver antes de atender.</li>
+            </ul>
+        ` },
+        { id: 'visita', titulo: 'Registrar visita', corpo: `
+            <p>Escolhe o paciente, preenche os itens de modelo ativos (agrupados como o
+            Administrador configurou -- ex: Sinais Vitais, Medicação, Cuidados) e salva.</p>
+            <ul>
+                <li>Item do tipo <strong>número</strong> com faixa de referência configurada
+                mostra um selo vermelho <strong>"Fora da referência"</strong> na hora, se o
+                valor digitado estiver fora do mínimo/máximo -- é só um alerta visual, não
+                bloqueia o envio.</li>
+                <li>Cada item aceita uma <strong>observação</strong> e <strong>fotos</strong>
+                próprias (ex: foto de um curativo, de uma receita). As fotos são comprimidas
+                no aparelho antes de enviar.</li>
+                <li><strong>Observações gerais da visita</strong> é o campo de evolução
+                clínica em texto livre, sobre a visita como um todo.</li>
+            </ul>
+        ` },
+        { id: 'itens', titulo: 'Itens de Modelo', corpo: `
+            <p>Só Administrador/Principal vê e mexe nessa aba.</p>
+            <ul>
+                <li>Cada item pertence a um <strong>grupo</strong> (texto livre -- "Sinais
+                Vitais", "Medicação", "Cuidados", o que fizer sentido pra sua operação).</li>
+                <li><strong>Tipo de resposta</strong>: Número (com unidade e faixa de
+                referência opcional), Texto livre, ou Sim/Não.</li>
+                <li>Desativar um item (em vez de excluir) tira ele do formulário de novas
+                visitas sem apagar o histórico de visitas antigas que já usaram ele.</li>
+            </ul>
+        ` }
+    ]
+};
+function renderizarAjudaModulo(secaoId) {
+    const secao = AJUDA_PRONTUARIO.secoes.find(s => s.id === secaoId) || AJUDA_PRONTUARIO.secoes[0];
+    document.querySelectorAll('.modal-ajuda-nav-item').forEach(el => el.classList.toggle('ativo', el.dataset.secao === secao.id));
+    document.getElementById('ajudaModuloConteudo').innerHTML = `
+        <h4>${secao.titulo}</h4>
+        ${secao.corpo}
+        <div class="ajuda-atualizado">Última revisão deste conteúdo: ${AJUDA_PRONTUARIO.ultimaRevisao}</div>
+    `;
+}
+function abrirModalAjuda(secaoInicial) {
+    document.getElementById('modalAjudaTitulo').textContent = '❓ Ajuda — ' + AJUDA_PRONTUARIO.titulo;
+    document.getElementById('ajudaModuloNav').innerHTML = AJUDA_PRONTUARIO.secoes.map(s =>
+        `<button type="button" class="modal-ajuda-nav-item" data-secao="${s.id}">${s.titulo}</button>`
+    ).join('');
+    document.querySelectorAll('.modal-ajuda-nav-item').forEach(btn => {
+        btn.addEventListener('click', () => renderizarAjudaModulo(btn.dataset.secao));
+    });
+    renderizarAjudaModulo(secaoInicial || 'geral');
+    document.getElementById('modal-ajuda').classList.add('aberto');
+}
+document.getElementById('btnAjudaModulo').addEventListener('click', () => {
+    const abaAtivaBtn = document.querySelector('.aba-btn.ativa');
+    const abaAtiva = abaAtivaBtn ? abaAtivaBtn.dataset.aba : 'geral';
+    const mapa = { pacientes: 'pacientes', itens: 'itens' };
+    abrirModalAjuda(mapa[abaAtiva] || 'geral');
+});
+document.getElementById('btnFecharModalAjuda').addEventListener('click', () => {
+    document.getElementById('modal-ajuda').classList.remove('aberto');
+});
+
+// ---------- olho de mostrar/ocultar senha ----------
+const svgOlhoAberto = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+const svgOlhoFechado = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+document.querySelectorAll('.btn-olho-senha').forEach(btn => {
+    btn.innerHTML = svgOlhoFechado;
+    btn.addEventListener('click', () => {
+        const input = document.getElementById(btn.dataset.alvo);
+        if (!input) return;
+        const mostrando = input.type === 'text';
+        input.type = mostrando ? 'password' : 'text';
+        btn.innerHTML = mostrando ? svgOlhoFechado : svgOlhoAberto;
+    });
+});
+
+// ---------------------------------------------------------------
+// ESTADO GLOBAL
+// ---------------------------------------------------------------
+let meuPerfil = { unidadeId: null, unidadeNome: '', ehPrincipal: false, papel: null, userId: null, nomeOperador: '', email: '' };
+let vinculosGlobais = [];
+let pacientes = [];
+let itensModelo = [];
+let pacienteSelecionado = null;
+let visitasPacienteAtual = [];
+
+function ehAdministradorOuPrincipal() { return meuPerfil.ehPrincipal || meuPerfil.papel === 'administrador'; }
+
+// grava um registro na sentinela (auditoria global, compartilhada
+// entre módulos) -- não bloqueia a ação principal se falhar, só avisa
+// no console
+async function registrarSentinela(tipoAcao, descricao) {
+    try {
+        const { error } = await sb.from('servir_sentinela').insert({
+            unidade_negocio_id: meuPerfil.unidadeId,
+            modulo: 'prontuario',
+            tipo_acao: tipoAcao,
+            descricao,
+            operador: meuPerfil.nomeOperador,
+            operador_user_id: meuPerfil.userId
+        });
+        if (error) console.error('Falha ao gravar na sentinela:', error);
+    } catch (e) { console.error('Falha ao gravar na sentinela:', e); }
+}
+
+// ---------------------------------------------------------------
+// LOGIN / SESSÃO (mesmo padrão do resto do Sicon)
+// ---------------------------------------------------------------
+document.getElementById('btn-login').addEventListener('click', async () => {
+    const email = document.getElementById('login-email').value.trim();
+    const senha = document.getElementById('login-senha').value;
+    const statusEl = document.getElementById('status-login');
+    statusEl.textContent = '';
+    if (!email || !senha) { statusEl.textContent = 'Preencha e-mail e senha.'; return; }
+    const btn = document.getElementById('btn-login');
+    btn.disabled = true; btn.textContent = 'Entrando...';
+    const { error } = await sb.auth.signInWithPassword({ email, password: senha });
+    btn.disabled = false; btn.textContent = 'Entrar';
+    if (error) {
+        const msg = (error.message || '').toLowerCase();
+        if (msg.includes('email not confirmed')) statusEl.textContent = 'Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada.';
+        else if (msg.includes('invalid login credentials') || msg.includes('invalid_credentials')) statusEl.textContent = 'E-mail ou senha incorretos.';
+        else if (msg.includes('rate limit') || msg.includes('too many')) statusEl.textContent = 'Muitas tentativas seguidas. Aguarde um instante e tente de novo.';
+        else if (!navigator.onLine) statusEl.textContent = 'Sem conexão com a internet. Verifique sua rede e tente de novo.';
+        else statusEl.textContent = 'Não foi possível entrar: ' + error.message;
+        return;
+    }
+    await onLogin();
+});
+document.getElementById('login-senha').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btn-login').click(); });
+document.getElementById('link-esqueci-senha').addEventListener('click', async (e) => {
+    e.preventDefault();
+    const statusEl = document.getElementById('status-login');
+    const email = document.getElementById('login-email').value.trim();
+    if (!email) { statusEl.textContent = 'Digite seu e-mail no campo acima primeiro, depois clique em "Esqueci minha senha".'; return; }
+    statusEl.style.color = ''; statusEl.textContent = 'Enviando...';
+    try {
+        const { error } = await sb.auth.resetPasswordForEmail(email);
+        if (error) throw error;
+        statusEl.style.color = 'var(--brand-2)';
+        statusEl.textContent = 'Se esse e-mail estiver cadastrado, você vai receber um link pra redefinir a senha.';
+    } catch (erro) { statusEl.style.color = ''; statusEl.textContent = 'Não foi possível enviar: ' + erro.message; }
+});
+document.getElementById('btn-sair').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
+document.getElementById('btn-sair-sem-acesso').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
+
+async function checkSession() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) await onLogin();
+}
+
+async function onLogin() {
+    document.getElementById('tela-login').classList.add('hidden');
+
+    const { data: sessao } = await sb.auth.getUser();
+    meuPerfil.email = sessao?.user?.email || '';
+    meuPerfil.nomeOperador = sessao?.user?.user_metadata?.nome || sessao?.user?.user_metadata?.full_name || meuPerfil.email;
+    const userId = sessao?.user?.id;
+    meuPerfil.userId = userId;
+    if (!userId) return;
+
+    const { data: vinculos, error } = await sb.from('servir_unidade_usuarios')
+        .select('unidade_negocio_id, eh_principal, servir_unidades_negocio(nome)')
+        .eq('user_id', userId);
+    if (error || !vinculos || !vinculos.length) {
+        alert('Não encontramos nenhuma unidade vinculada ao seu usuário. Fale com o administrador.');
+        return;
+    }
+    vinculosGlobais = vinculos.map(v => ({ unidade_id: v.unidade_negocio_id, eh_principal: v.eh_principal, nome: v.servir_unidades_negocio?.nome || '' }));
+
+    if (vinculosGlobais.length === 1) {
+        await definirUnidadeAtiva(vinculosGlobais[0]);
+        await iniciarApp();
+    } else {
+        abrirEscolhaUnidade();
+    }
+}
+
+function abrirEscolhaUnidade() {
+    const wrap = document.getElementById('lista-unidades-escolha');
+    wrap.innerHTML = '';
+    vinculosGlobais.forEach(v => {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-cinza';
+        btn.style.width = '100%';
+        btn.textContent = v.nome;
+        btn.addEventListener('click', async () => {
+            await definirUnidadeAtiva(v);
+            document.getElementById('modal-unidade').classList.remove('aberto');
+            await iniciarApp();
+        });
+        wrap.appendChild(btn);
+    });
+    document.getElementById('modal-unidade').classList.add('aberto');
+}
+document.getElementById('btn-trocar-unidade').addEventListener('click', abrirEscolhaUnidade);
+
+async function definirUnidadeAtiva(vinculo) {
+    meuPerfil.unidadeId = vinculo.unidade_id;
+    meuPerfil.unidadeNome = vinculo.nome;
+    meuPerfil.ehPrincipal = !!vinculo.eh_principal;
+    document.getElementById('unidade-logada').textContent = vinculo.nome;
+    document.getElementById('btn-trocar-unidade').style.display = vinculosGlobais.length > 1 ? '' : 'none';
+
+    if (meuPerfil.ehPrincipal) {
+        meuPerfil.papel = 'principal';
+    } else {
+        const { data: papel } = await sb.rpc('fn_papel_usuario', { p_unidade_negocio_id: meuPerfil.unidadeId, p_modulo: 'prontuario' });
+        meuPerfil.papel = papel || null;
+    }
+}
+
+// ---------------------------------------------------------------
+// PENDÊNCIA DE LICENÇA (mesmo padrão de todo módulo Servir -- ver
+// verificarPendenciaLicenca em staff-painel-admin.html/estoque-app.html
+// etc., sempre chamado no topo de carregarTudo/iniciarApp)
+// ---------------------------------------------------------------
+function bloquearAcessoTotal(mensagem) {
+    document.getElementById('textoSemAcesso').textContent = mensagem || 'Acesso bloqueado por pendência de licença. Fale com o administrador da unidade.';
+    document.getElementById('app').classList.add('hidden');
+    document.getElementById('tela-sem-acesso').classList.remove('hidden');
+}
+function mostrarAvisoLicenca(mensagem) {
+    console.warn('Aviso de licença:', mensagem);
+}
+async function verificarPendenciaLicenca(unidadeIdAlvo, moduloChave) {
+    try {
+        const { data, error } = await sb.rpc('fn_verificar_pendencia_licenca', { p_unidade_negocio_id: unidadeIdAlvo, p_modulo_chave: moduloChave });
+        if (error || !data) return false;
+        if (data.bloqueia) { bloquearAcessoTotal(data.mensagem); return true; }
+        if (data.mensagem) mostrarAvisoLicenca(data.mensagem);
+        return false;
+    } catch (erro) {
+        console.warn('Não consegui checar pendência de licença:', erro.message);
+        return false;
+    }
+}
+
+// ---------------------------------------------------------------
+// CARREGAMENTO
+// ---------------------------------------------------------------
+async function iniciarApp() {
+    if (await verificarPendenciaLicenca(meuPerfil.unidadeId, 'prontuario')) return;
+    document.getElementById('app').classList.remove('hidden');
+    document.getElementById('aba-btn-itens').style.display = ehAdministradorOuPrincipal() ? '' : 'none';
+    document.getElementById('btnEditarPaciente').style.display = ehAdministradorOuPrincipal() ? '' : 'none';
+
+    await Promise.all([carregarPacientes(), carregarItensModelo()]);
+    renderizarItensModeloAdmin();
+}
+
+async function carregarPacientes() {
+    const { data, error } = await sb.from('prontuario_pacientes')
+        .select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome');
+    pacientes = error ? [] : (data || []);
+}
+
+async function carregarItensModelo() {
+    const { data, error } = await sb.from('prontuario_itens_modelo')
+        .select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('grupo').order('ordem');
+    itensModelo = error ? [] : (data || []);
+}
+
+// ---------------------------------------------------------------
+// ABAS
+// ---------------------------------------------------------------
+document.querySelectorAll('.aba-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.aba-btn').forEach(b => b.classList.remove('ativa'));
+        document.querySelectorAll('.conteudo-aba').forEach(c => c.classList.remove('ativa'));
+        btn.classList.add('ativa');
+        document.getElementById('aba-' + btn.dataset.aba).classList.add('ativa');
+    });
+});
+
+// ---------------------------------------------------------------
+// BUSCA DE PACIENTE (autocomplete local)
+// ---------------------------------------------------------------
+const campoBuscaPaciente = document.getElementById('campoBuscaPaciente');
+const resultadosBuscaPaciente = document.getElementById('resultadosBuscaPaciente');
+campoBuscaPaciente.addEventListener('input', () => {
+    const termo = campoBuscaPaciente.value.trim().toLowerCase();
+    if (!termo) { resultadosBuscaPaciente.classList.remove('aberto'); return; }
+    const achados = pacientes.filter(p => p.nome.toLowerCase().includes(termo)).slice(0, 8);
+    resultadosBuscaPaciente.innerHTML = achados.length
+        ? achados.map(p => `<div class="resultado-item" data-id="${p.id}">${escapeHtml(p.nome)}<div class="sub">${p.data_nascimento ? calcularIdade(p.data_nascimento) + ' anos' : ''}</div></div>`).join('')
+        : '<div class="resultado-item">Nenhum paciente encontrado</div>';
+    resultadosBuscaPaciente.classList.add('aberto');
+});
+resultadosBuscaPaciente.addEventListener('mousedown', (e) => {
+    const item = e.target.closest('.resultado-item[data-id]');
+    if (!item) return;
+    e.preventDefault();
+    selecionarPaciente(item.dataset.id);
+});
+campoBuscaPaciente.addEventListener('blur', () => setTimeout(() => resultadosBuscaPaciente.classList.remove('aberto'), 200));
+
+async function selecionarPaciente(id) {
+    const p = pacientes.find(x => x.id === id);
+    if (!p) return;
+    pacienteSelecionado = p;
+    document.getElementById('pacienteIdSelecionado').value = p.id;
+    campoBuscaPaciente.value = p.nome;
+    resultadosBuscaPaciente.classList.remove('aberto');
+    document.getElementById('fichaPacienteNome').textContent = p.nome;
+    const idade = calcularIdade(p.data_nascimento);
+    document.getElementById('fichaPacienteSub').textContent = [
+        idade != null ? idade + ' anos' : null, p.telefone, p.convenio
+    ].filter(Boolean).join(' · ');
+    const alertaEl = document.getElementById('fichaPacienteAlerta');
+    const alertas = [];
+    if (p.alergias) alertas.push('⚠️ Alergias: ' + p.alergias);
+    if (p.comorbidades) alertas.push('Comorbidades: ' + p.comorbidades);
+    if (alertas.length) { alertaEl.textContent = alertas.join(' — '); alertaEl.classList.remove('hidden'); }
+    else { alertaEl.classList.add('hidden'); }
+    document.getElementById('blocoPaciente').classList.remove('hidden');
+    await carregarVisitas(p.id);
+}
+
+// ---------------------------------------------------------------
+// CADASTRO DE PACIENTE
+// ---------------------------------------------------------------
+let pacienteEmEdicaoId = null;
+function abrirFormPaciente(p) {
+    pacienteEmEdicaoId = p ? p.id : null;
+    document.getElementById('modalPacienteTitulo').textContent = p ? 'Editar paciente' : 'Novo paciente';
+    document.getElementById('campoNomePaciente').value = p ? p.nome : '';
+    document.getElementById('campoNascimentoPaciente').value = p ? (p.data_nascimento || '') : '';
+    document.getElementById('campoCpfPaciente').value = p ? (p.cpf || '') : '';
+    document.getElementById('campoTelefonePaciente').value = p ? (p.telefone || '') : '';
+    document.getElementById('campoEnderecoPaciente').value = p ? (p.endereco || '') : '';
+    document.getElementById('campoContatoEmergenciaNome').value = p ? (p.contato_emergencia_nome || '') : '';
+    document.getElementById('campoContatoEmergenciaTelefone').value = p ? (p.contato_emergencia_telefone || '') : '';
+    document.getElementById('campoConvenioPaciente').value = p ? (p.convenio || '') : '';
+    document.getElementById('campoCarteirinhaPaciente').value = p ? (p.numero_carteirinha || '') : '';
+    document.getElementById('campoMedicoResponsavel').value = p ? (p.medico_responsavel || '') : '';
+    document.getElementById('campoAlergiasPaciente').value = p ? (p.alergias || '') : '';
+    document.getElementById('campoComorbidadesPaciente').value = p ? (p.comorbidades || '') : '';
+    document.getElementById('campoObsPaciente').value = p ? (p.observacoes_gerais || '') : '';
+    document.getElementById('campoAtivoPaciente').checked = p ? p.ativo : true;
+    document.getElementById('statusPaciente').textContent = '';
+    document.getElementById('modal-paciente').classList.add('aberto');
+}
+document.getElementById('btnNovoPaciente').addEventListener('click', () => abrirFormPaciente(null));
+document.getElementById('btnEditarPaciente').addEventListener('click', () => { if (pacienteSelecionado) abrirFormPaciente(pacienteSelecionado); });
+document.getElementById('btnCancelarPaciente').addEventListener('click', () => document.getElementById('modal-paciente').classList.remove('aberto'));
+
+document.getElementById('btnSalvarPaciente').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusPaciente');
+    statusEl.textContent = '';
+    const nome = document.getElementById('campoNomePaciente').value.trim();
+    if (!nome) { statusEl.textContent = 'Informe o nome.'; return; }
+
+    const btn = document.getElementById('btnSalvarPaciente');
+    btn.disabled = true; btn.textContent = 'Salvando...';
+    try {
+        const payload = {
+            unidade_negocio_id: meuPerfil.unidadeId, nome,
+            data_nascimento: document.getElementById('campoNascimentoPaciente').value || null,
+            cpf: document.getElementById('campoCpfPaciente').value.trim() || null,
+            telefone: document.getElementById('campoTelefonePaciente').value.trim() || null,
+            endereco: document.getElementById('campoEnderecoPaciente').value.trim() || null,
+            contato_emergencia_nome: document.getElementById('campoContatoEmergenciaNome').value.trim() || null,
+            contato_emergencia_telefone: document.getElementById('campoContatoEmergenciaTelefone').value.trim() || null,
+            convenio: document.getElementById('campoConvenioPaciente').value.trim() || null,
+            numero_carteirinha: document.getElementById('campoCarteirinhaPaciente').value.trim() || null,
+            medico_responsavel: document.getElementById('campoMedicoResponsavel').value.trim() || null,
+            alergias: document.getElementById('campoAlergiasPaciente').value.trim() || null,
+            comorbidades: document.getElementById('campoComorbidadesPaciente').value.trim() || null,
+            observacoes_gerais: document.getElementById('campoObsPaciente').value.trim() || null,
+            ativo: document.getElementById('campoAtivoPaciente').checked
+        };
+        if (pacienteEmEdicaoId) payload.id = pacienteEmEdicaoId;
+
+        const { error } = await sb.from('prontuario_pacientes').upsert(payload);
+        if (error) throw error;
+
+        await registrarSentinela('paciente_editado', (pacienteEmEdicaoId ? 'Editado: ' : 'Cadastrado: ') + nome);
+        document.getElementById('modal-paciente').classList.remove('aberto');
+        await carregarPacientes();
+    } catch (e) {
+        statusEl.textContent = 'Erro ao salvar: ' + (e.message || e);
+    } finally {
+        btn.disabled = false; btn.textContent = 'Salvar';
+    }
+});
+
+// ---------------------------------------------------------------
+// ITENS DE MODELO (admin/principal) -- CRUD + acordeão por grupo,
+// mesmo espírito de carregarItensAdmin() do checklist-equipamentos.html
+// ---------------------------------------------------------------
+function renderizarItensModeloAdmin() {
+    const wrap = document.getElementById('listaItensModelo');
+    const vazio = document.getElementById('vazioItensModelo');
+    if (!itensModelo.length) { wrap.innerHTML = ''; vazio.classList.remove('hidden'); return; }
+    vazio.classList.add('hidden');
+
+    const grupos = {};
+    itensModelo.forEach(it => { (grupos[it.grupo] = grupos[it.grupo] || []).push(it); });
+
+    wrap.innerHTML = Object.keys(grupos).sort().map(grupo => `
+        <div class="grupo-acordeao">
+            <div class="grupo-cab" data-toggle-grupo="${escapeHtml(grupo)}">
+                <span class="titulo">${escapeHtml(grupo)} <span style="color:var(--muted); font-weight:500;">(${grupos[grupo].length})</span></span>
+                <span>▾</span>
+            </div>
+            <div class="grupo-corpo" data-corpo-grupo="${escapeHtml(grupo)}">
+                ${grupos[grupo].map(it => `
+                    <div class="item-linha">
+                        <div class="info">
+                            <div class="nome">${escapeHtml(it.item)}${!it.ativo ? ' <span class="pill pill-inativo">inativo</span>' : ''}</div>
+                            <div class="meta">${it.tipo_resposta === 'numero' ? 'Número' + (it.unidade_medida ? ' (' + escapeHtml(it.unidade_medida) + ')' : '') + (it.valor_min_referencia != null || it.valor_max_referencia != null ? ' · referência: ' + (it.valor_min_referencia ?? '—') + ' a ' + (it.valor_max_referencia ?? '—') : '') : it.tipo_resposta === 'sim_nao' ? 'Sim/Não' : 'Texto livre'}${it.obrigatorio ? ' · obrigatório' : ''}</div>
+                        </div>
+                        <div class="acoes"><button type="button" class="btn btn-cinza" data-editar-item-modelo="${it.id}">Editar</button></div>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `).join('');
+}
+document.getElementById('listaItensModelo').addEventListener('click', (e) => {
+    const cab = e.target.closest('[data-toggle-grupo]');
+    if (cab) {
+        const corpo = document.querySelector(`[data-corpo-grupo="${CSS.escape(cab.dataset.toggleGrupo)}"]`);
+        if (corpo) corpo.classList.toggle('on');
+        return;
+    }
+    const btn = e.target.closest('[data-editar-item-modelo]');
+    if (btn) abrirFormItemModelo(itensModelo.find(it => it.id === btn.dataset.editarItemModelo));
+});
+
+function popularDatalistGrupos() {
+    const grupos = [...new Set(itensModelo.map(it => it.grupo))];
+    document.getElementById('listaGruposExistentes').innerHTML = grupos.map(g => `<option value="${escapeHtml(g)}">`).join('');
+}
+
+let itemModeloEmEdicaoId = null;
+function atualizarCamposPorTipoResposta() {
+    const tipo = document.getElementById('campoTipoRespostaItemModelo').value;
+    document.getElementById('blocoCamposNumero').classList.toggle('hidden', tipo !== 'numero');
+    document.getElementById('blocoOrdemFora').classList.toggle('hidden', tipo === 'numero');
+}
+document.getElementById('campoTipoRespostaItemModelo').addEventListener('change', atualizarCamposPorTipoResposta);
+
+function abrirFormItemModelo(it) {
+    itemModeloEmEdicaoId = it ? it.id : null;
+    document.getElementById('modalItemModeloTitulo').textContent = it ? 'Editar item de modelo' : 'Novo item de modelo';
+    popularDatalistGrupos();
+    document.getElementById('campoGrupoItemModelo').value = it ? it.grupo : '';
+    document.getElementById('campoNomeItemModelo').value = it ? it.item : '';
+    document.getElementById('campoTipoRespostaItemModelo').value = it ? it.tipo_resposta : 'numero';
+    document.getElementById('campoUnidadeMedidaItemModelo').value = it ? (it.unidade_medida || '') : '';
+    document.getElementById('campoValorMinItemModelo').value = it && it.valor_min_referencia != null ? it.valor_min_referencia : '';
+    document.getElementById('campoValorMaxItemModelo').value = it && it.valor_max_referencia != null ? it.valor_max_referencia : '';
+    document.getElementById('campoOrdemItemModelo').value = it ? it.ordem : 0;
+    document.getElementById('campoOrdemItemModeloAlt').value = it ? it.ordem : 0;
+    document.getElementById('campoObrigatorioItemModelo').checked = it ? it.obrigatorio : false;
+    document.getElementById('campoAtivoItemModelo').checked = it ? it.ativo : true;
+    atualizarCamposPorTipoResposta();
+    document.getElementById('statusItemModelo').textContent = '';
+    document.getElementById('modal-item-modelo').classList.add('aberto');
+}
+document.getElementById('btnNovoItemModelo').addEventListener('click', () => abrirFormItemModelo(null));
+document.getElementById('btnCancelarItemModelo').addEventListener('click', () => document.getElementById('modal-item-modelo').classList.remove('aberto'));
+
+document.getElementById('btnSalvarItemModelo').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusItemModelo');
+    statusEl.textContent = '';
+    const grupo = document.getElementById('campoGrupoItemModelo').value.trim();
+    const item = document.getElementById('campoNomeItemModelo').value.trim();
+    if (!grupo || !item) { statusEl.textContent = 'Informe grupo e nome do item.'; return; }
+    const tipoResposta = document.getElementById('campoTipoRespostaItemModelo').value;
+
+    const btn = document.getElementById('btnSalvarItemModelo');
+    btn.disabled = true; btn.textContent = 'Salvando...';
+    try {
+        const payload = {
+            unidade_negocio_id: meuPerfil.unidadeId, grupo, item, tipo_resposta: tipoResposta,
+            unidade_medida: tipoResposta === 'numero' ? (document.getElementById('campoUnidadeMedidaItemModelo').value.trim() || null) : null,
+            valor_min_referencia: tipoResposta === 'numero' && document.getElementById('campoValorMinItemModelo').value !== '' ? Number(document.getElementById('campoValorMinItemModelo').value) : null,
+            valor_max_referencia: tipoResposta === 'numero' && document.getElementById('campoValorMaxItemModelo').value !== '' ? Number(document.getElementById('campoValorMaxItemModelo').value) : null,
+            ordem: Number((tipoResposta === 'numero' ? document.getElementById('campoOrdemItemModelo').value : document.getElementById('campoOrdemItemModeloAlt').value)) || 0,
+            obrigatorio: document.getElementById('campoObrigatorioItemModelo').checked,
+            ativo: document.getElementById('campoAtivoItemModelo').checked
+        };
+        if (itemModeloEmEdicaoId) payload.id = itemModeloEmEdicaoId;
+
+        const { error } = await sb.from('prontuario_itens_modelo').upsert(payload);
+        if (error) throw error;
+
+        await registrarSentinela('item_modelo_editado', (itemModeloEmEdicaoId ? 'Editado: ' : 'Criado: ') + grupo + ' — ' + item);
+        document.getElementById('modal-item-modelo').classList.remove('aberto');
+        await carregarItensModelo();
+        renderizarItensModeloAdmin();
+    } catch (e) {
+        statusEl.textContent = 'Erro ao salvar: ' + (e.message || e);
+    } finally {
+        btn.disabled = false; btn.textContent = 'Salvar';
+    }
+});
+
+// ---------------------------------------------------------------
+// FOTOS -- mesmo princípio de comprimirImagem()/tirarFoto() do
+// checklist-equipamentos.html (canvas 1000px, JPEG 0.72), adaptado
+// pra guardar o Blob no estado em memória da visita (estVisita)
+// ---------------------------------------------------------------
+function comprimirImagem(file, maxPx, qualidade, cb) {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+        let w = img.width, h = img.height;
+        if (w > maxPx || h > maxPx) {
+            if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
+            else { w = Math.round(w * maxPx / h); h = maxPx; }
+        }
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        c.toBlob(blob => { URL.revokeObjectURL(url); cb(blob); }, 'image/jpeg', 0.72);
+    };
+    img.src = url;
+}
+function tirarFotoItemVisita(itemModeloId) {
+    const inp = document.createElement('input');
+    inp.type = 'file'; inp.accept = 'image/*'; inp.capture = 'environment';
+    inp.onchange = e => {
+        const f = e.target.files[0]; if (!f) return;
+        comprimirImagem(f, 1000, 0.72, blob => {
+            estVisita[itemModeloId].fotos.push(blob);
+            const url = URL.createObjectURL(blob);
+            const row = document.getElementById('fp_' + itemModeloId);
+            const img = document.createElement('img'); img.className = 'fth'; img.src = url;
+            img.onclick = () => abrirFoto(url);
+            row.appendChild(img);
+        });
+    };
+    inp.click();
+}
+function abrirFoto(src) {
+    document.getElementById('fmodal-img').src = src;
+    document.getElementById('fmodal').classList.add('on');
+}
+function fecharFoto() { document.getElementById('fmodal').classList.remove('on'); }
+
+// ---------------------------------------------------------------
+// NOVA VISITA
+// ---------------------------------------------------------------
+let estVisita = {}; // { [itemModeloId]: { valor, simNao, observacao, fotos:[Blob] } }
+
+document.getElementById('btnNovaVisita').addEventListener('click', () => {
+    if (!pacienteSelecionado) return;
+    document.getElementById('visitaPacienteTexto').textContent = 'Pra: ' + pacienteSelecionado.nome;
+    document.getElementById('campoDataVisita').value = hojeISO();
+    document.getElementById('campoHoraVisita').value = agoraHora();
+    document.getElementById('campoObsGeraisVisita').value = '';
+    document.getElementById('statusVisita').textContent = '';
+    montarFormularioVisita();
+    document.getElementById('modal-visita').classList.add('aberto');
+});
+document.getElementById('btnCancelarVisita').addEventListener('click', () => document.getElementById('modal-visita').classList.remove('aberto'));
+
+function montarFormularioVisita() {
+    estVisita = {};
+    const ativos = itensModelo.filter(it => it.ativo);
+    const wrap = document.getElementById('listaItensVisita');
+    const vazio = document.getElementById('vazioItensVisita');
+    if (!ativos.length) { wrap.innerHTML = ''; vazio.classList.remove('hidden'); return; }
+    vazio.classList.add('hidden');
+
+    const grupos = {};
+    ativos.forEach(it => { (grupos[it.grupo] = grupos[it.grupo] || []).push(it); estVisita[it.id] = { valor: '', simNao: null, observacao: '', fotos: [] }; });
+
+    wrap.innerHTML = Object.keys(grupos).sort().map(grupo => `
+        <div class="grupo-acordeao">
+            <div class="grupo-cab" style="cursor:default;"><span class="titulo">${escapeHtml(grupo)}</span></div>
+            <div class="grupo-corpo on">
+                ${grupos[grupo].map(it => `
+                    <div class="item-visita">
+                        <div class="item-cab">
+                            <span class="item-nome">${escapeHtml(it.item)}${it.obrigatorio ? ' *' : ''}</span>
+                            <span class="item-unidade">${it.unidade_medida ? escapeHtml(it.unidade_medida) : ''}</span>
+                        </div>
+                        ${it.tipo_resposta === 'numero' ? `
+                            <input type="number" step="any" id="valor_${it.id}" data-item-numero="${it.id}" placeholder="Valor">
+                            <span class="pill pill-fora hidden" id="foraRef_${it.id}" style="margin-top:6px; display:inline-block;">Fora da referência</span>
+                        ` : it.tipo_resposta === 'sim_nao' ? `
+                            <div class="sim-nao-btns">
+                                <button type="button" class="btn" data-simnao="${it.id}" data-valor="sim">Sim</button>
+                                <button type="button" class="btn" data-simnao="${it.id}" data-valor="nao">Não</button>
+                            </div>
+                        ` : `
+                            <input type="text" id="valor_${it.id}" data-item-texto="${it.id}" placeholder="Resposta">
+                        `}
+                        <input type="text" style="margin-top:8px;" id="obs_${it.id}" data-item-obs="${it.id}" placeholder="Observação (opcional)">
+                        <div class="frow" id="fp_${it.id}"></div>
+                        <button type="button" class="fbtn" style="margin-top:8px;" data-tirar-foto="${it.id}">📷 Foto</button>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
+    `).join('');
+}
+
+document.getElementById('listaItensVisita').addEventListener('click', (e) => {
+    const btnFoto = e.target.closest('[data-tirar-foto]');
+    if (btnFoto) { tirarFotoItemVisita(btnFoto.dataset.tirarFoto); return; }
+    const btnSimNao = e.target.closest('[data-simnao]');
+    if (btnSimNao) {
+        const id = btnSimNao.dataset.simnao, valor = btnSimNao.dataset.valor;
+        estVisita[id].simNao = valor;
+        document.querySelectorAll(`[data-simnao="${id}"]`).forEach(b => {
+            b.classList.toggle('ativo-sim', b.dataset.valor === 'sim' && valor === 'sim');
+            b.classList.toggle('ativo-nao', b.dataset.valor === 'nao' && valor === 'nao');
+        });
+    }
+});
+document.getElementById('listaItensVisita').addEventListener('input', (e) => {
+    const numero = e.target.closest('[data-item-numero]');
+    if (numero) {
+        const id = numero.dataset.itemNumero;
+        estVisita[id].valor = numero.value;
+        const item = itensModelo.find(it => it.id === id);
+        const fora = numero.value !== '' && item && (
+            (item.valor_min_referencia != null && Number(numero.value) < item.valor_min_referencia) ||
+            (item.valor_max_referencia != null && Number(numero.value) > item.valor_max_referencia)
+        );
+        document.getElementById('foraRef_' + id).classList.toggle('hidden', !fora);
+        return;
+    }
+    const texto = e.target.closest('[data-item-texto]');
+    if (texto) { estVisita[texto.dataset.itemTexto].valor = texto.value; return; }
+    const obs = e.target.closest('[data-item-obs]');
+    if (obs) { estVisita[obs.dataset.itemObs].observacao = obs.value; }
+});
+
+document.getElementById('btnSalvarVisita').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusVisita');
+    statusEl.textContent = '';
+    const data = document.getElementById('campoDataVisita').value || hojeISO();
+    const hora = document.getElementById('campoHoraVisita').value || agoraHora();
+    const obsGerais = document.getElementById('campoObsGeraisVisita').value.trim();
+
+    const faltando = itensModelo.filter(it => it.ativo && it.obrigatorio).find(it => {
+        const e = estVisita[it.id];
+        return it.tipo_resposta === 'sim_nao' ? !e.simNao : !String(e.valor || '').trim();
+    });
+    if (faltando) { statusEl.textContent = 'Preencha o item obrigatório: ' + faltando.item; return; }
+
+    const btn = document.getElementById('btnSalvarVisita');
+    btn.disabled = true; btn.textContent = 'Registrando...';
+    try {
+        const { data: visita, error: eVisita } = await sb.from('prontuario_visitas').insert({
+            unidade_negocio_id: meuPerfil.unidadeId, paciente_id: pacienteSelecionado.id,
+            tecnico_user_id: meuPerfil.userId, tecnico_nome: meuPerfil.nomeOperador,
+            data, hora, observacoes_gerais: obsGerais || null
+        }).select().single();
+        if (eVisita) throw eVisita;
+
+        for (const it of itensModelo.filter(x => x.ativo)) {
+            const e = estVisita[it.id];
+            const valorTexto = it.tipo_resposta === 'sim_nao' ? (e.simNao === 'sim' ? 'Sim' : e.simNao === 'nao' ? 'Não' : '') : String(e.valor || '');
+            if (!valorTexto && !e.observacao && !e.fotos.length) continue; // item deixado em branco, não obrigatório -- não grava linha vazia
+            const foraRef = it.tipo_resposta === 'numero' && e.valor !== '' && (
+                (it.valor_min_referencia != null && Number(e.valor) < it.valor_min_referencia) ||
+                (it.valor_max_referencia != null && Number(e.valor) > it.valor_max_referencia)
+            );
+            const { data: linhaItem, error: eItem } = await sb.from('prontuario_visitas_itens').insert({
+                visita_id: visita.id, item_modelo_id: it.id, grupo: it.grupo, nome_item: it.item,
+                valor_texto: valorTexto || null, fora_da_referencia: !!foraRef, observacao: e.observacao || null
+            }).select().single();
+            if (eItem) throw eItem;
+
+            for (const blob of e.fotos) {
+                const path = `${meuPerfil.unidadeId}/${visita.id}/${linhaItem.id}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.jpg`;
+                const { error: eUpload } = await sb.storage.from(BUCKET_FOTOS).upload(path, blob, { contentType: 'image/jpeg' });
+                if (eUpload) { console.error('Falha ao enviar foto:', eUpload); continue; }
+                const { data: urlData } = sb.storage.from(BUCKET_FOTOS).getPublicUrl(path);
+                await sb.from('prontuario_visitas_itens_fotos').insert({ visita_item_id: linhaItem.id, url: urlData.publicUrl });
+            }
+        }
+
+        await registrarSentinela('visita_registrada', 'Visita de ' + pacienteSelecionado.nome + ' em ' + formatarDataSemFuso(data));
+        document.getElementById('modal-visita').classList.remove('aberto');
+        await carregarVisitas(pacienteSelecionado.id);
+    } catch (e) {
+        statusEl.textContent = 'Erro ao registrar: ' + (e.message || e);
+    } finally {
+        btn.disabled = false; btn.textContent = 'Registrar visita';
+    }
+});
+
+// ---------------------------------------------------------------
+// HISTÓRICO DE VISITAS
+// ---------------------------------------------------------------
+async function carregarVisitas(pacienteId) {
+    const { data, error } = await sb.from('prontuario_visitas')
+        .select('*').eq('paciente_id', pacienteId).order('data', { ascending: false }).order('hora', { ascending: false });
+    visitasPacienteAtual = error ? [] : (data || []);
+    renderizarVisitas();
+}
+function renderizarVisitas() {
+    const wrap = document.getElementById('listaVisitas');
+    const vazio = document.getElementById('vazioVisitas');
+    if (!visitasPacienteAtual.length) { wrap.innerHTML = ''; vazio.classList.remove('hidden'); return; }
+    vazio.classList.add('hidden');
+    wrap.innerHTML = visitasPacienteAtual.map(v => `
+        <div class="item-linha">
+            <div class="info">
+                <div class="nome">${formatarDataSemFuso(v.data)} às ${(v.hora || '').slice(0, 5)}</div>
+                <div class="meta">${escapeHtml(v.tecnico_nome || '')}${v.observacoes_gerais ? ' · ' + escapeHtml(v.observacoes_gerais.slice(0, 80)) + (v.observacoes_gerais.length > 80 ? '…' : '') : ''}</div>
+            </div>
+            <div class="acoes"><button type="button" class="btn btn-cinza" data-ver-visita="${v.id}">Ver</button></div>
+        </div>
+    `).join('');
+}
+document.getElementById('listaVisitas').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-ver-visita]');
+    if (btn) abrirDetalheVisita(btn.dataset.verVisita);
+});
+
+async function abrirDetalheVisita(visitaId) {
+    const visita = visitasPacienteAtual.find(v => v.id === visitaId);
+    if (!visita) return;
+    document.getElementById('detalheVisitaTexto').textContent = pacienteSelecionado.nome + ' — ' + formatarDataSemFuso(visita.data) + ' às ' + (visita.hora || '').slice(0, 5) + ' · ' + (visita.tecnico_nome || '');
+    document.getElementById('detalheVisitaObsGerais').textContent = visita.observacoes_gerais ? 'Observações gerais: ' + visita.observacoes_gerais : '';
+    document.getElementById('modal-detalhe-visita').classList.add('aberto');
+
+    const { data: itens, error } = await sb.from('prontuario_visitas_itens')
+        .select('*, prontuario_visitas_itens_fotos(id, url)').eq('visita_id', visitaId).order('grupo');
+    const wrap = document.getElementById('listaDetalheVisita');
+    if (error || !itens || !itens.length) { wrap.innerHTML = '<div class="vazio">Nenhum item registrado nessa visita.</div>'; return; }
+    wrap.innerHTML = itens.map(it => `
+        <div class="item-linha">
+            <div class="info">
+                <div class="nome">${escapeHtml(it.nome_item)} ${it.fora_da_referencia ? '<span class="pill pill-fora">Fora da referência</span>' : ''}</div>
+                <div class="meta">${escapeHtml(it.valor_texto || '—')}${it.observacao ? ' · ' + escapeHtml(it.observacao) : ''}</div>
+                ${it.prontuario_visitas_itens_fotos && it.prontuario_visitas_itens_fotos.length ? `<div class="frow">${it.prontuario_visitas_itens_fotos.map(f => `<img class="fth" src="${f.url}" onclick="abrirFoto('${f.url}')">`).join('')}</div>` : ''}
+            </div>
+        </div>
+    `).join('');
+}
+document.getElementById('btnFecharDetalheVisita').addEventListener('click', () => document.getElementById('modal-detalhe-visita').classList.remove('aberto'));
+
+// ---------------------------------------------------------------
+// INÍCIO
+// ---------------------------------------------------------------
+checkSession();
+</script>
+</body>
+</html>
+
