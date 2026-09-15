@@ -97,6 +97,8 @@
     .grupo-cab .titulo { font-weight: 700; font-size: 0.9rem; }
     .grupo-corpo { display: none; border-top: 1px solid var(--border); padding: 6px 12px; }
     .grupo-corpo.on { display: block; }
+    .grupo-cab .contagem-preenchidos { color: var(--brand); font-weight: 600; }
+    .item-referencia { font-size: 0.76rem; color: var(--muted); margin: -2px 0 6px; }
 
     /* ---- formulário de visita: um bloco por item ---- */
     .item-visita { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; }
@@ -1132,10 +1134,20 @@ function montarFormularioVisita() {
     const grupos = {};
     ativos.forEach(it => { (grupos[it.grupo] = grupos[it.grupo] || []).push(it); estVisita[it.id] = { valor: '', simNao: null, observacao: '', fotos: [] }; });
 
-    wrap.innerHTML = Object.keys(grupos).sort().map(grupo => `
+    const grupoTemAlgoPreenchido = (itensGrupo) => itensGrupo.some(it => {
+        const e = estVisita[it.id];
+        return e && (String(e.valor || '').trim() || e.simNao || e.observacao.trim() || e.fotos.length);
+    });
+
+    wrap.innerHTML = Object.keys(grupos).sort().map(grupo => {
+        const aberto = grupoTemAlgoPreenchido(grupos[grupo]);
+        return `
         <div class="grupo-acordeao">
-            <div class="grupo-cab" style="cursor:default;"><span class="titulo">${escapeHtml(grupo)}</span></div>
-            <div class="grupo-corpo on">
+            <div class="grupo-cab" data-toggle-grupo-visita="${escapeHtml(grupo)}">
+                <span class="titulo">${escapeHtml(grupo)} <span style="color:var(--muted); font-weight:500;">(${grupos[grupo].length})</span></span>
+                <span>▾</span>
+            </div>
+            <div class="grupo-corpo${aberto ? ' on' : ''}" data-corpo-grupo-visita="${escapeHtml(grupo)}">
                 ${grupos[grupo].map(it => `
                     <div class="item-visita">
                         <div class="item-cab">
@@ -1143,6 +1155,7 @@ function montarFormularioVisita() {
                             <span class="item-unidade">${it.unidade_medida ? escapeHtml(it.unidade_medida) : ''}</span>
                         </div>
                         ${it.tipo_resposta === 'numero' ? `
+                            ${(it.valor_min_referencia != null || it.valor_max_referencia != null) ? `<div class="item-referencia">Referência: ${it.valor_min_referencia ?? '—'} a ${it.valor_max_referencia ?? '—'}${it.unidade_medida ? ' ' + escapeHtml(it.unidade_medida) : ''}</div>` : ''}
                             <input type="number" step="any" id="valor_${it.id}" data-item-numero="${it.id}" placeholder="Valor">
                             <span class="pill pill-fora hidden" id="foraRef_${it.id}" style="margin-top:6px; display:inline-block;">Fora da referência</span>
                         ` : it.tipo_resposta === 'sim_nao' ? `
@@ -1160,10 +1173,17 @@ function montarFormularioVisita() {
                 `).join('')}
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 document.getElementById('listaItensVisita').addEventListener('click', (e) => {
+    const cabGrupo = e.target.closest('[data-toggle-grupo-visita]');
+    if (cabGrupo) {
+        const corpo = document.getElementById('listaItensVisita').querySelector(`[data-corpo-grupo-visita="${CSS.escape(cabGrupo.dataset.toggleGrupoVisita)}"]`);
+        if (corpo) corpo.classList.toggle('on');
+        return;
+    }
     const btnFoto = e.target.closest('[data-tirar-foto]');
     if (btnFoto) { tirarFotoItemVisita(btnFoto.dataset.tirarFoto); return; }
     const btnSimNao = e.target.closest('[data-simnao]');
