@@ -1655,6 +1655,7 @@ document.getElementById('btnSalvarVisita').addEventListener('click', async () =>
     btn.disabled = true; btn.textContent = editando ? 'Salvando...' : 'Registrando...';
     try {
         let visitaId;
+        let fotosComFalha = 0; // conta upload que falhar (ex: bucket "prontuario-fotos" não existe no Storage) -- avisa no final, não só no console
         if (editando) {
             const { error: eVisita } = await sb.from('prontuario_visitas').update({
                 profissional_id: profissionalVisitaSelecionado.id,
@@ -1722,7 +1723,7 @@ document.getElementById('btnSalvarVisita').addEventListener('click', async () =>
             for (const blob of e.fotos) {
                 const path = `${meuPerfil.unidadeId}/${visitaId}/${itemRowId}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}.jpg`;
                 const { error: eUpload } = await sb.storage.from(BUCKET_FOTOS).upload(path, blob, { contentType: 'image/jpeg' });
-                if (eUpload) { console.error('Falha ao enviar foto:', eUpload); continue; }
+                if (eUpload) { console.error('Falha ao enviar foto:', eUpload); fotosComFalha++; continue; }
                 const { data: urlData } = sb.storage.from(BUCKET_FOTOS).getPublicUrl(path);
                 await sb.from('prontuario_visitas_itens_fotos').insert({ visita_item_id: itemRowId, url: urlData.publicUrl });
             }
@@ -1732,6 +1733,9 @@ document.getElementById('btnSalvarVisita').addEventListener('click', async () =>
         salvarUltimoProfissional(profissionalVisitaSelecionado.id);
         document.getElementById('modal-visita').classList.remove('aberto');
         await carregarVisitas(pacienteSelecionado.id);
+        if (fotosComFalha > 0) {
+            alert(`Visita salva, mas ${fotosComFalha} foto(s) não foram enviadas. Confirme se o bucket de Storage "prontuario-fotos" existe e está público (Supabase → Storage).`);
+        }
     } catch (e) {
         statusEl.textContent = 'Erro ao salvar: ' + (e.message || e);
     } finally {
