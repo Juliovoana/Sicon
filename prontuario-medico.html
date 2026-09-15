@@ -56,10 +56,23 @@
     .conteudo-aba { display: none; }
     .conteudo-aba.ativa { display: block; }
 
+    /* sub-abas dentro da ficha do paciente (Dados / Histórico) --
+       classes próprias, não reaproveita .aba-btn/.conteudo-aba pra não
+       cair no querySelectorAll global das abas principais do módulo */
+    .sub-abas { display: flex; gap: 16px; margin: 0 0 14px 0; border-bottom: 1px solid var(--border); }
+    .sub-aba-btn { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.85rem; color: var(--muted); background: none; border: none; padding: 8px 2px; cursor: pointer; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+    .sub-aba-btn.ativa { color: var(--brand); border-bottom-color: var(--brand); }
+    .sub-conteudo-aba { display: none; }
+    .sub-conteudo-aba.ativa { display: block; }
+
     .cartao { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
     .cartao h2 { font-family: 'Fraunces', serif; font-size: 1.02rem; font-weight: 600; margin: 0 0 14px 0; }
     .grade { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media (max-width: 520px) { .grade { grid-template-columns: 1fr; } }
+    .campo-leitura { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+    .campo-leitura label { font-size: 0.78rem; font-weight: 600; color: var(--muted); }
+    .campo-leitura .valor { font-size: 0.92rem; }
+    .campo-leitura .valor.vazio-campo { color: var(--muted); font-style: italic; }
 
     .linha-busca { position: relative; }
     .resultados-busca { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; max-height: 220px; overflow-y: auto; display: none; margin-top: 4px; box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
@@ -247,10 +260,28 @@
                 </div>
             </div>
 
-            <div class="cartao">
-                <h2>Histórico de visitas</h2>
-                <div id="listaVisitas"></div>
-                <div id="vazioVisitas" class="vazio hidden">Nenhuma visita registrada ainda.</div>
+            <div class="sub-abas">
+                <button class="sub-aba-btn ativa" data-sub-aba="dados">📇 Dados</button>
+                <button class="sub-aba-btn" data-sub-aba="historico">🕑 Histórico de visitas</button>
+            </div>
+
+            <div class="sub-conteudo-aba ativa" id="sub-aba-dados">
+                <div class="cartao">
+                    <div class="grade" id="fichaPacienteDados"></div>
+                </div>
+            </div>
+
+            <div class="sub-conteudo-aba" id="sub-aba-historico">
+                <div class="cartao">
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <h2 style="margin:0;">Histórico de visitas</h2>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                            <button type="button" class="btn btn-cinza" id="btnGerarPdfHistorico" style="width:auto; white-space:nowrap;">🖨️ Imprimir / Gerar PDF</button>
+                        </div>
+                    </div>
+                    <div id="listaVisitas" style="margin-top:14px;"></div>
+                    <div id="vazioVisitas" class="vazio hidden">Nenhuma visita registrada ainda.</div>
+                </div>
             </div>
         </div>
     </div>
@@ -404,6 +435,20 @@
     </div>
 </div>
 
+<!-- ==================== MODAL: AÇÕES DO PDF (padrão da plataforma) ==================== -->
+<div id="modal-acoes-pdf" class="modal-overlay">
+    <div class="modal-caixa">
+        <h3 id="tituloModalAcoesPdf">PDF gerado</h3>
+        <div style="display:flex; flex-direction:column; gap:10px; margin-top:14px;">
+            <button type="button" class="btn btn-principal" id="btnVisualizarPdfGerado">👁 Visualizar / Imprimir</button>
+            <button type="button" class="btn btn-cinza" id="btnBaixarPdfGerado">⬇️ Baixar</button>
+            <button type="button" class="btn btn-cinza" id="btnCompartilharPdfGerado">📤 Compartilhar</button>
+            <button type="button" class="btn btn-cinza" id="btnFecharModalAcoesPdf">Fechar</button>
+        </div>
+        <p class="status-msg" id="statusAcoesPdf"></p>
+    </div>
+</div>
+
 <script>
 // ---------------------------------------------------------------
 // CONFIG
@@ -434,6 +479,11 @@ function calcularIdade(dataNascimento) {
     const m = hoje.getMonth() - nasc.getMonth();
     if (m < 0 || (m === 0 && hoje.getDate() < nasc.getDate())) idade--;
     return idade;
+}
+const MAPA_ACENTOS_SLUG = { 'á':'a','à':'a','â':'a','ã':'a','ä':'a','é':'e','è':'e','ê':'e','ë':'e','í':'i','ì':'i','î':'i','ï':'i','ó':'o','ò':'o','ô':'o','õ':'o','ö':'o','ú':'u','ù':'u','û':'u','ü':'u','ç':'c','ñ':'n' };
+function slugTexto(texto) {
+    const semAcento = String(texto || '').toLowerCase().split('').map(c => MAPA_ACENTOS_SLUG[c] || c).join('');
+    return semAcento.replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'arquivo';
 }
 
 // ---------------------------------------------------------------
@@ -551,6 +601,7 @@ let vinculosGlobais = [];
 let pacientes = [];
 let itensModelo = [];
 let grupoOrdens = []; // [{id, nome, ordem}] -- ordem de exibição dos grupos (prontuario_grupos)
+let logoUnidadeUrl = null; // logo da unidade (servir_unidades_negocio.logo_url), pro cabeçalho do PDF
 let pacienteSelecionado = null;
 let visitasPacienteAtual = [];
 
@@ -715,9 +766,14 @@ async function iniciarApp() {
     document.getElementById('aba-btn-itens').style.display = ehAdministradorOuPrincipal() ? '' : 'none';
     document.getElementById('btnEditarPaciente').style.display = ehAdministradorOuPrincipal() ? '' : 'none';
 
-    await Promise.all([carregarPacientes(), carregarItensModelo()]);
+    await Promise.all([carregarPacientes(), carregarItensModelo(), carregarLogoUnidade()]);
     await backfillGrupoOrdens();
     renderizarItensModeloAdmin();
+}
+
+async function carregarLogoUnidade() {
+    const { data } = await sb.from('servir_unidades_negocio').select('logo_url').eq('id', meuPerfil.unidadeId).single();
+    logoUnidadeUrl = data ? data.logo_url : null;
 }
 
 async function carregarPacientes() {
@@ -875,8 +931,42 @@ async function selecionarPaciente(id) {
     if (p.comorbidades) alertas.push('Comorbidades: ' + p.comorbidades);
     if (alertas.length) { alertaEl.textContent = alertas.join(' — '); alertaEl.classList.remove('hidden'); }
     else { alertaEl.classList.add('hidden'); }
+    renderizarFichaDados(p);
+    ativarSubAba('dados');
     document.getElementById('blocoPaciente').classList.remove('hidden');
     await carregarVisitas(p.id);
+}
+
+// ---------------------------------------------------------------
+// SUB-ABAS DA FICHA DO PACIENTE (Dados / Histórico)
+// ---------------------------------------------------------------
+function ativarSubAba(chave) {
+    document.querySelectorAll('#blocoPaciente .sub-aba-btn').forEach(b => b.classList.toggle('ativa', b.dataset.subAba === chave));
+    document.querySelectorAll('#blocoPaciente .sub-conteudo-aba').forEach(c => c.classList.toggle('ativa', c.id === 'sub-aba-' + chave));
+}
+document.querySelectorAll('#blocoPaciente .sub-aba-btn').forEach(btn => {
+    btn.addEventListener('click', () => ativarSubAba(btn.dataset.subAba));
+});
+
+function campoLeitura(rotulo, valor) {
+    const texto = valor != null && String(valor).trim() ? escapeHtml(valor) : '<span class="vazio-campo">Não informado</span>';
+    return `<div class="campo-leitura"><label>${escapeHtml(rotulo)}</label><div class="valor">${texto}</div></div>`;
+}
+function renderizarFichaDados(p) {
+    const idade = calcularIdade(p.data_nascimento);
+    document.getElementById('fichaPacienteDados').innerHTML = [
+        campoLeitura('Data de nascimento', p.data_nascimento ? formatarDataSemFuso(p.data_nascimento) + (idade != null ? ' (' + idade + ' anos)' : '') : null),
+        campoLeitura('CPF', p.cpf),
+        campoLeitura('Telefone', p.telefone),
+        campoLeitura('Endereço', p.endereco),
+        campoLeitura('Convênio', p.convenio),
+        campoLeitura('Nº da carteirinha', p.numero_carteirinha),
+        campoLeitura('Médico responsável', p.medico_responsavel),
+        campoLeitura('Contato de emergência', [p.contato_emergencia_nome, p.contato_emergencia_telefone].filter(Boolean).join(' · ') || null),
+        campoLeitura('Alergias', p.alergias),
+        campoLeitura('Comorbidades', p.comorbidades),
+        campoLeitura('Observações gerais', p.observacoes_gerais)
+    ].join('');
 }
 
 // ---------------------------------------------------------------
@@ -1431,6 +1521,173 @@ async function abrirDetalheVisita(visitaId) {
     `).join('');
 }
 document.getElementById('btnFecharDetalheVisita').addEventListener('click', () => document.getElementById('modal-detalhe-visita').classList.remove('aberto'));
+
+// ---------------------------------------------------------------
+// GERAÇÃO DE PDF -- padrão da plataforma: jsPDF carregado sob
+// demanda (nunca no carregamento inicial), popup com 3 ações
+// (Visualizar/Baixar/Compartilhar), cabeçalho com logo+nome da
+// unidade (mesmo formato já usado em financeiro-painel-admin.html)
+// ---------------------------------------------------------------
+let jsPdfCarregado = false;
+function carregarScriptExterno(src) {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src;
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+    });
+}
+async function carregarJsPdf() {
+    if (jsPdfCarregado) return;
+    await carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    await carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+    jsPdfCarregado = true;
+}
+async function carregarLogoComoBase64(url) {
+    if (!url) return null;
+    try {
+        const resposta = await fetch(url);
+        const blob = await resposta.blob();
+        return await new Promise((resolve) => {
+            const leitor = new FileReader();
+            leitor.onload = () => resolve(leitor.result);
+            leitor.onerror = () => resolve(null);
+            leitor.readAsDataURL(blob);
+        });
+    } catch (e) { return null; }
+}
+async function montarCabecalhoPdf(doc, tituloRelatorio) {
+    const logoBase64 = await carregarLogoComoBase64(logoUnidadeUrl);
+    let y = 15;
+    if (logoBase64) {
+        try { doc.addImage(logoBase64, 'PNG', 14, 10, 22, 22); } catch (e) { /* formato não suportado, segue sem logo */ }
+    }
+    doc.setFontSize(14); doc.setFont(undefined, 'bold');
+    doc.text(meuPerfil.unidadeNome || 'Unidade', logoBase64 ? 40 : 14, y);
+    y += 7;
+    doc.setFontSize(11); doc.setFont(undefined, 'normal');
+    doc.text(tituloRelatorio, logoBase64 ? 40 : 14, y);
+    y += 6;
+    doc.setFontSize(8); doc.setTextColor(120);
+    doc.text('Gerado em ' + new Date().toLocaleString('pt-BR'), logoBase64 ? 40 : 14, y);
+    doc.setTextColor(0);
+    return 34;
+}
+
+let pdfAtual = null;
+function mostrarPopupAcoesPdf(tituloModal, blob, nomeArquivo) {
+    pdfAtual = { blob, nomeArquivo };
+    document.getElementById('tituloModalAcoesPdf').textContent = tituloModal;
+    document.getElementById('statusAcoesPdf').textContent = '';
+    document.getElementById('modal-acoes-pdf').classList.add('aberto');
+}
+document.getElementById('btnFecharModalAcoesPdf').addEventListener('click', () => document.getElementById('modal-acoes-pdf').classList.remove('aberto'));
+document.getElementById('btnVisualizarPdfGerado').addEventListener('click', () => {
+    if (!pdfAtual) return;
+    window.open(URL.createObjectURL(pdfAtual.blob), '_blank');
+});
+document.getElementById('btnBaixarPdfGerado').addEventListener('click', () => {
+    if (!pdfAtual) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(pdfAtual.blob);
+    a.download = pdfAtual.nomeArquivo;
+    a.click();
+});
+document.getElementById('btnCompartilharPdfGerado').addEventListener('click', async () => {
+    if (!pdfAtual) return;
+    try {
+        const arquivo = new File([pdfAtual.blob], pdfAtual.nomeArquivo, { type: 'application/pdf' });
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [arquivo] })) {
+            await navigator.share({ files: [arquivo], title: pdfAtual.nomeArquivo });
+        } else {
+            document.getElementById('statusAcoesPdf').textContent = 'Compartilhamento direto não disponível nesse navegador -- use Baixar.';
+        }
+    } catch (e) { /* pessoa cancelou o compartilhamento, ignora */ }
+});
+
+document.getElementById('btnGerarPdfHistorico').addEventListener('click', async () => {
+    if (!pacienteSelecionado) return;
+    const btn = document.getElementById('btnGerarPdfHistorico');
+    btn.disabled = true; btn.textContent = 'Gerando...';
+    try {
+        if (!visitasPacienteAtual.length) { alert('Esse paciente ainda não tem visita registrada.'); return; }
+
+        const { data: itensTodos, error } = await sb.from('prontuario_visitas_itens')
+            .select('*').in('visita_id', visitasPacienteAtual.map(v => v.id)).order('grupo');
+        if (error) throw error;
+        const itensPorVisita = {};
+        (itensTodos || []).forEach(it => { (itensPorVisita[it.visita_id] = itensPorVisita[it.visita_id] || []).push(it); });
+
+        await carregarJsPdf();
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        let y = await montarCabecalhoPdf(doc, 'Prontuário — ' + pacienteSelecionado.nome);
+
+        // resumo do paciente
+        doc.setFontSize(9); doc.setTextColor(80);
+        const idade = calcularIdade(pacienteSelecionado.data_nascimento);
+        const resumo = [
+            pacienteSelecionado.data_nascimento ? 'Nasc.: ' + formatarDataSemFuso(pacienteSelecionado.data_nascimento) + (idade != null ? ' (' + idade + ' anos)' : '') : null,
+            pacienteSelecionado.convenio ? 'Convênio: ' + pacienteSelecionado.convenio : null,
+            pacienteSelecionado.medico_responsavel ? 'Médico responsável: ' + pacienteSelecionado.medico_responsavel : null
+        ].filter(Boolean).join('   ·   ');
+        if (resumo) { doc.text(resumo, 14, y); y += 6; }
+        if (pacienteSelecionado.alergias || pacienteSelecionado.comorbidades) {
+            doc.setTextColor(180, 40, 40);
+            const alertas = [pacienteSelecionado.alergias ? 'Alergias: ' + pacienteSelecionado.alergias : null, pacienteSelecionado.comorbidades ? 'Comorbidades: ' + pacienteSelecionado.comorbidades : null].filter(Boolean).join('   ·   ');
+            const linhas = doc.splitTextToSize(alertas, 180);
+            doc.text(linhas, 14, y);
+            y += linhas.length * 4.5 + 2;
+            doc.setTextColor(0);
+        }
+        y += 4;
+
+        visitasPacienteAtual.forEach(visita => {
+            const itens = (itensPorVisita[visita.id] || []);
+            if (y > 260) { doc.addPage(); y = 20; }
+            doc.setFontSize(11); doc.setFont(undefined, 'bold'); doc.setTextColor(26, 58, 92);
+            doc.text('Visita — ' + formatarDataSemFuso(visita.data) + ' às ' + (visita.hora || '').slice(0, 5) + (visita.tecnico_nome ? ' · ' + visita.tecnico_nome : ''), 14, y);
+            doc.setTextColor(0); doc.setFont(undefined, 'normal');
+            y += 5;
+            if (visita.observacoes_gerais) {
+                doc.setFontSize(9); doc.setTextColor(80);
+                const linhas = doc.splitTextToSize('Obs.: ' + visita.observacoes_gerais, 180);
+                doc.text(linhas, 14, y);
+                y += linhas.length * 4.5;
+                doc.setTextColor(0);
+            }
+            if (!itens.length) {
+                doc.setFontSize(9); doc.setTextColor(140);
+                doc.text('Nenhum item registrado nessa visita.', 14, y + 3);
+                doc.setTextColor(0);
+                y += 10;
+                return;
+            }
+            doc.autoTable({
+                startY: y + 2,
+                head: [['Grupo', 'Item', 'Valor', 'Observação']],
+                body: itens.map(it => [it.grupo, it.nome_item + (it.fora_da_referencia ? ' ⚠' : ''), it.valor_texto || '—', it.observacao || '']),
+                styles: { fontSize: 8 },
+                headStyles: { fillColor: [45, 90, 142] },
+                margin: { left: 14, right: 14 },
+                didParseCell: (dados) => {
+                    if (dados.section === 'body' && dados.column.index === 1 && itens[dados.row.index] && itens[dados.row.index].fora_da_referencia) {
+                        dados.cell.styles.textColor = [180, 40, 40];
+                    }
+                }
+            });
+            y = doc.lastAutoTable.finalY + 8;
+        });
+
+        const nomeArquivo = 'prontuario-' + slugTexto(pacienteSelecionado.nome) + '-' + new Date().toISOString().slice(0, 10) + '.pdf';
+        mostrarPopupAcoesPdf('Prontuário — ' + pacienteSelecionado.nome, doc.output('blob'), nomeArquivo);
+    } catch (e) {
+        alert('Erro ao gerar PDF: ' + (e.message || e));
+    } finally {
+        btn.disabled = false; btn.textContent = '🖨️ Imprimir / Gerar PDF';
+    }
+});
 
 // ---------------------------------------------------------------
 // INÍCIO
