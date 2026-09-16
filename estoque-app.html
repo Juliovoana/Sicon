@@ -1990,13 +1990,20 @@ async function chamarGet(acao, filtros) {
         return todosProdutos;
     }
     if (acao === 'listarMovimentacoes') {
-        const { data, error } = await sb.from('estoque_movimentacoes').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('data', { ascending: false }).limit(300);
+        // teto alto de segurança (não "sem limite" pra não arriscar carregar
+        // dezenas de milhares de linhas de uma vez) -- antes era 300, e como
+        // esse array alimenta cálculo de quantidade entregue por item de
+        // projeto, busca de movimentação solta por tag e o histórico do
+        // produto (não só listagem visual), um teto baixo causava resultado
+        // ERRADO (não só relatório incompleto) pra unidade com bastante
+        // movimentação acumulada -- reportado pelo usuário em 16/09/2026.
+        const { data, error } = await sb.from('estoque_movimentacoes').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('data', { ascending: false }).limit(5000);
         if (error) throw error;
         return data;
     }
     if (acao === 'listarMovimentacoesFiltradas') {
         filtros = filtros || {};
-        let query = sb.from('estoque_movimentacoes').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('data', { ascending: false }).limit(500);
+        let query = sb.from('estoque_movimentacoes').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('data', { ascending: false }).limit(5000);
         if (filtros.produtoId) query = query.eq('produto_id', filtros.produtoId);
         if (filtros.tag) query = query.ilike('tag', `%${filtros.tag}%`);
         if (filtros.evento) query = query.eq('evento', filtros.evento);
@@ -2045,7 +2052,7 @@ async function chamarGet(acao, filtros) {
     }
     if (acao === 'listarNotasEntrada') {
         filtros = filtros || {};
-        let query = sb.from('estoque_notas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('data_entrada', { ascending: false }).order('id', { ascending: false }).limit(300);
+        let query = sb.from('estoque_notas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('data_entrada', { ascending: false }).order('id', { ascending: false }).limit(5000);
         if (filtros.fornecedor) query = query.or(`nome_fornecedor.ilike.%${filtros.fornecedor}%,cnpj_fornecedor.ilike.%${filtros.fornecedor}%`);
         if (filtros.numero) query = query.ilike('numero_nf', `%${filtros.numero}%`);
         const { data, error } = await query;
@@ -2125,7 +2132,7 @@ async function chamarGet(acao, filtros) {
         return { itens: itens || [], titulos: titulos || [] };
     }
     if (acao === 'listarNotasProtocolo') {
-        let query = sb.from('estoque_notas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('data_entrada', { ascending: false }).order('id', { ascending: false }).limit(500);
+        let query = sb.from('estoque_notas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('data_entrada', { ascending: false }).order('id', { ascending: false }).limit(5000);
         query = filtros.somenteAceitas ? query.gt('nr_protocolo', 0) : query.eq('nr_protocolo', 0);
         if (filtros.tipo && filtros.tipo !== 'todos') query = query.eq('tipo', filtros.tipo);
         const { data: notas, error: e1 } = await query;
