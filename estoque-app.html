@@ -7046,14 +7046,41 @@ function construirLinhasMovimentacoes(lista) {
         return { m, prod, proj, subtotal: Number(m.qtd) * Number(m.valorUnit) };
     });
 }
-function movimentacoesPorEvento(codigoEvento) {
-    const alvo = String(codigoEvento || '').trim();
-    return movimentacoes.filter(m => m.tipo === 'saida' && String(m.evento || '').trim() === alvo)
+// mesmo formato de linha já usado no painel de Movimentações
+// (buscarPainelMovimentacoes) -- dado bruto do banco (snake_case) pro
+// formato usado no front (camelCase + data formatada)
+function mapearMovimentacaoFiltrada(m) {
+    return {
+        id: Number(m.id), data: formatarData(m.data), produtoId: m.produto_id != null ? Number(m.produto_id) : null, tipo: m.tipo,
+        qtd: Number(m.qtd) || 0, valorUnit: Number(m.valor_unit) || 0, tag: m.tag || '', evento: m.evento || '',
+        observacao: m.observacao || '', responsavel: m.responsavel || '', projetoId: m.projeto_id || null,
+        nfNumero: m.nf_numero || '', fornecedorCnpj: m.fornecedor_cnpj || '', fornecedorNome: m.fornecedor_nome || '',
+        almoxarifadoId: m.almoxarifado_id != null ? Number(m.almoxarifado_id) : null,
+        descricaoAvulsa: m.descricao_avulsa || null
+    };
+}
+
+// busca DIRETO no servidor filtrando por evento/tag (mesma ação já
+// usada no painel de Movimentações, listarMovimentacoesFiltradas) --
+// NÃO usa o array global `movimentacoes`, que só guarda os 300
+// lançamentos mais recentes de TODA a unidade (listarMovimentacoes,
+// sem filtro). Um evento/tag antigo passa a cair fora desse teto à
+// medida que a unidade lança mais movimentações, e o item "some" do
+// relatório mesmo continuando 100% presente no banco -- bug relatado
+// pelo usuário ("antes aparecia"), corrigido buscando filtrado.
+async function movimentacoesPorEvento(codigoEvento) {
+    const dados = await chamarGet('listarMovimentacoesFiltradas', { evento: codigoEvento });
+    return (dados || [])
+        .filter(m => m.tipo === 'saida')
+        .map(mapearMovimentacaoFiltrada)
         .sort((a, b) => (a.data || '').localeCompare(b.data || ''));
 }
-function movimentacoesPorTag(tag) {
+async function movimentacoesPorTag(tag) {
     const alvo = String(tag || '').trim().toLowerCase();
-    return movimentacoes.filter(m => m.tipo === 'saida' && String(m.tag || '').trim().toLowerCase() === alvo)
+    const dados = await chamarGet('listarMovimentacoesFiltradas', { tag });
+    return (dados || [])
+        .filter(m => m.tipo === 'saida' && String(m.tag || '').trim().toLowerCase() === alvo)
+        .map(mapearMovimentacaoFiltrada)
         .sort((a, b) => (a.data || '').localeCompare(b.data || ''));
 }
 
@@ -7220,9 +7247,9 @@ document.getElementById('relBuscaEvento').addEventListener('keydown', e => {
     if (e.key === 'Enter') renderizarResultadosEventoRelatorio(document.getElementById('relBuscaEvento').value);
 });
 
-function executarRelatorioEvento(acao) {
+async function executarRelatorioEvento(acao) {
     if (!eventoSelecionadoRelatorio) { alert('Selecione um evento primeiro.'); return; }
-    const linhas = construirLinhasMovimentacoes(movimentacoesPorEvento(eventoSelecionadoRelatorio.codigo));
+    const linhas = construirLinhasMovimentacoes(await movimentacoesPorEvento(eventoSelecionadoRelatorio.codigo));
     if (!linhas.length) { alert('Nenhuma retirada (saída) encontrada para esse evento. Esse relatório não lista entrada/compra, só o que foi retirado do estoque.'); return; }
     const formato = document.getElementById('relEventoFormato').value;
     const titulo = 'Relatório por Evento — Detalhado';
@@ -7240,10 +7267,10 @@ document.getElementById('relEventoCompartilhar').addEventListener('click', () =>
 document.getElementById('relEventoSalvar').addEventListener('click', () => executarRelatorioEvento('salvar'));
 
 /* ---------- módulo: por Tag ---------- */
-function executarRelatorioTag(acao) {
+async function executarRelatorioTag(acao) {
     const tag = document.getElementById('relBuscaTag').value.trim();
     if (!tag) { alert('Informe uma tag primeiro.'); return; }
-    const linhas = construirLinhasMovimentacoes(movimentacoesPorTag(tag));
+    const linhas = construirLinhasMovimentacoes(await movimentacoesPorTag(tag));
     if (!linhas.length) { alert('Nenhuma retirada (saída) encontrada para essa tag. Esse relatório não lista entrada/compra, só o que foi retirado do estoque.'); return; }
     const formato = document.getElementById('relTagFormato').value;
     const titulo = 'Relatório por Tag — Detalhado';
