@@ -8397,6 +8397,8 @@ document.getElementById('notaFornecedorNome').addEventListener('input', (e) => {
 });
 
 document.getElementById('btnSalvarCabecalhoNota').addEventListener('click', async () => {
+    const btnSalvarCabecalho = document.getElementById('btnSalvarCabecalhoNota');
+    if (btnSalvarCabecalho.disabled) return; // já tem um salvamento em andamento -- ignora clique duplicado
     const statusEl = document.getElementById('statusNotaEntrada');
     const nome = document.getElementById('notaFornecedorNome').value.trim();
     const dataEntrada = document.getElementById('notaDataEntrada').value;
@@ -8405,35 +8407,77 @@ document.getElementById('btnSalvarCabecalhoNota').addEventListener('click', asyn
     if (!dataEntrada) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe a data de entrada.'; document.getElementById('notaDataEntrada').focus(); return; }
     if (!observacoesNota) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe a observação.'; document.getElementById('notaObservacoes').focus(); return; }
 
-    statusEl.className = '';
-    statusEl.textContent = 'Salvando...';
+    const cnpjFornecedor = document.getElementById('notaFornecedorCnpj').value.trim();
+    const numeroNf = document.getElementById('notaNumeroNf').value.trim();
+
+    // Trava o botão assim que passa nas validações -- antes até da
+    // checagem de duplicidade, que já é assíncrona. Sem isso, um duplo
+    // clique (ou um clique impaciente enquanto o "Salvando..." ainda
+    // não voltou) disparava dois INSERT concorrentes e criava DUAS
+    // notas iguais no banco, já que nenhum dos dois cliques via
+    // notaEmEdicaoId preenchido a tempo. Sempre reabilitado no finally.
+    btnSalvarCabecalho.disabled = true;
     try {
-        const nota = await chamarPost('salvarNotaFiscal', {
-            nota: {
-                id: notaEmEdicaoId || undefined,
-                numeroNf: document.getElementById('notaNumeroNf').value.trim(),
-                serie: document.getElementById('notaSerie').value.trim(),
-                dataEmissao: document.getElementById('notaDataEmissao').value || null,
-                dataEntrada,
-                cnpjFornecedor: document.getElementById('notaFornecedorCnpj').value.trim(),
-                nomeFornecedor: nome,
-                valorTotal: parseFloat(document.getElementById('notaValorTotal').value) || 0,
-                valorDesconto: parseFloat(document.getElementById('notaValorDesconto').value) || 0,
-                valorFrete: parseFloat(document.getElementById('notaValorFrete').value) || 0,
-                responsavel: document.getElementById('notaResponsavel').value.trim().toUpperCase(),
-                chaveAcesso: document.getElementById('notaChaveAcesso').value.trim(),
-                observacoes: observacoesNota
+        // avisa (não bloqueia) se já existe outra nota dessa mesma unidade
+        // com o mesmo CNPJ + número de NF -- ajuda a pegar nota lançada em
+        // duplicidade por engano, sem impedir um caso legítimo raro. Só
+        // checa quando os dois campos estão preenchidos (casar vazio com
+        // vazio não significa nada); ignora a própria nota se já estiver
+        // editando uma existente.
+        if (cnpjFornecedor && numeroNf) {
+            try {
+                let queryDuplicada = sb.from('estoque_notas')
+                    .select('id, numero_nf, data_entrada, nome_fornecedor')
+                    .eq('unidade_negocio_id', meuPerfil.unidadeId)
+                    .eq('cnpj_fornecedor', cnpjFornecedor)
+                    .eq('numero_nf', numeroNf);
+                if (notaEmEdicaoId) queryDuplicada = queryDuplicada.neq('id', notaEmEdicaoId);
+                const { data: duplicadas, error: eDup } = await queryDuplicada;
+                if (eDup) throw eDup;
+                if (duplicadas && duplicadas.length) {
+                    const d = duplicadas[0];
+                    const prosseguir = confirm(
+                        `⚠️ Já existe uma nota gravada dessa unidade com o mesmo CNPJ e número de NF (${numeroNf}) — fornecedor "${d.nome_fornecedor}", entrada em ${formatarData(d.data_entrada)} (#${d.id}).\n\nDeseja salvar mesmo assim?`
+                    );
+                    if (!prosseguir) { statusEl.className = ''; statusEl.textContent = ''; return; }
+                }
+            } catch (eDup) {
+                console.error('Falha ao checar nota duplicada (não bloqueia o salvamento):', eDup);
             }
-        });
-        notaEmEdicaoId = nota.id;
-        statusEl.className = 'status-msg sucesso';
-        statusEl.textContent = '✅ Cabeçalho salvo.';
-        document.getElementById('tituloNotaEntrada').textContent = `Editando entrada — NF ${nota.numero_nf || '#' + nota.id}`;
-        document.getElementById('blocoItensTitulosNota').style.display = 'block';
-        await carregarItensETitulosDaNota(notaEmEdicaoId);
-    } catch (err) {
-        statusEl.className = 'status-msg erro';
-        statusEl.textContent = '⚠️ ' + err.message;
+        }
+
+        statusEl.className = '';
+        statusEl.textContent = 'Salvando...';
+        try {
+            const nota = await chamarPost('salvarNotaFiscal', {
+                nota: {
+                    id: notaEmEdicaoId || undefined,
+                    numeroNf: document.getElementById('notaNumeroNf').value.trim(),
+                    serie: document.getElementById('notaSerie').value.trim(),
+                    dataEmissao: document.getElementById('notaDataEmissao').value || null,
+                    dataEntrada,
+                    cnpjFornecedor: document.getElementById('notaFornecedorCnpj').value.trim(),
+                    nomeFornecedor: nome,
+                    valorTotal: parseFloat(document.getElementById('notaValorTotal').value) || 0,
+                    valorDesconto: parseFloat(document.getElementById('notaValorDesconto').value) || 0,
+                    valorFrete: parseFloat(document.getElementById('notaValorFrete').value) || 0,
+                    responsavel: document.getElementById('notaResponsavel').value.trim().toUpperCase(),
+                    chaveAcesso: document.getElementById('notaChaveAcesso').value.trim(),
+                    observacoes: observacoesNota
+                }
+            });
+            notaEmEdicaoId = nota.id;
+            statusEl.className = 'status-msg sucesso';
+            statusEl.textContent = '✅ Cabeçalho salvo.';
+            document.getElementById('tituloNotaEntrada').textContent = `Editando entrada — NF ${nota.numero_nf || '#' + nota.id}`;
+            document.getElementById('blocoItensTitulosNota').style.display = 'block';
+            await carregarItensETitulosDaNota(notaEmEdicaoId);
+        } catch (err) {
+            statusEl.className = 'status-msg erro';
+            statusEl.textContent = '⚠️ ' + err.message;
+        }
+    } finally {
+        btnSalvarCabecalho.disabled = false;
     }
 });
 
