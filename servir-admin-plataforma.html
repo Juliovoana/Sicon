@@ -77,6 +77,8 @@
   .pill-atrasado{background:var(--warn-soft); color:var(--warn);}
   .pill-suspenso{background:var(--danger-soft); color:var(--danger);}
   .pill-cancelado{background:#EEE; color:#666;}
+  .pill-pendente{background:var(--warn-soft); color:var(--warn);}
+  .pill-pago{background:var(--success-soft); color:#1e7a43;}
 
   /* ---------- modal ---------- */
   .modal-overlay{position:fixed; inset:0; background:rgba(23,30,26,.5); display:none; align-items:center; justify-content:center; padding:20px; z-index:100;}
@@ -249,6 +251,49 @@
     </div>
   </div>
 
+  <!-- ================= MODAL: GERAR FATURA DE COBRANÇA AVULSA ================= -->
+  <div class="modal-overlay" id="modalGerarFatura">
+    <div class="modal" style="max-width:440px;">
+      <div class="modal-head">
+        <h2>🧾 Gerar fatura</h2>
+        <button class="modal-close" id="btnFecharModalGerarFatura">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:.82rem; color:var(--muted); margin-bottom:14px;">Documento de cobrança (não é recibo — o valor ainda não precisa estar pago), pronto pra baixar ou compartilhar com o contratante.</p>
+        <div class="campo"><label>Vencimento (opcional)</label><input type="date" id="ft_vencimento"></div>
+        <div class="campo">
+          <label>Endereço do contratante (opcional)</label>
+          <input type="text" id="ft_endereco_contratante" placeholder="Preenchido a partir de Dados da unidade, se cadastrado">
+        </div>
+        <div class="linha-2">
+          <div class="campo"><label>CPF/CNPJ do contratante (opcional)</label><input type="text" id="ft_documento_contratante" placeholder="000.000.000-00"></div>
+          <div class="campo"><label>Cidade</label><input type="text" id="ft_cidade"></div>
+        </div>
+        <label style="display:flex; align-items:center; gap:8px; font-size:.85rem; cursor:pointer; margin-bottom:14px;">
+          <input type="checkbox" id="ft_incluir_logo_servir" style="width:auto;" checked>
+          Incluir a logomarca da Servir na fatura
+        </label>
+        <div class="erro-msg" id="ft_erro"></div>
+        <button class="btn btn-primary" id="btnGerarFaturaConfirmar">Gerar fatura</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: FATURA GERADA ================= -->
+  <div class="modal-overlay" id="modalResultadoFatura">
+    <div class="modal" style="max-width:340px;">
+      <div class="modal-head">
+        <h2>Fatura gerada</h2>
+        <button class="modal-close" id="btnFecharModalResultadoFatura">✕</button>
+      </div>
+      <div class="modal-body" style="display:flex; flex-direction:column; gap:10px;">
+        <button class="btn btn-secundario" id="btnVisualizarFatura">👁 Visualizar</button>
+        <button class="btn btn-primary" id="btnBaixarFatura">📄 Baixar</button>
+        <button class="btn btn-secundario" id="btnCompartilharFatura">📤 Compartilhar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= MODAL: DETALHE DA UNIDADE ================= -->
   <div class="modal-overlay" id="modalUnidade">
     <div class="modal">
@@ -260,6 +305,7 @@
         <div class="abas-modal">
           <button class="aba-modal-btn on" data-aba-modal="status">Status</button>
           <button class="aba-modal-btn" data-aba-modal="pagamentos">Pagamentos</button>
+          <button class="aba-modal-btn" data-aba-modal="cobrancas">Cobranças avulsas</button>
           <button class="aba-modal-btn" data-aba-modal="modulos">Módulos</button>
           <button class="aba-modal-btn" data-aba-modal="usuarios">Usuários</button>
         </div>
@@ -296,6 +342,20 @@
           </div>
           <button class="btn btn-primary" id="btnRegistrarPagamento" style="margin-bottom:16px;">+ Registrar pagamento</button>
           <div class="lista-pagamentos" id="listaPagamentos"></div>
+        </div>
+
+        <div class="aba-modal-conteudo" id="abaCobrancas">
+          <p style="font-size:.82rem; color:var(--muted); margin-bottom:10px;">
+            Valor combinado à parte da mensalidade (ex: adiantamento de treinamento, ajuste
+            avulso) — controle interno só, a unidade não vê essa cobrança.
+          </p>
+          <div class="campo" style="margin-bottom:10px;"><label>Descrição</label><input type="text" id="cb_descricao" placeholder="Ex: Adiantamento — treinamento de ajustes no Estoque"></div>
+          <div class="linha-2" style="margin-bottom:10px;">
+            <div class="campo"><label>Valor (R$)</label><input type="number" step="0.01" id="cb_valor"></div>
+            <div class="campo"><label>Data combinada</label><input type="date" id="cb_data"></div>
+          </div>
+          <button class="btn btn-primary" id="btnRegistrarCobranca" style="margin-bottom:16px;">+ Registrar cobrança</button>
+          <div class="lista-pagamentos" id="listaCobrancas"></div>
         </div>
 
         <div class="aba-modal-conteudo" id="abaModulos">
@@ -445,6 +505,7 @@
     document.getElementById('abaStatus').classList.add('on');
 
     carregarPagamentos(id);
+    carregarCobrancas(id);
     renderizarTogglesModulos(u);
     renderizarUsuariosDaUnidade(id);
 
@@ -532,6 +593,278 @@
     } finally{
       btn.disabled = false; btn.textContent = '+ Registrar pagamento';
     }
+  });
+
+  // ---------------------------------------------------------------
+  // COBRANÇAS AVULSAS -- valor combinado à parte da mensalidade (ex:
+  // adiantamento de treinamento). Diferente de servir_unidades_negocio_
+  // pagamentos (que só registra pagamento já feito de mensalidade),
+  // aqui o registro nasce como "pendente" até alguém marcar como pago.
+  // ---------------------------------------------------------------
+  let cobrancasDaUnidadeAtual = [];
+
+  async function carregarCobrancas(unidadeId){
+    const { data, error } = await sb.from('servir_unidades_negocio_cobrancas')
+      .select('*').eq('unidade_negocio_id', unidadeId).order('data_combinada', { ascending: false });
+    const lista = document.getElementById('listaCobrancas');
+    if(error){ lista.innerHTML = `<div class="vazio">Erro: ${escapeHtml(error.message)}</div>`; return; }
+    cobrancasDaUnidadeAtual = data || [];
+    if(!data.length){ lista.innerHTML = '<div class="vazio">Nenhuma cobrança avulsa registrada ainda.</div>'; return; }
+    lista.innerHTML = data.map(c => `
+      <div class="item-pagamento">
+        <span>
+          <span class="pill pill-${c.status}">${LABEL_STATUS_COBRANCA[c.status] || c.status}</span>
+          ${escapeHtml(c.descricao)} · ${formatarData(c.data_combinada)}
+        </span>
+        <span class="valores">
+          <span class="mono">${formatarMoeda(c.valor)}</span>
+          ${c.status === 'pendente' ? `<button type="button" class="btn-recibo-icone" data-marcar-pago="${c.id}" title="Marcar como pago">✓</button>` : ''}
+          <button type="button" class="btn-recibo-icone" data-gerar-fatura="${c.id}" title="Gerar fatura dessa cobrança">🧾</button>
+          <button type="button" class="btn-recibo-icone" data-excluir-cobranca="${c.id}" title="Excluir (lançamento errado)">🗑</button>
+        </span>
+      </div>`).join('');
+    lista.querySelectorAll('[data-marcar-pago]').forEach(btn => {
+      btn.addEventListener('click', () => marcarCobrancaPaga(btn.dataset.marcarPago));
+    });
+    lista.querySelectorAll('[data-gerar-fatura]').forEach(btn => {
+      btn.addEventListener('click', () => abrirModalGerarFatura(btn.dataset.gerarFatura));
+    });
+    lista.querySelectorAll('[data-excluir-cobranca]').forEach(btn => {
+      btn.addEventListener('click', () => excluirCobranca(btn.dataset.excluirCobranca));
+    });
+  }
+  const LABEL_STATUS_COBRANCA = { pendente: 'Pendente', pago: 'Pago', cancelado: 'Cancelado' };
+
+  document.getElementById('btnRegistrarCobranca').addEventListener('click', async () => {
+    const descricao = document.getElementById('cb_descricao').value.trim();
+    const valor = document.getElementById('cb_valor').value;
+    if(!descricao){ alert('Informe a descrição da cobrança.'); return; }
+    if(!valor || Number(valor) <= 0){ alert('Informe um valor válido.'); return; }
+    const btn = document.getElementById('btnRegistrarCobranca');
+    btn.disabled = true; btn.textContent = 'Registrando...';
+    try{
+      const { data: { session } } = await sb.auth.getSession();
+      if(!session) throw new Error('Sessão expirada — atualize a página e faça login de novo.');
+      const { error } = await sb.from('servir_unidades_negocio_cobrancas').insert({
+        unidade_negocio_id: unidadeAtualId,
+        descricao,
+        valor: Number(valor),
+        data_combinada: document.getElementById('cb_data').value || new Date().toISOString().slice(0,10),
+        criado_por: session.user.id,
+      });
+      if(error) throw new Error(error.message);
+      document.getElementById('cb_descricao').value = '';
+      document.getElementById('cb_valor').value = '';
+      document.getElementById('cb_data').value = '';
+      await carregarCobrancas(unidadeAtualId);
+    } catch(erro){
+      alert('Erro ao registrar: ' + erro.message);
+    } finally{
+      btn.disabled = false; btn.textContent = '+ Registrar cobrança';
+    }
+  });
+
+  async function marcarCobrancaPaga(cobrancaId){
+    if(!confirm('Marcar essa cobrança como paga?')) return;
+    const { error } = await sb.from('servir_unidades_negocio_cobrancas')
+      .update({ status: 'pago', data_pagamento: new Date().toISOString().slice(0,10) })
+      .eq('id', cobrancaId);
+    if(error){ alert('Erro ao marcar como pago: ' + error.message); return; }
+    await carregarCobrancas(unidadeAtualId);
+  }
+
+  async function excluirCobranca(cobrancaId){
+    if(!confirm('Excluir essa cobrança? Use só pra corrigir um lançamento errado.')) return;
+    const { error } = await sb.from('servir_unidades_negocio_cobrancas').delete().eq('id', cobrancaId);
+    if(error){ alert('Erro ao excluir: ' + error.message); return; }
+    await carregarCobrancas(unidadeAtualId);
+  }
+
+  let faturaIdCobrancaAtual = null;
+  async function abrirModalGerarFatura(cobrancaId){
+    faturaIdCobrancaAtual = cobrancaId;
+    const c = cobrancasDaUnidadeAtual.find(x => String(x.id) === String(cobrancaId));
+    const u = todasUnidades.find(x => x.id === unidadeAtualId);
+    if(!c || !u) return;
+
+    const config = await obterConfigPlataforma();
+    const { data: dadosUnidade } = await sb.from('servir_unidades_negocio')
+      .select('endereco, telefone').eq('id', unidadeAtualId).single();
+
+    document.getElementById('ft_erro').classList.remove('show');
+    document.getElementById('ft_vencimento').value = '';
+    document.getElementById('ft_endereco_contratante').value = (dadosUnidade && dadosUnidade.endereco) || '';
+    document.getElementById('ft_documento_contratante').value = '';
+    document.getElementById('ft_cidade').value = (config && config.cidade_emissor) || '';
+    document.getElementById('ft_incluir_logo_servir').checked = true;
+
+    document.getElementById('modalGerarFatura').classList.add('show');
+  }
+  document.getElementById('btnFecharModalGerarFatura').addEventListener('click', () => {
+    document.getElementById('modalGerarFatura').classList.remove('show');
+  });
+
+  // Desenha a fatura numa folha A4 inteira -- diferente do recibo (que
+  // sai em 2 vias meia-folha), aqui não precisa de 2ª via porque não é
+  // um documento assinado na hora entre as partes, é só a cobrança em si
+  function desenharFatura(doc, dados){
+    const margem = 16, largura = 210 - margem * 2;
+    let y = 18;
+    let xNomeEmissor = margem;
+
+    if(dados.incluirLogoServir){
+      const ladoLogo = 16;
+      try{ doc.addImage(LOGO_SERVIR_PNG, 'PNG', margem, y - 4, ladoLogo, ladoLogo); } catch(erro){ /* formato indisponível, segue sem logo */ }
+      xNomeEmissor = margem + ladoLogo + 5;
+    }
+
+    doc.setFont(undefined, 'bold'); doc.setFontSize(12);
+    doc.text(dados.nomeEmissor, xNomeEmissor, y);
+    if(dados.documentoEmissor){
+      doc.setFont(undefined, 'normal'); doc.setFontSize(9); doc.setTextColor(100);
+      doc.text(dados.documentoEmissor, xNomeEmissor, y + 5);
+      doc.setTextColor(0);
+    }
+
+    y += 20;
+    doc.setFont(undefined, 'bold'); doc.setFontSize(20);
+    doc.text('FATURA', 105, y, { align: 'center' });
+
+    y += 8;
+    doc.setFont(undefined, 'bold'); doc.setFontSize(10);
+    doc.setTextColor(...(dados.status === 'pago' ? [30, 122, 67] : [200, 130, 0]));
+    doc.text(dados.statusLabel, 105, y, { align: 'center' });
+    doc.setTextColor(0); doc.setFont(undefined, 'normal');
+
+    y += 14;
+    doc.setDrawColor(180);
+    doc.roundedRect(210 - margem - 60, 12, 60, 16, 2, 2);
+    doc.setFont(undefined, 'bold'); doc.setFontSize(15);
+    doc.text(dados.valorFormatado, 210 - margem - 30, 22, { align: 'center' });
+    doc.setFont(undefined, 'normal');
+
+    doc.setFontSize(10.5);
+    const contratanteTexto = dados.documentoContratante
+      ? `${dados.nomeContratante} (${dados.documentoContratante})`
+      : dados.nomeContratante;
+    const paragrafo = `Cobramos de ${contratanteTexto} a quantia de ${dados.valorFormatado} (${dados.valorExtenso}), referente a ${dados.descricao}.`;
+    const linhas = doc.splitTextToSize(paragrafo, largura);
+    doc.text(linhas, margem, y);
+    y += linhas.length * 5.5 + 4;
+
+    if(dados.enderecoContratante){
+      doc.setFontSize(9); doc.setTextColor(100);
+      const linhasEndereco = doc.splitTextToSize(dados.enderecoContratante, largura);
+      doc.text(linhasEndereco, margem, y);
+      doc.setTextColor(0);
+      y += linhasEndereco.length * 4.3 + 4;
+    }
+
+    if(dados.vencimentoFormatado){
+      doc.setFontSize(10);
+      doc.text(`Vencimento: ${dados.vencimentoFormatado}`, margem, y);
+      y += 7;
+    }
+
+    y += 4;
+    doc.setFontSize(10);
+    doc.text(`${dados.cidade || '________________'}, ${dados.dataEmissaoFormatada}.`, margem, y);
+
+    y += 20;
+    doc.setDrawColor(0);
+    doc.line(margem, y, margem + 80, y);
+    y += 4.5;
+    doc.setFontSize(9);
+    doc.text(dados.nomeEmissor, margem, y);
+    if(dados.documentoEmissor){
+      y += 4;
+      doc.setFontSize(8); doc.setTextColor(100);
+      doc.text(dados.documentoEmissor, margem, y);
+      doc.setTextColor(0);
+    }
+  }
+
+  document.getElementById('btnGerarFaturaConfirmar').addEventListener('click', async () => {
+    const erroEl = document.getElementById('ft_erro');
+    erroEl.classList.remove('show');
+
+    const c = cobrancasDaUnidadeAtual.find(x => String(x.id) === String(faturaIdCobrancaAtual));
+    const u = todasUnidades.find(x => x.id === unidadeAtualId);
+    if(!c || !u) return;
+
+    const config = await obterConfigPlataforma();
+    if(!config || !config.nome_emissor){
+      erroEl.textContent = 'Cadastre seu nome/razão social em Configurações → Dados do emissor antes de gerar a fatura.';
+      erroEl.classList.add('show');
+      return;
+    }
+
+    const btn = document.getElementById('btnGerarFaturaConfirmar');
+    btn.disabled = true; btn.textContent = 'Gerando...';
+    try{
+      const vencimento = document.getElementById('ft_vencimento').value;
+      const dados = {
+        nomeEmissor: config.nome_emissor,
+        documentoEmissor: config.documento_emissor || '',
+        nomeContratante: u.nome,
+        documentoContratante: document.getElementById('ft_documento_contratante').value.trim(),
+        enderecoContratante: document.getElementById('ft_endereco_contratante').value.trim(),
+        valorFormatado: formatarMoeda(c.valor),
+        valorExtenso: numeroPorExtenso(c.valor),
+        descricao: c.descricao,
+        status: c.status,
+        statusLabel: c.status === 'pago' ? 'PAGO' : (c.status === 'cancelado' ? 'CANCELADO' : 'PENDENTE DE PAGAMENTO'),
+        vencimentoFormatado: vencimento ? formatarDataExtenso(vencimento) : '',
+        cidade: document.getElementById('ft_cidade').value.trim(),
+        dataEmissaoFormatada: formatarDataExtenso(new Date().toISOString().slice(0,10)),
+        incluirLogoServir: document.getElementById('ft_incluir_logo_servir').checked,
+      };
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+      desenharFatura(doc, dados);
+
+      const nomeArquivo = `fatura-${(u.nome || 'unidade').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}-${new Date().toISOString().slice(0,10)}.pdf`;
+      const blob = doc.output('blob');
+      mostrarResultadoFatura(blob, nomeArquivo);
+      document.getElementById('modalGerarFatura').classList.remove('show');
+    } catch(erro){
+      erroEl.textContent = 'Erro ao gerar fatura: ' + erro.message;
+      erroEl.classList.add('show');
+    } finally{
+      btn.disabled = false; btn.textContent = 'Gerar fatura';
+    }
+  });
+
+  let faturaAtual = null;
+  function mostrarResultadoFatura(blob, nomeArquivo){
+    faturaAtual = { blob, nomeArquivo };
+    document.getElementById('modalResultadoFatura').classList.add('show');
+  }
+  document.getElementById('btnFecharModalResultadoFatura').addEventListener('click', () => {
+    document.getElementById('modalResultadoFatura').classList.remove('show');
+  });
+  document.getElementById('btnVisualizarFatura').addEventListener('click', () => {
+    if(!faturaAtual) return;
+    window.open(URL.createObjectURL(faturaAtual.blob), '_blank');
+  });
+  document.getElementById('btnBaixarFatura').addEventListener('click', () => {
+    if(!faturaAtual) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(faturaAtual.blob);
+    a.download = faturaAtual.nomeArquivo;
+    a.click();
+  });
+  document.getElementById('btnCompartilharFatura').addEventListener('click', async () => {
+    if(!faturaAtual) return;
+    try{
+      const arquivo = new File([faturaAtual.blob], faturaAtual.nomeArquivo, { type: 'application/pdf' });
+      if(navigator.share && navigator.canShare && navigator.canShare({ files: [arquivo] })){
+        await navigator.share({ files: [arquivo], title: 'Fatura' });
+      } else {
+        alert('Compartilhamento direto não disponível nesse navegador — use Baixar.');
+      }
+    } catch(erro){ /* pessoa cancelou o compartilhamento, ignora */ }
   });
 
   function renderizarTogglesModulos(u){
