@@ -2785,6 +2785,13 @@ const AJUDA_ESTOQUE = {
             <p><strong>📄 Importar NF-e (XML)</strong> lê o arquivo da nota fiscal do fornecedor e já
             cria a nota de entrada com itens e valores preenchidos automaticamente, sem digitar um por
             um.</p>
+            <p>Item marcado <strong>Avulso</strong> na importação não vira produto de catálogo nenhum,
+            só uma movimentação com descrição livre. Registrando como <strong>Entrada em Estoque</strong>,
+            fica só a entrada (não gera baixa nenhuma sozinho) — bom pra nota consolidada que só serve
+            pra protocolar/casar com boleto de pagamento (ex: "metro cúbico de madeira serrada" numa
+            nota grande, cujo consumo real entra por notinhas separadas com romaneio). Registrando como
+            <strong>Baixa Direta</strong>, o item avulso também sai do estoque, usando a mesma
+            destinação (setor/evento/plano de contas) informada pro resto da nota.</p>
         ` },
         { id: 'movimentacao', titulo: 'Requisição de Saída', corpo: `
             <p>É a forma normal de retirar material do estoque pra usar numa obra/reforma. Selecione o
@@ -2829,10 +2836,13 @@ const AJUDA_ESTOQUE = {
         { id: 'movpainel', titulo: 'Movimentações', corpo: `
             <p>Painel geral com todo o histórico de entradas e saídas, filtrável por Produto,
             Fornecedor, Tag ou Evento.</p>
-            <p><strong>🏷️ Itens avulsos pendentes de destino</strong> mostra os itens que foram
-            "descritos" numa requisição (produto ainda não cadastrado no estoque) e que ainda não
-            foram vinculados a um produto real — vale revisar essa lista periodicamente pra não deixar
-            item solto sem virar cadastro.</p>
+            <p><strong>🏷️ Itens avulsos pendentes de destino</strong> mostra saídas de item avulso
+            (sem produto cadastrado) sem setor/evento/veículo informado — vale revisar essa lista
+            periodicamente. Cada item tem botão <strong>🗑 Excluir</strong> pra remover a pendência
+            sem precisar informar destinação nenhuma — útil quando é só um lançamento financeiro/
+            protocolo sem relevância real de destino pro almoxarifado (ex: nota consolidada de compra
+            que só serve pra casar com boleto de pagamento, com o material entrando de fato por
+            notas menores em separado).</p>
         ` },
         { id: 'notasentrada', titulo: 'Notas', corpo: `
             <p>Reúne tanto notas de <strong>entrada</strong> (compra, manual ou importada por XML)
@@ -4301,11 +4311,22 @@ async function processarImportacaoNFe(tipo) {
             statusEl.textContent = `Processando item ${idx + 1} de ${nfeItensParseados.length}... Não feche esta janela.`;
 
             if (item.avulso) {
-                // item avulso: não cria produto de catálogo nenhum -- só
-                // uma entrada (a compra em si) seguida de uma saída
-                // IMEDIATA (já consumido/usado), linkadas entre si. O
-                // destino (setor/evento/veículo) fica em branco de
-                // propósito -- "pendente de destino", pra decidir depois
+                // item avulso: não cria produto de catálogo nenhum, só a
+                // movimentação com descrição livre. Registrando como
+                // "Entrada em Estoque", fica só a entrada -- NÃO força
+                // mais uma baixa imediata (antes isso acontecia sempre,
+                // mesmo escolhendo entrada, e o item sempre nascia
+                // "pendente de destino" à toa). Isso existe justamente pro
+                // caso de nota consolidada que só serve pra protocolar/
+                // casar com boleto de pagamento (ex: "metro cúbico de
+                // madeira serrada" numa nota grande, cujo consumo real
+                // entra por notinhas separadas com romaneio) -- não tem
+                // porquê forçar uma saída que ninguém pediu.
+                // Só vira saída de fato se o usuário escolher "Baixa
+                // Direta", e nesse caso usa a MESMA destinação (setor/
+                // evento/plano de contas) já informada pro resto da nota
+                // -- não fica pendente à toa, porque a informação já
+                // existe (evento/setor são obrigatórios pra nota inteira).
                 const descricaoItemAvulso = (item.xProdOriginal || ('ITEM NF ' + item.cProd)).toUpperCase();
                 const entradaGerada = await chamarPost('registrarMovimentacao', {
                     movimentacao: {
@@ -4318,20 +4339,25 @@ async function processarImportacaoNFe(tipo) {
                         nfNumero: nfeDadosNota ? nfeDadosNota.nNF : '',
                         fornecedorCnpj: nfeDadosNota ? nfeDadosNota.emitCnpj : '',
                         fornecedorNome: nfeDadosNota ? nfeDadosNota.emitNome : '',
-                        estoqueNotaId
+                        estoqueNotaId,
+                        setorId, planoContasId
                     }
                 });
-                await chamarPost('registrarMovimentacao', {
-                    movimentacao: {
-                        data, descricaoAvulsa: descricaoItemAvulso, qtd: item.qtd, valorUnit: item.valorUnit,
-                        tipo: 'saida',
-                        almoxarifadoId: item.almoxarifadoId,
-                        movimentacaoOrigemId: entradaGerada.id,
-                        observacao: 'Saída imediata (item avulso, sem cadastro) — pendente de destino (evento/setor/veículo)',
-                        responsavel, projetoId: null, itemProjetoId: null,
-                        estoqueNotaId
-                    }
-                });
+                if (tipo === 'saida') {
+                    await chamarPost('registrarMovimentacao', {
+                        movimentacao: {
+                            data, descricaoAvulsa: descricaoItemAvulso, qtd: item.qtd, valorUnit: item.valorUnit,
+                            tipo: 'saida',
+                            tag, evento,
+                            almoxarifadoId: item.almoxarifadoId,
+                            movimentacaoOrigemId: entradaGerada.id,
+                            observacao: observacaoBase || 'Baixa direta (item avulso, sem cadastro)',
+                            responsavel, projetoId: null, itemProjetoId: null,
+                            estoqueNotaId,
+                            ...destinacao
+                        }
+                    });
+                }
                 continue;
             }
 
@@ -7605,12 +7631,31 @@ async function buscarPainelMovimentacoes() {
                 <td>${fornecedorInfo}</td>
                 <td>${escapeHtml(m.responsavel) || '-'}</td>
                 <td>${escapeHtml(m.observacao) || '-'}</td>
-                <td class="center"><button class="btn btn-cinza btn-pequeno" data-editar-mov="${m.id}">✏️ Editar</button></td>
+                <td class="center">
+                    <button class="btn btn-cinza btn-pequeno" data-editar-mov="${m.id}">✏️ Editar</button>
+                    ${filtroPendentesDestinoAtivo ? `<button class="btn btn-vermelho btn-pequeno" data-excluir-pendencia="${m.id}" title="Remove da lista de pendências sem precisar informar destinação">🗑 Excluir</button>` : ''}
+                </td>
             `;
             corpo.appendChild(tr);
         });
         corpo.querySelectorAll('[data-editar-mov]').forEach(btn => {
             btn.addEventListener('click', () => abrirModalEditarMovimentacaoGeral(Number(btn.dataset.editarMov)));
+        });
+        // só aparece na lista "Itens avulsos pendentes de destino" -- exclui
+        // a baixa avulsa sem precisar informar setor/evento/veículo (útil
+        // quando é só um lançamento financeiro/protocolo sem relevância de
+        // destino pro almoxarifado, ex: nota consolidada de compra que só
+        // serve pra casar com boleto de pagamento)
+        corpo.querySelectorAll('[data-excluir-pendencia]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                if (!confirm('Excluir essa pendência? Remove a movimentação de saída sem precisar informar destinação. Não tem como desfazer.')) return;
+                try {
+                    await chamarPost('excluirMovimentacaoIndividual', { movId: Number(btn.dataset.excluirPendencia) });
+                    await buscarPainelMovimentacoes();
+                } catch (err) {
+                    alert('Erro ao excluir: ' + err.message);
+                }
+            });
         });
     } catch (err) {
         console.error(err);
