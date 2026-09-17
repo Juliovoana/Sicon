@@ -297,6 +297,7 @@
                             <div class="resultados-busca" id="lanFornecedorResultados"></div>
                         </div>
                         <button type="button" class="btn-add-rapido" data-cadastro-rapido="pessoa" data-busca="lanFornecedorBusca" data-oculto="lanFornecedorId" title="Cadastrar novo fornecedor">+</button>
+                        <button type="button" class="btn-add-rapido" data-editar-rapido="pessoa" data-busca="lanFornecedorBusca" data-oculto="lanFornecedorId" title="Editar fornecedor selecionado">✎</button>
                     </div>
                 </div>
                 <div class="campo">
@@ -308,6 +309,7 @@
                             <div class="resultados-busca" id="lanMaterialResultados"></div>
                         </div>
                         <button type="button" class="btn-add-rapido" data-cadastro-rapido="material" data-busca="lanMaterialBusca" data-oculto="lanMaterialId" title="Cadastrar novo material">+</button>
+                        <button type="button" class="btn-add-rapido" data-editar-rapido="material" data-busca="lanMaterialBusca" data-oculto="lanMaterialId" title="Editar material selecionado">✎</button>
                     </div>
                 </div>
             </div>
@@ -336,6 +338,7 @@
                             <div class="resultados-busca" id="lanSetorResultados"></div>
                         </div>
                         <button type="button" class="btn-add-rapido" data-cadastro-rapido="setor" data-busca="lanSetorBusca" data-oculto="lanSetorId" title="Cadastrar novo centro de custo">+</button>
+                        <button type="button" class="btn-add-rapido" data-editar-rapido="setor" data-busca="lanSetorBusca" data-oculto="lanSetorId" title="Editar centro de custo selecionado">✎</button>
                     </div>
                 </div>
                 <div class="campo">
@@ -347,6 +350,7 @@
                             <div class="resultados-busca" id="lanPlanoResultados"></div>
                         </div>
                         <button type="button" class="btn-add-rapido" data-cadastro-rapido="plano" data-busca="lanPlanoBusca" data-oculto="lanPlanoId" title="Cadastrar nova classificação">+</button>
+                        <button type="button" class="btn-add-rapido" data-editar-rapido="plano" data-busca="lanPlanoBusca" data-oculto="lanPlanoId" title="Editar classificação selecionada">✎</button>
                     </div>
                 </div>
             </div>
@@ -889,42 +893,65 @@ ligarBuscaAutocomplete(
 // ---------------------------------------------------------------
 const CONFIG_CADASTRO_RAPIDO = {
     pessoa: {
-        tabela: 'pessoa', idManual: true, titulo: 'Novo fornecedor', sub: 'Cadastrado na tabela de pessoas compartilhada com o Financeiro.',
+        tabela: 'pessoa', idManual: true, titulo: 'Novo fornecedor', tituloEdicao: 'Editar fornecedor', sub: 'Cadastrado na tabela de pessoas compartilhada com o Financeiro.',
         campos: [
             { campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
             { campo: 'tipo_pessoa', label: 'Tipo', tipo: 'select', opcoes: [['JURIDICA', 'Jurídica'], ['FISICA', 'Física']] },
             { campo: 'documento', label: 'Documento (CPF/CNPJ)', tipo: 'text' },
+            { campo: 'telefone', label: 'Telefone', tipo: 'text' },
+            { campo: 'cidade', label: 'Cidade', tipo: 'text' },
+            { campo: 'endereco', label: 'Endereço', tipo: 'text' },
         ],
     },
     setor: {
-        tabela: 'unidade_setores', titulo: 'Novo centro de custo', sub: 'Cadastrado na tabela de setores compartilhada com o Financeiro.',
+        tabela: 'unidade_setores', titulo: 'Novo centro de custo', tituloEdicao: 'Editar centro de custo', sub: 'Cadastrado na tabela de setores compartilhada com o Financeiro.',
         campos: [
             { campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
             { campo: 'codigo', label: 'Código (opcional)', tipo: 'text' },
         ],
     },
     plano: {
-        tabela: 'unidade_plano_de_contas', titulo: 'Nova classificação (plano de contas)', sub: 'Cadastrada na tabela de plano de contas compartilhada com o Financeiro.',
+        tabela: 'unidade_plano_de_contas', titulo: 'Nova classificação (plano de contas)', tituloEdicao: 'Editar classificação', sub: 'Cadastrada na tabela de plano de contas compartilhada com o Financeiro.',
         campos: [
             { campo: 'codigo', label: 'Código', tipo: 'text', obrigatorio: true },
             { campo: 'descricao', label: 'Descrição', tipo: 'text', obrigatorio: true },
         ],
     },
     material: {
-        tabela: 'obras_materiais', titulo: 'Novo material', sub: 'Fica disponível pra buscar em qualquer lançamento a partir de agora.',
+        tabela: 'obras_materiais', titulo: 'Novo material', tituloEdicao: 'Editar material', sub: 'Fica disponível pra buscar em qualquer lançamento a partir de agora.',
         campos: [
             { campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
             { campo: 'unidade_padrao', label: 'Unidade padrão (TON, UM, M3...)', tipo: 'text' },
         ],
     },
 };
-let cadastroRapidoOrigem = null; // { tipo, inputBusca, inputOculto }
+let cadastroRapidoOrigem = null; // { tipo, inputBusca, inputOculto, idEmEdicao }
 
-function abrirCadastroRapido(tipo, inputBusca, inputOculto) {
+// busca o registro completo pra pré-preencher o modal em modo edição.
+// pessoa tem campos (telefone/cidade/endereço) que a busca da
+// autocomplete não traz, então busca de novo no banco; setor/plano/
+// material já têm tudo que precisam no cache local carregado no início
+async function buscarRegistroCadastroRapido(tipo, id) {
+    if (tipo === 'pessoa') {
+        const { data, error } = await sb.from('pessoa').select('*').eq('id', id).single();
+        return error ? null : data;
+    }
+    if (tipo === 'setor') return setoresCarregados.find(s => String(s.id) === String(id)) || null;
+    if (tipo === 'plano') return planoContasCarregado.find(p => String(p.id) === String(id)) || null;
+    if (tipo === 'material') return materiaisCarregados.find(m => String(m.id) === String(id)) || null;
+    return null;
+}
+
+async function abrirCadastroRapido(tipo, inputBusca, inputOculto, idParaEditar) {
     const config = CONFIG_CADASTRO_RAPIDO[tipo];
     if (!config) return;
-    cadastroRapidoOrigem = { tipo, inputBusca, inputOculto };
-    document.getElementById('cadastroRapidoTitulo').textContent = config.titulo;
+    let registro = null;
+    if (idParaEditar) {
+        registro = await buscarRegistroCadastroRapido(tipo, idParaEditar);
+        if (!registro) { alert('Não consegui carregar esse registro pra edição.'); return; }
+    }
+    cadastroRapidoOrigem = { tipo, inputBusca, inputOculto, idEmEdicao: idParaEditar || null };
+    document.getElementById('cadastroRapidoTitulo').textContent = idParaEditar ? config.tituloEdicao : config.titulo;
     document.getElementById('cadastroRapidoSub').textContent = config.sub;
     document.getElementById('cadastroRapidoCampos').innerHTML = config.campos.map(c => {
         const idCampo = 'cr_' + c.campo;
@@ -933,15 +960,33 @@ function abrirCadastroRapido(tipo, inputBusca, inputOculto) {
         }
         return `<div class="campo"><label>${escapeHtml(c.label)}</label><input type="text" id="${idCampo}"></div>`;
     }).join('');
-    // pré-preenche o primeiro campo com o que já foi digitado na busca de origem
-    const elPrimeiro = document.getElementById('cr_' + config.campos[0].campo);
-    if (elPrimeiro) elPrimeiro.value = inputBusca.value.trim();
+    if (registro) {
+        // edição: preenche todo mundo com o valor atual do registro
+        config.campos.forEach(c => {
+            const el = document.getElementById('cr_' + c.campo);
+            if (el && registro[c.campo] != null) el.value = registro[c.campo];
+        });
+    } else {
+        // criação: pré-preenche só o primeiro campo com o que já foi digitado na busca de origem
+        const elPrimeiro = document.getElementById('cr_' + config.campos[0].campo);
+        if (elPrimeiro) elPrimeiro.value = inputBusca.value.trim();
+    }
     document.getElementById('statusCadastroRapido').textContent = '';
+    document.getElementById('btnSalvarCadastroRapido').textContent = idParaEditar ? 'Salvar alterações' : 'Salvar';
     document.getElementById('modal-cadastro-rapido').classList.add('aberto');
 }
 document.querySelectorAll('[data-cadastro-rapido]').forEach(btn => {
     btn.addEventListener('click', () => {
         abrirCadastroRapido(btn.dataset.cadastroRapido, document.getElementById(btn.dataset.busca), document.getElementById(btn.dataset.oculto));
+    });
+});
+// botão "✎" -- só funciona se já tiver um item selecionado na busca
+// (o campo oculto guarda o id do item escolhido pelo autocomplete)
+document.querySelectorAll('[data-editar-rapido]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const inputOculto = document.getElementById(btn.dataset.oculto);
+        if (!inputOculto.value) { alert('Busque e selecione um item antes de editar.'); return; }
+        abrirCadastroRapido(btn.dataset.editarRapido, document.getElementById(btn.dataset.busca), inputOculto, inputOculto.value);
     });
 });
 // limpa o modal por completo (campos digitados + mensagem de status +
@@ -952,14 +997,16 @@ function limparCadastroRapido() {
     document.getElementById('cadastroRapidoCampos').innerHTML = '';
     document.getElementById('statusCadastroRapido').className = 'status-msg';
     document.getElementById('statusCadastroRapido').textContent = '';
+    document.getElementById('btnSalvarCadastroRapido').textContent = 'Salvar';
     cadastroRapidoOrigem = null;
 }
 document.getElementById('btnFecharCadastroRapido').addEventListener('click', limparCadastroRapido);
 document.getElementById('btnSalvarCadastroRapido').addEventListener('click', async () => {
     if (!cadastroRapidoOrigem) return;
     const config = CONFIG_CADASTRO_RAPIDO[cadastroRapidoOrigem.tipo];
+    const emEdicao = !!cadastroRapidoOrigem.idEmEdicao;
     const statusEl = document.getElementById('statusCadastroRapido');
-    const payload = { unidade_negocio_id: meuPerfil.unidadeId };
+    const payload = emEdicao ? {} : { unidade_negocio_id: meuPerfil.unidadeId };
     for (const c of config.campos) {
         const valor = document.getElementById('cr_' + c.campo).value.trim();
         if (c.obrigatorio && !valor) { statusEl.className = 'status-msg erro'; statusEl.textContent = `Preencha "${c.label}".`; return; }
@@ -968,19 +1015,24 @@ document.getElementById('btnSalvarCadastroRapido').addEventListener('click', asy
     // material segue o mesmo padrão de maiúsculas do material criado
     // direto ao salvar um lançamento com nome novo (evita "Brita 01" e
     // "BRITA 01" virando dois materiais diferentes no catálogo)
-    if (cadastroRapidoOrigem.tipo === 'material' && payload.nome) { payload.nome = payload.nome.toUpperCase(); payload.ativo = true; }
+    if (cadastroRapidoOrigem.tipo === 'material' && payload.nome) { payload.nome = payload.nome.toUpperCase(); if (!emEdicao) payload.ativo = true; }
     const btn = document.getElementById('btnSalvarCadastroRapido');
     btn.disabled = true;
     try {
-        // pessoa (e empresas, não usado aqui) não tem id automático --
-        // precisa gerar manualmente antes de inserir, mesmo padrão do
-        // financeiro-painel-admin.html (ENTIDADES_SEM_ID_AUTOMATICO)
-        if (config.idManual) {
-            const { data: proximoId, error: erroId } = await sb.rpc('fn_proximo_id_manual', { p_tabela: config.tabela });
-            if (erroId) throw new Error('Erro ao gerar ID: ' + erroId.message);
-            payload.id = proximoId;
+        let data, error;
+        if (emEdicao) {
+            ({ data, error } = await sb.from(config.tabela).update(payload).eq('id', cadastroRapidoOrigem.idEmEdicao).select().single());
+        } else {
+            // pessoa (e empresas, não usado aqui) não tem id automático --
+            // precisa gerar manualmente antes de inserir, mesmo padrão do
+            // financeiro-painel-admin.html (ENTIDADES_SEM_ID_AUTOMATICO)
+            if (config.idManual) {
+                const { data: proximoId, error: erroId } = await sb.rpc('fn_proximo_id_manual', { p_tabela: config.tabela });
+                if (erroId) throw new Error('Erro ao gerar ID: ' + erroId.message);
+                payload.id = proximoId;
+            }
+            ({ data, error } = await sb.from(config.tabela).insert(payload).select().single());
         }
-        const { data, error } = await sb.from(config.tabela).insert(payload).select().single();
         if (error) throw error;
         const nomeExibido = data.nome || data.descricao;
         cadastroRapidoOrigem.inputBusca.value = nomeExibido;
