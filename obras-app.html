@@ -300,10 +300,13 @@
                 </div>
                 <div class="campo">
                     <label>Material</label>
-                    <div class="linha-busca">
-                        <input type="text" id="lanMaterialBusca" placeholder="Buscar ou digitar novo material..." autocomplete="off">
-                        <input type="hidden" id="lanMaterialId">
-                        <div class="resultados-busca" id="lanMaterialResultados"></div>
+                    <div class="campo-com-add">
+                        <div class="linha-busca">
+                            <input type="text" id="lanMaterialBusca" placeholder="Buscar ou digitar novo material..." autocomplete="off">
+                            <input type="hidden" id="lanMaterialId">
+                            <div class="resultados-busca" id="lanMaterialResultados"></div>
+                        </div>
+                        <button type="button" class="btn-add-rapido" data-cadastro-rapido="material" data-busca="lanMaterialBusca" data-oculto="lanMaterialId" title="Cadastrar novo material">+</button>
                     </div>
                 </div>
             </div>
@@ -856,6 +859,13 @@ const CONFIG_CADASTRO_RAPIDO = {
             { campo: 'descricao', label: 'Descrição', tipo: 'text', obrigatorio: true },
         ],
     },
+    material: {
+        tabela: 'obras_materiais', titulo: 'Novo material', sub: 'Fica disponível pra buscar em qualquer lançamento a partir de agora.',
+        campos: [
+            { campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
+            { campo: 'unidade_padrao', label: 'Unidade padrão (TON, UM, M3...)', tipo: 'text' },
+        ],
+    },
 };
 let cadastroRapidoOrigem = null; // { tipo, inputBusca, inputOculto }
 
@@ -896,6 +906,10 @@ document.getElementById('btnSalvarCadastroRapido').addEventListener('click', asy
         if (c.obrigatorio && !valor) { statusEl.className = 'status-msg erro'; statusEl.textContent = `Preencha "${c.label}".`; return; }
         payload[c.campo] = valor || null;
     }
+    // material segue o mesmo padrão de maiúsculas do material criado
+    // direto ao salvar um lançamento com nome novo (evita "Brita 01" e
+    // "BRITA 01" virando dois materiais diferentes no catálogo)
+    if (cadastroRapidoOrigem.tipo === 'material' && payload.nome) { payload.nome = payload.nome.toUpperCase(); payload.ativo = true; }
     const btn = document.getElementById('btnSalvarCadastroRapido');
     btn.disabled = true;
     try {
@@ -916,6 +930,10 @@ document.getElementById('btnSalvarCadastroRapido').addEventListener('click', asy
         if (cadastroRapidoOrigem.tipo === 'pessoa') fornecedorSelecionado = { id: data.id, nome: data.nome };
         if (cadastroRapidoOrigem.tipo === 'setor') await carregarSetores();
         if (cadastroRapidoOrigem.tipo === 'plano') await carregarPlanoContas();
+        if (cadastroRapidoOrigem.tipo === 'material') {
+            await carregarMateriais();
+            document.getElementById('lanUnidade').value = data.unidade_padrao || document.getElementById('lanUnidade').value;
+        }
         document.getElementById('modal-cadastro-rapido').classList.remove('aberto');
     } catch (erro) {
         statusEl.className = 'status-msg erro'; statusEl.textContent = 'Erro: ' + erro.message;
@@ -1246,12 +1264,18 @@ const AJUDA_OBRAS = {
             origem já funcionava).</p>
             <ul>
                 <li><strong>Material</strong>: busca no catálogo já usado antes, ou digita um
-                nome novo -- se não existir, é criado automaticamente ao salvar.</li>
+                nome novo -- se não existir, é criado automaticamente ao salvar. O botão
+                <strong>"+"</strong> ao lado também cadastra um material novo na hora, sem
+                precisar salvar o lançamento primeiro.</li>
                 <li><strong>Tipo de documento</strong>: "Pedido" é um compromisso já feito mas
                 ainda sem nota fiscal emitida; "DANFE" é quando a nota já saiu. Isso alimenta o
                 relatório de Pendentes x Realizados.</li>
                 <li><strong>Frete</strong> é somado separado do valor do material nos totais por
                 obra/relatório.</li>
+                <li>Os botões <strong>"+"</strong> ao lado de Fornecedor, Material, Centro de
+                custo e Classificação cadastram um item novo sem sair do formulário --
+                Fornecedor/Centro de custo/Classificação ficam disponíveis pro Financeiro
+                também, já que são as mesmas tabelas compartilhadas.</li>
             </ul>
         ` },
         { id: 'obras', titulo: 'Obras', corpo: `
