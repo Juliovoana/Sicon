@@ -796,12 +796,16 @@ function ligarBuscaAutocomplete(inputBusca, inputOculto, listaResultados, buscar
 }
 function buscarLocal(lista, campoNome, termo) {
     const termoLower = termo.trim().toLowerCase();
-    return lista.filter(item => String(item[campoNome] ?? '').toLowerCase().includes(termoLower))
-        .slice(0, 8).map(item => ({ id: item.id, nome: item[campoNome], sub: item.codigo ? ('Cód. ' + item.codigo) : (item.descricao || '') }));
+    return lista.filter(item =>
+        String(item[campoNome] ?? '').toLowerCase().includes(termoLower) ||
+        (item.codigo != null && String(item.codigo).toLowerCase().includes(termoLower))
+    ).slice(0, 8).map(item => ({ id: item.id, nome: item[campoNome], sub: item.codigo ? ('Cód. ' + item.codigo) : (item.descricao || '') }));
 }
 async function buscarFornecedorParaCampo(termo) {
+    // busca por nome OU por código exato (mesmo padrão de
+    // financeiro-painel-admin.html:2234-2235)
     const { data, error } = await sb.from('pessoa').select('id, codigo, nome').eq('unidade_negocio_id', meuPerfil.unidadeId)
-        .ilike('nome', `%${termo}%`).limit(8);
+        .or(`nome.ilike.%${termo}%,codigo.eq.${isNaN(Number(termo)) ? -1 : Number(termo)}`).limit(8);
     if (error || !data) return [];
     return data.map(p => ({ id: p.id, nome: p.nome, sub: p.codigo ? ('Cód. ' + p.codigo) : '' }));
 }
