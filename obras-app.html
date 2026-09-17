@@ -835,7 +835,7 @@ ligarBuscaAutocomplete(
 // ---------------------------------------------------------------
 const CONFIG_CADASTRO_RAPIDO = {
     pessoa: {
-        tabela: 'pessoa', titulo: 'Novo fornecedor', sub: 'Cadastrado na tabela de pessoas compartilhada com o Financeiro.',
+        tabela: 'pessoa', idManual: true, titulo: 'Novo fornecedor', sub: 'Cadastrado na tabela de pessoas compartilhada com o Financeiro.',
         campos: [
             { campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
             { campo: 'tipo_pessoa', label: 'Tipo', tipo: 'select', opcoes: [['JURIDICA', 'Jurídica'], ['FISICA', 'Física']] },
@@ -899,6 +899,14 @@ document.getElementById('btnSalvarCadastroRapido').addEventListener('click', asy
     const btn = document.getElementById('btnSalvarCadastroRapido');
     btn.disabled = true;
     try {
+        // pessoa (e empresas, não usado aqui) não tem id automático --
+        // precisa gerar manualmente antes de inserir, mesmo padrão do
+        // financeiro-painel-admin.html (ENTIDADES_SEM_ID_AUTOMATICO)
+        if (config.idManual) {
+            const { data: proximoId, error: erroId } = await sb.rpc('fn_proximo_id_manual', { p_tabela: config.tabela });
+            if (erroId) throw new Error('Erro ao gerar ID: ' + erroId.message);
+            payload.id = proximoId;
+        }
         const { data, error } = await sb.from(config.tabela).insert(payload).select().single();
         if (error) throw error;
         const nomeExibido = data.nome || data.descricao;
