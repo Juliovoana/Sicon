@@ -295,7 +295,7 @@
                             <input type="hidden" id="lanFornecedorId">
                             <div class="resultados-busca" id="lanFornecedorResultados"></div>
                         </div>
-                        <button type="button" class="btn-add-rapido" id="btnNovoFornecedorRapido" title="Cadastrar novo fornecedor">+</button>
+                        <button type="button" class="btn-add-rapido" data-cadastro-rapido="pessoa" data-busca="lanFornecedorBusca" data-oculto="lanFornecedorId" title="Cadastrar novo fornecedor">+</button>
                     </div>
                 </div>
                 <div class="campo">
@@ -325,18 +325,24 @@
                 </div>
                 <div class="campo">
                     <label>Centro de custo (setor)</label>
-                    <div class="linha-busca">
-                        <input type="text" id="lanSetorBusca" placeholder="Buscar..." autocomplete="off">
-                        <input type="hidden" id="lanSetorId">
-                        <div class="resultados-busca" id="lanSetorResultados"></div>
+                    <div class="campo-com-add">
+                        <div class="linha-busca">
+                            <input type="text" id="lanSetorBusca" placeholder="Buscar..." autocomplete="off">
+                            <input type="hidden" id="lanSetorId">
+                            <div class="resultados-busca" id="lanSetorResultados"></div>
+                        </div>
+                        <button type="button" class="btn-add-rapido" data-cadastro-rapido="setor" data-busca="lanSetorBusca" data-oculto="lanSetorId" title="Cadastrar novo centro de custo">+</button>
                     </div>
                 </div>
                 <div class="campo">
                     <label>Classificação (plano de contas)</label>
-                    <div class="linha-busca">
-                        <input type="text" id="lanPlanoBusca" placeholder="Buscar..." autocomplete="off">
-                        <input type="hidden" id="lanPlanoId">
-                        <div class="resultados-busca" id="lanPlanoResultados"></div>
+                    <div class="campo-com-add">
+                        <div class="linha-busca">
+                            <input type="text" id="lanPlanoBusca" placeholder="Buscar..." autocomplete="off">
+                            <input type="hidden" id="lanPlanoId">
+                            <div class="resultados-busca" id="lanPlanoResultados"></div>
+                        </div>
+                        <button type="button" class="btn-add-rapido" data-cadastro-rapido="plano" data-busca="lanPlanoBusca" data-oculto="lanPlanoId" title="Cadastrar nova classificação">+</button>
                     </div>
                 </div>
             </div>
@@ -463,22 +469,17 @@
     </div>
 </div>
 
-<!-- ================= MODAL CADASTRO RÁPIDO DE FORNECEDOR ================= -->
-<div class="modal-overlay" id="modal-fornecedor-rapido">
+<!-- ================= MODAL CADASTRO RÁPIDO (genérico -- fornecedor, setor, plano de contas) ================= -->
+<div class="modal-overlay" id="modal-cadastro-rapido">
     <div class="modal-caixa">
-        <h3>Novo fornecedor</h3>
-        <p class="sub">Cadastrado na tabela de pessoas compartilhada com o Financeiro.</p>
-        <div class="campo"><label>Nome</label><input type="text" id="fpNome"></div>
-        <div class="campo">
-            <label>Tipo</label>
-            <select id="fpTipo"><option value="JURIDICA">Jurídica</option><option value="FISICA">Física</option></select>
-        </div>
-        <div class="campo"><label>Documento (CPF/CNPJ)</label><input type="text" id="fpDocumento"></div>
+        <h3 id="cadastroRapidoTitulo">Novo item</h3>
+        <p class="sub" id="cadastroRapidoSub"></p>
+        <div id="cadastroRapidoCampos"></div>
         <div style="display:flex; gap:10px;">
-            <button class="btn btn-principal" id="btnSalvarFornecedorRapido" style="width:auto; padding:11px 24px;">Salvar</button>
-            <button class="btn btn-cinza" id="btnFecharFornecedorRapido">Cancelar</button>
+            <button class="btn btn-principal" id="btnSalvarCadastroRapido" style="width:auto; padding:11px 24px;">Salvar</button>
+            <button class="btn btn-cinza" id="btnFecharCadastroRapido">Cancelar</button>
         </div>
-        <div class="status-msg" id="statusFornecedorRapido"></div>
+        <div class="status-msg" id="statusCadastroRapido"></div>
     </div>
 </div>
 
@@ -825,35 +826,89 @@ ligarBuscaAutocomplete(
 );
 
 // ---------------------------------------------------------------
-// CADASTRO RÁPIDO DE FORNECEDOR (grava direto na tabela `pessoa`
-// compartilhada com o Financeiro -- aparece lá também)
+// CADASTRO RÁPIDO (genérico -- fornecedor/setor/plano de contas, todo
+// botão "+" cai aqui. Mesmo espírito do financeiro-painel-admin.html:
+// grava direto nas tabelas compartilhadas (pessoa/unidade_setores/
+// unidade_plano_de_contas) -- cadastrar aqui já aparece no Financeiro
+// também. Pra adicionar um novo tipo de cadastro rápido no futuro,
+// basta acrescentar uma entrada em CONFIG_CADASTRO_RAPIDO.
 // ---------------------------------------------------------------
-document.getElementById('btnNovoFornecedorRapido').addEventListener('click', () => {
-    document.getElementById('fpNome').value = document.getElementById('lanFornecedorBusca').value.trim();
-    document.getElementById('fpDocumento').value = '';
-    document.getElementById('statusFornecedorRapido').textContent = '';
-    document.getElementById('modal-fornecedor-rapido').classList.add('aberto');
+const CONFIG_CADASTRO_RAPIDO = {
+    pessoa: {
+        tabela: 'pessoa', titulo: 'Novo fornecedor', sub: 'Cadastrado na tabela de pessoas compartilhada com o Financeiro.',
+        campos: [
+            { campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
+            { campo: 'tipo_pessoa', label: 'Tipo', tipo: 'select', opcoes: [['JURIDICA', 'Jurídica'], ['FISICA', 'Física']] },
+            { campo: 'documento', label: 'Documento (CPF/CNPJ)', tipo: 'text' },
+        ],
+    },
+    setor: {
+        tabela: 'unidade_setores', titulo: 'Novo centro de custo', sub: 'Cadastrado na tabela de setores compartilhada com o Financeiro.',
+        campos: [
+            { campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
+            { campo: 'codigo', label: 'Código (opcional)', tipo: 'text' },
+        ],
+    },
+    plano: {
+        tabela: 'unidade_plano_de_contas', titulo: 'Nova classificação (plano de contas)', sub: 'Cadastrada na tabela de plano de contas compartilhada com o Financeiro.',
+        campos: [
+            { campo: 'codigo', label: 'Código', tipo: 'text', obrigatorio: true },
+            { campo: 'descricao', label: 'Descrição', tipo: 'text', obrigatorio: true },
+        ],
+    },
+};
+let cadastroRapidoOrigem = null; // { tipo, inputBusca, inputOculto }
+
+function abrirCadastroRapido(tipo, inputBusca, inputOculto) {
+    const config = CONFIG_CADASTRO_RAPIDO[tipo];
+    if (!config) return;
+    cadastroRapidoOrigem = { tipo, inputBusca, inputOculto };
+    document.getElementById('cadastroRapidoTitulo').textContent = config.titulo;
+    document.getElementById('cadastroRapidoSub').textContent = config.sub;
+    document.getElementById('cadastroRapidoCampos').innerHTML = config.campos.map(c => {
+        const idCampo = 'cr_' + c.campo;
+        if (c.tipo === 'select') {
+            return `<div class="campo"><label>${escapeHtml(c.label)}</label><select id="${idCampo}">${c.opcoes.map(([v, l]) => `<option value="${escapeHtml(v)}">${escapeHtml(l)}</option>`).join('')}</select></div>`;
+        }
+        return `<div class="campo"><label>${escapeHtml(c.label)}</label><input type="text" id="${idCampo}"></div>`;
+    }).join('');
+    // pré-preenche o primeiro campo com o que já foi digitado na busca de origem
+    const elPrimeiro = document.getElementById('cr_' + config.campos[0].campo);
+    if (elPrimeiro) elPrimeiro.value = inputBusca.value.trim();
+    document.getElementById('statusCadastroRapido').textContent = '';
+    document.getElementById('modal-cadastro-rapido').classList.add('aberto');
+}
+document.querySelectorAll('[data-cadastro-rapido]').forEach(btn => {
+    btn.addEventListener('click', () => {
+        abrirCadastroRapido(btn.dataset.cadastroRapido, document.getElementById(btn.dataset.busca), document.getElementById(btn.dataset.oculto));
+    });
 });
-document.getElementById('btnFecharFornecedorRapido').addEventListener('click', () => {
-    document.getElementById('modal-fornecedor-rapido').classList.remove('aberto');
+document.getElementById('btnFecharCadastroRapido').addEventListener('click', () => {
+    document.getElementById('modal-cadastro-rapido').classList.remove('aberto');
 });
-document.getElementById('btnSalvarFornecedorRapido').addEventListener('click', async () => {
-    const nome = document.getElementById('fpNome').value.trim();
-    const statusEl = document.getElementById('statusFornecedorRapido');
-    if (!nome) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o nome.'; return; }
-    const btn = document.getElementById('btnSalvarFornecedorRapido');
+document.getElementById('btnSalvarCadastroRapido').addEventListener('click', async () => {
+    if (!cadastroRapidoOrigem) return;
+    const config = CONFIG_CADASTRO_RAPIDO[cadastroRapidoOrigem.tipo];
+    const statusEl = document.getElementById('statusCadastroRapido');
+    const payload = { unidade_negocio_id: meuPerfil.unidadeId };
+    for (const c of config.campos) {
+        const valor = document.getElementById('cr_' + c.campo).value.trim();
+        if (c.obrigatorio && !valor) { statusEl.className = 'status-msg erro'; statusEl.textContent = `Preencha "${c.label}".`; return; }
+        payload[c.campo] = valor || null;
+    }
+    const btn = document.getElementById('btnSalvarCadastroRapido');
     btn.disabled = true;
     try {
-        const { data, error } = await sb.from('pessoa').insert({
-            unidade_negocio_id: meuPerfil.unidadeId,
-            nome, tipo_pessoa: document.getElementById('fpTipo').value,
-            documento: document.getElementById('fpDocumento').value.trim() || null,
-        }).select().single();
+        const { data, error } = await sb.from(config.tabela).insert(payload).select().single();
         if (error) throw error;
-        fornecedorSelecionado = { id: data.id, nome: data.nome };
-        document.getElementById('lanFornecedorBusca').value = data.nome;
-        document.getElementById('lanFornecedorId').value = data.id;
-        document.getElementById('modal-fornecedor-rapido').classList.remove('aberto');
+        const nomeExibido = data.nome || data.descricao;
+        cadastroRapidoOrigem.inputBusca.value = nomeExibido;
+        cadastroRapidoOrigem.inputOculto.value = data.id;
+        cadastroRapidoOrigem.inputOculto.dispatchEvent(new Event('change'));
+        if (cadastroRapidoOrigem.tipo === 'pessoa') fornecedorSelecionado = { id: data.id, nome: data.nome };
+        if (cadastroRapidoOrigem.tipo === 'setor') await carregarSetores();
+        if (cadastroRapidoOrigem.tipo === 'plano') await carregarPlanoContas();
+        document.getElementById('modal-cadastro-rapido').classList.remove('aberto');
     } catch (erro) {
         statusEl.className = 'status-msg erro'; statusEl.textContent = 'Erro: ' + erro.message;
     } finally { btn.disabled = false; }
