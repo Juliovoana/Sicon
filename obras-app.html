@@ -944,9 +944,17 @@ document.querySelectorAll('[data-cadastro-rapido]').forEach(btn => {
         abrirCadastroRapido(btn.dataset.cadastroRapido, document.getElementById(btn.dataset.busca), document.getElementById(btn.dataset.oculto));
     });
 });
-document.getElementById('btnFecharCadastroRapido').addEventListener('click', () => {
+// limpa o modal por completo (campos digitados + mensagem de status +
+// referência de origem) -- chamado tanto ao cancelar quanto depois de
+// salvar com sucesso, pra nunca reabrir com dado da vez anterior
+function limparCadastroRapido() {
     document.getElementById('modal-cadastro-rapido').classList.remove('aberto');
-});
+    document.getElementById('cadastroRapidoCampos').innerHTML = '';
+    document.getElementById('statusCadastroRapido').className = 'status-msg';
+    document.getElementById('statusCadastroRapido').textContent = '';
+    cadastroRapidoOrigem = null;
+}
+document.getElementById('btnFecharCadastroRapido').addEventListener('click', limparCadastroRapido);
 document.getElementById('btnSalvarCadastroRapido').addEventListener('click', async () => {
     if (!cadastroRapidoOrigem) return;
     const config = CONFIG_CADASTRO_RAPIDO[cadastroRapidoOrigem.tipo];
@@ -985,7 +993,7 @@ document.getElementById('btnSalvarCadastroRapido').addEventListener('click', asy
             await carregarMateriais();
             document.getElementById('lanUnidade').value = data.unidade_padrao || document.getElementById('lanUnidade').value;
         }
-        document.getElementById('modal-cadastro-rapido').classList.remove('aberto');
+        limparCadastroRapido();
     } catch (erro) {
         statusEl.className = 'status-msg erro'; statusEl.textContent = 'Erro: ' + erro.message;
     } finally { btn.disabled = false; }
