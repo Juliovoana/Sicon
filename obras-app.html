@@ -82,6 +82,21 @@
     .stat-card .label { font-size: .8rem; color: var(--muted); font-weight: 500; }
     .stat-card .value { font-size: 1.4rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
     .stat-card .value.alerta { color: var(--accent-ink); }
+    .stat-card { cursor: help; transition: box-shadow .12s ease, border-color .12s ease; }
+    .stat-card:hover { border-color: var(--brand-2); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+
+    /* pop-up temporário ao passar o mouse nos cartões do dashboard, tipo Power BI */
+    .dash-tooltip { position: fixed; z-index: 999; width: 260px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 12px 34px rgba(0,0,0,.2); padding: 13px 15px; pointer-events: none; opacity: 0; transform: translateY(5px); transition: opacity .12s ease, transform .12s ease; }
+    .dash-tooltip.visivel { opacity: 1; transform: translateY(0); }
+    .dash-tooltip-titulo { font-size: .72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 9px; }
+    .dash-tooltip-linha { margin-bottom: 8px; }
+    .dash-tooltip-linha:last-child { margin-bottom: 0; }
+    .dash-tooltip-rotulo { display: flex; justify-content: space-between; gap: 8px; font-size: .78rem; margin-bottom: 3px; }
+    .dash-tooltip-rotulo .nome { font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dash-tooltip-rotulo .num { color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+    .dash-tooltip-barra-fundo { height: 6px; border-radius: 4px; background: var(--brand-soft); overflow: hidden; }
+    .dash-tooltip-barra { height: 100%; border-radius: 4px; background: var(--brand); }
+    .dash-tooltip-vazio { font-size: .8rem; color: var(--muted); }
 
     .chart-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
     .chart-box h3 { font-size: .92rem; font-weight: 700; margin-bottom: 2px; }
@@ -224,31 +239,35 @@
     <!-- ---------- DASHBOARD ---------- -->
     <div class="panel-app active" id="app-panel-dashboard">
         <div class="stat-cards">
-            <div class="stat-card">
+            <div class="stat-card" data-tip-dashboard="valor">
                 <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
                 <div class="label">Total gasto (material + frete)</div>
                 <div class="value" id="statTotalGasto">—</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" data-tip-dashboard="qtd">
                 <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
                 <div class="label">Lançamentos registrados</div>
                 <div class="value" id="statQtdLancamentos">—</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" data-tip-dashboard="valor">
                 <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/></svg></div>
                 <div class="label">Obras ativas</div>
                 <div class="value" id="statObrasAtivas">—</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" data-tip-dashboard="fornecedor">
                 <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/></svg></div>
                 <div class="label">Fornecedores usados</div>
                 <div class="value" id="statFornecedores">—</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" data-tip-dashboard="pendentes">
                 <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
                 <div class="label">Pendentes (pedido sem nota)</div>
                 <div class="value alerta" id="statPendentes">—</div>
             </div>
+        </div>
+        <div class="dash-tooltip" id="dashTooltip">
+            <div class="dash-tooltip-titulo" id="dashTooltipTitulo">Obras mais relevantes</div>
+            <div id="dashTooltipCorpo"></div>
         </div>
         <div class="chart-box">
             <h3>Últimos lançamentos</h3>
@@ -526,6 +545,22 @@ function formatarDataSemFuso(dataStr) {
     return m ? `${m[3]}/${m[2]}/${m[1]}` : dataStr;
 }
 function hojeISO() { return new Date().toISOString().slice(0, 10); }
+
+// ---------------------------------------------------------------
+// SENTINELA (auditoria) -- mesmo padrão usado em Financeiro/Estoque/
+// Checklist Equipamentos/Staff-Uniformes: grava exclusões e alterações
+// importantes em servir_sentinela pra ficar rastreável quem fez o quê
+// ---------------------------------------------------------------
+async function registrarSentinela(tipoAcao, descricao) {
+    try {
+        await sb.from('servir_sentinela').insert({
+            unidade_negocio_id: meuPerfil.unidadeId, modulo: 'obras',
+            tipo_acao: tipoAcao, descricao, operador: meuPerfil.email, operador_user_id: meuPerfil.userId || null,
+        });
+    } catch (erro) {
+        console.warn('Não consegui registrar na sentinela:', erro.message);
+    }
+}
 
 // ---------------------------------------------------------------
 // olho de mostrar/ocultar senha
@@ -1035,6 +1070,10 @@ document.getElementById('btnSalvarCadastroRapido').addEventListener('click', asy
         }
         if (error) throw error;
         const nomeExibido = data.nome || data.descricao;
+        if (emEdicao) {
+            const rotulos = { pessoa: 'fornecedor', setor: 'centro de custo', plano: 'classificação', material: 'material' };
+            await registrarSentinela('obras_cadastro_editado', `Editou ${rotulos[cadastroRapidoOrigem.tipo] || cadastroRapidoOrigem.tipo} "${nomeExibido}" (id ${data.id})`);
+        }
         cadastroRapidoOrigem.inputBusca.value = nomeExibido;
         cadastroRapidoOrigem.inputOculto.value = data.id;
         cadastroRapidoOrigem.inputOculto.dispatchEvent(new Event('change'));
@@ -1117,10 +1156,16 @@ document.getElementById('btnSalvarLancamento').addEventListener('click', async (
             transportador: document.getElementById('lanTransportador').value.trim() || null,
             observacao: document.getElementById('lanObservacao').value.trim() || null,
         };
-        const { error } = lancamentoEmEdicaoId
-            ? await sb.from('obras_lancamentos').update(payload).eq('id', lancamentoEmEdicaoId)
+        const idEmEdicaoAntes = lancamentoEmEdicaoId;
+        const { error } = idEmEdicaoAntes
+            ? await sb.from('obras_lancamentos').update(payload).eq('id', idEmEdicaoAntes)
             : await sb.from('obras_lancamentos').insert(payload);
         if (error) throw error;
+
+        if (idEmEdicaoAntes) {
+            const obraNome = obrasCarregadas.find(o => o.id === obraId)?.nome || '—';
+            await registrarSentinela('obras_lancamento_editado', `Editou lançamento de ${formatarDataSemFuso(payload.data)} -- obra: ${obraNome}, fornecedor: ${document.getElementById('lanFornecedorBusca').value.trim() || '—'}, material: ${materialTexto}, valor ${formatarMoeda(payload.valor)}${payload.numero_nf ? ', NF ' + payload.numero_nf : ''}`);
+        }
 
         statusEl.className = 'status-msg sucesso';
         statusEl.textContent = '✅ Lançamento salvo.';
@@ -1168,8 +1213,12 @@ function editarLancamento(id) {
 }
 async function excluirLancamento(id) {
     if (!confirm('Excluir esse lançamento?')) return;
+    const l = lancamentosCarregados.find(x => x.id === id);
     const { error } = await sb.from('obras_lancamentos').delete().eq('id', id);
     if (error) { alert('Erro ao excluir: ' + error.message); return; }
+    if (l) {
+        await registrarSentinela('obras_lancamento_excluido', `Excluiu lançamento de ${formatarDataSemFuso(l.data)} -- obra: ${l.obras_obras?.nome || '—'}, fornecedor: ${l.pessoa?.nome || '—'}, material: ${l.obras_materiais?.nome || l.descricao_avulsa || '—'}, valor ${formatarMoeda(l.valor)}${l.numero_nf ? ', NF ' + l.numero_nf : ''}`);
+    }
     await carregarLancamentos();
     renderizarTabelaLancamentos();
     renderizarTabelaObras();
@@ -1248,10 +1297,14 @@ document.getElementById('btnSalvarObra').addEventListener('click', async () => {
             cidade: document.getElementById('obraCidade').value.trim() || null,
             status: document.getElementById('obraStatus').value,
         };
-        const { error } = obraEmEdicaoId
-            ? await sb.from('obras_obras').update(payload).eq('id', obraEmEdicaoId)
+        const idEmEdicaoAntes = obraEmEdicaoId;
+        const { error } = idEmEdicaoAntes
+            ? await sb.from('obras_obras').update(payload).eq('id', idEmEdicaoAntes)
             : await sb.from('obras_obras').insert(payload);
         if (error) throw error;
+        if (idEmEdicaoAntes) {
+            await registrarSentinela('obras_obra_editada', `Editou obra "${nome}" -- cidade: ${payload.cidade || '—'}, status: ${payload.status}`);
+        }
         statusEl.className = 'status-msg sucesso'; statusEl.textContent = '✅ Obra salva.';
         limparFormObra();
         await carregarObras();
@@ -1331,6 +1384,63 @@ function renderizarDashboard() {
     corpoFornecedores.innerHTML = topFornecedores.length ? topFornecedores.map(f => `
         <tr><td>${escapeHtml(f.rotulo)}</td><td class="num">${f.qtd}</td><td class="num">${formatarMoeda(f.valor)}</td></tr>`).join('') : '<tr><td colspan="3" class="vazio">Sem dados.</td></tr>';
 }
+
+// ---------------------------------------------------------------
+// TOOLTIP DO DASHBOARD -- pop-up temporário ao passar o mouse sobre
+// os cartões (tipo Power BI): mini gráfico de barras das obras/
+// fornecedores mais relevantes, com valor e quantidade de notas
+// ---------------------------------------------------------------
+function montarTooltipDashboard(tipo) {
+    const titulos = {
+        valor: 'Top obras por valor',
+        qtd: 'Top obras por lançamentos',
+        fornecedor: 'Top fornecedores por valor',
+        pendentes: 'Obras com mais pendências',
+    };
+    document.getElementById('dashTooltipTitulo').textContent = titulos[tipo] || 'Obras mais relevantes';
+
+    let linhas;
+    if (tipo === 'fornecedor') {
+        linhas = agregarPor(lancamentosCarregados, l => l.pessoa_id, l => l.pessoa?.nome || '—').slice(0, 5);
+    } else if (tipo === 'pendentes') {
+        linhas = agregarPor(lancamentosCarregados.filter(l => l.tipo_doc === 'PEDIDO'), l => l.obra_id, l => l.obras_obras?.nome || '—')
+            .sort((a, b) => b.qtd - a.qtd).slice(0, 5);
+    } else {
+        linhas = agregarPor(lancamentosCarregados, l => l.obra_id, l => l.obras_obras?.nome || '—');
+        if (tipo === 'qtd') linhas = linhas.slice().sort((a, b) => b.qtd - a.qtd);
+        linhas = linhas.slice(0, 5);
+    }
+
+    const corpo = document.getElementById('dashTooltipCorpo');
+    if (!linhas.length) { corpo.innerHTML = '<div class="dash-tooltip-vazio">Sem dados ainda.</div>'; return; }
+    const maxValor = Math.max(...linhas.map(l => l.valor), 1);
+    corpo.innerHTML = linhas.map(l => `
+        <div class="dash-tooltip-linha">
+            <div class="dash-tooltip-rotulo"><span class="nome">${escapeHtml(l.rotulo)}</span><span class="num">${formatarMoeda(l.valor)} · ${l.qtd} nota${l.qtd === 1 ? '' : 's'}</span></div>
+            <div class="dash-tooltip-barra-fundo"><div class="dash-tooltip-barra" style="width:${Math.max(4, Math.round(l.valor / maxValor * 100))}%"></div></div>
+        </div>`).join('');
+}
+(function ligarTooltipDashboard() {
+    const tooltip = document.getElementById('dashTooltip');
+    function posicionar(ev) {
+        const largura = tooltip.offsetWidth || 260;
+        const altura = tooltip.offsetHeight || 120;
+        let x = ev.clientX + 16, y = ev.clientY + 16;
+        if (x + largura > window.innerWidth - 12) x = ev.clientX - largura - 16;
+        if (y + altura > window.innerHeight - 12) y = ev.clientY - altura - 16;
+        tooltip.style.left = x + 'px';
+        tooltip.style.top = y + 'px';
+    }
+    document.querySelectorAll('[data-tip-dashboard]').forEach(card => {
+        card.addEventListener('mouseenter', (ev) => {
+            montarTooltipDashboard(card.dataset.tipDashboard);
+            posicionar(ev);
+            tooltip.classList.add('visivel');
+        });
+        card.addEventListener('mousemove', posicionar);
+        card.addEventListener('mouseleave', () => tooltip.classList.remove('visivel'));
+    });
+})();
 
 // ---------------------------------------------------------------
 // RELATÓRIOS
