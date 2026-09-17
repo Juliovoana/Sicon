@@ -10,7 +10,7 @@
 <style>
     :root {
         --ink:#171E1A; --bg:#F6F7F9; --surface:#FFFFFF; --border:#E8EAED;
-        --muted:#6B7280; --brand:#1B4332; --brand-2:#2D6A4F; --brand-soft:#EAF2EE;
+        --muted:#6B7280; --brand:#1B4332; --brand-2:#2D6A4F; --brand-soft:#EAF2EE; --brand-escuro:#122E23;
         --accent:#F2A93B; --accent-ink:#8A5E12; --danger:#C0392B; --danger-soft:#FBEAE8;
         --success-soft:#E8F3EC;
     }
@@ -654,6 +654,51 @@ async function definirUnidadeAtiva(vinculo) {
 }
 
 // ---------------------------------------------------------------
+// PERSONALIZAÇÃO VISUAL POR UNIDADE (cor principal + imagem de fundo
+// no menu lateral) -- mesmo padrão de staff-painel-admin.html. Se a
+// unidade não tiver nada configurado, mantém o verde padrão do CSS.
+// Vira padrão pra todo módulo novo -- ver CLAUDE.md.
+// ---------------------------------------------------------------
+function clarearCor(hex, percentual) {
+    hex = (hex || '').replace('#', '');
+    if (hex.length !== 6) return hex;
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const misturar = (canal) => Math.round(canal + (255 - canal) * percentual);
+    return '#' + [misturar(r), misturar(g), misturar(b)].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function escurecerCor(hex, percentual) {
+    hex = (hex || '').replace('#', '');
+    if (hex.length !== 6) return hex;
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const escurecer = (canal) => Math.round(canal * (1 - percentual));
+    return '#' + [escurecer(r), escurecer(g), escurecer(b)].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function aplicarPersonalizacao(corPrincipal, imagemFundoUrl) {
+    if (corPrincipal) {
+        const raiz = document.documentElement.style;
+        raiz.setProperty('--brand', corPrincipal);
+        raiz.setProperty('--brand-2', clarearCor(corPrincipal, 0.2));
+        raiz.setProperty('--brand-soft', clarearCor(corPrincipal, 0.92));
+        raiz.setProperty('--brand-escuro', escurecerCor(corPrincipal, 0.35));
+    }
+    if (imagemFundoUrl) {
+        const sidebar = document.querySelector('.sidebar');
+        sidebar.style.backgroundImage = `linear-gradient(180deg, rgba(15,43,34,.82) 0%, rgba(15,43,34,.7) 100%), url('${imagemFundoUrl}')`;
+        sidebar.style.backgroundSize = 'cover';
+        sidebar.style.backgroundPosition = 'center';
+    }
+}
+async function carregarPersonalizacao() {
+    const { data, error } = await sb.from('servir_unidades_negocio').select('cor_principal, imagem_fundo_url, logo_url').eq('id', meuPerfil.unidadeId).single();
+    if (error || !data) return;
+    aplicarPersonalizacao(data.cor_principal, data.imagem_fundo_url);
+}
+
+// ---------------------------------------------------------------
 // LICENÇA (mesmo padrão do resto da plataforma -- ver estoque-app.html)
 // ---------------------------------------------------------------
 function mostrarAvisoLicenca(texto){
@@ -674,15 +719,15 @@ function bloquearAcessoTotal(mensagem){
   const temTrocar = botaoTrocar && botaoTrocar.style.display !== 'none';
   const overlay = document.createElement('div');
   overlay.id = 'overlayBloqueioLicenca';
-  overlay.style.cssText = 'position:fixed; inset:0; z-index:999999; background:#F6F7F9; display:flex; align-items:center; justify-content:center; padding:20px;';
+  overlay.style.cssText = 'position:fixed; inset:0; z-index:999999; background:var(--bg); display:flex; align-items:center; justify-content:center; padding:20px;';
   overlay.innerHTML = `
-    <div style="background:#fff; border-radius:16px; padding:36px; max-width:440px; text-align:center; box-shadow:0 8px 28px rgba(20,30,50,.1);">
+    <div style="background:var(--surface); border-radius:16px; padding:36px; max-width:440px; text-align:center; box-shadow:0 8px 28px rgba(20,30,50,.1);">
       <div style="font-size:2.5rem; margin-bottom:12px;">🔒</div>
-      <h2 style="color:#C0392B; margin-bottom:12px; font-size:1.2rem;">Acesso bloqueado</h2>
-      <p style="color:#333; font-size:.92rem; line-height:1.5; margin-bottom:20px;">${escapeHtml(mensagem)}</p>
+      <h2 style="color:var(--danger); margin-bottom:12px; font-size:1.2rem;">Acesso bloqueado</h2>
+      <p style="color:var(--ink); font-size:.92rem; line-height:1.5; margin-bottom:20px;">${escapeHtml(mensagem)}</p>
       <div style="display:flex; gap:10px; flex-direction:column;">
-        ${temTrocar ? '<button id="btnTrocarUnidadeBloqueio" style="padding:10px; border-radius:8px; border:1.5px solid #1B4332; background:none; color:#1B4332; font-weight:600; cursor:pointer;">🔄 Escolher outra unidade</button>' : ''}
-        <button id="btnSairBloqueio" style="padding:10px; border-radius:8px; border:none; background:#1B4332; color:#fff; font-weight:600; cursor:pointer;">Sair</button>
+        ${temTrocar ? '<button id="btnTrocarUnidadeBloqueio" style="padding:10px; border-radius:8px; border:1.5px solid var(--brand); background:none; color:var(--brand); font-weight:600; cursor:pointer;">🔄 Escolher outra unidade</button>' : ''}
+        <button id="btnSairBloqueio" style="padding:10px; border-radius:8px; border:none; background:var(--brand); color:#fff; font-weight:600; cursor:pointer;">Sair</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
@@ -708,8 +753,9 @@ async function verificarPendenciaLicenca(unidadeIdAlvo, moduloChave){
 // CARREGAMENTO
 // ---------------------------------------------------------------
 async function iniciarApp() {
-    if (await verificarPendenciaLicenca(meuPerfil.unidadeId, 'obras')) return;
     document.getElementById('app').style.display = 'block';
+    await carregarPersonalizacao(); // antes da checagem de licença -- a tela de bloqueio também deve refletir a cor/fundo da unidade
+    if (await verificarPendenciaLicenca(meuPerfil.unidadeId, 'obras')) return;
     document.getElementById('lanData').value = hojeISO();
     await Promise.all([carregarObras(), carregarMateriais(), carregarSetores(), carregarPlanoContas()]);
     await carregarLancamentos();
