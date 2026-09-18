@@ -543,7 +543,10 @@
             <div class="campo"><label>Estoque inicial</label><input type="number" step="0.01" id="npEstoque" value="0"></div>
             <div class="campo" style="position:relative;">
                 <label>Grupo</label>
-                <input type="text" id="npGrupoBusca" placeholder="Buscar grupo..." autocomplete="off">
+                <div style="display:flex; gap:6px;">
+                    <input type="text" id="npGrupoBusca" placeholder="Buscar grupo..." autocomplete="off" style="flex:1;">
+                    <button type="button" class="btn btn-verde btn-pequeno" id="btnNovoGrupoNP" title="Cadastrar novo grupo">+</button>
+                </div>
                 <div id="npGrupoResultados" class="dropdown-busca-evento"></div>
                 <p class="subtitulo" id="npGrupoSelecionado" style="margin-top:4px;"></p>
             </div>
@@ -1032,6 +1035,27 @@
     </div>
 
     <div class="caixa">
+        <h4 style="margin-top:0;">👤 Relatório por Responsável <span class="subtitulo" style="font-weight:normal;">(só SAÍDAS — o que foi retirado do estoque em nome dessa pessoa; útil pra encontro de contas com terceirizado)</span></h4>
+        <div class="campo">
+            <input type="text" id="relBuscaResponsavel" list="relListaResponsaveis" placeholder="Nome do responsável...">
+            <datalist id="relListaResponsaveis"></datalist>
+        </div>
+        <div class="grade col2" style="margin-top:8px;">
+            <div class="campo"><label>Data início (opcional)</label><input type="date" id="relResponsavelDataInicio"></div>
+            <div class="campo"><label>Data fim (opcional)</label><input type="date" id="relResponsavelDataFim"></div>
+        </div>
+        <div class="linha-ferramentas-relatorio">
+            <select id="relResponsavelFormato">
+                <option value="pdf">PDF</option>
+                <option value="xlsx">Excel</option>
+            </select>
+            <button class="btn-icone" id="relResponsavelVer" title="Visualizar">👁️</button>
+            <button class="btn-icone" id="relResponsavelCompartilhar" title="Compartilhar">📤</button>
+            <button class="btn-icone" id="relResponsavelSalvar" title="Salvar">💾</button>
+        </div>
+    </div>
+
+    <div class="caixa">
         <h4 style="margin-top:0;">🏗️ Relatório por Projeto</h4>
         <div class="campo">
             <select id="relProjetoSelect"><option value="">-- selecione um projeto --</option></select>
@@ -1205,6 +1229,25 @@
 </div>
 
 <!-- ===================== MODAL / POPUP: Editar produto ===================== -->
+<!-- ===================== MODAL / POPUP: Novo grupo de produtos (cadastro rápido) ===================== -->
+<div class="modal-overlay" id="modalNovoGrupoProduto" style="z-index:1200;">
+    <div class="modal-caixa">
+        <h4 style="margin-top:0;" id="tituloNovoGrupoProduto">Novo grupo de produtos</h4>
+        <div class="campo"><label>Nome do grupo</label><input type="text" id="novoGrupoProdutoNome" placeholder="Ex: Ferramentas, EPI, Material elétrico..."></div>
+        <div style="margin-top:16px; text-align:right;">
+            <button class="btn btn-cinza" id="btnCancelarEdicaoGrupoProduto" style="display:none;">Cancelar edição</button>
+            <button class="btn btn-cinza" id="btnCancelarNovoGrupoProduto">Sair</button>
+            <button class="btn btn-verde" id="btnSalvarNovoGrupoProduto">Salvar</button>
+        </div>
+        <span class="status-msg" id="statusNovoGrupoProduto"></span>
+
+        <div style="margin-top:18px; border-top:1px solid var(--linha); padding-top:12px;">
+            <p class="subtitulo" style="margin:0 0 8px 0;">Grupos já cadastrados — clique num pra editar:</p>
+            <div id="listaGruposProdutoExistentes" style="max-height:220px; overflow:auto;"></div>
+        </div>
+    </div>
+</div>
+
 <div class="modal-overlay" id="modalEditarProduto">
     <div class="modal-caixa">
         <h4 style="margin-top:0;">Editar produto</h4>
@@ -1234,7 +1277,10 @@
         <div class="grade col2" style="margin-top:10px;">
             <div class="campo" style="position:relative;">
                 <label>Grupo</label>
-                <input type="text" id="editProdutoGrupoBusca" placeholder="Buscar grupo..." autocomplete="off">
+                <div style="display:flex; gap:6px;">
+                    <input type="text" id="editProdutoGrupoBusca" placeholder="Buscar grupo..." autocomplete="off" style="flex:1;">
+                    <button type="button" class="btn btn-verde btn-pequeno" id="btnNovoGrupoEP" title="Cadastrar novo grupo">+</button>
+                </div>
                 <div id="editProdutoGrupoResultados" class="dropdown-busca-evento"></div>
                 <p class="subtitulo" id="editProdutoGrupoSelecionado" style="margin-top:4px;"></p>
             </div>
@@ -2082,6 +2128,9 @@ async function chamarGet(acao, filtros) {
         if (filtros.evento) query = query.eq('evento', filtros.evento);
         if (filtros.fornecedor) query = query.or(`fornecedor_nome.ilike.%${filtros.fornecedor}%,fornecedor_cnpj.ilike.%${filtros.fornecedor}%`);
         if (filtros.avulsoNome) query = query.ilike('descricao_avulsa', `%${filtros.avulsoNome}%`);
+        if (filtros.responsavel) query = query.ilike('responsavel', `%${filtros.responsavel}%`);
+        if (filtros.dataInicio) query = query.gte('data', filtros.dataInicio);
+        if (filtros.dataFim) query = query.lte('data', filtros.dataFim);
         if (filtros.itensAvulsos) {
             // guia de avulsos: todo lançamento avulso (sem produto de
             // catálogo), entrada OU saída -- fica sempre visível aqui,
@@ -2364,6 +2413,14 @@ async function chamarPost(acao, d) {
         const { error } = await query;
         if (error) throw error;
         return;
+    }
+    if (acao === 'salvarGrupoProduto') {
+        const query = d.id
+            ? sb.from('unidade_grupos_produtos').update({ nome: d.nome }).eq('id', d.id)
+            : sb.from('unidade_grupos_produtos').insert({ unidade_negocio_id: meuPerfil.unidadeId, nome: d.nome, ativo: true });
+        const { data, error } = await query.select().single();
+        if (error) throw error;
+        return data;
     }
     if (acao === 'excluirAlmoxarifado') {
         const { error } = await sb.from('unidade_almoxarifados').delete().eq('id', d.id);
@@ -2868,6 +2925,9 @@ const AJUDA_ESTOQUE = {
             </ul>
             <p><strong>⬇️ Baixa direta (sem projeto)</strong> tira uma quantidade do estoque sem passar
             por projeto nem requisição — use só pra ajuste pontual, não pro consumo normal de obra.</p>
+            <p>No cadastro de produto (novo ou edição), o campo <strong>Grupo</strong> é obrigatório —
+            o botão <strong>"+"</strong> ao lado abre um cadastro rápido pra criar um grupo novo na hora,
+            sem precisar sair da tela.</p>
             <p><strong>📄 Importar NF-e (XML)</strong> lê o arquivo da nota fiscal do fornecedor e já
             cria a nota de entrada com itens e valores preenchidos automaticamente, sem digitar um por
             um.</p>
@@ -3000,6 +3060,9 @@ const AJUDA_ESTOQUE = {
                 só tem entrada (compra) com esse evento/tag, ele não aparece aqui de propósito, mesmo
                 com o evento/tag preenchido na entrada.</li>
                 <li><strong>Por Projeto</strong>: resumo ou detalhado.</li>
+                <li><strong>Por Responsável</strong>: lista as saídas em nome de uma pessoa, num
+                período opcional — útil pra fechar conta com terceirizado que retira material do
+                almoxarifado (o valor retirado entra no encontro de contas do serviço prestado).</li>
                 <li>Todos saem em <strong>PDF ou Excel</strong>, com opções de Visualizar, Compartilhar
                 ou Salvar.</li>
                 <li><strong>🔄 Reprocessar Estoque</strong>: recalcula o saldo de cada produto (estoque
@@ -3045,6 +3108,8 @@ function popularRelatoriosSelects() {
     popularSelectProjetos(document.getElementById('relProjetoSelect'));
     const tags = [...new Set(movimentacoes.map(m => m.tag).filter(Boolean))].sort();
     document.getElementById('relListaTags').innerHTML = tags.map(t => `<option value="${escapeHtml(t)}"></option>`).join('');
+    const responsaveis = [...new Set(movimentacoes.map(m => m.responsavel).filter(Boolean))].sort();
+    document.getElementById('relListaResponsaveis').innerHTML = responsaveis.map(r => `<option value="${escapeHtml(r)}"></option>`).join('');
 }
 
 /* ============================================================
@@ -3245,6 +3310,86 @@ function configurarBuscaCatalogoSimples(idBusca, idResultados, getLista, aoSelec
 configurarBuscaCatalogoSimples('editProdutoGrupoBusca', 'editProdutoGrupoResultados', () => catalogosBaixa.grupos || [], (item) => {
     grupoSelecionadoEditProduto = item;
     document.getElementById('editProdutoGrupoSelecionado').textContent = `Selecionado: ${item.nome}`;
+});
+
+// cadastro rápido de grupo de produtos -- botão "+" chamado tanto do
+// "Novo produto" quanto do "Editar produto"; guarda de onde veio o
+// clique pra saber em qual campo/variável selecionar o grupo
+// recém-criado/editado. Lista os grupos já cadastrados dentro do
+// próprio modal (tendência é ter poucos grupos, cabe tudo na tela) --
+// clicar num item da lista entra em modo edição
+let origemNovoGrupoProduto = null;
+let grupoEmEdicaoId = null;
+
+function renderizarListaGruposProdutoExistentes() {
+    const el = document.getElementById('listaGruposProdutoExistentes');
+    const lista = [...(catalogosBaixa.grupos || [])].sort((a, b) => a.nome.localeCompare(b.nome));
+    if (!lista.length) { el.innerHTML = '<p class="subtitulo" style="margin:0;">Nenhum grupo cadastrado ainda.</p>'; return; }
+    el.innerHTML = lista.map(g => `<div class="item-resultado" style="cursor:pointer;" data-editar-grupo-produto="${g.id}">${escapeHtml(g.nome)}</div>`).join('');
+    el.querySelectorAll('[data-editar-grupo-produto]').forEach(div => {
+        div.addEventListener('click', () => {
+            const grupo = (catalogosBaixa.grupos || []).find(g => String(g.id) === div.dataset.editarGrupoProduto);
+            if (!grupo) return;
+            grupoEmEdicaoId = grupo.id;
+            document.getElementById('novoGrupoProdutoNome').value = grupo.nome;
+            document.getElementById('tituloNovoGrupoProduto').textContent = 'Editando grupo';
+            document.getElementById('btnCancelarEdicaoGrupoProduto').style.display = '';
+            document.getElementById('statusNovoGrupoProduto').textContent = '';
+        });
+    });
+}
+
+function limparFormNovoGrupoProduto() {
+    grupoEmEdicaoId = null;
+    document.getElementById('novoGrupoProdutoNome').value = '';
+    document.getElementById('tituloNovoGrupoProduto').textContent = 'Novo grupo de produtos';
+    document.getElementById('btnCancelarEdicaoGrupoProduto').style.display = 'none';
+    document.getElementById('statusNovoGrupoProduto').textContent = '';
+}
+
+function abrirModalNovoGrupoProduto(origem) {
+    origemNovoGrupoProduto = origem;
+    limparFormNovoGrupoProduto();
+    renderizarListaGruposProdutoExistentes();
+    document.getElementById('modalNovoGrupoProduto').classList.add('aberto');
+}
+document.getElementById('btnNovoGrupoNP').addEventListener('click', () => abrirModalNovoGrupoProduto('novo'));
+document.getElementById('btnNovoGrupoEP').addEventListener('click', () => abrirModalNovoGrupoProduto('editar'));
+document.getElementById('btnCancelarEdicaoGrupoProduto').addEventListener('click', limparFormNovoGrupoProduto);
+document.getElementById('btnCancelarNovoGrupoProduto').addEventListener('click', () => {
+    document.getElementById('modalNovoGrupoProduto').classList.remove('aberto');
+});
+document.getElementById('btnSalvarNovoGrupoProduto').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusNovoGrupoProduto');
+    const nome = document.getElementById('novoGrupoProdutoNome').value.trim();
+    if (!nome) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o nome do grupo.'; return; }
+    const btn = document.getElementById('btnSalvarNovoGrupoProduto');
+    btn.disabled = true;
+    statusEl.className = '';
+    statusEl.textContent = 'Salvando...';
+    try {
+        const grupoSalvo = await chamarPost('salvarGrupoProduto', { id: grupoEmEdicaoId || undefined, nome: nome.toUpperCase() });
+        catalogosBaixa.grupos = catalogosBaixa.grupos || [];
+        const idx = catalogosBaixa.grupos.findIndex(g => g.id === grupoSalvo.id);
+        if (idx >= 0) catalogosBaixa.grupos[idx] = grupoSalvo; else catalogosBaixa.grupos.push(grupoSalvo);
+
+        if (origemNovoGrupoProduto === 'novo') {
+            grupoSelecionadoNovoProduto = grupoSalvo;
+            document.getElementById('npGrupoSelecionado').textContent = `Selecionado: ${grupoSalvo.nome}`;
+        } else if (origemNovoGrupoProduto === 'editar') {
+            grupoSelecionadoEditProduto = grupoSalvo;
+            document.getElementById('editProdutoGrupoSelecionado').textContent = `Selecionado: ${grupoSalvo.nome}`;
+        }
+        limparFormNovoGrupoProduto();
+        renderizarListaGruposProdutoExistentes();
+        statusEl.className = 'status-msg sucesso';
+        statusEl.textContent = '✅ Grupo salvo.';
+    } catch (err) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = '⚠️ ' + err.message;
+    } finally {
+        btn.disabled = false;
+    }
 });
 
 configurarBuscaCatalogoSimples('editProdutoAlmoxBusca', 'editProdutoAlmoxResultados', () => catalogosBaixa.almoxarifados || [], (item) => {
@@ -7226,6 +7371,17 @@ async function movimentacoesPorTag(tag) {
         .map(mapearMovimentacaoFiltrada)
         .sort((a, b) => (a.data || '').localeCompare(b.data || ''));
 }
+// pra encontro de contas com terceirizado que retira material do
+// almoxarifado -- lista as saídas em nome de um responsável, num
+// período opcional. Não exige nome exato (ilike) porque o mesmo nome
+// às vezes é digitado com pequenas variações nas diferentes retiradas
+async function movimentacoesPorResponsavel(responsavel, dataInicio, dataFim) {
+    const dados = await chamarGet('listarMovimentacoesFiltradas', { responsavel, dataInicio, dataFim });
+    return (dados || [])
+        .filter(m => m.tipo === 'saida')
+        .map(mapearMovimentacaoFiltrada)
+        .sort((a, b) => (a.data || '').localeCompare(b.data || ''));
+}
 
 function construirPdfListaMovimentacoes(titulo, subtitulo, linhas, colunaExtra) {
     const { jsPDF } = window.jspdf;
@@ -7439,6 +7595,30 @@ async function executarRelatorioTag(acao) {
 document.getElementById('relTagVer').addEventListener('click', () => executarRelatorioTag('ver'));
 document.getElementById('relTagCompartilhar').addEventListener('click', () => executarRelatorioTag('compartilhar'));
 document.getElementById('relTagSalvar').addEventListener('click', () => executarRelatorioTag('salvar'));
+
+/* ---------- módulo: por Responsável (encontro de contas c/ terceirizado) ---------- */
+async function executarRelatorioResponsavel(acao) {
+    const responsavel = document.getElementById('relBuscaResponsavel').value.trim();
+    if (!responsavel) { alert('Informe o nome do responsável primeiro.'); return; }
+    const dataInicio = document.getElementById('relResponsavelDataInicio').value || null;
+    const dataFim = document.getElementById('relResponsavelDataFim').value || null;
+    const linhas = construirLinhasMovimentacoes(await movimentacoesPorResponsavel(responsavel, dataInicio, dataFim));
+    if (!linhas.length) { alert('Nenhuma retirada (saída) encontrada pra esse responsável no período. Esse relatório não lista entrada/compra, só o que foi retirado do estoque.'); return; }
+    const formato = document.getElementById('relResponsavelFormato').value;
+    const periodoTexto = (dataInicio || dataFim) ? ` — período: ${dataInicio ? formatarData(dataInicio) : 'início'} a ${dataFim ? formatarData(dataFim) : 'hoje'}` : '';
+    const titulo = 'Relatório por Responsável — Detalhado';
+    const subtitulo = `Responsável: ${responsavel}${periodoTexto}`;
+    const nomeBase = `relatorio-responsavel-${slugArquivo(responsavel)}`;
+    const colunaExtra = { header: 'Evento', getter: m => m.evento };
+    if (formato === 'pdf') {
+        executarAcaoPdf(acao, construirPdfListaMovimentacoes(titulo, subtitulo, linhas, colunaExtra), `${nomeBase}.pdf`);
+    } else {
+        executarAcaoExcel(acao, construirDadosExcelMovimentacoes(linhas, colunaExtra), 'Relatório', `${nomeBase}.xlsx`, titulo);
+    }
+}
+document.getElementById('relResponsavelVer').addEventListener('click', () => executarRelatorioResponsavel('ver'));
+document.getElementById('relResponsavelCompartilhar').addEventListener('click', () => executarRelatorioResponsavel('compartilhar'));
+document.getElementById('relResponsavelSalvar').addEventListener('click', () => executarRelatorioResponsavel('salvar'));
 
 /* ---------- módulo: por Projeto ---------- */
 function executarRelatorioProjeto(acao) {
