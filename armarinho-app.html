@@ -40,6 +40,11 @@
     .btn-perigo { background: var(--danger-soft); color: var(--danger); }
     .btn-sm { padding: 7px 10px; font-size: 0.78rem; }
     .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .aviso-dia-util { font-size: .72rem; font-weight: 400; color: var(--muted); margin-top: 3px; }
+    .aviso-dia-util.feriado_nacional { color: var(--danger); font-weight: 600; }
+    .aviso-dia-util.fim_de_semana { color: var(--accent-ink); font-weight: 600; }
+    .aviso-dia-util.feriado_regional { color: #7C3AED; font-weight: 600; }
+    table.tabela input.data-parcela { padding: 6px 8px; border: 1.5px solid var(--border); border-radius: 7px; font-family: inherit; font-size: .85rem; }
     .acoes-linha { display: flex; flex-wrap: wrap; gap: 6px; }
     .status-msg { font-size: 0.85rem; margin-top: 10px; }
     .status-msg.erro { color: var(--danger); }
@@ -91,6 +96,16 @@
     .chart-box h3 { font-size: .92rem; font-weight: 700; margin: 0 0 2px 0; }
     .chart-box .chart-sub { font-size: .8rem; color: var(--muted); margin-bottom: 16px; }
 
+    .barra-linha { display: grid; grid-template-columns: 130px 1fr 190px; align-items: center; gap: 12px; padding: 7px 8px; border-radius: 8px; }
+    .barra-linha.clicavel { cursor: pointer; }
+    .barra-linha.clicavel:hover, .barra-linha.clicavel:focus-visible { background: var(--brand-soft); outline: none; }
+    .barra-linha .rotulo { font-size: .85rem; font-weight: 600; }
+    .barra-trilho { height: 12px; background: #F1EEF0; border-radius: 6px; overflow: hidden; }
+    .barra-fill { height: 100%; border-radius: 0 4px 4px 0; background: var(--brand-2); min-width: 0; transition: width .3s ease; }
+    .barra-fill.atrasado { background: var(--danger); }
+    .barra-linha .valores { font-size: .82rem; text-align: right; font-variant-numeric: tabular-nums; }
+    .barra-linha .valores small { display: block; color: var(--muted); font-size: .74rem; }
+    @media (max-width: 720px) { .barra-linha { grid-template-columns: 1fr; gap: 4px; } .barra-linha .valores { text-align: left; } }
     .cartao { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
     .cartao h2 { font-size: 1.02rem; font-weight: 700; margin: 0 0 14px 0; }
     .cartao .desc { color: var(--muted); font-size: .82rem; margin: -8px 0 14px 0; }
@@ -256,6 +271,11 @@
             </div>
         </div>
         <div class="chart-box">
+            <h3>Contas a receber por vencimento</h3>
+            <div class="chart-sub" id="subGraficoAReceber">Parcelas ainda não recebidas.</div>
+            <div id="graficoAReceber"></div>
+        </div>
+        <div class="chart-box">
             <h3>Últimas vendas</h3>
             <div class="chart-sub">As 8 vendas mais recentes.</div>
             <div class="tabela-scroll"><table class="tabela">
@@ -355,6 +375,10 @@
 
         <!-- MANUAL -->
         <div id="subaba-entrada-manual" style="display:none;">
+            <div class="aviso-caixa" id="bannerEdicaoEntrada" style="display:none; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+                <span id="textoBannerEdicaoEntrada">Editando entrada</span>
+                <button class="btn btn-cinza btn-sm" id="btnCancelarEdicaoEntrada">Cancelar edição</button>
+            </div>
             <div class="cartao">
                 <h2>Itens da entrada</h2>
                 <div class="grade-4" style="align-items:end;">
@@ -389,6 +413,7 @@
         <div id="subaba-entrada-historico" style="display:none;">
             <div class="cartao">
                 <h2>Entradas registradas</h2>
+                <div class="status-msg" id="statusHistoricoEntradas" style="margin:-6px 0 10px;"></div>
                 <div class="tabela-scroll"><table class="tabela">
                     <thead><tr><th>Data</th><th>Nota</th><th>Fornecedor</th><th class="num">Itens</th><th class="num">Valor</th><th>Ações</th></tr></thead>
                     <tbody id="corpoHistoricoEntradas"></tbody>
@@ -459,7 +484,7 @@
                 </div>
             </div>
             <div class="grade-3">
-                <div class="campo"><label id="labelVencimento">Vencimento *</label><input type="date" id="vendaVencimento"></div>
+                <div class="campo"><label id="labelVencimento">Vencimento *</label><input type="date" id="vendaVencimento"><div class="aviso-dia-util" id="avisoDiaUtilVenda"></div></div>
                 <div class="campo" id="campoQtdParcelas" style="display:none;"><label>Nº de parcelas</label><input type="number" min="2" max="36" step="1" id="vendaQtdParcelas" value="2"></div>
                 <div class="campo" id="campoRegraParcelas" style="display:none;"><label>Vencimentos seguintes</label>
                     <select id="vendaRegraParcelas">
@@ -472,6 +497,7 @@
                 <div class="campo"><label>Dias entre parcelas</label><input type="number" min="1" step="1" id="vendaIntervalo" value="30"></div>
             </div>
             <div id="blocoPreviewParcelas" style="display:none; margin-bottom:14px;">
+                <div style="margin-bottom:6px; font-size:.8rem; color:var(--muted);">Os vencimentos podem ser ajustados um a um; o aviso embaixo da data informa se é dia útil, fim de semana ou feriado.</div>
                 <div class="tabela-scroll"><table class="tabela">
                     <thead><tr><th>Parcela</th><th>Vencimento</th><th class="num">Valor</th></tr></thead>
                     <tbody id="corpoPreviewParcelas"></tbody>
@@ -540,6 +566,52 @@
     </div>
 </div>
 
+<!-- ================= MODAL MOVIMENTAÇÃO DO PRODUTO ================= -->
+<div class="modal-overlay" id="modal-mov-produto">
+    <div class="modal-caixa" style="max-width:820px;">
+        <h3 id="movProdutoTitulo">Movimentação do produto</h3>
+        <p class="sub" id="movProdutoResumo"></p>
+        <div class="campo" style="max-width:220px; margin-bottom:10px;">
+            <select id="movProdutoFiltro">
+                <option value="">Entradas e saídas</option>
+                <option value="entrada">Só entradas</option>
+                <option value="saida">Só saídas</option>
+            </select>
+        </div>
+        <div class="tabela-scroll"><table class="tabela">
+            <thead><tr><th>Data</th><th>Tipo</th><th>Origem</th><th class="num">Qtd</th><th class="num">Valor unit.</th><th class="num">Total</th></tr></thead>
+            <tbody id="corpoMovProduto"></tbody>
+        </table></div>
+        <div style="margin-top:14px;"><button class="btn btn-cinza" id="btnFecharMovProduto">Fechar</button></div>
+    </div>
+</div>
+
+<!-- ================= MODAL ITENS DE UMA ENTRADA ================= -->
+<div class="modal-overlay" id="modal-itens-entrada">
+    <div class="modal-caixa" style="max-width:680px;">
+        <h3 id="itensEntradaTitulo">Itens da entrada</h3>
+        <p class="sub" id="itensEntradaSub"></p>
+        <div class="tabela-scroll"><table class="tabela">
+            <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Custo unit.</th><th class="num">Subtotal</th></tr></thead>
+            <tbody id="corpoItensEntrada"></tbody>
+        </table></div>
+        <div style="margin-top:14px;"><button class="btn btn-cinza" id="btnFecharItensEntrada">Fechar</button></div>
+    </div>
+</div>
+
+<!-- ================= MODAL TÍTULOS DA FAIXA (clique numa barra do gráfico do Dashboard) ================= -->
+<div class="modal-overlay" id="modal-faixa-receber">
+    <div class="modal-caixa" style="max-width:780px;">
+        <h3 id="faixaTitulo">Títulos</h3>
+        <p class="sub" id="faixaSub"></p>
+        <div class="tabela-scroll"><table class="tabela">
+            <thead><tr><th>Vencimento</th><th>Cliente</th><th>Título</th><th class="num">Valor</th><th>Situação</th><th></th></tr></thead>
+            <tbody id="corpoFaixaReceber"></tbody>
+        </table></div>
+        <div style="margin-top:14px;"><button class="btn btn-cinza" id="btnFecharFaixa">Fechar</button></div>
+    </div>
+</div>
+
 <!-- ================= MODAL RECEBIMENTOS (parcelas de uma venda) ================= -->
 <div class="modal-overlay" id="modal-recebimentos">
     <div class="modal-caixa" style="max-width:640px;">
@@ -558,6 +630,11 @@
     <div class="modal-caixa">
         <h3 id="baixaTitulo">Receber parcela</h3>
         <p class="sub" id="baixaSub"></p>
+        <div class="subabas" style="margin-bottom:14px;">
+            <button type="button" class="subaba ativa" data-modo-baixa="receber">💰 Receber</button>
+            <button type="button" class="subaba" data-modo-baixa="editar">✏️ Editar parcela</button>
+        </div>
+        <div id="baixaCamposReceber">
         <div class="grade">
             <div class="campo"><label>Valor da parcela</label><input type="text" id="baixaValorOriginal" readonly></div>
             <div class="campo"><label>Data do recebimento *</label><input type="date" id="baixaData"></div>
@@ -577,7 +654,17 @@
             </div>
         </div>
         <div class="aviso-caixa" id="baixaAvisoParcial" style="display:none;">Recebimento parcial: a parcela é dividida — a parte recebida fica quitada e o saldo vira uma nova parcela em aberto (mesmo padrão do Financeiro).</div>
+        </div>
+        <div id="baixaCamposEditar" style="display:none;">
+            <p class="sub" style="margin-top:-6px;">Altera só esta parcela, sem dar baixa. Use para renegociar o vencimento ou ajustar o valor.</p>
+            <div class="grade">
+                <div class="campo"><label>Vencimento *</label><input type="date" id="editVencimento"><div class="aviso-dia-util" id="avisoDiaUtilEdit"></div></div>
+                <div class="campo"><label>Valor da parcela (R$) *</label><input type="number" step="0.01" min="0" id="editValor"></div>
+            </div>
+            <div class="aviso-caixa" id="editAvisoSoma" style="display:none;"></div>
+        </div>
         <div style="display:flex; gap:10px;">
+            <button class="btn btn-principal" id="btnSalvarParcela" style="display:none;">💾 Salvar parcela</button>
             <button class="btn btn-principal" id="btnConfirmarBaixa">✅ Confirmar recebimento</button>
             <button class="btn btn-cinza" id="btnFecharBaixa">Cancelar</button>
         </div>
@@ -604,6 +691,7 @@
     <div class="modal-caixa" style="max-width:360px; text-align:center;">
         <h3 id="tituloModalAcoesPdf">Fatura gerada</h3>
         <p class="sub">O que você quer fazer com o PDF?</p>
+        <p class="sub" id="avisoLogoPdf" style="display:none; color:var(--accent-ink); font-weight:600;"></p>
         <div style="display:flex; flex-direction:column; gap:8px;">
             <button class="btn btn-principal" id="btnVisualizarPdfGerado">👁️ Visualizar</button>
             <button class="btn btn-cinza" id="btnBaixarPdfGerado">⬇️ Baixar</button>
@@ -657,12 +745,25 @@ function arredondar2(v) { return Math.round((Number(v) || 0) * 100) / 100; }
 // ---------------------------------------------------------------
 // SENTINELA (auditoria) -- exclusões e alterações importantes
 // ---------------------------------------------------------------
-async function registrarSentinela(tipoAcao, descricao) {
+// registroId = id do registro exato que a ação alterou (produto, venda, parcela...);
+// registroPaiId = id do item a que ele pertence (ex: a venda dona da parcela).
+// Guardados como texto em id_registro_alterado / id_item_pai (servir-sentinela-ids-registro.sql).
+async function registrarSentinela(tipoAcao, descricao, registroId = null, registroPaiId = null) {
+    const base = {
+        unidade_negocio_id: meuPerfil.unidadeId, modulo: 'armarinho',
+        tipo_acao: tipoAcao, descricao, operador: meuPerfil.email, operador_user_id: meuPerfil.userId || null,
+    };
+    const idRegistro = registroId != null ? String(registroId) : null;
+    const idPai = registroPaiId != null ? String(registroPaiId) : null;
     try {
-        await sb.from('servir_sentinela').insert({
-            unidade_negocio_id: meuPerfil.unidadeId, modulo: 'armarinho',
-            tipo_acao: tipoAcao, descricao, operador: meuPerfil.email, operador_user_id: meuPerfil.userId || null,
-        });
+        const { error } = await sb.from('servir_sentinela').insert({ ...base, id_registro_alterado: idRegistro, id_item_pai: idPai });
+        if (!error) return;
+        if (!/id_registro_alterado|id_item_pai/i.test(error.message || '')) throw error;
+        // colunas novas ainda não existem no banco (SQL não rodado): grava sem elas, com os ids no texto, pra não perder a auditoria
+        console.warn('Sentinela sem as colunas de id (rode servir-sentinela-ids-registro.sql):', error.message);
+        const sufixo = idRegistro || idPai ? ` [registro ${idRegistro ?? '—'}${idPai ? ', item pai ' + idPai : ''}]` : '';
+        const { error: erro2 } = await sb.from('servir_sentinela').insert({ ...base, descricao: descricao + sufixo });
+        if (erro2) throw erro2;
     } catch (erro) {
         console.warn('Não consegui registrar na sentinela:', erro.message);
     }
@@ -702,6 +803,9 @@ let produtoManualSelecionado = null;
 let itensManual = [];             // { produtoId|null, nome, qtd, custo, precoVenda, categoria, un }
 let nfeDadosNota = null;
 let nfeItensParseados = [];       // { xProd, cProd, un, qtd, custoUnit, produtoId|null, precoVenda }
+let feriados = [];                // feriados nacionais + regionais da unidade, { _tipo, mes, dia, nome }
+let datasParcelasManuais = [];    // vencimentos ajustados à mão na venda (índice da parcela -> 'YYYY-MM-DD'); a 1ª parcela segue o campo Vencimento
+let entradaEmEdicao = null;       // { nota } enquanto se edita uma entrada de estoque
 let vendaEmEdicao = null;         // { nota, movsAntigos, titulosAntigos, operacaoId, qtdAntiga:{produtoId:qtd} } enquanto edita uma venda
 
 // ---------------------------------------------------------------
@@ -910,7 +1014,7 @@ async function iniciarApp() {
     document.getElementById('entResponsavel').value = meuPerfil.nomeOperador;
     document.getElementById('vendaData').value = hojeISO();
     document.getElementById('vendaVencimento').value = hojeISO();
-    await Promise.all([carregarProdutos(), carregarContas()]);
+    await Promise.all([carregarProdutos(), carregarContas(), carregarFeriados()]);
     renderizarProdutos();
     await carregarVendas();
     renderizarDashboard();
@@ -932,7 +1036,40 @@ async function carregarContas() {
         sel.value = atual;
     });
 }
-const COLUNAS_TITULO = 'id, codigo, titulo, operacao_id, origem, id_registro_na_origem, id_fornecedor_cliente, descricao_avulsa, documento_fiscal, observacao, tipo_movimento, valor_titulo, descontos, acrescimos, data_vencimento, data_pagamento, data_competencia, id_conta_pagamento';
+// mesmas tabelas que o Financeiro usa pro aviso de dia útil
+async function carregarFeriados() {
+    const [nac, reg] = await Promise.all([
+        sb.from('servir_feriados_nacionais').select('*'),
+        sb.from('servir_feriados_regionais').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true),
+    ]);
+    feriados = [
+        ...(nac.error ? [] : (nac.data || [])).map(f => ({ ...f, _tipo: 'feriado_nacional' })),
+        ...(reg.error ? [] : (reg.data || [])).map(f => ({ ...f, _tipo: 'feriado_regional' })),
+    ];
+}
+// só informa (não bloqueia): dia da semana + se é dia útil, fim de semana ou feriado
+function verificarDiaUtil(dataISO) {
+    if (!dataISO) return null;
+    const data = new Date(dataISO + 'T00:00:00');
+    const diaSemana = data.getDay();
+    const mes = data.getMonth() + 1, dia = data.getDate();
+    const nome = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'][diaSemana];
+    const nacional = feriados.find(f => f._tipo === 'feriado_nacional' && Number(f.mes) === mes && Number(f.dia) === dia);
+    if (nacional) return { tipo: 'feriado_nacional', texto: `${nome} — feriado nacional: ${nacional.nome} (não é dia útil)` };
+    const regional = feriados.find(f => f._tipo === 'feriado_regional' && Number(f.mes) === mes && Number(f.dia) === dia);
+    if (regional) return { tipo: 'feriado_regional', texto: `${nome} — feriado regional: ${regional.nome} (sem expediente bancário local)` };
+    if (diaSemana === 0 || diaSemana === 6) return { tipo: 'fim_de_semana', texto: `${nome} — fim de semana (não é dia útil)` };
+    return { tipo: 'normal', texto: `${nome} — dia útil` };
+}
+function aplicarAvisoDiaUtil(elementoAviso, dataISO) {
+    if (!elementoAviso) return;
+    const r = verificarDiaUtil(dataISO);
+    elementoAviso.classList.remove('feriado_nacional', 'feriado_regional', 'fim_de_semana', 'normal');
+    elementoAviso.textContent = r ? r.texto : '';
+    if (r) elementoAviso.classList.add(r.tipo);
+}
+
+const COLUNAS_TITULO ='id, codigo, titulo, operacao_id, origem, id_registro_na_origem, id_fornecedor_cliente, descricao_avulsa, documento_fiscal, observacao, tipo_movimento, valor_titulo, descontos, acrescimos, data_vencimento, data_pagamento, data_competencia, id_conta_pagamento';
 async function carregarVendas() {
     const { data, error } = await sb.from('armarinho_notas')
         .select('*, pessoa(nome, documento)')
@@ -985,6 +1122,97 @@ function situacaoVenda(venda) {
 function valorLiquidoTitulo(t) {
     return (Number(t.valor_titulo) || 0) - (Number(t.descontos) || 0) + (Number(t.acrescimos) || 0);
 }
+// faixas por dias até o vencimento; "hoje" ainda não é atraso e conta em "Até 7 dias"
+const FAIXAS_A_RECEBER = [
+    { chave: 'atrasado', rotulo: 'Atrasados', atrasado: true, contem: d => d < 0 },
+    { chave: 'ate7', rotulo: 'Até 7 dias', contem: d => d >= 0 && d <= 7 },
+    { chave: 'ate15', rotulo: '8 a 15 dias', contem: d => d >= 8 && d <= 15 },
+    { chave: 'ate30', rotulo: '16 a 30 dias', contem: d => d >= 16 && d <= 30 },
+    { chave: 'mais30', rotulo: 'Mais de 30 dias', contem: d => d > 30 },
+];
+function diasAteVencer(vencimentoISO) {
+    const [a, m, d] = vencimentoISO.split('-').map(Number);
+    const [ha, hm, hd] = hojeISO().split('-').map(Number);
+    return Math.round((Date.UTC(a, m - 1, d) - Date.UTC(ha, hm - 1, hd)) / 86400000);
+}
+const textoQtdTitulos = (n) => `${n} título${n === 1 ? '' : 's'}`;
+
+// títulos ainda não recebidos que caem na faixa, do vencimento mais antigo pro mais novo
+function titulosDaFaixa(chave) {
+    const faixa = FAIXAS_A_RECEBER.find(f => f.chave === chave);
+    const lista = [];
+    Object.entries(titulosPorVenda).forEach(([vendaId, titulos]) => titulos.forEach(t => {
+        if (t.data_pagamento || !t.data_vencimento) return;
+        const dias = diasAteVencer(t.data_vencimento);
+        if (faixa.contem(dias)) lista.push({ t, dias, cliente: vendasCarregadas.find(v => v.id === vendaId)?.pessoa?.nome || '—' });
+    }));
+    return lista.sort((a, b) => a.t.data_vencimento.localeCompare(b.t.data_vencimento) || String(a.t.id).localeCompare(String(b.t.id), undefined, { numeric: true }));
+}
+function renderizarGraficoAReceber() {
+    const faixas = FAIXAS_A_RECEBER.map(f => {
+        const lista = titulosDaFaixa(f.chave);
+        return { ...f, qtd: lista.length, valor: lista.reduce((acc, x) => acc + valorLiquidoTitulo(x.t), 0) };
+    });
+    const totalQtd = faixas.reduce((acc, f) => acc + f.qtd, 0);
+    const totalValor = faixas.reduce((acc, f) => acc + f.valor, 0);
+    const maior = Math.max(...faixas.map(f => f.valor), 0);
+    document.getElementById('subGraficoAReceber').textContent = totalQtd
+        ? `${textoQtdTitulos(totalQtd)} em aberto · ${formatarMoeda(totalValor)}. Vencimento hoje conta em "Até 7 dias". Clique numa barra para ver os títulos e dar baixa.`
+        : 'Nenhum título em aberto.';
+    const grafico = document.getElementById('graficoAReceber');
+    grafico.innerHTML = faixas.map(f => {
+        const largura = maior > 0 && f.valor > 0 ? Math.max(2, (f.valor / maior) * 100) : 0;
+        const clicavel = f.qtd > 0;
+        return `
+        <div class="barra-linha${clicavel ? ' clicavel' : ''}" data-faixa="${f.chave}"${clicavel ? ' role="button" tabindex="0"' : ''} title="${escapeHtml(f.rotulo)}: ${textoQtdTitulos(f.qtd)}, ${formatarMoeda(f.valor)}${clicavel ? ' — clique para ver os títulos' : ''}">
+            <div class="rotulo">${escapeHtml(f.rotulo)}</div>
+            <div class="barra-trilho" aria-hidden="true"><div class="barra-fill${f.atrasado ? ' atrasado' : ''}" style="width:${largura}%"></div></div>
+            <div class="valores"><strong>${formatarMoeda(f.valor)}</strong><small>${textoQtdTitulos(f.qtd)}</small></div>
+        </div>`;
+    }).join('');
+    grafico.querySelectorAll('.barra-linha.clicavel').forEach(el => {
+        el.addEventListener('click', () => abrirFaixaReceber(el.dataset.faixa));
+        el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrirFaixaReceber(el.dataset.faixa); } });
+    });
+}
+
+// ---- popup dos títulos de uma faixa (com baixa direto daqui) ----
+let faixaAbertaChave = null;
+function abrirFaixaReceber(chave) {
+    faixaAbertaChave = chave;
+    document.getElementById('modal-faixa-receber').classList.add('aberto');
+    renderizarFaixaReceber();
+}
+function renderizarFaixaReceber() {
+    if (!faixaAbertaChave || !document.getElementById('modal-faixa-receber').classList.contains('aberto')) return;
+    const faixa = FAIXAS_A_RECEBER.find(f => f.chave === faixaAbertaChave);
+    const lista = titulosDaFaixa(faixaAbertaChave);
+    const total = lista.reduce((acc, x) => acc + valorLiquidoTitulo(x.t), 0);
+    document.getElementById('faixaTitulo').textContent = `${faixa.rotulo} — ${textoQtdTitulos(lista.length)} · ${formatarMoeda(total)}`;
+    document.getElementById('faixaSub').textContent = faixa.atrasado
+        ? 'Títulos vencidos e ainda não recebidos. Use "Receber" para dar a baixa.'
+        : 'Títulos ainda não recebidos nessa faixa de vencimento. Use "Receber" para dar a baixa.';
+    document.getElementById('corpoFaixaReceber').innerHTML = lista.map(({ t, dias, cliente }) => {
+        const situacao = dias < 0
+            ? `<span class="pill pill-baixo">${-dias} dia${dias === -1 ? '' : 's'} de atraso</span>`
+            : `<span class="pill pill-aberto">${dias === 0 ? 'Vence hoje' : 'Vence em ' + dias + ' dia' + (dias === 1 ? '' : 's')}</span>`;
+        return `
+        <tr>
+            <td>${formatarDataSemFuso(t.data_vencimento)}</td>
+            <td>${escapeHtml(cliente)}</td>
+            <td>${escapeHtml(t.titulo || '—')}</td>
+            <td class="num">${formatarMoeda(valorLiquidoTitulo(t))}</td>
+            <td>${situacao}</td>
+            <td><button class="btn btn-principal btn-sm" data-receber-faixa="${t.id}">Receber</button></td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="6" class="vazio">Nenhum título nessa faixa.</td></tr>';
+    document.querySelectorAll('[data-receber-faixa]').forEach(b => b.addEventListener('click', () => abrirBaixa(b.dataset.receberFaixa)));
+}
+document.getElementById('btnFecharFaixa').addEventListener('click', () => {
+    faixaAbertaChave = null;
+    document.getElementById('modal-faixa-receber').classList.remove('aberto');
+});
+
 function renderizarDashboard() {
     const totalEstoque = produtosCarregados.reduce((acc, p) => acc + Math.max(0, Number(p.estoque) || 0) * (Number(p.preco_custo) || 0), 0);
     document.getElementById('statProdutos').textContent = produtosCarregados.length.toLocaleString('pt-BR');
@@ -999,6 +1227,8 @@ function renderizarDashboard() {
     let aReceber = 0;
     Object.values(titulosPorVenda).forEach(lista => lista.forEach(t => { if (!t.data_pagamento) aReceber += valorLiquidoTitulo(t); }));
     document.getElementById('statAReceber').textContent = formatarMoeda(aReceber);
+
+    renderizarGraficoAReceber();
 
     const recentes = vendasCarregadas.slice(0, 8);
     document.getElementById('corpoDashboardVendas').innerHTML = recentes.length ? recentes.map(v => `
@@ -1054,7 +1284,7 @@ document.getElementById('btnSalvarProduto').addEventListener('click', async () =
         if (idAntes) ({ error: erro } = await sb.from('armarinho_produtos').update(payload).eq('id', idAntes));
         else ({ error: erro } = await sb.from('armarinho_produtos').insert({ ...payload, unidade_negocio_id: meuPerfil.unidadeId }));
         if (erro) throw erro;
-        if (idAntes) await registrarSentinela('armarinho_produto_editado', `Editou produto "${nome}" -- preço de venda ${formatarMoeda(precoVenda)}`);
+        if (idAntes) await registrarSentinela('armarinho_produto_editado', `Editou produto "${nome}" -- preço de venda ${formatarMoeda(precoVenda)}`, idAntes);
         statusEl.className = 'status-msg sucesso'; statusEl.textContent = '✅ Produto salvo.';
         limparFormProduto();
         await carregarProdutos();
@@ -1091,12 +1321,14 @@ function renderizarProdutos() {
             <td class="num">${m == null ? '—' : m.toFixed(0) + '%'}</td>
             <td class="num">${Number(p.estoque) <= 0 ? `<span class="pill pill-baixo">${formatarNumero(p.estoque)}</span>` : formatarNumero(p.estoque)}</td>
             <td style="white-space:nowrap;">
+                <button class="btn btn-cinza btn-sm" data-mov-produto="${p.id}" title="Ver entradas e saídas deste produto">📜 Movimentação</button>
                 <button class="btn btn-cinza btn-sm" data-editar-produto="${p.id}">Editar</button>
                 <button class="btn btn-perigo btn-sm" data-inativar-produto="${p.id}">Inativar</button>
             </td>
         </tr>`;
     }).join('') || `<tr><td colspan="9" class="vazio">${termo ? 'Nenhum produto encontrado.' : 'Nenhum produto cadastrado.'}</td></tr>`;
 
+    document.querySelectorAll('[data-mov-produto]').forEach(b => b.addEventListener('click', () => abrirMovimentacaoProduto(b.dataset.movProduto)));
     document.querySelectorAll('[data-editar-produto]').forEach(b => b.addEventListener('click', () => editarProduto(b.dataset.editarProduto)));
     document.querySelectorAll('[data-inativar-produto]').forEach(b => b.addEventListener('click', () => inativarProduto(b.dataset.inativarProduto)));
 }
@@ -1128,7 +1360,7 @@ async function inativarProduto(id) {
     if (!confirm(`Inativar "${p.nome}"? Ele some das listas de venda, mas o histórico de movimentações continua.`)) return;
     const { error } = await sb.from('armarinho_produtos').update({ ativo: false }).eq('id', id);
     if (error) { alert('Erro ao inativar: ' + error.message); return; }
-    await registrarSentinela('armarinho_produto_inativado', `Inativou produto "${p.nome}" (estoque ${formatarNumero(p.estoque)})`);
+    await registrarSentinela('armarinho_produto_inativado', `Inativou produto "${p.nome}" (estoque ${formatarNumero(p.estoque)})`, p.id);
     await carregarProdutos();
     renderizarProdutos();
     renderizarDashboard();
@@ -1165,12 +1397,20 @@ function ligarBuscaProduto(idInput, idResultados, aoSelecionar, opcoes) {
 // ---------------------------------------------------------------
 // ENTRADA DE ESTOQUE
 // ---------------------------------------------------------------
-document.querySelectorAll('[data-subaba-entrada]').forEach(btn => btn.addEventListener('click', () => {
-    document.querySelectorAll('[data-subaba-entrada]').forEach(b => b.classList.toggle('ativa', b === btn));
-    const alvo = btn.dataset.subabaEntrada;
+function mostrarSubabaEntrada(alvo) {
+    document.querySelectorAll('[data-subaba-entrada]').forEach(b => b.classList.toggle('ativa', b.dataset.subabaEntrada === alvo));
     ['xml', 'manual', 'historico'].forEach(s => document.getElementById('subaba-entrada-' + s).style.display = s === alvo ? '' : 'none');
     document.getElementById('blocoEntradaCabecalho').style.display = alvo === 'historico' ? 'none' : '';
     if (alvo === 'historico') carregarHistoricoEntradas();
+}
+document.querySelectorAll('[data-subaba-entrada]').forEach(btn => btn.addEventListener('click', () => {
+    const alvo = btn.dataset.subabaEntrada;
+    // a importação por XML usa o mesmo cabeçalho da edição: não misturar
+    if (alvo === 'xml' && entradaEmEdicao) {
+        if (!confirm('Há uma entrada em edição. Descartar a edição e ir para a importação de XML?')) return;
+        sairEdicaoEntrada();
+    }
+    mostrarSubabaEntrada(alvo);
 }));
 
 function lerCabecalhoEntrada(statusEl) {
@@ -1402,7 +1642,7 @@ document.getElementById('btnConfirmarXml').addEventListener('click', async () =>
         }
         await gravarEntrada(cabecalho, itens, { chave_acesso: nfeDadosNota.chaveAcesso || null, xml_original: nfeDadosNota.xmlOriginal || null });
         statusEl.className = 'status-msg sucesso';
-        statusEl.textContent = `✅ Entrada registrada (${itens.length} item(ns)).`;
+        statusEl.textContent = `✅ Entrada registrada com ${itens.length} item(ns): ${nfeItensParseados.map(it => `${it.xProd} ×${formatarNumero(it.qtd)}`).join(', ')}.`;
         document.getElementById('nfeArquivo').value = '';
         document.getElementById('nfeBlocoItens').style.display = 'none';
         document.getElementById('nfeInfo').innerHTML = '';
@@ -1426,30 +1666,41 @@ ligarBuscaProduto('manProdutoBusca', 'manProdutoResultados', (p, invalidando) =>
     }
 }, { permiteNovo: true });
 
+function atualizarTotaisItensManual() {
+    document.getElementById('totalManual').textContent = formatarMoeda(itensManual.reduce((acc, it) => acc + it.qtd * it.custo, 0));
+    const n = itensManual.length;
+    document.getElementById('btnConfirmarManual').textContent = entradaEmEdicao
+        ? '💾 Salvar alterações da entrada'
+        : `📥 Registrar entrada no estoque${n ? ` (${n} item${n > 1 ? 's' : ''})` : ''}`;
+}
 function renderizarItensManual() {
     document.getElementById('corpoItensManual').innerHTML = itensManual.map((it, i) => `
         <tr>
             <td>${escapeHtml(it.nome)}${it.produtoId ? '' : ' <span class="pill pill-aberto">novo</span>'}</td>
-            <td class="num">${formatarNumero(it.qtd)}</td>
-            <td class="num">${formatarMoeda(it.custo)}</td>
+            <td class="num"><input class="mini" type="number" step="0.01" min="0" data-manual-qtd="${i}" value="${it.qtd}"></td>
+            <td class="num"><input class="mini" type="number" step="0.01" min="0" data-manual-custo="${i}" value="${it.custo}"></td>
             <td class="num">${formatarMoeda(it.precoVenda)}</td>
             <td class="num">${formatarMoeda(it.qtd * it.custo)}</td>
             <td><button class="btn btn-perigo btn-sm" data-remover-manual="${i}">✕</button></td>
         </tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhum item adicionado.</td></tr>';
-    document.getElementById('totalManual').textContent = formatarMoeda(itensManual.reduce((acc, it) => acc + it.qtd * it.custo, 0));
+    atualizarTotaisItensManual();
     document.querySelectorAll('[data-remover-manual]').forEach(b => b.addEventListener('click', () => { itensManual.splice(Number(b.dataset.removerManual), 1); renderizarItensManual(); }));
+    document.querySelectorAll('[data-manual-qtd]').forEach(inp => inp.addEventListener('change', () => { itensManual[Number(inp.dataset.manualQtd)].qtd = parseFloat(inp.value) || 0; renderizarItensManual(); }));
+    document.querySelectorAll('[data-manual-custo]').forEach(inp => inp.addEventListener('change', () => { itensManual[Number(inp.dataset.manualCusto)].custo = parseFloat(inp.value) || 0; renderizarItensManual(); }));
 }
-document.getElementById('btnAdicionarItemManual').addEventListener('click', () => {
-    const statusEl = document.getElementById('statusManualItem');
+// valida o item digitado no formulário e o coloca na lista; devolve true se entrou.
+// statusEl é onde a mensagem de erro aparece (a do item, ou a do botão de registrar).
+function adicionarItemManual(statusEl) {
     const nome = document.getElementById('manProdutoBusca').value.trim().toUpperCase();
     const qtd = parseFloat(document.getElementById('manQtd').value);
     const custo = parseFloat(document.getElementById('manCusto').value);
     const precoVenda = parseFloat(document.getElementById('manPrecoVenda').value);
-    if (!nome) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o produto.'; return; }
-    if (isNaN(qtd) || qtd <= 0) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe a quantidade.'; return; }
-    if (isNaN(custo) || custo < 0) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o custo unitário.'; return; }
-    if (isNaN(precoVenda) || precoVenda < 0) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o preço de venda.'; return; }
-    statusEl.textContent = '';
+    const erro = (msg) => { statusEl.className = 'status-msg erro'; statusEl.textContent = msg; return false; };
+    if (!nome) return erro('Informe o produto.');
+    if (isNaN(qtd) || qtd <= 0) return erro('Informe a quantidade.');
+    if (isNaN(custo) || custo < 0) return erro('Informe o custo unitário.');
+    if (isNaN(precoVenda) || precoVenda < 0) return erro('Informe o preço de venda.');
+    document.getElementById('statusManualItem').textContent = '';
     // digitou um nome igual a um produto existente sem clicar na sugestão -- reaproveita ele
     const existente = produtoManualSelecionado || produtosCarregados.find(p => p.nome.toUpperCase() === nome) || null;
     itensManual.push({
@@ -1461,14 +1712,28 @@ document.getElementById('btnAdicionarItemManual').addEventListener('click', () =
     ['manProdutoBusca', 'manCusto', 'manPrecoVenda'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('manQtd').value = 1;
     produtoManualSelecionado = null;
-    document.getElementById('manProdutoBusca').focus();
+    return true;
+}
+document.getElementById('btnAdicionarItemManual').addEventListener('click', () => {
+    if (adicionarItemManual(document.getElementById('statusManualItem'))) document.getElementById('manProdutoBusca').focus();
 });
 
 document.getElementById('btnConfirmarManual').addEventListener('click', async () => {
     const statusEl = document.getElementById('statusManual');
+    // produto digitado no formulário mas ainda não adicionado à lista: entra agora, ou barra dizendo o motivo
+    // (antes ele simplesmente ficava de fora da entrada sem ninguém perceber)
+    if (document.getElementById('manProdutoBusca').value.trim()) {
+        if (!adicionarItemManual(statusEl)) {
+            statusEl.textContent = 'O produto digitado ("' + document.getElementById('manProdutoBusca').value.trim() + '") ainda não foi adicionado à lista: ' + statusEl.textContent;
+            return;
+        }
+    }
     if (!itensManual.length) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Adicione ao menos um item.'; return; }
+    if (itensManual.some(it => !(it.qtd > 0))) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Tem item com quantidade zerada na lista.'; return; }
     const cabecalho = lerCabecalhoEntrada(statusEl);
     if (!cabecalho) return;
+    if (entradaEmEdicao) { await salvarEdicaoEntrada(cabecalho); return; }
+    const resumoItens = itensManual.map(it => `${it.nome} ×${formatarNumero(it.qtd)}`).join(', ');
     const btn = document.getElementById('btnConfirmarManual');
     btn.disabled = true;
     statusEl.className = 'status-msg'; statusEl.textContent = 'Registrando...';
@@ -1488,7 +1753,7 @@ document.getElementById('btnConfirmarManual').addEventListener('click', async ()
         }
         await gravarEntrada(cabecalho, itens);
         statusEl.className = 'status-msg sucesso';
-        statusEl.textContent = `✅ Entrada registrada (${itens.length} item(ns)).`;
+        statusEl.textContent = `✅ Entrada registrada com ${itens.length} item(ns): ${resumoItens}.`;
         itensManual = [];
         renderizarItensManual();
         await carregarProdutos();
@@ -1521,30 +1786,276 @@ async function carregarHistoricoEntradas() {
             <td>${escapeHtml(n.fornecedor_nome || '—')}</td>
             <td class="num">${contagem[n.id] || 0}</td>
             <td class="num">${formatarMoeda(n.valor_total)}</td>
-            <td><button class="btn btn-perigo btn-sm" data-excluir-entrada="${n.id}">Excluir</button></td>
+            <td><div class="acoes-linha">
+                <button class="btn btn-cinza btn-sm" data-itens-entrada="${n.id}">👁 Itens</button>
+                <button class="btn btn-cinza btn-sm" data-editar-entrada="${n.id}">✏️ Editar</button>
+                <button class="btn btn-perigo btn-sm" data-excluir-entrada="${n.id}">Excluir</button>
+            </div></td>
         </tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhuma entrada registrada ainda.</td></tr>';
-    corpo.querySelectorAll('[data-excluir-entrada]').forEach(b => b.addEventListener('click', () => excluirEntrada(b.dataset.excluirEntrada, (notas || []).find(n => n.id === b.dataset.excluirEntrada))));
+    const achar = (id) => (notas || []).find(n => n.id === id);
+    corpo.querySelectorAll('[data-itens-entrada]').forEach(b => b.addEventListener('click', () => abrirItensEntrada(achar(b.dataset.itensEntrada))));
+    corpo.querySelectorAll('[data-editar-entrada]').forEach(b => b.addEventListener('click', () => iniciarEdicaoEntrada(achar(b.dataset.editarEntrada))));
+    corpo.querySelectorAll('[data-excluir-entrada]').forEach(b => b.addEventListener('click', () => excluirEntrada(b.dataset.excluirEntrada, achar(b.dataset.excluirEntrada))));
 }
-async function excluirEntrada(notaId, nota) {
-    if (!confirm('Excluir essa entrada? O estoque dos produtos dela será revertido (pode ficar negativo se já foi vendido). Não tem como desfazer.')) return;
+
+// o "último custo" do produto é o da entrada mais recente que sobrou: recalcula depois de editar/excluir entrada
+async function recalcularUltimoCusto(produtoIds) {
+    for (const produtoId of new Set(produtoIds)) {
+        const { data, error } = await sb.from('armarinho_movimentacoes').select('valor_unit')
+            .eq('produto_id', produtoId).eq('tipo', 'entrada')
+            .order('data', { ascending: false }).order('criado_em', { ascending: false }).limit(1);
+        if (error) throw error;
+        if (data && data.length) {
+            const { error: erroUp } = await sb.from('armarinho_produtos').update({ preco_custo: data[0].valor_unit }).eq('id', produtoId);
+            if (erroUp) throw erroUp;
+        }
+    }
+}
+async function lerItensEntrada(notaId) {
+    const { data, error } = await sb.from('armarinho_movimentacoes')
+        .select('id, produto_id, qtd, valor_unit, criado_em, armarinho_produtos(nome, un, categoria, preco_venda, estoque)')
+        .eq('nota_id', notaId).eq('tipo', 'entrada');
+    if (error) throw new Error('Erro ao ler os itens da entrada: ' + error.message);
+    return (data || []).map(m => ({
+        movId: m.id, produtoId: m.produto_id, criadoEm: m.criado_em, qtd: Number(m.qtd), custo: Number(m.valor_unit),
+        nome: m.armarinho_produtos?.nome || '—', un: m.armarinho_produtos?.un || 'UN', categoria: m.armarinho_produtos?.categoria || null,
+        precoVenda: Number(m.armarinho_produtos?.preco_venda) || 0, estoqueAtual: Number(m.armarinho_produtos?.estoque) || 0,
+    }));
+}
+
+// ---- ver os itens de uma entrada ----
+async function abrirItensEntrada(nota) {
+    if (!nota) return;
+    document.getElementById('itensEntradaTitulo').textContent = `Itens da entrada${nota.numero_nf ? ' — NF ' + nota.numero_nf : ''}`;
+    document.getElementById('itensEntradaSub').textContent = `${nota.fornecedor_nome || '—'} · ${formatarDataSemFuso(nota.data)} · ${formatarMoeda(nota.valor_total)}`;
+    document.getElementById('corpoItensEntrada').innerHTML = '<tr><td colspan="4" class="vazio">Carregando...</td></tr>';
+    document.getElementById('modal-itens-entrada').classList.add('aberto');
     try {
-        const { data: movs, error: erroBusca } = await sb.from('armarinho_movimentacoes').select('id, produto_id, qtd').eq('nota_id', notaId).eq('tipo', 'entrada');
-        if (erroBusca) throw erroBusca;
-        for (const m of (movs || [])) {
-            const { error } = await sb.rpc('armarinho_registrar_saida', { p_produto_id: m.produto_id, p_qtd: m.qtd });
+        const itens = await lerItensEntrada(nota.id);
+        document.getElementById('corpoItensEntrada').innerHTML = itens.map(i => `
+            <tr><td>${escapeHtml(i.nome)}</td><td class="num">${formatarNumero(i.qtd)}</td><td class="num">${formatarMoeda(i.custo)}</td><td class="num">${formatarMoeda(i.qtd * i.custo)}</td></tr>`).join('')
+            || '<tr><td colspan="4" class="vazio">Essa entrada não tem itens.</td></tr>';
+    } catch (e) {
+        document.getElementById('corpoItensEntrada').innerHTML = `<tr><td colspan="4" class="vazio">${escapeHtml(e.message)}</td></tr>`;
+    }
+}
+document.getElementById('btnFecharItensEntrada').addEventListener('click', () => document.getElementById('modal-itens-entrada').classList.remove('aberto'));
+
+// ---- editar uma entrada ----
+function sairEdicaoEntrada() {
+    entradaEmEdicao = null;
+    document.getElementById('bannerEdicaoEntrada').style.display = 'none';
+    itensManual = [];
+    ['entFornecedor', 'entCnpj', 'entNumeroNf', 'entObservacao'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('entData').value = hojeISO();
+    document.getElementById('entResponsavel').value = meuPerfil.nomeOperador;
+    document.getElementById('statusManual').textContent = '';
+    renderizarItensManual();
+}
+document.getElementById('btnCancelarEdicaoEntrada').addEventListener('click', () => { sairEdicaoEntrada(); mostrarSubabaEntrada('historico'); });
+
+async function iniciarEdicaoEntrada(nota) {
+    if (!nota) return;
+    if (entradaEmEdicao && !confirm('Já existe uma entrada em edição. Descartar e abrir esta?')) return;
+    if (!entradaEmEdicao && itensManual.length && !confirm('A lista de itens da entrada manual em andamento será descartada. Continuar?')) return;
+    let itens;
+    try { itens = await lerItensEntrada(nota.id); } catch (e) { alert(e.message); return; }
+    entradaEmEdicao = { nota };
+    document.getElementById('entFornecedor').value = nota.fornecedor_nome || '';
+    document.getElementById('entCnpj').value = nota.fornecedor_cnpj || '';
+    document.getElementById('entNumeroNf').value = nota.numero_nf || '';
+    document.getElementById('entData').value = nota.data;
+    document.getElementById('entResponsavel').value = nota.responsavel || meuPerfil.nomeOperador;
+    document.getElementById('entObservacao').value = nota.observacao || '';
+    itensManual = itens.map(i => ({ produtoId: i.produtoId, nome: i.nome, qtd: i.qtd, custo: i.custo, precoVenda: i.precoVenda, categoria: i.categoria, un: i.un, criadoEm: i.criadoEm }));
+    document.getElementById('textoBannerEdicaoEntrada').textContent = `Editando a entrada${nota.numero_nf ? ' NF ' + nota.numero_nf : ''} de ${nota.fornecedor_nome || '—'} (${formatarDataSemFuso(nota.data)}). Ao salvar, o estoque é ajustado pela diferença.`;
+    document.getElementById('bannerEdicaoEntrada').style.display = 'flex';
+    document.getElementById('statusManual').textContent = '';
+    renderizarItensManual();
+    mostrarSubabaEntrada('manual');
+}
+
+async function salvarEdicaoEntrada(cabecalho) {
+    const statusEl = document.getElementById('statusManual');
+    const btn = document.getElementById('btnConfirmarManual');
+    const nota = entradaEmEdicao.nota;
+    btn.disabled = true;
+    statusEl.className = 'status-msg'; statusEl.textContent = 'Salvando...';
+    let fase = 'ler a entrada atual', resumoAntes = `entrada${nota.numero_nf ? ' NF ' + nota.numero_nf : ''} de ${nota.fornecedor_nome || '—'} (${formatarMoeda(nota.valor_total)})`;
+    let aplicados = [], novosMovIds = [], novosProdutoIds = [];
+    const notaAntes = { fornecedor_nome: nota.fornecedor_nome, fornecedor_cnpj: nota.fornecedor_cnpj, numero_nf: nota.numero_nf, data: nota.data, observacao: nota.observacao, responsavel: nota.responsavel, valor_total: nota.valor_total };
+    try {
+        const antigos = await lerItensEntrada(nota.id);
+        resumoAntes += ` -- itens: ${textoItens(antigos.map(i => ({ nome: i.nome, qtd: i.qtd, valorUnit: i.custo })))}`;
+
+        // efeito no estoque = nova qtd - antiga qtd (produto novo não tem antiga: nasce já com a quantidade)
+        const novo = somarPorProduto(itensManual.filter(it => it.produtoId));
+        const antigo = somarPorProduto(antigos);
+        const deltasEstoque = {};
+        new Set([...Object.keys(novo), ...Object.keys(antigo)]).forEach(pid => {
+            const d = arred4((novo[pid] || 0) - (antigo[pid] || 0));
+            if (d) deltasEstoque[pid] = d;
+        });
+        const ids = Object.keys(deltasEstoque);
+        if (ids.length) {
+            const { data: prods, error } = await sb.from('armarinho_produtos').select('id, nome, estoque').in('id', ids);
+            if (error) throw error;
+            const negativos = (prods || []).filter(p => Number(p.estoque) + deltasEstoque[p.id] < 0);
+            if (negativos.length && !confirm(`Com essa alteração o estoque de ${negativos.map(p => `"${p.nome}" (${formatarNumero(Number(p.estoque) + deltasEstoque[p.id])})`).join(', ')} fica negativo (provavelmente já foi vendido). Continuar?`)) {
+                statusEl.textContent = '';
+                return;
+            }
+        }
+
+        fase = 'ajustar o estoque';
+        // a RPC de saída aceita quantidade negativa: aqui "saída" = -delta (entrar mais = saída negativa)
+        const deltasSaida = {};
+        Object.entries(deltasEstoque).forEach(([pid, d]) => { deltasSaida[pid] = -d; });
+        aplicados = await ajustarEstoqueVenda(deltasSaida);
+
+        // 1ª parte: grava o NOVO antes de tirar o antigo; se falhar, desfaz tudo
+        try {
+            fase = 'cadastrar os produtos novos';
+            const itensGravar = [];
+            for (const it of itensManual) {
+                let produtoId = it.produtoId;
+                if (!produtoId) {
+                    const { data: criado, error } = await sb.from('armarinho_produtos').insert({
+                        unidade_negocio_id: meuPerfil.unidadeId, nome: it.nome, categoria: it.categoria, un: it.un,
+                        preco_custo: it.custo, preco_venda: it.precoVenda, estoque: it.qtd,
+                    }).select().single();
+                    if (error) throw error;
+                    produtoId = criado.id;
+                    novosProdutoIds.push(produtoId);
+                }
+                itensGravar.push({ produtoId, qtd: it.qtd, custo: it.custo, criadoEm: it.criadoEm || null });
+            }
+            fase = 'gravar os novos itens';
+            const { data: novosMovs, error: erroMov } = await sb.from('armarinho_movimentacoes').insert(itensGravar.map(i => ({
+                unidade_negocio_id: meuPerfil.unidadeId, produto_id: i.produtoId, nota_id: nota.id,
+                tipo: 'entrada', qtd: i.qtd, valor_unit: i.custo, data: cabecalho.data,
+                // mantém a posição original na ordem dos custos. Sempre enviado: num insert em lote, chave ausente
+                // em alguma linha vira NULL (não o default) e criado_em não aceita nulo
+                criado_em: i.criadoEm || new Date().toISOString(),
+            }))).select('id');
+            if (erroMov) throw erroMov;
+            novosMovIds = (novosMovs || []).map(m => m.id);
+            fase = 'atualizar a entrada';
+            const totalNota = arredondar2(itensGravar.reduce((acc, i) => acc + i.qtd * i.custo, 0));
+            const { error: erroNota } = await sb.from('armarinho_notas').update({ ...cabecalho, valor_total: totalNota }).eq('id', nota.id);
+            if (erroNota) throw erroNota;
+        } catch (e) {
+            try {
+                if (novosMovIds.length) await sb.from('armarinho_movimentacoes').delete().in('id', novosMovIds);
+                if (novosProdutoIds.length) await sb.from('armarinho_produtos').delete().in('id', novosProdutoIds);
+                await sb.from('armarinho_notas').update(notaAntes).eq('id', nota.id);
+                await desfazerAjusteEstoque(aplicados);
+            } catch (e2) { console.warn('Falha ao desfazer a edição da entrada:', e2.message); }
+            throw Object.assign(new Error(e.message), { desfeito: true });
+        }
+
+        fase = 'remover os itens antigos';
+        if (antigos.length) {
+            const { error } = await sb.from('armarinho_movimentacoes').delete().in('id', antigos.map(i => i.movId));
             if (error) throw error;
         }
+        fase = 'recalcular o último custo dos produtos';
+        await recalcularUltimoCusto([...antigos.map(i => i.produtoId), ...itensManual.filter(it => it.produtoId).map(it => it.produtoId), ...novosProdutoIds]);
+
+        await registrarSentinela('armarinho_entrada_editada', `Editou ${resumoAntes} -- PASSOU PARA: ${cabecalho.numero_nf ? 'NF ' + cabecalho.numero_nf + ' de ' : ''}${cabecalho.fornecedor_nome} (${formatarDataSemFuso(cabecalho.data)}, ${formatarMoeda(itensManual.reduce((acc, it) => acc + it.qtd * it.custo, 0))}) -- itens: ${textoItens(itensManual.map(it => ({ nome: it.nome, qtd: it.qtd, valorUnit: it.custo })))}`, nota.id);
+        sairEdicaoEntrada();
+        statusEl.textContent = '';
+        await carregarProdutos(); renderizarProdutos(); renderizarDashboard();
+        mostrarSubabaEntrada('historico');
+        document.getElementById('statusHistoricoEntradas').className = 'status-msg sucesso';
+        document.getElementById('statusHistoricoEntradas').textContent = '✅ Entrada atualizada.';
+    } catch (e) {
+        const semAlteracao = e.desfeito || fase === 'ler a entrada atual' || fase === 'ajustar o estoque';
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = semAlteracao
+            ? `⚠️ Não consegui salvar (falhou ao ${fase}): ${e.message}. Nada foi alterado na entrada.`
+            : `⚠️ As alterações foram gravadas, mas falhou ao ${fase}: ${e.message}. Confira a entrada e o estoque dos produtos e avise o administrador.`;
+        await registrarSentinela('armarinho_entrada_edicao_falhou', `Falha ao EDITAR ${resumoAntes} -- etapa "${fase}": ${e.message} -- ${semAlteracao ? 'nada foi alterado' : 'edição PARCIAL'}`, nota.id);
+    } finally { btn.disabled = false; }
+}
+
+// ---- movimentação de um produto (entradas e saídas) ----
+let movProdutoAtual = null;
+async function abrirMovimentacaoProduto(produtoId) {
+    const p = produtosCarregados.find(x => x.id === produtoId);
+    if (!p) return;
+    movProdutoAtual = { produto: p, movs: [] };
+    document.getElementById('movProdutoTitulo').textContent = `Movimentação — ${p.nome}`;
+    document.getElementById('movProdutoResumo').textContent = 'Carregando...';
+    document.getElementById('movProdutoFiltro').value = '';
+    document.getElementById('corpoMovProduto').innerHTML = '<tr><td colspan="6" class="vazio">Carregando...</td></tr>';
+    document.getElementById('modal-mov-produto').classList.add('aberto');
+    const { data, error } = await sb.from('armarinho_movimentacoes')
+        .select('id, tipo, qtd, valor_unit, data, criado_em, armarinho_notas(tipo, numero_nf, fornecedor_nome, pessoa(nome))')
+        .eq('produto_id', produtoId)
+        .order('data', { ascending: false }).order('criado_em', { ascending: false }).limit(2000);
+    if (error) {
+        document.getElementById('movProdutoResumo').textContent = '';
+        document.getElementById('corpoMovProduto').innerHTML = `<tr><td colspan="6" class="vazio">Erro: ${escapeHtml(error.message)}</td></tr>`;
+        return;
+    }
+    movProdutoAtual.movs = data || [];
+    renderizarMovimentacaoProduto();
+}
+function renderizarMovimentacaoProduto() {
+    if (!movProdutoAtual) return;
+    const { produto, movs } = movProdutoAtual;
+    const entradas = movs.filter(m => m.tipo === 'entrada').reduce((acc, m) => acc + Number(m.qtd), 0);
+    const saidas = movs.filter(m => m.tipo === 'saida').reduce((acc, m) => acc + Number(m.qtd), 0);
+    document.getElementById('movProdutoResumo').textContent = `Estoque atual: ${formatarNumero(produto.estoque)} ${produto.un || ''} · total de entradas: ${formatarNumero(entradas)} · total de saídas: ${formatarNumero(saidas)} · ${movs.length} movimento(s)`;
+    const filtro = document.getElementById('movProdutoFiltro').value;
+    const lista = movs.filter(m => !filtro || m.tipo === filtro);
+    document.getElementById('corpoMovProduto').innerHTML = lista.map(m => {
+        const nota = m.armarinho_notas;
+        const origem = m.tipo === 'entrada'
+            ? `Entrada${nota?.numero_nf ? ' NF ' + nota.numero_nf : ''}${nota?.fornecedor_nome ? ' — ' + nota.fornecedor_nome : ''}`
+            : `Venda${nota?.pessoa?.nome ? ' — ' + nota.pessoa.nome : ''}`;
+        return `
+        <tr>
+            <td>${formatarDataSemFuso(m.data)}</td>
+            <td><span class="pill ${m.tipo === 'entrada' ? 'pill-ok' : 'pill-baixo'}">${m.tipo === 'entrada' ? 'Entrada' : 'Saída'}</span></td>
+            <td>${escapeHtml(origem)}</td>
+            <td class="num">${m.tipo === 'entrada' ? '+' : '−'}${formatarNumero(m.qtd)}</td>
+            <td class="num">${formatarMoeda(m.valor_unit)}</td>
+            <td class="num">${formatarMoeda(Number(m.qtd) * Number(m.valor_unit))}</td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="6" class="vazio">Nenhuma movimentação.</td></tr>';
+}
+document.getElementById('movProdutoFiltro').addEventListener('change', renderizarMovimentacaoProduto);
+document.getElementById('btnFecharMovProduto').addEventListener('click', () => { movProdutoAtual = null; document.getElementById('modal-mov-produto').classList.remove('aberto'); });
+async function excluirEntrada(notaId, nota) {
+    if (!confirm('Excluir essa entrada? O estoque dos produtos dela será revertido (pode ficar negativo se já foi vendido). Não tem como desfazer.')) return;
+    let aplicados = [], algoApagado = false;
+    try {
+        const itens = await lerItensEntrada(notaId);
+        // tira do estoque tudo o que a entrada colocou (aplica todos os produtos ou nenhum)
+        const deltas = somarPorProduto(itens);
+        aplicados = await ajustarEstoqueVenda(deltas);
         const { error: erroMov } = await sb.from('armarinho_movimentacoes').delete().eq('nota_id', notaId);
         if (erroMov) throw erroMov;
+        algoApagado = true;
         const { error: erroNota } = await sb.from('armarinho_notas').delete().eq('id', notaId);
         if (erroNota) throw erroNota;
-        await registrarSentinela('armarinho_entrada_excluida', `Excluiu entrada ${nota?.numero_nf ? 'NF ' + nota.numero_nf : ''} de ${nota?.fornecedor_nome || '—'} (${formatarMoeda(nota?.valor_total)}), ${(movs || []).length} item(ns) revertido(s) do estoque`);
+        try { await recalcularUltimoCusto(itens.map(i => i.produtoId)); } catch (e) { console.warn('Não recalculei o último custo:', e.message); }
+        await registrarSentinela('armarinho_entrada_excluida', `Excluiu entrada ${nota?.numero_nf ? 'NF ' + nota.numero_nf : ''} de ${nota?.fornecedor_nome || '—'} (${formatarMoeda(nota?.valor_total)}) -- itens revertidos do estoque: ${textoItens(itens.map(i => ({ nome: i.nome, qtd: i.qtd, valorUnit: i.custo })))}`, notaId);
+        if (entradaEmEdicao && entradaEmEdicao.nota.id === notaId) sairEdicaoEntrada();
         await carregarProdutos();
         renderizarProdutos();
         renderizarDashboard();
         carregarHistoricoEntradas();
+        document.getElementById('statusHistoricoEntradas').className = 'status-msg sucesso';
+        document.getElementById('statusHistoricoEntradas').textContent = '✅ Entrada excluída e estoque revertido.';
     } catch (erro) {
-        alert('Erro ao excluir a entrada: ' + erro.message);
+        if (!algoApagado) await desfazerAjusteEstoque(aplicados);
+        alert(algoApagado
+            ? 'A exclusão parou no meio (' + erro.message + '). Os itens já foram apagados — avise o administrador antes de tentar de novo.'
+            : 'Erro ao excluir a entrada: ' + erro.message + '. Nada foi alterado.');
+        await carregarProdutos(); renderizarProdutos(); carregarHistoricoEntradas();
     }
 }
 
@@ -1704,7 +2215,11 @@ function calcularParcelasVenda() {
     const regra = document.getElementById('vendaRegraParcelas').value;
     const intervalo = parseInt(document.getElementById('vendaIntervalo').value) || 30;
     const valores = calcularValoresParcelas(total, qtd);
-    return valores.map((valor, i) => ({ vencimento: calcularDataParcela(primeira, i, regra, intervalo), valor }));
+    // a partir da 2ª parcela, data ajustada à mão vale mais que a calculada ('' = campo apagado, barrado ao faturar)
+    return valores.map((valor, i) => ({
+        vencimento: (i > 0 && datasParcelasManuais[i] !== undefined) ? datasParcelasManuais[i] : calcularDataParcela(primeira, i, regra, intervalo),
+        valor,
+    }));
 }
 function atualizarPreviewParcelas() {
     const parcelado = document.getElementById('vendaCondicao').value === 'parcelado';
@@ -1714,11 +2229,36 @@ function atualizarPreviewParcelas() {
     document.getElementById('labelVencimento').textContent = parcelado ? 'Vencimento da 1ª parcela *' : 'Vencimento *';
     const parcelas = parcelado ? calcularParcelasVenda() : [];
     document.getElementById('blocoPreviewParcelas').style.display = parcelas.length ? '' : 'none';
-    document.getElementById('corpoPreviewParcelas').innerHTML = parcelas.map((p, i) => `<tr><td>${i + 1}/${parcelas.length}</td><td>${formatarDataSemFuso(p.vencimento)}</td><td class="num">${formatarMoeda(p.valor)}</td></tr>`).join('');
+    const corpo = document.getElementById('corpoPreviewParcelas');
+    corpo.innerHTML = parcelas.map((p, i) => `
+        <tr>
+            <td>${i + 1}/${parcelas.length}</td>
+            <td><input type="date" class="data-parcela" data-parcela-data="${i}" value="${p.vencimento}"><div class="aviso-dia-util" data-aviso-parcela="${i}"></div></td>
+            <td class="num">${formatarMoeda(p.valor)}</td>
+        </tr>`).join('');
+    corpo.querySelectorAll('[data-parcela-data]').forEach(inp => {
+        const indice = Number(inp.dataset.parcelaData);
+        const aviso = corpo.querySelector(`[data-aviso-parcela="${indice}"]`);
+        aplicarAvisoDiaUtil(aviso, inp.value);
+        inp.addEventListener('input', () => {
+            aplicarAvisoDiaUtil(aviso, inp.value);
+            if (indice > 0) datasParcelasManuais[indice] = inp.value;
+        });
+        // mexer na 1ª parcela equivale a mudar o campo Vencimento: as demais são recalculadas a partir dela
+        if (indice === 0) inp.addEventListener('change', () => {
+            if (!inp.value) return;
+            document.getElementById('vendaVencimento').value = inp.value;
+            datasParcelasManuais = [];
+            atualizarPreviewParcelas();
+        });
+    });
+    aplicarAvisoDiaUtil(document.getElementById('avisoDiaUtilVenda'), document.getElementById('vendaVencimento').value);
 }
+// mudou condição, nº de parcelas, regra, intervalo ou a 1ª data: recalcula tudo (descarta os ajustes manuais)
 ['vendaCondicao', 'vendaVencimento', 'vendaQtdParcelas', 'vendaRegraParcelas', 'vendaIntervalo'].forEach(id => {
-    document.getElementById(id).addEventListener('input', atualizarPreviewParcelas);
-    document.getElementById(id).addEventListener('change', atualizarPreviewParcelas);
+    const recalcular = () => { datasParcelasManuais = []; atualizarPreviewParcelas(); };
+    document.getElementById(id).addEventListener('input', recalcular);
+    document.getElementById(id).addEventListener('change', recalcular);
 });
 
 // toda venda tem 1 unidade_operacao (as N parcelas compartilham); é o que liga os títulos ao rateio/movimentação do Financeiro
@@ -1761,6 +2301,8 @@ document.getElementById('btnFaturar').addEventListener('click', async () => {
     if (!contaId) return erro('Escolha a conta de recebimento.');
     const parcelas = calcularParcelasVenda();
     if (!parcelas.length) return erro('Confira o vencimento (e as parcelas, se for parcelado).');
+    if (parcelas.some(p => !p.vencimento)) return erro('Informe o vencimento de todas as parcelas.');
+    if (parcelas.some((p, i) => i > 0 && p.vencimento < parcelas[i - 1].vencimento) && !confirm('Há parcela com vencimento anterior ao da parcela anterior. Continuar mesmo assim?')) return;
     if (parcelas.some(p => !(p.valor > 0))) return erro('Uma das parcelas ficou com valor zerado — reduza o número de parcelas.');
     const total = totalCarrinho();
     if (!(total > 0)) return erro('O total da venda está zerado.');
@@ -1804,6 +2346,7 @@ document.getElementById('btnFaturar').addEventListener('click', async () => {
         selecionarCliente(null);
         document.getElementById('vendaObservacao').value = '';
         document.getElementById('vendaCondicao').value = 'avista';
+        datasParcelasManuais = [];
         atualizarPreviewParcelas();
         statusEl.className = 'status-msg sucesso'; statusEl.textContent = '✅ Venda faturada.';
         await carregarProdutos(); renderizarProdutos();
@@ -1837,23 +2380,70 @@ async function carregarJsPdf() {
     await carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
     jsPdfCarregado = true;
 }
-async function carregarLogoComoBase64(url) {
-    if (!url) return null;
+// ---- logo da unidade no cabeçalho dos PDFs ----
+// A Servir Central grava o logo como JPEG comprimido (qualquer imagem vira
+// image/jpeg no upload), não como PNG, e ele quase nunca é quadrado. Por
+// isso o logo é redesenhado num canvas -> PNG (formato que o jsPDF lê
+// sempre, mesmo se um dia vier WebP/SVG) e encaixado numa caixa
+// preservando a proporção, em vez de esticado num quadrado fixo.
+function imagemDe(src, cors) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        if (cors) img.crossOrigin = 'anonymous';
+        img.onload = () => resolve(img);
+        img.onerror = () => reject(new Error('imagem inválida ou inacessível'));
+        img.src = src;
+    });
+}
+async function carregarImagemLogo(url) {
     try {
         const resposta = await fetch(url);
+        if (!resposta.ok) throw new Error('HTTP ' + resposta.status);
         const blob = await resposta.blob();
-        return await new Promise((resolve) => {
+        const dataUrl = await new Promise((resolve, reject) => {
             const leitor = new FileReader();
             leitor.onload = () => resolve(leitor.result);
-            leitor.onerror = () => resolve(null);
+            leitor.onerror = () => reject(new Error('falha ao ler o arquivo'));
             leitor.readAsDataURL(blob);
         });
-    } catch (erro) { return null; }
+        return await imagemDe(dataUrl);
+    } catch (erro) {
+        return await imagemDe(url, true); // plano B: carrega direto como <img>
+    }
+}
+// devolve { dataUrl, largura, altura } (mm) ou { motivo } explicando por que não há logo
+async function prepararLogoPdf() {
+    // relê a URL no banco: se o logo foi trocado com o app aberto, a personalização em memória está velha
+    let url = personalizacaoAtual?.logo_url || null;
+    try {
+        const { data } = await sb.from('servir_unidades_negocio').select('logo_url').eq('id', meuPerfil.unidadeId).single();
+        if (data) url = data.logo_url || null;
+    } catch (erro) { /* mantém a que já estava em memória */ }
+    if (!url) return { motivo: 'A unidade ainda não tem logo cadastrado (Servir Central → Dados da unidade), então o PDF saiu sem logo.' };
+    try {
+        const img = await carregarImagemLogo(url);
+        const w = img.naturalWidth || 300, h = img.naturalHeight || 300;
+        const escala = Math.min(1, 400 / Math.max(w, h));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(w * escala));
+        canvas.height = Math.max(1, Math.round(h * escala));
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        const razao = w / h;
+        let largura = 22 * razao, altura = 22; // no máximo 22 mm de altura e 44 mm de largura
+        if (largura > 44) { largura = 44; altura = 44 / razao; }
+        return { dataUrl: canvas.toDataURL('image/png'), largura, altura };
+    } catch (erro) {
+        console.warn('Logo não carregou pro PDF:', erro.message);
+        return { motivo: 'Não consegui carregar o logo da unidade (' + erro.message + '), então o PDF saiu sem logo.' };
+    }
 }
 let pdfAtual = null;
-function mostrarPopupAcoesPdf(tituloModal, blob, nomeArquivo) {
+function mostrarPopupAcoesPdf(tituloModal, blob, nomeArquivo, aviso) {
     pdfAtual = { blob, nomeArquivo };
     document.getElementById('tituloModalAcoesPdf').textContent = tituloModal;
+    const avisoEl = document.getElementById('avisoLogoPdf');
+    avisoEl.textContent = aviso || '';
+    avisoEl.style.display = aviso ? '' : 'none';
     document.getElementById('modalAcoesPdf').classList.add('aberto');
 }
 document.getElementById('btnFecharModalAcoesPdf').addEventListener('click', () => document.getElementById('modalAcoesPdf').classList.remove('aberto'));
@@ -1879,9 +2469,12 @@ async function gerarPdfFatura(nota, cliente, itens, parcelas) {
         await carregarJsPdf();
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF();
-        const logo = await carregarLogoComoBase64(personalizacaoAtual?.logo_url);
-        if (logo) { try { doc.addImage(logo, 'PNG', 14, 10, 22, 22); } catch (e) { /* formato não suportado */ } }
-        const xTexto = logo ? 40 : 14;
+        const logoInfo = await prepararLogoPdf();
+        if (logoInfo.dataUrl) {
+            try { doc.addImage(logoInfo.dataUrl, 'PNG', 14, 10 + (22 - logoInfo.altura) / 2, logoInfo.largura, logoInfo.altura); }
+            catch (e) { logoInfo.dataUrl = null; logoInfo.motivo = 'Não consegui inserir o logo no PDF (' + e.message + ').'; }
+        }
+        const xTexto = logoInfo.dataUrl ? 14 + logoInfo.largura + 5 : 14;
         doc.setFontSize(15); doc.setFont(undefined, 'bold');
         doc.text(meuPerfil.unidadeNome || 'Armarinho e Cosméticos', xTexto, 17);
         doc.setFontSize(11); doc.setFont(undefined, 'normal');
@@ -1927,7 +2520,7 @@ async function gerarPdfFatura(nota, cliente, itens, parcelas) {
             doc.setFontSize(9); doc.text('Observação: ' + nota.observacao, 14, yObs, { maxWidth: 180 });
         }
         const nomeArquivo = `fatura-${(cliente.nome || 'cliente').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${nota.data}.pdf`;
-        mostrarPopupAcoesPdf('Fatura gerada', doc.output('blob'), nomeArquivo);
+        mostrarPopupAcoesPdf('Fatura gerada', doc.output('blob'), nomeArquivo, logoInfo.dataUrl ? null : logoInfo.motivo);
     } catch (erro) {
         alert('A venda foi salva, mas não consegui gerar o PDF agora: ' + erro.message + '\nVocê pode gerar de novo pela aba Vendas.');
     }
@@ -2036,6 +2629,7 @@ document.getElementById('btnSalvarConta').addEventListener('click', async () => 
 // parcial divide o título (parte paga + novo título com o saldo).
 // ---------------------------------------------------------------
 let vendaRecebimentosId = null;
+let vendaBaixaId = null;      // venda do título em baixa (pode vir do popup do gráfico, sem passar pelo modal de recebimentos)
 let tituloBaixaAtual = null;
 
 function ordenarTitulos(lista) {
@@ -2049,10 +2643,11 @@ function abrirRecebimentos(notaId) {
     if (!venda) return;
     vendaRecebimentosId = notaId;
     document.getElementById('recebimentosTitulo').textContent = `Recebimentos — ${venda.pessoa?.nome || '—'} · ${formatarMoeda(venda.valor_total)}`;
-    renderizarRecebimentos();
     document.getElementById('modal-recebimentos').classList.add('aberto');
+    renderizarRecebimentos();
 }
 function renderizarRecebimentos() {
+    if (!vendaRecebimentosId || !document.getElementById('modal-recebimentos').classList.contains('aberto')) return;
     const titulos = titulosDaVendaOrdenados(vendaRecebimentosId);
     const hoje = hojeISO();
     document.getElementById('corpoRecebimentos').innerHTML = titulos.map((t, i) => {
@@ -2091,10 +2686,15 @@ document.getElementById('baixaAcrescimo').addEventListener('input', recalcularBa
 document.getElementById('baixaRecebido').addEventListener('input', atualizarAvisoParcial);
 
 function abrirBaixa(tituloId) {
-    const t = (titulosPorVenda[vendaRecebimentosId] || []).find(x => String(x.id) === String(tituloId));
+    let t = null;
+    for (const [vendaId, lista] of Object.entries(titulosPorVenda)) {
+        const achado = lista.find(x => String(x.id) === String(tituloId));
+        if (achado) { t = achado; vendaBaixaId = vendaId; break; }
+    }
     if (!t) return;
     tituloBaixaAtual = t;
-    document.getElementById('baixaSub').textContent = `${t.titulo || 'Título a receber'} · vence em ${formatarDataSemFuso(t.data_vencimento)}`;
+    const clienteBaixa = vendasCarregadas.find(v => v.id === vendaBaixaId)?.pessoa?.nome;
+    document.getElementById('baixaSub').textContent = `${clienteBaixa ? clienteBaixa + ' · ' : ''}${t.titulo || 'Título a receber'} · vence em ${formatarDataSemFuso(t.data_vencimento)}`;
     document.getElementById('baixaValorOriginal').value = formatarMoeda(t.valor_titulo);
     document.getElementById('baixaData').value = hojeISO();
     document.getElementById('baixaDesconto').value = Number(t.descontos) || 0;
@@ -2102,9 +2702,99 @@ function abrirBaixa(tituloId) {
     document.getElementById('baixaConta').value = t.id_conta_pagamento || '';
     document.getElementById('statusBaixa').textContent = '';
     recalcularBaixa();
+    document.getElementById('editVencimento').value = t.data_vencimento || '';
+    aplicarAvisoDiaUtil(document.getElementById('avisoDiaUtilEdit'), t.data_vencimento);
+    document.getElementById('editValor').value = Number(t.valor_titulo) || '';
+    definirModoBaixa('receber');
     document.getElementById('modal-baixa').classList.add('aberto');
 }
 document.getElementById('btnFecharBaixa').addEventListener('click', () => document.getElementById('modal-baixa').classList.remove('aberto'));
+
+// ---- mesma janela: aba "Receber" (baixa) ou "Editar parcela" (só vencimento/valor, sem baixa) ----
+function definirModoBaixa(modo) {
+    document.querySelectorAll('[data-modo-baixa]').forEach(b => b.classList.toggle('ativa', b.dataset.modoBaixa === modo));
+    const editar = modo === 'editar';
+    document.getElementById('baixaCamposReceber').style.display = editar ? 'none' : '';
+    document.getElementById('baixaCamposEditar').style.display = editar ? '' : 'none';
+    document.getElementById('btnConfirmarBaixa').style.display = editar ? 'none' : '';
+    document.getElementById('btnSalvarParcela').style.display = editar ? '' : 'none';
+    document.getElementById('baixaTitulo').textContent = editar ? 'Editar parcela' : 'Receber parcela';
+    document.getElementById('statusBaixa').textContent = '';
+    if (editar) atualizarAvisoSomaParcelas();
+}
+document.querySelectorAll('[data-modo-baixa]').forEach(b => b.addEventListener('click', () => definirModoBaixa(b.dataset.modoBaixa)));
+
+// alterar o valor de uma parcela não muda o total da venda -- só avisa quando a soma dos títulos deixa de bater com ele
+function atualizarAvisoSomaParcelas() {
+    const aviso = document.getElementById('editAvisoSoma');
+    const t = tituloBaixaAtual;
+    const venda = vendasCarregadas.find(v => v.id === vendaBaixaId);
+    if (!t || !venda) { aviso.style.display = 'none'; return; }
+    const novoValor = parseFloat(document.getElementById('editValor').value) || 0;
+    const soma = arredondar2((titulosPorVenda[vendaBaixaId] || []).reduce((acc, x) => acc + (x.id === t.id ? novoValor : Number(x.valor_titulo) || 0), 0));
+    const diferente = Math.abs(soma - Number(venda.valor_total)) > 0.009;
+    aviso.style.display = diferente ? '' : 'none';
+    aviso.textContent = `A soma dos títulos da venda ficará em ${formatarMoeda(soma)}, diferente do total da venda (${formatarMoeda(venda.valor_total)}). Isso é permitido (ex: juros ou renegociação), só fica registrado.`;
+}
+document.getElementById('editValor').addEventListener('input', atualizarAvisoSomaParcelas);
+document.getElementById('editVencimento').addEventListener('input', () => aplicarAvisoDiaUtil(document.getElementById('avisoDiaUtilEdit'), document.getElementById('editVencimento').value));
+
+document.getElementById('btnSalvarParcela').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusBaixa');
+    const erro = (msg) => { statusEl.className = 'status-msg erro'; statusEl.textContent = msg; };
+    const t = tituloBaixaAtual;
+    if (!t) return;
+    const novoVenc = document.getElementById('editVencimento').value;
+    const novoValor = arredondar2(parseFloat(document.getElementById('editValor').value));
+    if (!novoVenc) return erro('Informe o vencimento.');
+    if (!(novoValor > 0)) return erro('Informe um valor maior que zero.');
+    const valorMudou = Math.abs(novoValor - Number(t.valor_titulo)) > 0.009;
+    const vencMudou = novoVenc !== t.data_vencimento;
+    if (!valorMudou && !vencMudou) return erro('Nenhuma alteração para salvar.');
+
+    const btn = document.getElementById('btnSalvarParcela');
+    btn.disabled = true;
+    statusEl.className = 'status-msg'; statusEl.textContent = 'Salvando...';
+    let etapa = 'conferir o título';
+    try {
+        const venda = vendasCarregadas.find(v => v.id === vendaBaixaId);
+        const rotuloTitulo = `${venda?.pessoa?.nome || '—'} -- título "${t.titulo || t.id}"`;
+        // confere no banco: se alguém já deu baixa (ex: no Financeiro), a parcela não pode mais ser alterada
+        const { data: atual, error: erroAtual } = await sb.from('financeiro_titulos').select('id, data_pagamento').eq('id', t.id).single();
+        if (erroAtual || !atual) throw new Error('não consegui confirmar a situação atual do título' + (erroAtual ? ' (' + erroAtual.message + ')' : ''));
+        if (atual.data_pagamento) {
+            await registrarSentinela('armarinho_titulo_edicao_bloqueada', `Tentativa de EDITAR parcela BLOQUEADA (já recebida em ${formatarDataSemFuso(atual.data_pagamento)}) -- ${rotuloTitulo}`, t.id, vendaBaixaId);
+            erro('Essa parcela já foi recebida (talvez no Financeiro) — não pode mais ser editada.');
+            await carregarVendas(); renderizarTabelaVendas(); renderizarDashboard(); renderizarRecebimentos(); renderizarFaixaReceber();
+            return;
+        }
+        // rateio lançado no Financeiro fica desatualizado se o valor mudar
+        let apagarRateio = false;
+        if (valorMudou && t.operacao_id) {
+            const { data: rateio, error } = await sb.from('unidade_rateios').select('operacao_id').eq('operacao_id', t.operacao_id).limit(1);
+            if (error) throw error;
+            apagarRateio = (rateio || []).length > 0;
+            if (apagarRateio && !confirm('Essa venda tem rateio lançado no Financeiro e o valor da parcela vai mudar. Ao salvar, o rateio será apagado e precisa ser lançado de novo lá. Continuar?')) { statusEl.textContent = ''; return; }
+        }
+        etapa = 'salvar a parcela';
+        const { error } = await sb.from('financeiro_titulos').update({ valor_titulo: novoValor, data_vencimento: novoVenc }).eq('id', t.id);
+        if (error) throw error;
+        if (apagarRateio) {
+            etapa = 'apagar o rateio desatualizado (parcela já salva)';
+            const { error: erroRateio } = await sb.from('unidade_rateios').delete().eq('operacao_id', t.operacao_id);
+            if (erroRateio) throw erroRateio;
+        }
+        const mudancas = [];
+        if (vencMudou) mudancas.push(`vencimento ${formatarDataSemFuso(t.data_vencimento)} → ${formatarDataSemFuso(novoVenc)}`);
+        if (valorMudou) mudancas.push(`valor ${formatarMoeda(t.valor_titulo)} → ${formatarMoeda(novoValor)}`);
+        await registrarSentinela('armarinho_titulo_editado', `Editou parcela de venda armarinho -- ${rotuloTitulo}: ${mudancas.join('; ')}${apagarRateio ? ' (rateio apagado)' : ''}`, t.id, vendaBaixaId);
+        document.getElementById('modal-baixa').classList.remove('aberto');
+        await carregarVendas();
+        renderizarTabelaVendas(); renderizarDashboard(); renderizarRecebimentos(); renderizarFaixaReceber();
+    } catch (e) {
+        erro(`⚠️ Falhou ao ${etapa}: ${e.message}.`);
+    } finally { btn.disabled = false; }
+});
 
 document.getElementById('btnConfirmarBaixa').addEventListener('click', async () => {
     const statusEl = document.getElementById('statusBaixa');
@@ -2130,7 +2820,7 @@ document.getElementById('btnConfirmarBaixa').addEventListener('click', async () 
     statusEl.className = 'status-msg'; statusEl.textContent = 'Confirmando...';
     let etapa = 'atualizar o título';
     try {
-        const venda = vendasCarregadas.find(v => v.id === vendaRecebimentosId);
+        const venda = vendasCarregadas.find(v => v.id === vendaBaixaId);
         const nomeTitulo = t.titulo ? ' - ' + t.titulo : '';
         if (!parcial) {
             const { error } = await sb.from('financeiro_titulos').update({ data_pagamento: dataPag, id_conta_pagamento: contaId, descontos: desconto, acrescimos: acrescimo }).eq('id', t.id);
@@ -2153,26 +2843,28 @@ document.getElementById('btnConfirmarBaixa').addEventListener('click', async () 
         });
         if (erroMov) throw erroMov;
 
+        let idTituloSaldo = null;
         if (parcial) {
             etapa = 'criar o título do saldo (recebimento já lançado)';
-            const { error } = await sb.from('financeiro_titulos').insert({
+            const { data: tituloSaldo, error } = await sb.from('financeiro_titulos').insert({
                 unidade_negocio_id: meuPerfil.unidadeId, operacao_id: t.operacao_id,
                 tipo_movimento: t.tipo_movimento, origem: t.origem, id_registro_na_origem: t.id_registro_na_origem,
                 id_fornecedor_cliente: t.id_fornecedor_cliente, descricao_avulsa: t.descricao_avulsa,
                 titulo: t.titulo, valor_titulo: saldo, data_vencimento: t.data_vencimento,
                 data_competencia: t.data_competencia, id_conta_pagamento: t.id_conta_pagamento,
                 documento_fiscal: t.documento_fiscal, observacao: `Saldo remanescente da baixa parcial do título #${t.codigo ?? t.id}`,
-            });
+            }).select('id').single();
             if (error) throw error;
+            idTituloSaldo = tituloSaldo?.id ?? null;
         }
 
-        await registrarSentinela('armarinho_titulo_baixado', `${parcial ? 'Baixa PARCIAL' : 'Baixa'} de parcela de venda armarinho -- cliente ${venda?.pessoa?.nome || '—'} -- recebido ${formatarMoeda(recebido)} de ${formatarMoeda(liquido)}${parcial ? ', saldo ' + formatarMoeda(saldo) : ''} (conta id ${contaId}, em ${formatarDataSemFuso(dataPag)})`);
+        await registrarSentinela('armarinho_titulo_baixado', `${parcial ? 'Baixa PARCIAL' : 'Baixa'} de parcela de venda armarinho -- cliente ${venda?.pessoa?.nome || '—'} -- recebido ${formatarMoeda(recebido)} de ${formatarMoeda(liquido)}${parcial ? ', saldo ' + formatarMoeda(saldo) + (idTituloSaldo != null ? ' virou o título id ' + idTituloSaldo : '') : ''} (conta id ${contaId}, em ${formatarDataSemFuso(dataPag)})`, t.id, vendaBaixaId);
         document.getElementById('modal-baixa').classList.remove('aberto');
         await carregarVendas();
-        renderizarTabelaVendas(); renderizarDashboard(); renderizarRecebimentos();
+        renderizarTabelaVendas(); renderizarDashboard(); renderizarRecebimentos(); renderizarFaixaReceber();
     } catch (e) {
         erro(`⚠️ Falhou ao ${etapa}: ${e.message}. Confira o título no Financeiro antes de tentar de novo, pra não lançar em duplicidade.`);
-        await carregarVendas(); renderizarTabelaVendas(); renderizarRecebimentos();
+        await carregarVendas(); renderizarTabelaVendas(); renderizarRecebimentos(); renderizarFaixaReceber();
     } finally { btn.disabled = false; }
 });
 
@@ -2242,7 +2934,7 @@ async function desfazerAjusteEstoque(aplicados) {
     }
 }
 async function bloquearPorRecebimento(acao, nota) {
-    await registrarSentinela('armarinho_venda_bloqueada', `Tentativa de ${acao} ${rotuloVenda(nota)} BLOQUEADA: a venda já tem recebimento registrado`);
+    await registrarSentinela('armarinho_venda_bloqueada', `Tentativa de ${acao} ${rotuloVenda(nota)} BLOQUEADA: a venda já tem recebimento registrado`, nota.id);
     alert(`Essa venda já tem recebimento registrado — não pode ser ${acao === 'EDITAR' ? 'editada' : 'excluída'}.`);
     await carregarVendas(); renderizarTabelaVendas(); renderizarDashboard();
 }
@@ -2292,12 +2984,12 @@ async function excluirVenda(notaId) {
         const { error: erroNota } = await sb.from('armarinho_notas').delete().eq('id', notaId);
         if (erroNota) throw erroNota;
 
-        await registrarSentinela('armarinho_venda_excluida', `Excluiu ${resumo} -- estoque devolvido`);
+        await registrarSentinela('armarinho_venda_excluida', `Excluiu ${resumo} -- estoque devolvido`, notaId);
         document.getElementById('statusVendas').className = 'status-msg sucesso';
         document.getElementById('statusVendas').textContent = '✅ Venda excluída e estoque devolvido.';
     } catch (e) {
         if (!algoApagado) await desfazerAjusteEstoque(aplicados);
-        await registrarSentinela('armarinho_venda_exclusao_falhou', `Falha ao EXCLUIR ${resumo} -- etapa "${etapa}": ${e.message} -- ${algoApagado ? 'exclusão PARCIAL (parte já apagada)' : 'nada foi alterado'}`);
+        await registrarSentinela('armarinho_venda_exclusao_falhou', `Falha ao EXCLUIR ${resumo} -- etapa "${etapa}": ${e.message} -- ${algoApagado ? 'exclusão PARCIAL (parte já apagada)' : 'nada foi alterado'}`, notaId);
         alert(algoApagado
             ? `A exclusão parou na etapa "${etapa}": ${e.message}.\nParte da venda já foi apagada — avise o administrador antes de tentar de novo.`
             : `Não consegui excluir (falhou ao ${etapa}): ${e.message}.\nNada foi apagado e o estoque foi mantido.`);
@@ -2316,6 +3008,7 @@ function sairModoEdicao() {
     document.getElementById('vendaCondicao').value = 'avista';
     document.getElementById('vendaData').value = hojeISO();
     document.getElementById('vendaVencimento').value = hojeISO();
+    datasParcelasManuais = [];
     atualizarPreviewParcelas();
 }
 document.getElementById('btnCancelarEdicaoVenda').addEventListener('click', () => {
@@ -2360,6 +3053,8 @@ async function iniciarEdicaoVenda(notaId) {
             document.getElementById('vendaIntervalo').value = dias >= 1 ? dias : 30;
         }
     }
+    // mantém os vencimentos exatamente como estavam (podem ter sido ajustados à mão na venda original)
+    datasParcelasManuais = parcelado ? tits.map(t => t.data_vencimento) : [];
     document.getElementById('textoBannerEdicao').textContent = `Editando a ${rotuloVenda(venda)}. Ao salvar, o estoque e as parcelas são recalculados.`;
     document.getElementById('bannerEdicaoVenda').style.display = 'flex';
     document.getElementById('btnFaturar').textContent = '💾 Salvar alterações da venda';
@@ -2458,7 +3153,7 @@ async function salvarEdicaoVenda({ contaId, parcelas, total, dataVenda, parcelad
         }
 
         const itensNovos = carrinho.map(it => ({ nome: it.nome, qtd: it.qtd, valorUnit: it.valorUnit }));
-        await registrarSentinela('armarinho_venda_editada', `Editou ${resumoAntes} -- PASSOU PARA: venda de ${formatarDataSemFuso(dataVenda)} — ${clienteSelecionado.nome} (${formatarMoeda(total)}) -- itens: ${textoItens(itensNovos)} -- parcelas: ${textoParcelas(parcelas)}`);
+        await registrarSentinela('armarinho_venda_editada', `Editou ${resumoAntes} -- PASSOU PARA: venda de ${formatarDataSemFuso(dataVenda)} — ${clienteSelecionado.nome} (${formatarMoeda(total)}) -- itens: ${textoItens(itensNovos)} -- parcelas: ${textoParcelas(parcelas)}`, nota.id);
         sairModoEdicao();
         statusEl.textContent = '';
         document.getElementById('statusVendas').className = 'status-msg sucesso';
@@ -2470,7 +3165,7 @@ async function salvarEdicaoVenda({ contaId, parcelas, total, dataVenda, parcelad
             ? `⚠️ Não consegui salvar (falhou ao ${fase}): ${e.message}. Nada foi alterado na venda.`
             : `⚠️ As alterações foram gravadas, mas falhou ao ${fase}: ${e.message}. A venda pode ficar com itens/parcelas antigos duplicados — avise o administrador.`;
         statusEl.className = 'status-msg erro'; statusEl.textContent = msg;
-        await registrarSentinela('armarinho_venda_edicao_falhou', `Falha ao EDITAR ${resumoAntes} -- etapa "${fase}": ${e.message} -- ${semAlteracao ? 'nada foi alterado' : 'edição PARCIAL'}`);
+        await registrarSentinela('armarinho_venda_edicao_falhou', `Falha ao EDITAR ${resumoAntes} -- etapa "${fase}": ${e.message} -- ${semAlteracao ? 'nada foi alterado' : 'edição PARCIAL'}`, nota.id);
     } finally {
         btn.disabled = false;
     }
@@ -2516,6 +3211,14 @@ const AJUDA_ARMARINHO = {
                 <li><strong>Vendas no mês</strong>: quantidade e valor total das vendas com data no mês corrente.</li>
                 <li><strong>A receber em aberto</strong>: soma das parcelas ainda não recebidas (já considerando
                 desconto e juros lançados na baixa).</li>
+                <li><strong>Contas a receber por vencimento</strong> (gráfico de barras): separa as parcelas
+                ainda não recebidas em <em>Atrasados</em> (vencimento anterior a hoje), <em>Até 7 dias</em>
+                (inclui as que vencem hoje), <em>8 a 15</em>, <em>16 a 30</em> e <em>Mais de 30 dias</em>. Cada
+                barra mostra o valor (com desconto/juros já lançados) e a quantidade de títulos; o
+                comprimento da barra compara os valores entre as faixas. <strong>Clique numa barra</strong>
+                para abrir a lista dos títulos daquela faixa (vencimento, cliente, valor e quantos dias de
+                atraso ou faltam) e use <strong>Receber</strong> em cada um para dar a baixa ou editar o
+                vencimento/valor da parcela, do mesmo jeito da aba Vendas.</li>
                 <li><strong>Últimas vendas</strong>: as 8 mais recentes.</li>
                 <li><strong>Produtos com estoque baixo</strong>: os que estão com saldo zerado ou negativo (até 10).
                 Saldo negativo acontece quando se vende acima do estoque — o sistema pede confirmação antes.</li>
@@ -2529,6 +3232,9 @@ const AJUDA_ARMARINHO = {
             média). A coluna <strong>Margem</strong> compara venda e custo.</p>
             <p>A lista de produtos nasce recolhida — clique em "Ver produtos cadastrados" pra abrir e
             buscar. <strong>Inativar</strong> tira o produto das listas de venda sem apagar o histórico.</p>
+            <p>O botão <strong>📜 Movimentação</strong> de cada produto abre o histórico dele: todas as
+            <strong>entradas</strong> (com nota e fornecedor) e <strong>saídas</strong> (vendas, com o cliente),
+            com data, quantidade e valor, o total de cada lado e o estoque atual. Dá pra filtrar só entradas ou só saídas.</p>
         ` },
         { id: 'entrada', titulo: 'Entrada de estoque', corpo: `
             <ul>
@@ -2539,10 +3245,19 @@ const AJUDA_ARMARINHO = {
                 custo + %). Desconto/frete lançados no próprio item entram no custo; desconto/frete
                 só no total da nota <strong>não</strong> são rateados nessa versão. A mesma nota
                 (mesma chave de acesso) não pode ser importada duas vezes.</li>
-                <li><strong>Entrada manual</strong>: monte a lista de itens (produto existente ou novo,
-                qtd, custo, preço de venda) e registre tudo de uma vez.</li>
-                <li><strong>Entradas registradas</strong>: histórico, com opção de excluir — o estoque
-                dos itens é revertido (pode ficar negativo se já foram vendidos).</li>
+                <li><strong>Entrada manual</strong>: preencha produto, quantidade, custo e preço de venda e clique em
+                <strong>+ Adicionar item</strong> para cada produto; só o que está na <em>lista abaixo</em> entra
+                no estoque (o botão mostra quantos itens serão registrados). Se você digitou um produto e esqueceu
+                de adicionar, ao registrar ele é incluído automaticamente — ou o sistema avisa o que falta
+                preencher. Quantidade e custo dos itens da lista podem ser ajustados ali mesmo. Ao registrar, a
+                mensagem lista os produtos e quantidades gravados.</li>
+                <li><strong>Entradas registradas</strong>: histórico com três ações. <strong>👁 Itens</strong> mostra
+                o que a entrada contém. <strong>✏️ Editar</strong> abre a entrada na Entrada manual (fornecedor,
+                nota, data, itens, quantidades e custos; dá pra remover ou acrescentar produtos) — ao salvar, o
+                estoque é ajustado <em>pela diferença</em> e o custo do produto volta a ser o da entrada mais
+                recente que sobrou. Se a mudança deixar algum estoque negativo (já foi vendido), o sistema avisa e
+                pede confirmação. <strong>Excluir</strong> reverte o estoque de todos os itens (pode ficar
+                negativo se já foram vendidos). Edição e exclusão ficam na Sentinela.</li>
             </ul>
         ` },
         { id: 'vender', titulo: 'Vender / Faturar', corpo: `
@@ -2555,7 +3270,13 @@ const AJUDA_ARMARINHO = {
                 <li>Escolha a <strong>conta de recebimento</strong> (o botão "+" cria uma conta nova na
                 hora, no Financeiro da unidade) e a condição: <strong>à vista</strong>
                 (1 título) ou <strong>parcelado</strong> (de 2 a 36 parcelas, a cada N dias ou no mesmo
-                dia do mês; a última parcela absorve o resto do arredondamento).</li>
+                dia do mês; a última parcela absorve o resto do arredondamento). O sistema gera os
+                vencimentos, mas você pode <strong>ajustar a data de cada parcela</strong> na tabela que aparece
+                logo abaixo. Embaixo de toda data (inclusive a do vencimento à vista) há um aviso dizendo o dia
+                da semana e se é <strong>dia útil, fim de semana ou feriado</strong> — nacional ou regional da
+                unidade, os mesmos cadastrados no Financeiro. É só informativo: você decide se mantém a data.
+                Mudar a 1ª data, o nº de parcelas ou a regra recalcula todas as parcelas (descarta os ajustes
+                manuais); mexer no valor do carrinho não mexe nas datas.</li>
                 <li><strong>Faturar</strong>: grava a venda, baixa o estoque, cria o(s) título(s) a
                 receber no Financeiro e abre o PDF da fatura (Visualizar/Baixar/Compartilhar).</li>
             </ol>
@@ -2573,6 +3294,13 @@ const AJUDA_ARMARINHO = {
             parcela é dividida — a parte paga fica quitada e o saldo vira uma nova parcela em aberto.
             A baixa também aparece no Financeiro (título quitado e lançamento na conta), então
             <strong>não</strong> dê a mesma baixa nos dois lugares.</p>
+            <p>Na mesma janela há a aba <strong>✏️ Editar parcela</strong>: altera só o
+            <strong>vencimento</strong> e o <strong>valor</strong> daquela parcela, sem dar baixa
+            (renegociação, juros). Só vale para parcela ainda <strong>não recebida</strong> — o sistema confere no
+            banco na hora de salvar. Mudar o valor não altera o total da venda: se a soma das parcelas deixar de
+            bater com ele, aparece um aviso (é permitido). Se a venda tiver rateio lançado no Financeiro e o valor
+            mudar, o rateio é apagado (com confirmação) e precisa ser lançado de novo lá. A alteração fica
+            na Sentinela.</p>
             <p><strong>✏️ Editar</strong> reabre a venda na aba Vender/Faturar (cliente, itens, valores,
             data, conta e parcelas) — ao salvar, o estoque é recalculado e as parcelas do Financeiro são
             substituídas pelas novas. <strong>🗑️ Excluir</strong> apaga a venda, devolve o estoque e apaga os
@@ -2607,13 +3335,18 @@ const AJUDA_ARMARINHO = {
                 outra unidade ou sair). A liberação é feita no Admin Plataforma.</li>
             </ul>
             <p><strong>Aparência da unidade</strong>: a cor principal, a imagem de fundo do menu e o logo são
-            configurados fora deste módulo, pelo administrador da unidade — o Armarinho só aplica. O logo
-            também aparece no cabeçalho do PDF da fatura.</p>
+            configurados fora deste módulo, pelo administrador da unidade (Servir Central → Dados da
+            unidade) — o Armarinho só aplica. O logo aparece no cabeçalho do PDF da fatura, ao lado do nome da
+            unidade, sempre com a proporção original. Se a unidade não tiver logo cadastrado, ou ele não
+            carregar, o PDF sai sem logo e a janela do PDF avisa o motivo.</p>
             <p><strong>Sentinela (auditoria)</strong>: ficam registrados, com quem fez e o que mudou —
             produto editado ou inativado, entrada de estoque excluída, baixa de parcela (total ou parcial),
+            parcela editada (vencimento/valor) ou tentativa de editar parcela já recebida,
             venda editada, venda excluída, tentativa de editar/excluir venda bloqueada e falhas nessas
             operações. Nas edições e exclusões de venda o registro guarda o retrato completo (cliente, itens e
-            parcelas), já que o original deixa de existir.</p>
+            parcelas), já que o original deixa de existir. Cada registro também guarda o identificador do item
+            alterado (e o da venda dona, quando é uma parcela), o que permite localizar depois todo o histórico
+            de uma venda.</p>
         ` },
     ]
 };
