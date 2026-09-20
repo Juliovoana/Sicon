@@ -1,0 +1,2646 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Armarinho e Cosméticos — Servir</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Crect width='200' height='200' rx='46' fill='%23FCE8F0'/%3E%3Cpath d='M55 78h90l-8 78a10 10 0 0 1-10 9H73a10 10 0 0 1-10-9z' fill='%23A8325E'/%3E%3Cpath d='M78 78V64a22 22 0 0 1 44 0v14' fill='none' stroke='%23A8325E' stroke-width='10' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+    :root {
+        --ink:#1F1A1D; --bg:#F8F6F7; --surface:#FFFFFF; --border:#EBE6E9;
+        --muted:#6F6A6D; --brand:#8E2A55; --brand-2:#A8325E; --brand-soft:#FBEDF3; --brand-escuro:#5C1836;
+        --accent:#F2A93B; --accent-ink:#8A5E12; --danger:#C0392B; --danger-soft:#FBEAE8;
+        --success-soft:#E8F3EC; --success:#1E7E34;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Inter', sans-serif; }
+    .hidden { display: none !important; }
+
+    #tela-login { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(160deg, var(--brand), var(--brand-escuro)); }
+    .caixa-login { background: var(--surface); border-radius: 16px; padding: 32px 28px; width: 100%; max-width: 360px; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
+    .caixa-login h1 { font-family: 'Fraunces', serif; font-size: 1.4rem; color: var(--brand); margin: 0 0 4px 0; }
+    .caixa-login .subtitulo { color: var(--muted); font-size: 0.85rem; margin: 0 0 20px 0; }
+    .campo { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .campo label { font-size: 0.82rem; font-weight: 600; }
+    .campo input, .campo select, .campo textarea {
+        font-family: 'Inter', sans-serif; font-size: 0.92rem; padding: 10px 12px;
+        border: 1.5px solid var(--border); border-radius: 9px; width: 100%; background: var(--surface); color: var(--ink);
+    }
+    .campo input:focus, .campo select:focus, .campo textarea:focus { outline: none; border-color: var(--brand-2); }
+    .campo input[readonly] { background: #F3F0F2; color: var(--muted); }
+    .btn { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.92rem; border: none; border-radius: 9px; padding: 11px 18px; cursor: pointer; }
+    .btn-principal { background: var(--brand); color: white; }
+    .btn-principal.cheio { width: 100%; padding: 13px; }
+    .btn-principal:hover { background: var(--brand-2); }
+    .btn-principal:disabled { background: var(--muted); cursor: not-allowed; }
+    .btn-cinza { background: #EEF0F1; color: var(--ink); }
+    .btn-perigo { background: var(--danger-soft); color: var(--danger); }
+    .btn-sm { padding: 7px 10px; font-size: 0.78rem; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .acoes-linha { display: flex; flex-wrap: wrap; gap: 6px; }
+    .status-msg { font-size: 0.85rem; margin-top: 10px; }
+    .status-msg.erro { color: var(--danger); }
+    .status-msg.sucesso { color: var(--success); }
+
+    #app { display: none; }
+    .app-shell { display: flex; min-height: 100vh; }
+    .sidebar { width: 232px; flex-shrink: 0; background: var(--brand); color: #fff; display: flex; flex-direction: column; padding: 24px 16px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+    .sidebar-brand { padding: 8px 10px 28px; font-weight: 700; font-size: 1.05rem; letter-spacing: -.01em; }
+    .sidebar-brand small { display: block; font-weight: 400; font-size: .74rem; color: rgba(255,255,255,.55); margin-top: 3px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: none; color: rgba(255,255,255,.72); font-family: 'Inter', sans-serif; font-size: .88rem; font-weight: 500; padding: 10px 12px; border-radius: 9px; cursor: pointer; margin-bottom: 2px; transition: background .15s, color .15s; }
+    .nav-item svg { width: 17px; height: 17px; flex-shrink: 0; }
+    .nav-item:hover { background: rgba(255,255,255,.06); color: #fff; }
+    .nav-item.active { background: rgba(255,255,255,.12); color: #fff; }
+    .sidebar-spacer { flex: 1; }
+    .btn-sidebar-sair { display: flex; align-items: center; gap: 10px; background: none; border: 1px solid rgba(255,255,255,.18); color: rgba(255,255,255,.75); font-family: 'Inter', sans-serif; font-size: .85rem; padding: 10px 12px; border-radius: 9px; cursor: pointer; width: 100%; margin-bottom: 6px; }
+    .btn-sidebar-sair:hover { background: rgba(255,255,255,.06); color: #fff; }
+    .btn-sidebar-sair svg { width: 16px; height: 16px; }
+
+    .content-area { flex: 1; min-width: 0; }
+    .content-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 22px 36px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+    .content-header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.01em; margin: 0; }
+    .content-header .unidade-pill { font-size: .78rem; color: var(--brand-2); background: var(--brand-soft); padding: 6px 12px; border-radius: 20px; font-weight: 600; }
+    main.app-main { max-width: 1100px; margin: 0 auto; padding: 28px 36px 60px; }
+    .panel-app { display: none; }
+    .panel-app.active { display: block; animation: fadeInArm .25s ease; }
+    @keyframes fadeInArm { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    @media (max-width: 760px) {
+        .sidebar { width: 64px; padding: 16px 8px; align-items: center; }
+        .sidebar-brand { display: none; }
+        .nav-item { justify-content: center; padding: 12px 0; gap: 0; }
+        .nav-item .nav-label { display: none; }
+        .btn-sidebar-sair { justify-content: center; padding: 12px 0; gap: 0; }
+        .btn-sidebar-sair .nav-label { display: none; }
+        .content-header { padding: 16px 18px; }
+        main.app-main { padding: 20px 14px 48px; }
+    }
+
+    .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 24px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 8px; }
+    .stat-card .icon-badge { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; background: var(--brand-soft); color: var(--brand-2); }
+    .stat-card .icon-badge svg { width: 17px; height: 17px; }
+    .stat-card .label { font-size: .8rem; color: var(--muted); font-weight: 500; }
+    .stat-card .value { font-size: 1.4rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+    .stat-card .value.alerta { color: var(--accent-ink); }
+
+    .chart-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
+    .chart-box h3 { font-size: .92rem; font-weight: 700; margin: 0 0 2px 0; }
+    .chart-box .chart-sub { font-size: .8rem; color: var(--muted); margin-bottom: 16px; }
+
+    .cartao { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+    .cartao h2 { font-size: 1.02rem; font-weight: 700; margin: 0 0 14px 0; }
+    .cartao .desc { color: var(--muted); font-size: .82rem; margin: -8px 0 14px 0; }
+    .grade { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grade-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    .grade-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    @media (max-width: 720px) { .grade, .grade-3, .grade-4 { grid-template-columns: 1fr; } }
+
+    .subabas { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .subaba { background: #EEF0F1; color: var(--ink); border: none; border-radius: 20px; padding: 8px 16px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: .85rem; cursor: pointer; }
+    .subaba.ativa { background: var(--brand); color: #fff; }
+
+    .linha-busca { position: relative; }
+    .resultados-busca { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; max-height: 240px; overflow-y: auto; display: none; margin-top: 4px; box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+    .resultados-busca.show { display: block; }
+    .resultado-item { padding: 10px 12px; cursor: pointer; font-size: 0.88rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; gap: 10px; }
+    .resultado-item:last-child { border-bottom: none; }
+    .resultado-item:hover { background: var(--brand-soft); }
+    .resultado-item small { color: var(--muted); white-space: nowrap; }
+    .sugestao-vazia { padding: 10px 12px; font-size: .85rem; color: var(--muted); }
+    .campo-com-add { display: flex; gap: 6px; align-items: flex-start; }
+    .campo-com-add .linha-busca { flex: 1; }
+    .btn-add-rapido { background: var(--brand-soft); color: var(--brand-2); border: none; border-radius: 9px; width: 40px; height: 40px; font-size: 1.1rem; font-weight: 700; cursor: pointer; flex-shrink: 0; }
+    .btn-add-rapido:hover { background: var(--brand); color: #fff; }
+
+    .cliente-sel { background: var(--brand-soft); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; font-size: .88rem; display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .cliente-sel small { display: block; color: var(--muted); margin-top: 2px; }
+
+    table.tabela { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    table.tabela th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); font-weight: 700; padding: 8px 10px; border-bottom: 2px solid var(--border); }
+    table.tabela td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    table.tabela td.num, table.tabela th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    table.tabela tbody tr:hover { background: var(--brand-soft); }
+    table.tabela input.mini { width: 90px; padding: 6px 8px; border: 1.5px solid var(--border); border-radius: 7px; font-family: inherit; font-size: .85rem; text-align: right; }
+    table.tabela select.mini { padding: 6px 8px; border: 1.5px solid var(--border); border-radius: 7px; font-family: inherit; font-size: .82rem; max-width: 220px; }
+    .tabela-scroll { overflow-x: auto; }
+
+    .pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; }
+    .pill-ok { background: var(--success-soft); color: var(--success); }
+    .pill-aberto { background: #FFF3E0; color: var(--accent-ink); }
+    .pill-baixo { background: var(--danger-soft); color: var(--danger); }
+    .pill-neutro { background: #EEF0F1; color: var(--muted); }
+
+    .vazio { text-align: center; padding: 24px 0; color: var(--muted); font-size: 0.88rem; }
+    .link-toggle { font-size: .85rem; text-decoration: none; color: var(--brand-2); font-weight: 600; display: inline-block; margin-bottom: 10px; }
+    .total-linha { display: flex; justify-content: flex-end; gap: 24px; font-size: 1rem; font-weight: 700; padding: 12px 10px 0; }
+    .aviso-caixa { background: #FFF8E1; border: 1px solid #F2A93B; border-radius: 10px; padding: 10px 14px; font-size: .84rem; color: var(--accent-ink); margin-bottom: 14px; }
+
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; padding: 16px; }
+    .modal-overlay.aberto { display: flex; }
+    .modal-caixa { background: var(--surface); border-radius: 14px; padding: 24px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; }
+    .modal-caixa h3 { font-family: 'Fraunces', serif; margin: 0 0 4px 0; color: var(--brand); }
+    .modal-caixa .sub { color: var(--muted); font-size: .82rem; margin: 0 0 16px 0; }
+
+    .btn-ajuda-modulo{ display:flex; align-items:center; gap:6px; background:none; border:1.5px solid var(--border); color:var(--muted); font-size:.8rem; font-weight:600; padding:7px 12px; border-radius:8px; cursor:pointer; flex-shrink:0; }
+    .modal-ajuda-head{ display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border); }
+    .modal-ajuda-head h3{ font-family:'Fraunces', serif; margin:0; color:var(--brand); font-size:1.05rem; }
+    .modal-ajuda-body{ display:flex; flex:1; min-height:0; overflow:hidden; }
+    .modal-ajuda-nav{ width:210px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface); overflow-y:auto; padding:10px; }
+    .modal-ajuda-nav-item{ display:block; width:100%; text-align:left; background:none; border:none; color:var(--muted); font-size:.82rem; font-weight:600; padding:9px 10px; border-radius:8px; cursor:pointer; margin-bottom:2px; font-family:'Inter', sans-serif; }
+    .modal-ajuda-nav-item:hover{ background:var(--brand-soft); color:var(--ink); }
+    .modal-ajuda-nav-item.ativo{ background:var(--brand); color:#fff; }
+    .modal-ajuda-conteudo{ flex:1; overflow-y:auto; padding:22px 26px; font-size:.88rem; line-height:1.55; color:var(--ink); }
+    .modal-ajuda-conteudo h4{ font-size:1rem; font-weight:700; margin:0 0 10px 0; }
+    .modal-ajuda-conteudo p{ margin:0 0 10px 0; }
+    .modal-ajuda-conteudo ul{ margin:0 0 12px 18px; }
+    .modal-ajuda-conteudo li{ margin-bottom:6px; }
+    .ajuda-atualizado { font-size:.75rem; color:var(--muted); margin-top:16px; padding-top:10px; border-top:1px solid var(--border); }
+    #modal-ajuda .modal-caixa { max-width: 720px; padding: 0; display: flex; flex-direction: column; max-height: 82vh; }
+    @media (max-width:680px){ .modal-ajuda-body{ flex-direction:column; } .modal-ajuda-nav{ width:100%; border-right:none; border-bottom:1px solid var(--border); } }
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="tela-login">
+    <div class="caixa-login">
+        <h1>🛍️ Armarinho e Cosméticos</h1>
+        <p class="subtitulo">Servir — estoque, vendas e faturamento</p>
+        <div class="campo"><label>E-mail</label><input type="email" id="login-email"></div>
+        <div class="campo">
+            <label>Senha</label>
+            <div style="position:relative;">
+                <input type="password" id="login-senha" style="padding-right:38px;">
+                <button type="button" class="btn-olho-senha" data-alvo="login-senha" style="position:absolute; top:50%; right:5px; transform:translateY(-50%); background:none; border:none; padding:6px; cursor:pointer; color:var(--muted);"></button>
+            </div>
+        </div>
+        <button class="btn btn-principal cheio" id="btn-login">Entrar</button>
+        <div style="text-align:center; margin-top:12px;"><a href="#" id="link-esqueci-senha" style="font-size:.82rem; color:var(--muted);">Esqueci minha senha</a></div>
+        <div class="status-msg" id="status-login" style="text-align:center;"></div>
+    </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app">
+  <div class="app-shell">
+    <aside class="sidebar">
+        <div class="sidebar-brand">🛍️ Armarinho<small id="unidade-logada"></small></div>
+        <button class="nav-item tab-app-btn active" data-app-tab="dashboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+            <span class="nav-label">Dashboard</span>
+        </button>
+        <button class="nav-item tab-app-btn" data-app-tab="produtos">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            <span class="nav-label">Produtos</span>
+        </button>
+        <button class="nav-item tab-app-btn" data-app-tab="entrada">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span class="nav-label">Entrada de estoque</span>
+        </button>
+        <button class="nav-item tab-app-btn" data-app-tab="vender">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+            <span class="nav-label">Vender / Faturar</span>
+        </button>
+        <button class="nav-item tab-app-btn" data-app-tab="vendas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            <span class="nav-label">Vendas</span>
+        </button>
+        <div class="sidebar-spacer"></div>
+        <button class="btn-sidebar-sair" id="btnAjudaModulo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span class="nav-label">Ajuda</span>
+        </button>
+        <button class="btn-sidebar-sair" id="btn-trocar-unidade" style="display:none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+            <span class="nav-label">Trocar unidade</span>
+        </button>
+        <button class="btn-sidebar-sair" id="btn-sair">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            <span class="nav-label">Sair</span>
+        </button>
+    </aside>
+
+    <div class="content-area">
+      <div class="content-header">
+        <h1 id="tituloConteudo">Dashboard</h1>
+        <span class="unidade-pill" id="unidadePillHeader">—</span>
+      </div>
+      <main class="app-main">
+
+    <!-- ---------- DASHBOARD ---------- -->
+    <div class="panel-app active" id="app-panel-dashboard">
+        <div class="stat-cards">
+            <div class="stat-card">
+                <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg></div>
+                <div class="label">Produtos ativos</div>
+                <div class="value" id="statProdutos">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+                <div class="label">Valor em estoque (a custo)</div>
+                <div class="value" id="statValorEstoque">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></div>
+                <div class="label">Vendas no mês</div>
+                <div class="value" id="statVendasMes">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+                <div class="label">A receber em aberto</div>
+                <div class="value alerta" id="statAReceber">—</div>
+            </div>
+        </div>
+        <div class="chart-box">
+            <h3>Últimas vendas</h3>
+            <div class="chart-sub">As 8 vendas mais recentes.</div>
+            <div class="tabela-scroll"><table class="tabela">
+                <thead><tr><th>Data</th><th>Cliente</th><th class="num">Valor</th><th>Pagamento</th></tr></thead>
+                <tbody id="corpoDashboardVendas"></tbody>
+            </table></div>
+        </div>
+        <div class="chart-box">
+            <h3>Produtos com estoque baixo</h3>
+            <div class="chart-sub">Estoque zerado ou negativo (até 10 itens).</div>
+            <div class="tabela-scroll"><table class="tabela">
+                <thead><tr><th>Produto</th><th>Categoria</th><th class="num">Estoque</th></tr></thead>
+                <tbody id="corpoDashboardBaixo"></tbody>
+            </table></div>
+        </div>
+    </div>
+
+    <!-- ---------- PRODUTOS ---------- -->
+    <div class="panel-app" id="app-panel-produtos">
+        <div class="cartao">
+            <h2 id="tituloFormProduto">Novo produto</h2>
+            <p class="desc">Preço de custo e estoque não são digitados aqui — vêm das entradas de estoque.</p>
+            <div class="grade-3">
+                <div class="campo"><label>Nome *</label><input type="text" id="prodNome"></div>
+                <div class="campo"><label>Código (opcional)</label><input type="text" id="prodCodigo" placeholder="código de barras / fornecedor"></div>
+                <div class="campo"><label>Categoria</label><input type="text" id="prodCategoria" list="listaCategorias" placeholder="Armarinho, Cosméticos..."><datalist id="listaCategorias"></datalist></div>
+            </div>
+            <div class="grade-3">
+                <div class="campo"><label>Unidade</label><input type="text" id="prodUn" value="UN"></div>
+                <div class="campo"><label>Preço de venda (R$) *</label><input type="number" step="0.01" min="0" id="prodPrecoVenda"></div>
+                <div class="campo"><label>Preço de custo (último)</label><input type="text" id="prodPrecoCusto" readonly placeholder="—"></div>
+            </div>
+            <div style="display:flex; gap:10px; align-items:center;">
+                <button class="btn btn-principal" id="btnSalvarProduto">Salvar produto</button>
+                <button class="btn btn-cinza" id="btnCancelarEdicaoProduto" style="display:none;">Cancelar edição</button>
+                <span class="status-msg" id="statusProduto" style="margin:0;"></span>
+            </div>
+        </div>
+        <div class="cartao">
+            <a href="#" class="link-toggle" id="btnToggleListaProdutos">▶ Ver produtos cadastrados (0)</a>
+            <div id="blocoListaProdutos" style="display:none;">
+                <div class="campo"><input type="text" id="buscaProdutos" placeholder="Buscar por nome, código ou categoria..."></div>
+                <div class="tabela-scroll"><table class="tabela">
+                    <thead><tr><th>Código</th><th>Produto</th><th>Categoria</th><th>Un</th><th class="num">Custo</th><th class="num">Venda</th><th class="num">Margem</th><th class="num">Estoque</th><th>Ações</th></tr></thead>
+                    <tbody id="corpoTabelaProdutos"></tbody>
+                </table></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ---------- ENTRADA DE ESTOQUE ---------- -->
+    <div class="panel-app" id="app-panel-entrada">
+        <div class="subabas">
+            <button class="subaba ativa" data-subaba-entrada="xml">📄 Importar XML (NF-e)</button>
+            <button class="subaba" data-subaba-entrada="manual">✍️ Entrada manual</button>
+            <button class="subaba" data-subaba-entrada="historico">🕘 Entradas registradas</button>
+        </div>
+
+        <!-- cabeçalho comum (XML e manual) -->
+        <div id="blocoEntradaCabecalho">
+            <div class="cartao">
+                <h2>Dados da entrada</h2>
+                <div class="grade-3">
+                    <div class="campo"><label>Fornecedor *</label><input type="text" id="entFornecedor" placeholder="Nome do fornecedor"></div>
+                    <div class="campo"><label>CNPJ do fornecedor</label><input type="text" id="entCnpj"></div>
+                    <div class="campo"><label>Nº da nota</label><input type="text" id="entNumeroNf"></div>
+                </div>
+                <div class="grade-3">
+                    <div class="campo"><label>Data de entrada *</label><input type="date" id="entData"></div>
+                    <div class="campo"><label>Responsável *</label><input type="text" id="entResponsavel"></div>
+                    <div class="campo"><label>Observação</label><input type="text" id="entObservacao"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- XML -->
+        <div id="subaba-entrada-xml">
+            <div class="cartao">
+                <h2>Arquivo XML da NF-e</h2>
+                <p class="desc">O arquivo preenche fornecedor, nota e itens automaticamente. Itens sem produto correspondente viram produto novo (você define o preço de venda).</p>
+                <div class="campo"><input type="file" id="nfeArquivo" accept=".xml,text/xml"></div>
+                <div id="nfeInfo" style="font-size:.85rem; color:var(--muted); margin-bottom:10px;"></div>
+                <div id="nfeBlocoItens" style="display:none;">
+                    <div class="grade" style="align-items:end; margin-bottom:10px;">
+                        <div class="campo" style="margin:0;"><label>Margem sobre o custo pros produtos novos (%)</label><input type="number" step="0.1" min="0" id="nfeMargem" placeholder="Ex: 80"></div>
+                        <div><button class="btn btn-cinza" id="btnAplicarMargem">Aplicar margem nos itens novos</button></div>
+                    </div>
+                    <div class="tabela-scroll"><table class="tabela">
+                        <thead><tr><th>Descrição na NF</th><th>Un</th><th class="num">Qtd</th><th class="num">Custo unit.</th><th>Produto no sistema</th><th class="num">Preço de venda</th></tr></thead>
+                        <tbody id="corpoTabelaNFe"></tbody>
+                    </table></div>
+                    <div style="margin-top:14px;"><button class="btn btn-principal" id="btnConfirmarXml">📥 Registrar entrada no estoque</button></div>
+                </div>
+                <div class="status-msg" id="statusXml"></div>
+            </div>
+        </div>
+
+        <!-- MANUAL -->
+        <div id="subaba-entrada-manual" style="display:none;">
+            <div class="cartao">
+                <h2>Itens da entrada</h2>
+                <div class="grade-4" style="align-items:end;">
+                    <div class="campo" style="grid-column: span 2;">
+                        <label>Produto (busque ou digite um novo)</label>
+                        <div class="linha-busca">
+                            <input type="text" id="manProdutoBusca" placeholder="Nome ou código..." autocomplete="off">
+                            <div class="resultados-busca" id="manProdutoResultados"></div>
+                        </div>
+                    </div>
+                    <div class="campo"><label>Qtd</label><input type="number" step="0.01" min="0" id="manQtd" value="1"></div>
+                    <div class="campo"><label>Custo unit. (R$)</label><input type="number" step="0.01" min="0" id="manCusto"></div>
+                </div>
+                <div class="grade-4" style="align-items:end;">
+                    <div class="campo"><label>Preço de venda (R$)</label><input type="number" step="0.01" min="0" id="manPrecoVenda"></div>
+                    <div class="campo"><label>Categoria (produto novo)</label><input type="text" id="manCategoria" list="listaCategorias"></div>
+                    <div class="campo"><label>Unidade (produto novo)</label><input type="text" id="manUn" value="UN"></div>
+                    <div class="campo"><button class="btn btn-cinza" id="btnAdicionarItemManual" style="width:100%;">+ Adicionar item</button></div>
+                </div>
+                <div class="status-msg" id="statusManualItem"></div>
+                <div class="tabela-scroll"><table class="tabela">
+                    <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Custo unit.</th><th class="num">Venda</th><th class="num">Subtotal</th><th></th></tr></thead>
+                    <tbody id="corpoItensManual"></tbody>
+                </table></div>
+                <div class="total-linha"><span>Total:</span><span id="totalManual">R$ 0,00</span></div>
+                <div style="margin-top:14px;"><button class="btn btn-principal" id="btnConfirmarManual">📥 Registrar entrada no estoque</button></div>
+                <div class="status-msg" id="statusManual"></div>
+            </div>
+        </div>
+
+        <!-- HISTÓRICO -->
+        <div id="subaba-entrada-historico" style="display:none;">
+            <div class="cartao">
+                <h2>Entradas registradas</h2>
+                <div class="tabela-scroll"><table class="tabela">
+                    <thead><tr><th>Data</th><th>Nota</th><th>Fornecedor</th><th class="num">Itens</th><th class="num">Valor</th><th>Ações</th></tr></thead>
+                    <tbody id="corpoHistoricoEntradas"></tbody>
+                </table></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ---------- VENDER / FATURAR ---------- -->
+    <div class="panel-app" id="app-panel-vender">
+        <div class="aviso-caixa" id="bannerEdicaoVenda" style="display:none; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <span id="textoBannerEdicao">Editando venda</span>
+            <button class="btn btn-cinza btn-sm" id="btnCancelarEdicaoVenda">Cancelar edição</button>
+        </div>
+        <div class="cartao">
+            <h2>Cliente</h2>
+            <div id="blocoClienteBusca">
+                <div class="campo-com-add">
+                    <div class="linha-busca">
+                        <input type="text" id="clienteBusca" placeholder="Buscar cliente por nome, código ou documento..." autocomplete="off">
+                        <div class="resultados-busca" id="clienteResultados"></div>
+                    </div>
+                    <button type="button" class="btn-add-rapido" id="btnNovoCliente" title="Cadastrar novo cliente">+</button>
+                </div>
+            </div>
+            <div class="cliente-sel" id="blocoClienteSelecionado" style="display:none;">
+                <div><strong id="clienteSelNome"></strong><small id="clienteSelDetalhe"></small></div>
+                <button class="btn btn-cinza btn-sm" id="btnTrocarCliente">Trocar</button>
+            </div>
+        </div>
+
+        <div class="cartao">
+            <h2>Itens da venda</h2>
+            <div class="grade-4" style="align-items:end;">
+                <div class="campo" style="grid-column: span 2;">
+                    <label>Produto</label>
+                    <div class="linha-busca">
+                        <input type="text" id="vendaProdutoBusca" placeholder="Buscar produto por nome, código ou categoria..." autocomplete="off">
+                        <div class="resultados-busca" id="vendaProdutoResultados"></div>
+                    </div>
+                </div>
+                <div class="campo"><label>Qtd</label><input type="number" step="0.01" min="0" id="vendaQtd" value="1"></div>
+                <div class="campo"><label>Valor unit. (R$)</label><input type="number" step="0.01" min="0" id="vendaValor"></div>
+            </div>
+            <div style="margin-bottom:12px;"><button class="btn btn-cinza" id="btnAdicionarItemVenda">+ Adicionar ao carrinho</button> <span class="status-msg" id="statusVendaItem" style="margin-left:8px;"></span></div>
+            <div class="tabela-scroll"><table class="tabela">
+                <thead><tr><th>Produto</th><th class="num">Qtd</th><th class="num">Valor unit.</th><th class="num">Subtotal</th><th></th></tr></thead>
+                <tbody id="corpoCarrinho"></tbody>
+            </table></div>
+            <div class="total-linha"><span>Total da venda:</span><span id="totalVenda">R$ 0,00</span></div>
+        </div>
+
+        <div class="cartao">
+            <h2>Faturamento</h2>
+            <div class="grade-3">
+                <div class="campo"><label>Data da venda</label><input type="date" id="vendaData"></div>
+                <div class="campo"><label>Conta de recebimento *</label>
+                    <div class="campo-com-add">
+                        <select id="vendaConta" style="flex:1;"><option value="">— selecione —</option></select>
+                        <button type="button" class="btn-add-rapido" id="btnNovaContaVenda" title="Cadastrar nova conta">+</button>
+                    </div>
+                </div>
+                <div class="campo"><label>Condição</label>
+                    <select id="vendaCondicao">
+                        <option value="avista">À vista (1 título)</option>
+                        <option value="parcelado">Parcelado</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grade-3">
+                <div class="campo"><label id="labelVencimento">Vencimento *</label><input type="date" id="vendaVencimento"></div>
+                <div class="campo" id="campoQtdParcelas" style="display:none;"><label>Nº de parcelas</label><input type="number" min="2" max="36" step="1" id="vendaQtdParcelas" value="2"></div>
+                <div class="campo" id="campoRegraParcelas" style="display:none;"><label>Vencimentos seguintes</label>
+                    <select id="vendaRegraParcelas">
+                        <option value="intervalo">A cada N dias</option>
+                        <option value="diames">Mesmo dia do mês</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grade-3" id="linhaIntervalo" style="display:none;">
+                <div class="campo"><label>Dias entre parcelas</label><input type="number" min="1" step="1" id="vendaIntervalo" value="30"></div>
+            </div>
+            <div id="blocoPreviewParcelas" style="display:none; margin-bottom:14px;">
+                <div class="tabela-scroll"><table class="tabela">
+                    <thead><tr><th>Parcela</th><th>Vencimento</th><th class="num">Valor</th></tr></thead>
+                    <tbody id="corpoPreviewParcelas"></tbody>
+                </table></div>
+            </div>
+            <div class="campo"><label>Observação da venda</label><input type="text" id="vendaObservacao"></div>
+            <div style="display:flex; gap:10px; align-items:center;">
+                <button class="btn btn-principal" id="btnFaturar">🧾 Faturar venda</button>
+                <span class="status-msg" id="statusVenda" style="margin:0;"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ---------- VENDAS ---------- -->
+    <div class="panel-app" id="app-panel-vendas">
+        <div class="cartao">
+            <div class="grade-3" style="align-items:end;">
+                <div class="campo" style="margin:0;"><label>De</label><input type="date" id="filtroVendaInicio"></div>
+                <div class="campo" style="margin:0;"><label>Até</label><input type="date" id="filtroVendaFim"></div>
+                <div class="campo" style="margin:0;"><label>Cliente</label><input type="text" id="filtroVendaCliente" placeholder="Nome do cliente..."></div>
+            </div>
+        </div>
+        <div class="status-msg" id="statusVendas" style="margin:0 0 10px 2px;"></div>
+        <div class="cartao">
+            <div class="tabela-scroll"><table class="tabela">
+                <thead><tr><th>Data</th><th>Cliente</th><th class="num">Valor</th><th>Pagamento</th><th>Situação</th><th>Ações</th></tr></thead>
+                <tbody id="corpoTabelaVendas"></tbody>
+            </table></div>
+            <div class="vazio" id="vendasVazio" style="display:none;">Nenhuma venda encontrada.</div>
+        </div>
+      </div>
+
+      </main>
+    </div>
+  </div>
+</div>
+
+<!-- ================= MODAL ESCOLHA UNIDADE ================= -->
+<div class="modal-overlay" id="modal-unidade">
+    <div class="modal-caixa">
+        <h3>Escolha a unidade</h3>
+        <div id="lista-unidades-escolha" style="display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+</div>
+
+<!-- ================= MODAL NOVO CLIENTE (pessoa) ================= -->
+<div class="modal-overlay" id="modal-cliente">
+    <div class="modal-caixa">
+        <h3>Novo cliente</h3>
+        <p class="sub">Cadastrado na tabela de pessoas, compartilhada com o Financeiro.</p>
+        <div class="campo"><label>Nome *</label><input type="text" id="cli_nome"></div>
+        <div class="grade">
+            <div class="campo"><label>Tipo</label><select id="cli_tipo"><option value="FISICA">Física</option><option value="JURIDICA">Jurídica</option></select></div>
+            <div class="campo"><label>Documento (CPF/CNPJ)</label><input type="text" id="cli_documento"></div>
+        </div>
+        <div class="grade">
+            <div class="campo"><label>Telefone</label><input type="text" id="cli_telefone"></div>
+            <div class="campo"><label>Cidade</label><input type="text" id="cli_cidade"></div>
+        </div>
+        <div class="campo"><label>Endereço</label><input type="text" id="cli_endereco"></div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-principal" id="btnSalvarCliente">Salvar</button>
+            <button class="btn btn-cinza" id="btnFecharCliente">Cancelar</button>
+        </div>
+        <div class="status-msg" id="statusCliente"></div>
+    </div>
+</div>
+
+<!-- ================= MODAL RECEBIMENTOS (parcelas de uma venda) ================= -->
+<div class="modal-overlay" id="modal-recebimentos">
+    <div class="modal-caixa" style="max-width:640px;">
+        <h3 id="recebimentosTitulo">Recebimentos</h3>
+        <p class="sub">Dê baixa nas parcelas conforme o cliente for pagando. A baixa aparece também no Financeiro.</p>
+        <div class="tabela-scroll"><table class="tabela">
+            <thead><tr><th>Parcela</th><th>Vencimento</th><th class="num">Valor</th><th>Situação</th><th></th></tr></thead>
+            <tbody id="corpoRecebimentos"></tbody>
+        </table></div>
+        <div style="margin-top:14px;"><button class="btn btn-cinza" id="btnFecharRecebimentos">Fechar</button></div>
+    </div>
+</div>
+
+<!-- ================= MODAL BAIXA DE PARCELA ================= -->
+<div class="modal-overlay" id="modal-baixa">
+    <div class="modal-caixa">
+        <h3 id="baixaTitulo">Receber parcela</h3>
+        <p class="sub" id="baixaSub"></p>
+        <div class="grade">
+            <div class="campo"><label>Valor da parcela</label><input type="text" id="baixaValorOriginal" readonly></div>
+            <div class="campo"><label>Data do recebimento *</label><input type="date" id="baixaData"></div>
+        </div>
+        <div class="grade">
+            <div class="campo"><label>Desconto (R$)</label><input type="number" step="0.01" min="0" id="baixaDesconto" value="0"></div>
+            <div class="campo"><label>Acréscimo / juros (R$)</label><input type="number" step="0.01" min="0" id="baixaAcrescimo" value="0"></div>
+        </div>
+        <div class="grade">
+            <div class="campo"><label>Valor líquido</label><input type="text" id="baixaLiquido" readonly style="font-weight:700;"></div>
+            <div class="campo"><label>Valor recebido agora *</label><input type="number" step="0.01" min="0" id="baixaRecebido"></div>
+        </div>
+        <div class="campo"><label>Conta que recebeu *</label>
+            <div class="campo-com-add">
+                <select id="baixaConta" style="flex:1;"><option value="">— selecione —</option></select>
+                <button type="button" class="btn-add-rapido" id="btnNovaContaBaixa" title="Cadastrar nova conta">+</button>
+            </div>
+        </div>
+        <div class="aviso-caixa" id="baixaAvisoParcial" style="display:none;">Recebimento parcial: a parcela é dividida — a parte recebida fica quitada e o saldo vira uma nova parcela em aberto (mesmo padrão do Financeiro).</div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-principal" id="btnConfirmarBaixa">✅ Confirmar recebimento</button>
+            <button class="btn btn-cinza" id="btnFecharBaixa">Cancelar</button>
+        </div>
+        <div class="status-msg" id="statusBaixa"></div>
+    </div>
+</div>
+
+<!-- ================= MODAL NOVA CONTA (cadastro rápido) ================= -->
+<div class="modal-overlay" id="modal-conta">
+    <div class="modal-caixa" style="max-width:380px;">
+        <h3>Nova conta</h3>
+        <p class="sub">Conta corrente / caixa — cadastrada no Financeiro da unidade.</p>
+        <div class="campo"><label>Nome *</label><input type="text" id="conta_nome" placeholder="Ex: Caixa da loja, Pix, Conta Sicoob"></div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn btn-principal" id="btnSalvarConta">Salvar</button>
+            <button class="btn btn-cinza" id="btnFecharConta">Cancelar</button>
+        </div>
+        <div class="status-msg" id="statusConta"></div>
+    </div>
+</div>
+
+<!-- ================= MODAL AÇÕES PDF (3 botões, padrão da plataforma) ================= -->
+<div class="modal-overlay" id="modalAcoesPdf">
+    <div class="modal-caixa" style="max-width:360px; text-align:center;">
+        <h3 id="tituloModalAcoesPdf">Fatura gerada</h3>
+        <p class="sub">O que você quer fazer com o PDF?</p>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+            <button class="btn btn-principal" id="btnVisualizarPdfGerado">👁️ Visualizar</button>
+            <button class="btn btn-cinza" id="btnBaixarPdfGerado">⬇️ Baixar</button>
+            <button class="btn btn-cinza" id="btnCompartilharPdfGerado">📤 Compartilhar</button>
+            <button class="btn btn-cinza" id="btnFecharModalAcoesPdf" style="margin-top:6px;">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL AJUDA ================= -->
+<div class="modal-overlay" id="modal-ajuda">
+    <div class="modal-caixa">
+        <div class="modal-ajuda-head">
+            <h3 id="modalAjudaTitulo">❓ Ajuda</h3>
+            <button class="btn btn-cinza btn-sm" id="btnFecharModalAjuda">Fechar</button>
+        </div>
+        <div class="modal-ajuda-body">
+            <div class="modal-ajuda-nav" id="ajudaModuloNav"></div>
+            <div class="modal-ajuda-conteudo" id="ajudaModuloConteudo"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------
+// CONFIG
+// ---------------------------------------------------------------
+const SUPABASE_URL = 'https://frzvcrcshkpvjdbbqkhz.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_h-JuDyjYgb5YKGYFRKtLEg_8gnJor9w';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function escapeHtml(texto) {
+    if (texto == null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(texto);
+    return div.innerHTML;
+}
+function formatarMoeda(v) { return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+function formatarNumero(v) { return (Number(v) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 3 }); }
+function formatarDataSemFuso(dataStr) {
+    if (!dataStr) return '';
+    const m = String(dataStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : dataStr;
+}
+function hojeISO() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function arredondar2(v) { return Math.round((Number(v) || 0) * 100) / 100; }
+
+// ---------------------------------------------------------------
+// SENTINELA (auditoria) -- exclusões e alterações importantes
+// ---------------------------------------------------------------
+async function registrarSentinela(tipoAcao, descricao) {
+    try {
+        await sb.from('servir_sentinela').insert({
+            unidade_negocio_id: meuPerfil.unidadeId, modulo: 'armarinho',
+            tipo_acao: tipoAcao, descricao, operador: meuPerfil.email, operador_user_id: meuPerfil.userId || null,
+        });
+    } catch (erro) {
+        console.warn('Não consegui registrar na sentinela:', erro.message);
+    }
+}
+
+// ---------------------------------------------------------------
+// olho de mostrar/ocultar senha
+// ---------------------------------------------------------------
+const svgOlhoAberto = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+const svgOlhoFechado = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+document.querySelectorAll('.btn-olho-senha').forEach(btn => {
+    btn.innerHTML = svgOlhoFechado;
+    btn.addEventListener('click', () => {
+        const input = document.getElementById(btn.dataset.alvo);
+        if (!input) return;
+        const mostrando = input.type === 'text';
+        input.type = mostrando ? 'password' : 'text';
+        btn.innerHTML = mostrando ? svgOlhoFechado : svgOlhoAberto;
+    });
+});
+
+// ---------------------------------------------------------------
+// ESTADO GLOBAL
+// ---------------------------------------------------------------
+let meuPerfil = { unidadeId: null, unidadeNome: '', ehPrincipal: false, userId: null, nomeOperador: '', email: '' };
+let vinculosGlobais = [];
+let personalizacaoAtual = null;
+let produtosCarregados = [];
+let contasCarregadas = [];
+let vendasCarregadas = [];        // armarinho_notas tipo venda (com pessoa)
+let titulosPorVenda = {};         // nota_id -> [títulos]
+let produtoEmEdicaoId = null;
+let carrinho = [];                // { produtoId, nome, un, qtd, valorUnit, estoque }
+let clienteSelecionado = null;    // { id, nome, documento, telefone, cidade, endereco }
+let produtoVendaSelecionado = null;
+let produtoManualSelecionado = null;
+let itensManual = [];             // { produtoId|null, nome, qtd, custo, precoVenda, categoria, un }
+let nfeDadosNota = null;
+let nfeItensParseados = [];       // { xProd, cProd, un, qtd, custoUnit, produtoId|null, precoVenda }
+let vendaEmEdicao = null;         // { nota, movsAntigos, titulosAntigos, operacaoId, qtdAntiga:{produtoId:qtd} } enquanto edita uma venda
+
+// ---------------------------------------------------------------
+// LOGIN / SESSÃO (mesmo padrão do resto do Sicon)
+// ---------------------------------------------------------------
+document.getElementById('btn-login').addEventListener('click', async () => {
+    const email = document.getElementById('login-email').value.trim();
+    const senha = document.getElementById('login-senha').value;
+    const statusEl = document.getElementById('status-login');
+    statusEl.textContent = '';
+    if (!email || !senha) { statusEl.textContent = 'Preencha e-mail e senha.'; return; }
+    const btn = document.getElementById('btn-login');
+    btn.disabled = true; btn.textContent = 'Entrando...';
+    const { error } = await sb.auth.signInWithPassword({ email, password: senha });
+    btn.disabled = false; btn.textContent = 'Entrar';
+    if (error) {
+        const msg = (error.message || '').toLowerCase();
+        if (msg.includes('email not confirmed')) statusEl.textContent = 'Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada.';
+        else if (msg.includes('invalid login credentials') || msg.includes('invalid_credentials')) statusEl.textContent = 'E-mail ou senha incorretos.';
+        else if (msg.includes('rate limit') || msg.includes('too many')) statusEl.textContent = 'Muitas tentativas seguidas. Aguarde um instante e tente de novo.';
+        else if (!navigator.onLine) statusEl.textContent = 'Sem conexão com a internet. Verifique sua rede e tente de novo.';
+        else statusEl.textContent = 'Não foi possível entrar: ' + error.message;
+        return;
+    }
+    await onLogin();
+});
+document.getElementById('login-senha').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btn-login').click(); });
+document.getElementById('link-esqueci-senha').addEventListener('click', async (e) => {
+    e.preventDefault();
+    const statusEl = document.getElementById('status-login');
+    const email = document.getElementById('login-email').value.trim();
+    if (!email) { statusEl.textContent = 'Digite seu e-mail no campo acima primeiro, depois clique em "Esqueci minha senha".'; return; }
+    statusEl.style.color = ''; statusEl.textContent = 'Enviando...';
+    try {
+        const { error } = await sb.auth.resetPasswordForEmail(email);
+        if (error) throw error;
+        statusEl.style.color = 'var(--brand-2)';
+        statusEl.textContent = 'Se esse e-mail estiver cadastrado, você vai receber um link pra redefinir a senha.';
+    } catch (erro) { statusEl.style.color = ''; statusEl.textContent = 'Não foi possível enviar: ' + erro.message; }
+});
+document.getElementById('btn-sair').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
+
+async function checkSession() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) await onLogin();
+}
+
+async function onLogin() {
+    document.getElementById('tela-login').classList.add('hidden');
+    const { data: sessao } = await sb.auth.getUser();
+    meuPerfil.email = sessao?.user?.email || '';
+    meuPerfil.nomeOperador = sessao?.user?.user_metadata?.nome || sessao?.user?.user_metadata?.full_name || meuPerfil.email;
+    const userId = sessao?.user?.id;
+    meuPerfil.userId = userId;
+    if (!userId) return;
+
+    const { data: vinculos, error } = await sb.from('servir_unidade_usuarios')
+        .select('unidade_negocio_id, eh_principal, servir_unidades_negocio(nome)')
+        .eq('user_id', userId);
+    if (error || !vinculos || !vinculos.length) {
+        alert('Não encontramos nenhuma unidade vinculada ao seu usuário. Fale com o administrador.');
+        return;
+    }
+    vinculosGlobais = vinculos.map(v => ({ unidade_id: v.unidade_negocio_id, eh_principal: v.eh_principal, nome: v.servir_unidades_negocio?.nome || '' }));
+
+    if (vinculosGlobais.length === 1) {
+        await definirUnidadeAtiva(vinculosGlobais[0]);
+        await iniciarApp();
+    } else {
+        abrirEscolhaUnidade();
+    }
+}
+
+function abrirEscolhaUnidade() {
+    const wrap = document.getElementById('lista-unidades-escolha');
+    wrap.innerHTML = '';
+    vinculosGlobais.forEach(v => {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-cinza';
+        btn.style.width = '100%';
+        btn.textContent = v.nome;
+        btn.addEventListener('click', async () => {
+            await definirUnidadeAtiva(v);
+            document.getElementById('modal-unidade').classList.remove('aberto');
+            await iniciarApp();
+        });
+        wrap.appendChild(btn);
+    });
+    document.getElementById('modal-unidade').classList.add('aberto');
+}
+document.getElementById('btn-trocar-unidade').addEventListener('click', abrirEscolhaUnidade);
+
+async function definirUnidadeAtiva(vinculo) {
+    meuPerfil.unidadeId = vinculo.unidade_id;
+    meuPerfil.unidadeNome = vinculo.nome;
+    meuPerfil.ehPrincipal = !!vinculo.eh_principal;
+    document.getElementById('unidade-logada').textContent = vinculo.nome;
+    document.getElementById('unidadePillHeader').textContent = vinculo.nome;
+    document.getElementById('btn-trocar-unidade').style.display = vinculosGlobais.length > 1 ? '' : 'none';
+}
+
+// ---------------------------------------------------------------
+// PERSONALIZAÇÃO VISUAL POR UNIDADE (cor principal + imagem de fundo
+// no menu lateral) -- mesmo padrão de staff-painel-admin.html. Se a
+// unidade não tiver nada configurado, mantém o vinho padrão do CSS.
+// ---------------------------------------------------------------
+function clarearCor(hex, percentual) {
+    hex = (hex || '').replace('#', '');
+    if (hex.length !== 6) return hex;
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const misturar = (canal) => Math.round(canal + (255 - canal) * percentual);
+    return '#' + [misturar(r), misturar(g), misturar(b)].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function escurecerCor(hex, percentual) {
+    hex = (hex || '').replace('#', '');
+    if (hex.length !== 6) return hex;
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const escurecer = (canal) => Math.round(canal * (1 - percentual));
+    return '#' + [escurecer(r), escurecer(g), escurecer(b)].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function aplicarPersonalizacao(corPrincipal, imagemFundoUrl) {
+    if (corPrincipal) {
+        const raiz = document.documentElement.style;
+        raiz.setProperty('--brand', corPrincipal);
+        raiz.setProperty('--brand-2', clarearCor(corPrincipal, 0.2));
+        raiz.setProperty('--brand-soft', clarearCor(corPrincipal, 0.92));
+        raiz.setProperty('--brand-escuro', escurecerCor(corPrincipal, 0.35));
+    }
+    if (imagemFundoUrl) {
+        const sidebar = document.querySelector('.sidebar');
+        sidebar.style.backgroundImage = `linear-gradient(180deg, rgba(20,10,16,.82) 0%, rgba(20,10,16,.7) 100%), url('${imagemFundoUrl}')`;
+        sidebar.style.backgroundSize = 'cover';
+        sidebar.style.backgroundPosition = 'center';
+    }
+}
+async function carregarPersonalizacao() {
+    const { data, error } = await sb.from('servir_unidades_negocio').select('cor_principal, imagem_fundo_url, logo_url').eq('id', meuPerfil.unidadeId).single();
+    if (error || !data) return;
+    personalizacaoAtual = data;
+    aplicarPersonalizacao(data.cor_principal, data.imagem_fundo_url);
+}
+
+// ---------------------------------------------------------------
+// LICENÇA (mesmo padrão do resto da plataforma)
+// ---------------------------------------------------------------
+function mostrarAvisoLicenca(texto){
+    if(!texto) return;
+    if(document.getElementById('avisoPendenciaLicenca')) return;
+    const banner = document.createElement('div');
+    banner.id = 'avisoPendenciaLicenca';
+    banner.style.cssText = 'position:sticky; top:0; z-index:99999; background:#FEF3D8; color:#8A5E12; padding:10px 16px; font-size:.85rem; text-align:center; border-bottom:2px solid #F2A93B; display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 2px 6px rgba(0,0,0,.08);';
+    const span = document.createElement('span');
+    span.textContent = texto;
+    banner.innerHTML = '⚠️ ';
+    banner.appendChild(span);
+    document.body.prepend(banner);
+}
+function bloquearAcessoTotal(mensagem){
+  if(document.getElementById('overlayBloqueioLicenca')) return;
+  const botaoTrocar = document.getElementById('btn-trocar-unidade');
+  const temTrocar = botaoTrocar && botaoTrocar.style.display !== 'none';
+  const overlay = document.createElement('div');
+  overlay.id = 'overlayBloqueioLicenca';
+  overlay.style.cssText = 'position:fixed; inset:0; z-index:999999; background:var(--bg); display:flex; align-items:center; justify-content:center; padding:20px;';
+  overlay.innerHTML = `
+    <div style="background:var(--surface); border-radius:16px; padding:36px; max-width:440px; text-align:center; box-shadow:0 8px 28px rgba(20,30,50,.1);">
+      <div style="font-size:2.5rem; margin-bottom:12px;">🔒</div>
+      <h2 style="color:var(--danger); margin-bottom:12px; font-size:1.2rem;">Acesso bloqueado</h2>
+      <p style="color:var(--ink); font-size:.92rem; line-height:1.5; margin-bottom:20px;">${escapeHtml(mensagem)}</p>
+      <div style="display:flex; gap:10px; flex-direction:column;">
+        ${temTrocar ? '<button id="btnTrocarUnidadeBloqueio" style="padding:10px; border-radius:8px; border:1.5px solid var(--brand); background:none; color:var(--brand); font-weight:600; cursor:pointer;">🔄 Escolher outra unidade</button>' : ''}
+        <button id="btnSairBloqueio" style="padding:10px; border-radius:8px; border:none; background:var(--brand); color:#fff; font-weight:600; cursor:pointer;">Sair</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  if(temTrocar){
+    document.getElementById('btnTrocarUnidadeBloqueio').addEventListener('click', () => { overlay.remove(); botaoTrocar.click(); });
+  }
+  document.getElementById('btnSairBloqueio').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
+}
+async function verificarPendenciaLicenca(unidadeIdAlvo, moduloChave){
+  try{
+    const { data, error } = await sb.rpc('fn_verificar_pendencia_licenca', { p_unidade_negocio_id: unidadeIdAlvo, p_modulo_chave: moduloChave });
+    if(error || !data) return false;
+    if(data.bloqueia){ bloquearAcessoTotal(data.mensagem); return true; }
+    mostrarAvisoLicenca(data.mensagem);
+    return false;
+  } catch(erro){
+    console.warn('Não consegui checar pendência de licença:', erro.message);
+    return false;
+  }
+}
+
+// ---------------------------------------------------------------
+// CARREGAMENTO
+// ---------------------------------------------------------------
+async function iniciarApp() {
+    document.getElementById('app').style.display = 'block';
+    await carregarPersonalizacao(); // antes da checagem de licença -- a tela de bloqueio também deve refletir a cor/fundo da unidade
+    if (await verificarPendenciaLicenca(meuPerfil.unidadeId, 'armarinho')) return;
+    document.getElementById('entData').value = hojeISO();
+    document.getElementById('entResponsavel').value = meuPerfil.nomeOperador;
+    document.getElementById('vendaData').value = hojeISO();
+    document.getElementById('vendaVencimento').value = hojeISO();
+    await Promise.all([carregarProdutos(), carregarContas()]);
+    renderizarProdutos();
+    await carregarVendas();
+    renderizarDashboard();
+    renderizarTabelaVendas();
+}
+
+async function carregarProdutos() {
+    const { data, error } = await sb.from('armarinho_produtos').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome').limit(5000);
+    produtosCarregados = error ? [] : (data || []);
+}
+async function carregarContas() {
+    const { data, error } = await sb.from('financeiro_contas_correntes').select('id, nome').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome');
+    contasCarregadas = error ? [] : (data || []);
+    const opcoes = '<option value="">— selecione —</option>' + contasCarregadas.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+    ['vendaConta', 'baixaConta'].forEach(id => {
+        const sel = document.getElementById(id);
+        const atual = sel.value;
+        sel.innerHTML = opcoes;
+        sel.value = atual;
+    });
+}
+const COLUNAS_TITULO = 'id, codigo, titulo, operacao_id, origem, id_registro_na_origem, id_fornecedor_cliente, descricao_avulsa, documento_fiscal, observacao, tipo_movimento, valor_titulo, descontos, acrescimos, data_vencimento, data_pagamento, data_competencia, id_conta_pagamento';
+async function carregarVendas() {
+    const { data, error } = await sb.from('armarinho_notas')
+        .select('*, pessoa(nome, documento)')
+        .eq('unidade_negocio_id', meuPerfil.unidadeId).eq('tipo', 'venda')
+        .order('data', { ascending: false }).order('criado_em', { ascending: false })
+        .limit(1000);
+    vendasCarregadas = error ? [] : (data || []);
+    titulosPorVenda = {};
+    if (vendasCarregadas.length) {
+        const { data: titulos } = await sb.from('financeiro_titulos')
+            .select(COLUNAS_TITULO)
+            .eq('unidade_negocio_id', meuPerfil.unidadeId).eq('origem', 'armarinho').eq('tipo_movimento', 'RECEBER')
+            .in('id_registro_na_origem', vendasCarregadas.map(v => v.id));
+        (titulos || []).forEach(t => { (titulosPorVenda[t.id_registro_na_origem] = titulosPorVenda[t.id_registro_na_origem] || []).push(t); });
+    }
+}
+
+// ---------------------------------------------------------------
+// NAVEGAÇÃO (menu lateral, mesmo padrão de staff-painel-admin.html)
+// ---------------------------------------------------------------
+const TITULOS_ABA = { dashboard: 'Dashboard', produtos: 'Produtos', entrada: 'Entrada de estoque', vender: 'Vender / Faturar', vendas: 'Vendas' };
+function irParaAba(aba) {
+    document.querySelectorAll('.tab-app-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel-app').forEach(p => p.classList.remove('active'));
+    const btnAlvo = document.querySelector(`.tab-app-btn[data-app-tab="${aba}"]`);
+    if (btnAlvo) btnAlvo.classList.add('active');
+    document.getElementById('app-panel-' + aba).classList.add('active');
+    document.getElementById('tituloConteudo').textContent = TITULOS_ABA[aba] || '';
+    if (aba === 'dashboard') renderizarDashboard();
+    if (aba === 'vendas') renderizarTabelaVendas();
+    if (aba === 'entrada') carregarHistoricoEntradas();
+}
+document.querySelectorAll('.tab-app-btn').forEach(btn => btn.addEventListener('click', () => irParaAba(btn.dataset.appTab)));
+
+// ---------------------------------------------------------------
+// DASHBOARD
+// ---------------------------------------------------------------
+function descricaoPagamento(venda) {
+    return venda.parcelado ? `${venda.qtd_parcelas}x` : 'À vista';
+}
+function situacaoVenda(venda) {
+    const titulos = titulosPorVenda[venda.id] || [];
+    if (!titulos.length) return { texto: 'Sem título', classe: 'pill-neutro' };
+    const pagos = titulos.filter(t => t.data_pagamento).length;
+    if (pagos === titulos.length) return { texto: 'Pago', classe: 'pill-ok' };
+    // mais títulos que parcelas = houve recebimento parcial (a parcela foi dividida em paga + saldo)
+    if (pagos > 0) return { texto: titulos.length === venda.qtd_parcelas ? `${pagos}/${titulos.length} pagas` : 'Recebido em parte', classe: 'pill-aberto' };
+    return { texto: 'Em aberto', classe: 'pill-aberto' };
+}
+function valorLiquidoTitulo(t) {
+    return (Number(t.valor_titulo) || 0) - (Number(t.descontos) || 0) + (Number(t.acrescimos) || 0);
+}
+function renderizarDashboard() {
+    const totalEstoque = produtosCarregados.reduce((acc, p) => acc + Math.max(0, Number(p.estoque) || 0) * (Number(p.preco_custo) || 0), 0);
+    document.getElementById('statProdutos').textContent = produtosCarregados.length.toLocaleString('pt-BR');
+    document.getElementById('statValorEstoque').textContent = formatarMoeda(totalEstoque);
+
+    const hoje = hojeISO();
+    const prefixoMes = hoje.slice(0, 7);
+    const vendasMes = vendasCarregadas.filter(v => (v.data || '').startsWith(prefixoMes));
+    const totalMes = vendasMes.reduce((acc, v) => acc + Number(v.valor_total || 0), 0);
+    document.getElementById('statVendasMes').textContent = `${vendasMes.length} · ${formatarMoeda(totalMes)}`;
+
+    let aReceber = 0;
+    Object.values(titulosPorVenda).forEach(lista => lista.forEach(t => { if (!t.data_pagamento) aReceber += valorLiquidoTitulo(t); }));
+    document.getElementById('statAReceber').textContent = formatarMoeda(aReceber);
+
+    const recentes = vendasCarregadas.slice(0, 8);
+    document.getElementById('corpoDashboardVendas').innerHTML = recentes.length ? recentes.map(v => `
+        <tr>
+            <td>${formatarDataSemFuso(v.data)}</td>
+            <td>${escapeHtml(v.pessoa?.nome || '—')}</td>
+            <td class="num">${formatarMoeda(v.valor_total)}</td>
+            <td>${escapeHtml(descricaoPagamento(v))}</td>
+        </tr>`).join('') : '<tr><td colspan="4" class="vazio">Nenhuma venda ainda.</td></tr>';
+
+    const baixos = produtosCarregados.filter(p => Number(p.estoque) <= 0).slice(0, 10);
+    document.getElementById('corpoDashboardBaixo').innerHTML = baixos.length ? baixos.map(p => `
+        <tr><td>${escapeHtml(p.nome)}</td><td>${escapeHtml(p.categoria || '—')}</td><td class="num"><span class="pill pill-baixo">${formatarNumero(p.estoque)}</span></td></tr>`).join('')
+        : '<tr><td colspan="3" class="vazio">Nenhum produto com estoque zerado.</td></tr>';
+}
+
+// ---------------------------------------------------------------
+// PRODUTOS
+// ---------------------------------------------------------------
+function margemProduto(p) {
+    const custo = Number(p.preco_custo) || 0;
+    const venda = Number(p.preco_venda) || 0;
+    if (!custo) return null;
+    return ((venda - custo) / custo) * 100;
+}
+function limparFormProduto() {
+    produtoEmEdicaoId = null;
+    document.getElementById('tituloFormProduto').textContent = 'Novo produto';
+    document.getElementById('btnCancelarEdicaoProduto').style.display = 'none';
+    ['prodNome', 'prodCodigo', 'prodCategoria', 'prodPrecoVenda', 'prodPrecoCusto'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('prodUn').value = 'UN';
+}
+document.getElementById('btnCancelarEdicaoProduto').addEventListener('click', limparFormProduto);
+
+document.getElementById('btnSalvarProduto').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusProduto');
+    const nome = document.getElementById('prodNome').value.trim().toUpperCase();
+    const precoVenda = parseFloat(document.getElementById('prodPrecoVenda').value);
+    if (!nome) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o nome.'; return; }
+    if (isNaN(precoVenda) || precoVenda < 0) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o preço de venda.'; return; }
+    const btn = document.getElementById('btnSalvarProduto');
+    btn.disabled = true;
+    try {
+        const payload = {
+            nome,
+            codigo_externo: document.getElementById('prodCodigo').value.trim() || null,
+            categoria: document.getElementById('prodCategoria').value.trim() || null,
+            un: (document.getElementById('prodUn').value.trim() || 'UN').toUpperCase(),
+            preco_venda: precoVenda,
+        };
+        const idAntes = produtoEmEdicaoId;
+        let erro;
+        if (idAntes) ({ error: erro } = await sb.from('armarinho_produtos').update(payload).eq('id', idAntes));
+        else ({ error: erro } = await sb.from('armarinho_produtos').insert({ ...payload, unidade_negocio_id: meuPerfil.unidadeId }));
+        if (erro) throw erro;
+        if (idAntes) await registrarSentinela('armarinho_produto_editado', `Editou produto "${nome}" -- preço de venda ${formatarMoeda(precoVenda)}`);
+        statusEl.className = 'status-msg sucesso'; statusEl.textContent = '✅ Produto salvo.';
+        limparFormProduto();
+        await carregarProdutos();
+        renderizarProdutos();
+    } catch (erro) {
+        statusEl.className = 'status-msg erro'; statusEl.textContent = '⚠️ ' + erro.message;
+    } finally { btn.disabled = false; }
+});
+
+function renderizarProdutos() {
+    const categorias = [...new Set(produtosCarregados.map(p => p.categoria).filter(Boolean))].sort();
+    if (!categorias.includes('Armarinho')) categorias.unshift('Armarinho');
+    if (!categorias.includes('Cosméticos')) categorias.unshift('Cosméticos');
+    document.getElementById('listaCategorias').innerHTML = [...new Set(categorias)].map(c => `<option value="${escapeHtml(c)}">`).join('');
+
+    const expandido = document.getElementById('blocoListaProdutos').style.display !== 'none';
+    document.getElementById('btnToggleListaProdutos').textContent = `${expandido ? '▼' : '▶'} Ver produtos cadastrados (${produtosCarregados.length})`;
+
+    const termo = document.getElementById('buscaProdutos').value.trim().toLowerCase();
+    const lista = produtosCarregados.filter(p => !termo
+        || p.nome.toLowerCase().includes(termo)
+        || (p.codigo_externo || '').toLowerCase().includes(termo)
+        || (p.categoria || '').toLowerCase().includes(termo));
+    document.getElementById('corpoTabelaProdutos').innerHTML = lista.map(p => {
+        const m = margemProduto(p);
+        return `
+        <tr>
+            <td>${escapeHtml(p.codigo_externo || '—')}</td>
+            <td>${escapeHtml(p.nome)}</td>
+            <td>${escapeHtml(p.categoria || '—')}</td>
+            <td>${escapeHtml(p.un)}</td>
+            <td class="num">${Number(p.preco_custo) ? formatarMoeda(p.preco_custo) : '—'}</td>
+            <td class="num">${formatarMoeda(p.preco_venda)}</td>
+            <td class="num">${m == null ? '—' : m.toFixed(0) + '%'}</td>
+            <td class="num">${Number(p.estoque) <= 0 ? `<span class="pill pill-baixo">${formatarNumero(p.estoque)}</span>` : formatarNumero(p.estoque)}</td>
+            <td style="white-space:nowrap;">
+                <button class="btn btn-cinza btn-sm" data-editar-produto="${p.id}">Editar</button>
+                <button class="btn btn-perigo btn-sm" data-inativar-produto="${p.id}">Inativar</button>
+            </td>
+        </tr>`;
+    }).join('') || `<tr><td colspan="9" class="vazio">${termo ? 'Nenhum produto encontrado.' : 'Nenhum produto cadastrado.'}</td></tr>`;
+
+    document.querySelectorAll('[data-editar-produto]').forEach(b => b.addEventListener('click', () => editarProduto(b.dataset.editarProduto)));
+    document.querySelectorAll('[data-inativar-produto]').forEach(b => b.addEventListener('click', () => inativarProduto(b.dataset.inativarProduto)));
+}
+document.getElementById('btnToggleListaProdutos').addEventListener('click', (e) => {
+    e.preventDefault();
+    const bloco = document.getElementById('blocoListaProdutos');
+    bloco.style.display = bloco.style.display === 'none' ? '' : 'none';
+    renderizarProdutos();
+});
+document.getElementById('buscaProdutos').addEventListener('input', renderizarProdutos);
+
+function editarProduto(id) {
+    const p = produtosCarregados.find(x => x.id === id);
+    if (!p) return;
+    produtoEmEdicaoId = id;
+    document.getElementById('tituloFormProduto').textContent = 'Editando produto';
+    document.getElementById('btnCancelarEdicaoProduto').style.display = '';
+    document.getElementById('prodNome').value = p.nome;
+    document.getElementById('prodCodigo').value = p.codigo_externo || '';
+    document.getElementById('prodCategoria').value = p.categoria || '';
+    document.getElementById('prodUn').value = p.un || 'UN';
+    document.getElementById('prodPrecoVenda').value = p.preco_venda;
+    document.getElementById('prodPrecoCusto').value = Number(p.preco_custo) ? formatarMoeda(p.preco_custo) : '';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+async function inativarProduto(id) {
+    const p = produtosCarregados.find(x => x.id === id);
+    if (!p) return;
+    if (!confirm(`Inativar "${p.nome}"? Ele some das listas de venda, mas o histórico de movimentações continua.`)) return;
+    const { error } = await sb.from('armarinho_produtos').update({ ativo: false }).eq('id', id);
+    if (error) { alert('Erro ao inativar: ' + error.message); return; }
+    await registrarSentinela('armarinho_produto_inativado', `Inativou produto "${p.nome}" (estoque ${formatarNumero(p.estoque)})`);
+    await carregarProdutos();
+    renderizarProdutos();
+    renderizarDashboard();
+}
+
+// ---------------------------------------------------------------
+// BUSCA DE PRODUTO (autocomplete local -- usado na entrada manual e na venda)
+// ---------------------------------------------------------------
+function ligarBuscaProduto(idInput, idResultados, aoSelecionar, opcoes) {
+    const input = document.getElementById(idInput);
+    const resultados = document.getElementById(idResultados);
+    input.addEventListener('input', () => {
+        aoSelecionar(null, true); // digitar de novo invalida a seleção anterior
+        const termo = input.value.trim().toLowerCase();
+        if (!termo) { resultados.classList.remove('show'); return; }
+        const lista = produtosCarregados.filter(p =>
+            p.nome.toLowerCase().includes(termo) || (p.codigo_externo || '').toLowerCase() === termo || (p.categoria || '').toLowerCase().includes(termo)
+        ).slice(0, 12);
+        resultados.innerHTML = lista.length ? lista.map(p => `
+            <div class="resultado-item" data-id="${p.id}"><span>${escapeHtml(p.nome)}${p.categoria ? ' <small>· ' + escapeHtml(p.categoria) + '</small>' : ''}</span>
+            <small>${opcoes && opcoes.mostrarEstoque ? formatarMoeda(p.preco_venda) + ' · est. ' + formatarNumero(p.estoque) : 'custo ' + (Number(p.preco_custo) ? formatarMoeda(p.preco_custo) : '—')}</small></div>`).join('')
+            : `<div class="sugestao-vazia">${opcoes && opcoes.permiteNovo ? 'Nenhum produto com esse nome — será cadastrado como novo.' : 'Nenhum produto encontrado.'}</div>`;
+        resultados.classList.add('show');
+        resultados.querySelectorAll('.resultado-item').forEach(el => el.addEventListener('mousedown', () => {
+            const p = produtosCarregados.find(x => x.id === el.dataset.id);
+            input.value = p.nome;
+            resultados.classList.remove('show');
+            aoSelecionar(p, false);
+        }));
+    });
+    input.addEventListener('blur', () => setTimeout(() => resultados.classList.remove('show'), 150));
+}
+
+// ---------------------------------------------------------------
+// ENTRADA DE ESTOQUE
+// ---------------------------------------------------------------
+document.querySelectorAll('[data-subaba-entrada]').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-subaba-entrada]').forEach(b => b.classList.toggle('ativa', b === btn));
+    const alvo = btn.dataset.subabaEntrada;
+    ['xml', 'manual', 'historico'].forEach(s => document.getElementById('subaba-entrada-' + s).style.display = s === alvo ? '' : 'none');
+    document.getElementById('blocoEntradaCabecalho').style.display = alvo === 'historico' ? 'none' : '';
+    if (alvo === 'historico') carregarHistoricoEntradas();
+}));
+
+function lerCabecalhoEntrada(statusEl) {
+    const fornecedor = document.getElementById('entFornecedor').value.trim();
+    const data = document.getElementById('entData').value;
+    const responsavel = document.getElementById('entResponsavel').value.trim();
+    if (!fornecedor) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o fornecedor.'; return null; }
+    if (!data) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe a data de entrada.'; return null; }
+    if (!responsavel) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o responsável.'; return null; }
+    return {
+        fornecedor_nome: fornecedor,
+        fornecedor_cnpj: document.getElementById('entCnpj').value.trim() || null,
+        numero_nf: document.getElementById('entNumeroNf').value.trim() || null,
+        data, responsavel,
+        observacao: document.getElementById('entObservacao').value.trim() || null,
+    };
+}
+
+// grava a nota de entrada + 1 movimentação por item + atualiza estoque/custo
+// (RPC atômica). itens: [{ produtoId, qtd, custo }]
+async function gravarEntrada(cabecalho, itens, extrasNota) {
+    const totalNota = itens.reduce((acc, i) => acc + i.qtd * i.custo, 0);
+    const { data: nota, error: erroNota } = await sb.from('armarinho_notas').insert({
+        unidade_negocio_id: meuPerfil.unidadeId, tipo: 'entrada', ...cabecalho, ...(extrasNota || {}), valor_total: arredondar2(totalNota),
+    }).select().single();
+    if (erroNota) throw erroNota;
+
+    const { error: erroMov } = await sb.from('armarinho_movimentacoes').insert(itens.map(i => ({
+        unidade_negocio_id: meuPerfil.unidadeId, produto_id: i.produtoId, nota_id: nota.id,
+        tipo: 'entrada', qtd: i.qtd, valor_unit: i.custo, data: cabecalho.data,
+    })));
+    if (erroMov) throw new Error('Nota criada, mas falhou ao gravar os itens: ' + erroMov.message);
+
+    for (const i of itens) {
+        const { error } = await sb.rpc('armarinho_registrar_entrada', { p_produto_id: i.produtoId, p_qtd: i.qtd, p_valor_custo: i.custo });
+        if (error) throw new Error('Itens gravados, mas falhou ao atualizar o estoque de um produto: ' + error.message);
+    }
+    return nota;
+}
+
+// ---- parser de XML NF-e (copiado de estoque-app.html, parsearXmlNFe) ----
+function parsearXmlNFe(xmlText) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlText, 'text/xml');
+    if (doc.querySelector('parsererror')) throw new Error('Arquivo XML inválido ou corrompido.');
+
+    const get = (parent, tag) => {
+        if (!parent) return '';
+        const el = parent.getElementsByTagName(tag)[0];
+        return el ? el.textContent.trim() : '';
+    };
+
+    const ide = doc.getElementsByTagName('ide')[0];
+    const emit = doc.getElementsByTagName('emit')[0];
+    const dest = doc.getElementsByTagName('dest')[0];
+    const total = doc.getElementsByTagName('ICMSTot')[0];
+    const infAdic = doc.getElementsByTagName('infAdic')[0];
+    const dets = Array.from(doc.getElementsByTagName('det'));
+
+    if (!dets.length) throw new Error('Nenhum item (tag <det>) encontrado nesse XML. Confira se é uma NF-e válida.');
+
+    const infNFe = doc.getElementsByTagName('infNFe')[0];
+    let chaveAcesso = '';
+    if (infNFe) {
+        const idAttr = infNFe.getAttribute('Id') || '';
+        chaveAcesso = idAttr.replace(/^NFe/i, '').trim();
+    }
+    if (!chaveAcesso) chaveAcesso = get(doc.getElementsByTagName('protNFe')[0], 'chNFe');
+
+    const dups = Array.from(doc.getElementsByTagName('dup')).map(dup => ({
+        nDup: get(dup, 'nDup'),
+        dVenc: get(dup, 'dVenc'),
+        vDup: parseFloat(get(dup, 'vDup')) || 0
+    }));
+
+    const itens = dets.map(det => {
+        const prod = det.getElementsByTagName('prod')[0];
+        const cEan = get(prod, 'cEAN');
+        return {
+            cProd: get(prod, 'cProd'),
+            xProd: get(prod, 'xProd'),
+            uCom: get(prod, 'uCom') || 'UN',
+            qCom: parseFloat(get(prod, 'qCom')) || 0,
+            vUnCom: parseFloat(get(prod, 'vUnCom')) || 0,
+            cEan: (cEan && cEan.toUpperCase() !== 'SEM GTIN') ? cEan : '',
+            vDescItem: parseFloat(get(prod, 'vDesc')) || 0,
+            vFreteItem: parseFloat(get(prod, 'vFrete')) || 0,
+            vOutroItem: parseFloat(get(prod, 'vOutro')) || 0,
+        };
+    });
+
+    return {
+        nNF: get(ide, 'nNF'),
+        serie: get(ide, 'serie'),
+        natOp: get(ide, 'natOp'),
+        dhEmi: get(ide, 'dhEmi') || get(ide, 'dEmi'),
+        chaveAcesso,
+        emitNome: get(emit, 'xNome'),
+        emitCnpj: get(emit, 'CNPJ') || get(emit, 'CPF'),
+        destNome: get(dest, 'xNome'),
+        destCnpj: get(dest, 'CNPJ') || get(dest, 'CPF'),
+        vProd: parseFloat(get(total, 'vProd')) || 0,
+        vDesc: parseFloat(get(total, 'vDesc')) || 0,
+        vFrete: parseFloat(get(total, 'vFrete')) || 0,
+        vSeg: parseFloat(get(total, 'vSeg')) || 0,
+        vOutro: parseFloat(get(total, 'vOutro')) || 0,
+        vICMS: parseFloat(get(total, 'vICMS')) || 0,
+        vIPI: parseFloat(get(total, 'vIPI')) || 0,
+        vPIS: parseFloat(get(total, 'vPIS')) || 0,
+        vCOFINS: parseFloat(get(total, 'vCOFINS')) || 0,
+        vNF: parseFloat(get(total, 'vNF')) || 0,
+        infCpl: get(infAdic, 'infCpl'),
+        dups,
+        itens
+    };
+}
+
+// acha o produto já cadastrado que corresponde ao item da NF: primeiro
+// pelo código de barras/fornecedor (codigo_externo), depois por nome igual
+function encontrarProdutoDaNFe(item) {
+    const codigos = [item.cEan, item.cProd].filter(Boolean).map(c => c.toLowerCase());
+    const porCodigo = produtosCarregados.find(p => p.codigo_externo && codigos.includes(p.codigo_externo.toLowerCase()));
+    if (porCodigo) return porCodigo;
+    const nome = (item.xProd || '').toUpperCase().trim();
+    return produtosCarregados.find(p => p.nome.toUpperCase() === nome) || null;
+}
+
+document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
+    const statusEl = document.getElementById('statusXml');
+    statusEl.textContent = '';
+    document.getElementById('nfeBlocoItens').style.display = 'none';
+    document.getElementById('nfeInfo').innerHTML = '';
+    nfeDadosNota = null; nfeItensParseados = [];
+    const arquivo = e.target.files[0];
+    if (!arquivo) return;
+    try {
+        const textoXml = await arquivo.text();
+        const nfe = parsearXmlNFe(textoXml);
+        nfe.xmlOriginal = textoXml;
+        if (nfe.chaveAcesso) {
+            const { data: jaExiste } = await sb.from('armarinho_notas').select('id, data').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('tipo', 'entrada').eq('chave_acesso', nfe.chaveAcesso).limit(1);
+            if (jaExiste && jaExiste.length) {
+                statusEl.className = 'status-msg erro';
+                statusEl.textContent = `⚠️ Essa nota (chave ${nfe.chaveAcesso.slice(0, 8)}…) já foi importada em ${formatarDataSemFuso(jaExiste[0].data)}. Não vou importar duas vezes pra não duplicar o estoque.`;
+                return;
+            }
+        }
+        nfeDadosNota = nfe;
+        document.getElementById('entFornecedor').value = nfe.emitNome || '';
+        document.getElementById('entCnpj').value = nfe.emitCnpj || '';
+        document.getElementById('entNumeroNf').value = nfe.nNF || '';
+        document.getElementById('nfeInfo').innerHTML = `NF <strong>${escapeHtml(nfe.nNF)}</strong> · ${escapeHtml(nfe.emitNome)} · ${nfe.itens.length} item(ns) · total ${formatarMoeda(nfe.vNF)}`;
+
+        nfeItensParseados = nfe.itens.map(it => {
+            // desconto/frete/outras despesas lançados no próprio item entram no custo
+            const totalItem = it.qCom * it.vUnCom - it.vDescItem + it.vFreteItem + it.vOutroItem;
+            const custoUnit = it.qCom > 0 ? arredondar2(totalItem / it.qCom) : it.vUnCom;
+            const existente = encontrarProdutoDaNFe(it);
+            return {
+                xProd: it.xProd, cProd: it.cProd, cEan: it.cEan, un: it.uCom, qtd: it.qCom, custoUnit,
+                produtoId: existente ? existente.id : null,
+                precoVenda: existente ? Number(existente.preco_venda) : custoUnit,
+            };
+        });
+        renderizarTabelaNFe();
+        document.getElementById('nfeBlocoItens').style.display = '';
+    } catch (erro) {
+        statusEl.className = 'status-msg erro'; statusEl.textContent = '⚠️ ' + erro.message;
+    }
+});
+
+function renderizarTabelaNFe() {
+    const opcoes = '<option value="">➕ Criar produto novo</option>' + produtosCarregados.map(p => `<option value="${p.id}">${escapeHtml(p.nome)}</option>`).join('');
+    const corpo = document.getElementById('corpoTabelaNFe');
+    corpo.innerHTML = nfeItensParseados.map((it, i) => `
+        <tr>
+            <td>${escapeHtml(it.xProd)}</td>
+            <td>${escapeHtml(it.un)}</td>
+            <td class="num">${formatarNumero(it.qtd)}</td>
+            <td class="num">${formatarMoeda(it.custoUnit)}</td>
+            <td><select class="mini" data-nfe-produto="${i}">${opcoes}</select></td>
+            <td class="num"><input class="mini" type="number" step="0.01" min="0" data-nfe-preco="${i}" value="${it.precoVenda}" ${it.produtoId ? 'disabled title="Produto já cadastrado — o preço de venda dele se altera na aba Produtos"' : ''}></td>
+        </tr>`).join('');
+    nfeItensParseados.forEach((it, i) => { corpo.querySelector(`[data-nfe-produto="${i}"]`).value = it.produtoId || ''; });
+    corpo.querySelectorAll('[data-nfe-produto]').forEach(sel => sel.addEventListener('change', () => {
+        const it = nfeItensParseados[Number(sel.dataset.nfeProduto)];
+        it.produtoId = sel.value || null;
+        const p = produtosCarregados.find(x => x.id === it.produtoId);
+        it.precoVenda = p ? Number(p.preco_venda) : it.custoUnit;
+        renderizarTabelaNFe();
+    }));
+    corpo.querySelectorAll('[data-nfe-preco]').forEach(inp => inp.addEventListener('input', () => {
+        nfeItensParseados[Number(inp.dataset.nfePreco)].precoVenda = parseFloat(inp.value) || 0;
+    }));
+}
+
+document.getElementById('btnAplicarMargem').addEventListener('click', () => {
+    const margem = parseFloat(document.getElementById('nfeMargem').value);
+    if (isNaN(margem) || margem < 0) { alert('Informe a margem em %.'); return; }
+    nfeItensParseados.forEach(it => { if (!it.produtoId) it.precoVenda = arredondar2(it.custoUnit * (1 + margem / 100)); });
+    renderizarTabelaNFe();
+});
+
+document.getElementById('btnConfirmarXml').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusXml');
+    if (!nfeDadosNota || !nfeItensParseados.length) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Carregue um arquivo XML primeiro.'; return; }
+    const cabecalho = lerCabecalhoEntrada(statusEl);
+    if (!cabecalho) return;
+    const semPreco = nfeItensParseados.filter(it => !it.produtoId && !(it.precoVenda > 0));
+    if (semPreco.length && !confirm(`${semPreco.length} produto(s) novo(s) estão com preço de venda zerado. Cadastrar mesmo assim?`)) return;
+
+    const btn = document.getElementById('btnConfirmarXml');
+    btn.disabled = true;
+    statusEl.className = 'status-msg'; statusEl.textContent = 'Registrando...';
+    try {
+        const itens = [];
+        for (const it of nfeItensParseados) {
+            let produtoId = it.produtoId;
+            if (!produtoId) {
+                const { data: novo, error } = await sb.from('armarinho_produtos').insert({
+                    unidade_negocio_id: meuPerfil.unidadeId, nome: (it.xProd || ('PRODUTO NF ' + it.cProd)).toUpperCase(),
+                    codigo_externo: it.cEan || it.cProd || null, un: (it.un || 'UN').toUpperCase(),
+                    preco_custo: it.custoUnit, preco_venda: it.precoVenda || 0,
+                }).select().single();
+                if (error) throw error;
+                produtoId = novo.id;
+            }
+            itens.push({ produtoId, qtd: it.qtd, custo: it.custoUnit });
+        }
+        await gravarEntrada(cabecalho, itens, { chave_acesso: nfeDadosNota.chaveAcesso || null, xml_original: nfeDadosNota.xmlOriginal || null });
+        statusEl.className = 'status-msg sucesso';
+        statusEl.textContent = `✅ Entrada registrada (${itens.length} item(ns)).`;
+        document.getElementById('nfeArquivo').value = '';
+        document.getElementById('nfeBlocoItens').style.display = 'none';
+        document.getElementById('nfeInfo').innerHTML = '';
+        nfeDadosNota = null; nfeItensParseados = [];
+        await carregarProdutos();
+        renderizarProdutos();
+        renderizarDashboard();
+    } catch (erro) {
+        statusEl.className = 'status-msg erro'; statusEl.textContent = '⚠️ ' + erro.message;
+    } finally { btn.disabled = false; }
+});
+
+// ---- entrada manual ----
+ligarBuscaProduto('manProdutoBusca', 'manProdutoResultados', (p, invalidando) => {
+    produtoManualSelecionado = p;
+    if (p) {
+        document.getElementById('manPrecoVenda').value = p.preco_venda;
+        document.getElementById('manCusto').value = Number(p.preco_custo) || '';
+        document.getElementById('manCategoria').value = p.categoria || '';
+        document.getElementById('manUn').value = p.un || 'UN';
+    }
+}, { permiteNovo: true });
+
+function renderizarItensManual() {
+    document.getElementById('corpoItensManual').innerHTML = itensManual.map((it, i) => `
+        <tr>
+            <td>${escapeHtml(it.nome)}${it.produtoId ? '' : ' <span class="pill pill-aberto">novo</span>'}</td>
+            <td class="num">${formatarNumero(it.qtd)}</td>
+            <td class="num">${formatarMoeda(it.custo)}</td>
+            <td class="num">${formatarMoeda(it.precoVenda)}</td>
+            <td class="num">${formatarMoeda(it.qtd * it.custo)}</td>
+            <td><button class="btn btn-perigo btn-sm" data-remover-manual="${i}">✕</button></td>
+        </tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhum item adicionado.</td></tr>';
+    document.getElementById('totalManual').textContent = formatarMoeda(itensManual.reduce((acc, it) => acc + it.qtd * it.custo, 0));
+    document.querySelectorAll('[data-remover-manual]').forEach(b => b.addEventListener('click', () => { itensManual.splice(Number(b.dataset.removerManual), 1); renderizarItensManual(); }));
+}
+document.getElementById('btnAdicionarItemManual').addEventListener('click', () => {
+    const statusEl = document.getElementById('statusManualItem');
+    const nome = document.getElementById('manProdutoBusca').value.trim().toUpperCase();
+    const qtd = parseFloat(document.getElementById('manQtd').value);
+    const custo = parseFloat(document.getElementById('manCusto').value);
+    const precoVenda = parseFloat(document.getElementById('manPrecoVenda').value);
+    if (!nome) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o produto.'; return; }
+    if (isNaN(qtd) || qtd <= 0) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe a quantidade.'; return; }
+    if (isNaN(custo) || custo < 0) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o custo unitário.'; return; }
+    if (isNaN(precoVenda) || precoVenda < 0) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o preço de venda.'; return; }
+    statusEl.textContent = '';
+    // digitou um nome igual a um produto existente sem clicar na sugestão -- reaproveita ele
+    const existente = produtoManualSelecionado || produtosCarregados.find(p => p.nome.toUpperCase() === nome) || null;
+    itensManual.push({
+        produtoId: existente ? existente.id : null, nome: existente ? existente.nome : nome, qtd, custo, precoVenda,
+        categoria: document.getElementById('manCategoria').value.trim() || null,
+        un: (document.getElementById('manUn').value.trim() || 'UN').toUpperCase(),
+    });
+    renderizarItensManual();
+    ['manProdutoBusca', 'manCusto', 'manPrecoVenda'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('manQtd').value = 1;
+    produtoManualSelecionado = null;
+    document.getElementById('manProdutoBusca').focus();
+});
+
+document.getElementById('btnConfirmarManual').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusManual');
+    if (!itensManual.length) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Adicione ao menos um item.'; return; }
+    const cabecalho = lerCabecalhoEntrada(statusEl);
+    if (!cabecalho) return;
+    const btn = document.getElementById('btnConfirmarManual');
+    btn.disabled = true;
+    statusEl.className = 'status-msg'; statusEl.textContent = 'Registrando...';
+    try {
+        const itens = [];
+        for (const it of itensManual) {
+            let produtoId = it.produtoId;
+            if (!produtoId) {
+                const { data: novo, error } = await sb.from('armarinho_produtos').insert({
+                    unidade_negocio_id: meuPerfil.unidadeId, nome: it.nome, categoria: it.categoria, un: it.un,
+                    preco_custo: it.custo, preco_venda: it.precoVenda,
+                }).select().single();
+                if (error) throw error;
+                produtoId = novo.id;
+            }
+            itens.push({ produtoId, qtd: it.qtd, custo: it.custo });
+        }
+        await gravarEntrada(cabecalho, itens);
+        statusEl.className = 'status-msg sucesso';
+        statusEl.textContent = `✅ Entrada registrada (${itens.length} item(ns)).`;
+        itensManual = [];
+        renderizarItensManual();
+        await carregarProdutos();
+        renderizarProdutos();
+        renderizarDashboard();
+    } catch (erro) {
+        statusEl.className = 'status-msg erro'; statusEl.textContent = '⚠️ ' + erro.message;
+    } finally { btn.disabled = false; }
+});
+renderizarItensManual();
+
+// ---- histórico de entradas (com opção de excluir, revertendo o estoque) ----
+async function carregarHistoricoEntradas() {
+    const corpo = document.getElementById('corpoHistoricoEntradas');
+    corpo.innerHTML = '<tr><td colspan="6" class="vazio">Carregando...</td></tr>';
+    const { data: notas, error } = await sb.from('armarinho_notas').select('*')
+        .eq('unidade_negocio_id', meuPerfil.unidadeId).eq('tipo', 'entrada')
+        .order('data', { ascending: false }).order('criado_em', { ascending: false }).limit(60);
+    if (error) { corpo.innerHTML = `<tr><td colspan="6" class="vazio">Erro: ${escapeHtml(error.message)}</td></tr>`; return; }
+    const ids = (notas || []).map(n => n.id);
+    const contagem = {};
+    if (ids.length) {
+        const { data: movs } = await sb.from('armarinho_movimentacoes').select('nota_id').in('nota_id', ids);
+        (movs || []).forEach(m => { contagem[m.nota_id] = (contagem[m.nota_id] || 0) + 1; });
+    }
+    corpo.innerHTML = (notas || []).map(n => `
+        <tr>
+            <td>${formatarDataSemFuso(n.data)}</td>
+            <td>${escapeHtml(n.numero_nf || '—')}${n.xml_original ? ' <span class="pill pill-neutro">xml</span>' : ''}</td>
+            <td>${escapeHtml(n.fornecedor_nome || '—')}</td>
+            <td class="num">${contagem[n.id] || 0}</td>
+            <td class="num">${formatarMoeda(n.valor_total)}</td>
+            <td><button class="btn btn-perigo btn-sm" data-excluir-entrada="${n.id}">Excluir</button></td>
+        </tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhuma entrada registrada ainda.</td></tr>';
+    corpo.querySelectorAll('[data-excluir-entrada]').forEach(b => b.addEventListener('click', () => excluirEntrada(b.dataset.excluirEntrada, (notas || []).find(n => n.id === b.dataset.excluirEntrada))));
+}
+async function excluirEntrada(notaId, nota) {
+    if (!confirm('Excluir essa entrada? O estoque dos produtos dela será revertido (pode ficar negativo se já foi vendido). Não tem como desfazer.')) return;
+    try {
+        const { data: movs, error: erroBusca } = await sb.from('armarinho_movimentacoes').select('id, produto_id, qtd').eq('nota_id', notaId).eq('tipo', 'entrada');
+        if (erroBusca) throw erroBusca;
+        for (const m of (movs || [])) {
+            const { error } = await sb.rpc('armarinho_registrar_saida', { p_produto_id: m.produto_id, p_qtd: m.qtd });
+            if (error) throw error;
+        }
+        const { error: erroMov } = await sb.from('armarinho_movimentacoes').delete().eq('nota_id', notaId);
+        if (erroMov) throw erroMov;
+        const { error: erroNota } = await sb.from('armarinho_notas').delete().eq('id', notaId);
+        if (erroNota) throw erroNota;
+        await registrarSentinela('armarinho_entrada_excluida', `Excluiu entrada ${nota?.numero_nf ? 'NF ' + nota.numero_nf : ''} de ${nota?.fornecedor_nome || '—'} (${formatarMoeda(nota?.valor_total)}), ${(movs || []).length} item(ns) revertido(s) do estoque`);
+        await carregarProdutos();
+        renderizarProdutos();
+        renderizarDashboard();
+        carregarHistoricoEntradas();
+    } catch (erro) {
+        alert('Erro ao excluir a entrada: ' + erro.message);
+    }
+}
+
+// ---------------------------------------------------------------
+// CLIENTE (tabela pessoa, compartilhada com o Financeiro)
+// ---------------------------------------------------------------
+function selecionarCliente(c) {
+    clienteSelecionado = c;
+    document.getElementById('blocoClienteBusca').style.display = c ? 'none' : '';
+    document.getElementById('blocoClienteSelecionado').style.display = c ? '' : 'none';
+    if (c) {
+        document.getElementById('clienteSelNome').textContent = c.nome;
+        document.getElementById('clienteSelDetalhe').textContent = [c.documento, c.telefone, c.cidade].filter(Boolean).join(' · ') || 'sem dados de contato';
+    } else {
+        document.getElementById('clienteBusca').value = '';
+    }
+}
+document.getElementById('btnTrocarCliente').addEventListener('click', () => selecionarCliente(null));
+
+let timerBuscaCliente = null;
+document.getElementById('clienteBusca').addEventListener('input', () => {
+    clearTimeout(timerBuscaCliente);
+    const resultados = document.getElementById('clienteResultados');
+    const termo = document.getElementById('clienteBusca').value.trim();
+    if (!termo) { resultados.classList.remove('show'); return; }
+    timerBuscaCliente = setTimeout(async () => {
+        const filtroCodigo = /^\d+$/.test(termo) ? `,codigo.eq.${termo}` : '';
+        const termoSeguro = termo.replace(/[%,()]/g, ' ');
+        const { data } = await sb.from('pessoa').select('id, codigo, nome, documento, telefone, cidade, endereco')
+            .eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true)
+            .or(`nome.ilike.%${termoSeguro}%,documento.ilike.%${termoSeguro}%${filtroCodigo}`).limit(10);
+        resultados.innerHTML = (data || []).length ? data.map(c => `
+            <div class="resultado-item" data-id="${c.id}"><span>${escapeHtml(c.nome)}</span><small>${escapeHtml(c.documento || (c.codigo != null ? '#' + c.codigo : ''))}</small></div>`).join('')
+            : '<div class="sugestao-vazia">Nenhum cliente encontrado — use o botão "+" pra cadastrar.</div>';
+        resultados.classList.add('show');
+        resultados.querySelectorAll('.resultado-item').forEach(el => el.addEventListener('mousedown', () => {
+            selecionarCliente((data || []).find(c => String(c.id) === el.dataset.id));
+            resultados.classList.remove('show');
+        }));
+    }, 250);
+});
+document.getElementById('clienteBusca').addEventListener('blur', () => setTimeout(() => document.getElementById('clienteResultados').classList.remove('show'), 150));
+
+document.getElementById('btnNovoCliente').addEventListener('click', () => {
+    ['cli_nome', 'cli_documento', 'cli_telefone', 'cli_cidade', 'cli_endereco'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('cli_nome').value = document.getElementById('clienteBusca').value.trim();
+    document.getElementById('cli_tipo').value = 'FISICA';
+    document.getElementById('statusCliente').textContent = '';
+    document.getElementById('modal-cliente').classList.add('aberto');
+});
+document.getElementById('btnFecharCliente').addEventListener('click', () => document.getElementById('modal-cliente').classList.remove('aberto'));
+document.getElementById('btnSalvarCliente').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusCliente');
+    const nome = document.getElementById('cli_nome').value.trim();
+    if (!nome) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o nome.'; return; }
+    const btn = document.getElementById('btnSalvarCliente');
+    btn.disabled = true;
+    try {
+        // pessoa.id não é automático (mesmo padrão de financeiro-painel-admin.html):
+        // pega o próximo id e o próximo código da unidade antes de inserir
+        const { data: proximoId, error: erroId } = await sb.rpc('fn_proximo_id_manual', { p_tabela: 'pessoa' });
+        if (erroId) throw new Error('Erro ao gerar ID: ' + erroId.message);
+        const { data: maxCodigo } = await sb.from('pessoa').select('codigo').eq('unidade_negocio_id', meuPerfil.unidadeId).order('codigo', { ascending: false }).limit(1);
+        const proximoCodigo = (maxCodigo && maxCodigo.length && maxCodigo[0].codigo) ? maxCodigo[0].codigo + 1 : 1;
+        const { data: nova, error } = await sb.from('pessoa').insert({
+            id: proximoId, codigo: proximoCodigo, unidade_negocio_id: meuPerfil.unidadeId, ativo: true,
+            nome, tipo_pessoa: document.getElementById('cli_tipo').value,
+            documento: document.getElementById('cli_documento').value.trim() || null,
+            telefone: document.getElementById('cli_telefone').value.trim() || null,
+            cidade: document.getElementById('cli_cidade').value.trim() || null,
+            endereco: document.getElementById('cli_endereco').value.trim() || null,
+        }).select().single();
+        if (error) throw error;
+        selecionarCliente(nova);
+        document.getElementById('modal-cliente').classList.remove('aberto');
+    } catch (erro) {
+        statusEl.className = 'status-msg erro'; statusEl.textContent = 'Erro: ' + erro.message;
+    } finally { btn.disabled = false; }
+});
+
+// ---------------------------------------------------------------
+// VENDER / FATURAR
+// ---------------------------------------------------------------
+ligarBuscaProduto('vendaProdutoBusca', 'vendaProdutoResultados', (p) => {
+    produtoVendaSelecionado = p;
+    if (p) document.getElementById('vendaValor').value = p.preco_venda;
+}, { mostrarEstoque: true });
+
+function totalCarrinho() { return arredondar2(carrinho.reduce((acc, it) => acc + it.qtd * it.valorUnit, 0)); }
+
+function renderizarCarrinho() {
+    document.getElementById('corpoCarrinho').innerHTML = carrinho.map((it, i) => `
+        <tr>
+            <td>${escapeHtml(it.nome)} <small style="color:var(--muted)">est. ${formatarNumero(it.estoque)}</small></td>
+            <td class="num"><input class="mini" type="number" step="0.01" min="0" data-cart-qtd="${i}" value="${it.qtd}"></td>
+            <td class="num"><input class="mini" type="number" step="0.01" min="0" data-cart-valor="${i}" value="${it.valorUnit}"></td>
+            <td class="num">${formatarMoeda(it.qtd * it.valorUnit)}</td>
+            <td><button class="btn btn-perigo btn-sm" data-remover-cart="${i}">✕</button></td>
+        </tr>`).join('') || '<tr><td colspan="5" class="vazio">Carrinho vazio.</td></tr>';
+    document.getElementById('totalVenda').textContent = formatarMoeda(totalCarrinho());
+    document.querySelectorAll('[data-remover-cart]').forEach(b => b.addEventListener('click', () => { carrinho.splice(Number(b.dataset.removerCart), 1); renderizarCarrinho(); }));
+    document.querySelectorAll('[data-cart-qtd]').forEach(inp => inp.addEventListener('change', () => { carrinho[Number(inp.dataset.cartQtd)].qtd = parseFloat(inp.value) || 0; renderizarCarrinho(); }));
+    document.querySelectorAll('[data-cart-valor]').forEach(inp => inp.addEventListener('change', () => { carrinho[Number(inp.dataset.cartValor)].valorUnit = parseFloat(inp.value) || 0; renderizarCarrinho(); }));
+    atualizarPreviewParcelas();
+}
+
+document.getElementById('btnAdicionarItemVenda').addEventListener('click', () => {
+    const statusEl = document.getElementById('statusVendaItem');
+    const qtd = parseFloat(document.getElementById('vendaQtd').value);
+    const valor = parseFloat(document.getElementById('vendaValor').value);
+    if (!produtoVendaSelecionado) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Escolha um produto da lista.'; return; }
+    if (isNaN(qtd) || qtd <= 0) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe a quantidade.'; return; }
+    if (isNaN(valor) || valor < 0) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o valor unitário.'; return; }
+    statusEl.textContent = '';
+    document.getElementById('statusVenda').textContent = '';
+    const p = produtoVendaSelecionado;
+    const jaNoCarrinho = carrinho.filter(it => it.produtoId === p.id).reduce((acc, it) => acc + it.qtd, 0);
+    // editando uma venda: o que ela já baixou do estoque volta a ficar disponível
+    const estoqueDisponivel = Number(p.estoque) + (vendaEmEdicao ? (vendaEmEdicao.qtdAntiga[p.id] || 0) : 0);
+    if (estoqueDisponivel - jaNoCarrinho - qtd < 0 && !confirm(`Estoque atual de "${p.nome}" é ${formatarNumero(estoqueDisponivel)}${jaNoCarrinho ? ' (já tem ' + formatarNumero(jaNoCarrinho) + ' no carrinho)' : ''}. Vender ${formatarNumero(qtd)} deixa o estoque negativo. Continuar?`)) return;
+    carrinho.push({ produtoId: p.id, nome: p.nome, un: p.un, qtd, valorUnit: valor, estoque: estoqueDisponivel });
+    renderizarCarrinho();
+    ['vendaProdutoBusca', 'vendaValor'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('vendaQtd').value = 1;
+    produtoVendaSelecionado = null;
+    document.getElementById('vendaProdutoBusca').focus();
+});
+
+// ---- parcelamento (mesma matemática de financeiro-painel-admin.html) ----
+function calcularValoresParcelas(valorTotal, qtd) {
+    const base = Math.floor((valorTotal / qtd) * 100) / 100;
+    const valores = Array(qtd).fill(base);
+    valores[qtd - 1] = Math.round((valorTotal - base * (qtd - 1)) * 100) / 100; // a última absorve o resto do arredondamento
+    return valores;
+}
+function calcularDataParcela(dataPrimeiraISO, indice, regra, intervaloDias) {
+    const [ano, mes, dia] = dataPrimeiraISO.split('-').map(Number);
+    let d;
+    if (regra === 'diames') {
+        const alvoMes = mes - 1 + indice;
+        const anoAlvo = ano + Math.floor(alvoMes / 12);
+        const mesAlvo = ((alvoMes % 12) + 12) % 12;
+        const ultimoDia = new Date(anoAlvo, mesAlvo + 1, 0).getDate();
+        d = new Date(anoAlvo, mesAlvo, Math.min(dia, ultimoDia));
+    } else {
+        d = new Date(ano, mes - 1, dia + indice * intervaloDias);
+    }
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+function calcularParcelasVenda() {
+    const total = totalCarrinho();
+    const parcelado = document.getElementById('vendaCondicao').value === 'parcelado';
+    const primeira = document.getElementById('vendaVencimento').value;
+    if (!parcelado) return primeira && total > 0 ? [{ vencimento: primeira, valor: total }] : [];
+    const qtd = parseInt(document.getElementById('vendaQtdParcelas').value) || 0;
+    if (qtd < 2 || !primeira || total <= 0) return [];
+    const regra = document.getElementById('vendaRegraParcelas').value;
+    const intervalo = parseInt(document.getElementById('vendaIntervalo').value) || 30;
+    const valores = calcularValoresParcelas(total, qtd);
+    return valores.map((valor, i) => ({ vencimento: calcularDataParcela(primeira, i, regra, intervalo), valor }));
+}
+function atualizarPreviewParcelas() {
+    const parcelado = document.getElementById('vendaCondicao').value === 'parcelado';
+    document.getElementById('campoQtdParcelas').style.display = parcelado ? '' : 'none';
+    document.getElementById('campoRegraParcelas').style.display = parcelado ? '' : 'none';
+    document.getElementById('linhaIntervalo').style.display = parcelado && document.getElementById('vendaRegraParcelas').value === 'intervalo' ? '' : 'none';
+    document.getElementById('labelVencimento').textContent = parcelado ? 'Vencimento da 1ª parcela *' : 'Vencimento *';
+    const parcelas = parcelado ? calcularParcelasVenda() : [];
+    document.getElementById('blocoPreviewParcelas').style.display = parcelas.length ? '' : 'none';
+    document.getElementById('corpoPreviewParcelas').innerHTML = parcelas.map((p, i) => `<tr><td>${i + 1}/${parcelas.length}</td><td>${formatarDataSemFuso(p.vencimento)}</td><td class="num">${formatarMoeda(p.valor)}</td></tr>`).join('');
+}
+['vendaCondicao', 'vendaVencimento', 'vendaQtdParcelas', 'vendaRegraParcelas', 'vendaIntervalo'].forEach(id => {
+    document.getElementById(id).addEventListener('input', atualizarPreviewParcelas);
+    document.getElementById(id).addEventListener('change', atualizarPreviewParcelas);
+});
+
+// toda venda tem 1 unidade_operacao (as N parcelas compartilham); é o que liga os títulos ao rateio/movimentação do Financeiro
+async function criarOperacaoArmarinho(notaId) {
+    const { data: maxOp } = await sb.from('unidade_operacao').select('codigo').eq('unidade_negocio_id', meuPerfil.unidadeId).order('codigo', { ascending: false }).limit(1);
+    const proximoCodigo = (maxOp && maxOp.length && maxOp[0].codigo) ? maxOp[0].codigo + 1 : 1;
+    const { data: operacao, error } = await sb.from('unidade_operacao').insert({
+        unidade_negocio_id: meuPerfil.unidadeId, codigo: proximoCodigo, origem: 'armarinho', id_registro_na_origem: notaId,
+    }).select().single();
+    if (error) throw error;
+    return operacao;
+}
+// devolve os ids dos títulos criados (a edição precisa deles pra desfazer se algo falhar)
+async function inserirTitulosVenda({ operacaoId, notaId, pessoaId, contaId, parcelas, dataVenda }) {
+    const tituloBase = 'Venda armarinho ' + formatarDataSemFuso(dataVenda);
+    const ids = [];
+    for (let i = 0; i < parcelas.length; i++) {
+        const { data, error } = await sb.from('financeiro_titulos').insert({
+            unidade_negocio_id: meuPerfil.unidadeId, operacao_id: operacaoId,
+            tipo_movimento: 'RECEBER', origem: 'armarinho', id_registro_na_origem: notaId,
+            id_fornecedor_cliente: pessoaId,
+            titulo: parcelas.length > 1 ? `${tituloBase} -- Parcela ${i + 1}/${parcelas.length}` : tituloBase,
+            observacao: parcelas.length > 1 ? `Parcela ${i + 1}/${parcelas.length}` : null,
+            valor_titulo: parcelas[i].valor, data_vencimento: parcelas[i].vencimento,
+            data_competencia: dataVenda.slice(0, 7) + '-01', id_conta_pagamento: contaId,
+        }).select('id').single();
+        if (error) throw error;
+        ids.push(data.id);
+    }
+    return ids;
+}
+
+document.getElementById('btnFaturar').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusVenda');
+    const erro = (msg) => { statusEl.className = 'status-msg erro'; statusEl.textContent = msg; };
+    if (!clienteSelecionado) return erro('Escolha o cliente.');
+    if (!carrinho.length) return erro('Adicione ao menos um item ao carrinho.');
+    if (carrinho.some(it => !(it.qtd > 0))) return erro('Tem item com quantidade zerada no carrinho.');
+    const contaId = document.getElementById('vendaConta').value;
+    if (!contaId) return erro('Escolha a conta de recebimento.');
+    const parcelas = calcularParcelasVenda();
+    if (!parcelas.length) return erro('Confira o vencimento (e as parcelas, se for parcelado).');
+    if (parcelas.some(p => !(p.valor > 0))) return erro('Uma das parcelas ficou com valor zerado — reduza o número de parcelas.');
+    const total = totalCarrinho();
+    if (!(total > 0)) return erro('O total da venda está zerado.');
+    const dataVenda = document.getElementById('vendaData').value || hojeISO();
+    const parcelado = document.getElementById('vendaCondicao').value === 'parcelado';
+    const observacao = document.getElementById('vendaObservacao').value.trim() || null;
+    if (vendaEmEdicao) { await salvarEdicaoVenda({ contaId, parcelas, total, dataVenda, parcelado, observacao }); return; }
+
+    const btn = document.getElementById('btnFaturar');
+    btn.disabled = true;
+    statusEl.className = 'status-msg'; statusEl.textContent = 'Faturando...';
+    let nota = null, etapa = 'nota da venda';
+    try {
+        const { data: notaCriada, error: erroNota } = await sb.from('armarinho_notas').insert({
+            unidade_negocio_id: meuPerfil.unidadeId, tipo: 'venda', cliente_pessoa_id: clienteSelecionado.id,
+            parcelado, qtd_parcelas: parcelas.length, valor_total: total, data: dataVenda, observacao, responsavel: meuPerfil.nomeOperador,
+        }).select().single();
+        if (erroNota) throw erroNota;
+        nota = notaCriada;
+
+        etapa = 'itens da venda';
+        const { error: erroMov } = await sb.from('armarinho_movimentacoes').insert(carrinho.map(it => ({
+            unidade_negocio_id: meuPerfil.unidadeId, produto_id: it.produtoId, nota_id: nota.id,
+            tipo: 'saida', qtd: it.qtd, valor_unit: it.valorUnit, data: dataVenda,
+        })));
+        if (erroMov) throw erroMov;
+
+        etapa = 'baixa de estoque';
+        for (const it of carrinho) {
+            const { error } = await sb.rpc('armarinho_registrar_saida', { p_produto_id: it.produtoId, p_qtd: it.qtd });
+            if (error) throw error;
+        }
+
+        etapa = 'título a receber (Financeiro)';
+        const operacao = await criarOperacaoArmarinho(nota.id);
+        await inserirTitulosVenda({ operacaoId: operacao.id, notaId: nota.id, pessoaId: clienteSelecionado.id, contaId, parcelas, dataVenda });
+
+        const itensParaPdf = carrinho.map(it => ({ nome: it.nome, un: it.un, qtd: it.qtd, valorUnit: it.valorUnit }));
+        const clienteParaPdf = clienteSelecionado;
+        carrinho = []; renderizarCarrinho();
+        selecionarCliente(null);
+        document.getElementById('vendaObservacao').value = '';
+        document.getElementById('vendaCondicao').value = 'avista';
+        atualizarPreviewParcelas();
+        statusEl.className = 'status-msg sucesso'; statusEl.textContent = '✅ Venda faturada.';
+        await carregarProdutos(); renderizarProdutos();
+        await carregarVendas(); renderizarDashboard();
+        await gerarPdfFatura(nota, clienteParaPdf, itensParaPdf, parcelas);
+    } catch (e) {
+        if (nota) {
+            erro(`⚠️ A venda foi registrada, mas falhou na etapa "${etapa}": ${e.message}. Avise o administrador antes de refazer, pra não duplicar.`);
+            await carregarProdutos(); renderizarProdutos(); await carregarVendas(); renderizarDashboard();
+        } else {
+            erro('⚠️ ' + e.message);
+        }
+    } finally { btn.disabled = false; }
+});
+
+// ---------------------------------------------------------------
+// PDF DA FATURA -- jsPDF sob demanda + popup com 3 ações
+// (Visualizar/Baixar/Compartilhar), padrão da plataforma
+// ---------------------------------------------------------------
+let jsPdfCarregado = false;
+function carregarScriptExterno(src) {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src; script.onload = resolve; script.onerror = reject;
+        document.head.appendChild(script);
+    });
+}
+async function carregarJsPdf() {
+    if (jsPdfCarregado) return;
+    await carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    await carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+    jsPdfCarregado = true;
+}
+async function carregarLogoComoBase64(url) {
+    if (!url) return null;
+    try {
+        const resposta = await fetch(url);
+        const blob = await resposta.blob();
+        return await new Promise((resolve) => {
+            const leitor = new FileReader();
+            leitor.onload = () => resolve(leitor.result);
+            leitor.onerror = () => resolve(null);
+            leitor.readAsDataURL(blob);
+        });
+    } catch (erro) { return null; }
+}
+let pdfAtual = null;
+function mostrarPopupAcoesPdf(tituloModal, blob, nomeArquivo) {
+    pdfAtual = { blob, nomeArquivo };
+    document.getElementById('tituloModalAcoesPdf').textContent = tituloModal;
+    document.getElementById('modalAcoesPdf').classList.add('aberto');
+}
+document.getElementById('btnFecharModalAcoesPdf').addEventListener('click', () => document.getElementById('modalAcoesPdf').classList.remove('aberto'));
+document.getElementById('btnVisualizarPdfGerado').addEventListener('click', () => { if (pdfAtual) window.open(URL.createObjectURL(pdfAtual.blob), '_blank'); });
+document.getElementById('btnBaixarPdfGerado').addEventListener('click', () => {
+    if (!pdfAtual) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(pdfAtual.blob);
+    a.download = pdfAtual.nomeArquivo;
+    a.click();
+});
+document.getElementById('btnCompartilharPdfGerado').addEventListener('click', async () => {
+    if (!pdfAtual) return;
+    try {
+        const arquivo = new File([pdfAtual.blob], pdfAtual.nomeArquivo, { type: 'application/pdf' });
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [arquivo] })) await navigator.share({ files: [arquivo], title: pdfAtual.nomeArquivo });
+        else alert('Compartilhamento direto não disponível nesse navegador -- use Baixar.');
+    } catch (erro) { /* pessoa cancelou o compartilhamento */ }
+});
+
+async function gerarPdfFatura(nota, cliente, itens, parcelas) {
+    try {
+        await carregarJsPdf();
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        const logo = await carregarLogoComoBase64(personalizacaoAtual?.logo_url);
+        if (logo) { try { doc.addImage(logo, 'PNG', 14, 10, 22, 22); } catch (e) { /* formato não suportado */ } }
+        const xTexto = logo ? 40 : 14;
+        doc.setFontSize(15); doc.setFont(undefined, 'bold');
+        doc.text(meuPerfil.unidadeNome || 'Armarinho e Cosméticos', xTexto, 17);
+        doc.setFontSize(11); doc.setFont(undefined, 'normal');
+        doc.text('FATURA DE VENDA', xTexto, 24);
+        doc.setFontSize(8); doc.setTextColor(120);
+        doc.text('Emitida em ' + new Date().toLocaleString('pt-BR') + ' · Nº ' + String(nota.id).slice(0, 8).toUpperCase(), xTexto, 29);
+        doc.setTextColor(0);
+
+        let y = 40;
+        doc.setFontSize(10); doc.setFont(undefined, 'bold'); doc.text('Cliente', 14, y);
+        doc.setFont(undefined, 'normal');
+        y += 5; doc.text(cliente.nome || '—', 14, y);
+        if (cliente.documento) { y += 5; doc.text('CPF/CNPJ: ' + cliente.documento, 14, y); }
+        const contato = [cliente.telefone, cliente.endereco, cliente.cidade].filter(Boolean).join(' · ');
+        if (contato) { y += 5; doc.text(contato, 14, y); }
+        y += 5; doc.text('Data da venda: ' + formatarDataSemFuso(nota.data), 14, y);
+
+        const total = itens.reduce((acc, it) => acc + it.qtd * it.valorUnit, 0);
+        doc.autoTable({
+            startY: y + 6,
+            head: [['Produto', 'Un', 'Qtd', 'Valor unit.', 'Subtotal']],
+            body: itens.map(it => [it.nome, it.un, formatarNumero(it.qtd), formatarMoeda(it.valorUnit), formatarMoeda(it.qtd * it.valorUnit)]),
+            styles: { fontSize: 9 }, headStyles: { fillColor: [142, 42, 85] },
+            columnStyles: { 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+        });
+        let yFim = doc.lastAutoTable.finalY + 8;
+        doc.setFontSize(12); doc.setFont(undefined, 'bold');
+        doc.text('Total: ' + formatarMoeda(total), 196, yFim, { align: 'right' });
+        yFim += 10;
+
+        doc.setFontSize(10); doc.setFont(undefined, 'bold');
+        doc.text(parcelas.length > 1 ? `Pagamento parcelado em ${parcelas.length}x` : 'Pagamento à vista', 14, yFim);
+        doc.setFont(undefined, 'normal');
+        doc.autoTable({
+            startY: yFim + 3,
+            head: [['Parcela', 'Vencimento', 'Valor']],
+            body: parcelas.map((p, i) => [parcelas.length > 1 ? `${i + 1}/${parcelas.length}` : '1/1', formatarDataSemFuso(p.vencimento), formatarMoeda(p.valor)]),
+            styles: { fontSize: 9 }, headStyles: { fillColor: [110, 110, 110] },
+            columnStyles: { 2: { halign: 'right' } },
+        });
+        if (nota.observacao) {
+            const yObs = doc.lastAutoTable.finalY + 8;
+            doc.setFontSize(9); doc.text('Observação: ' + nota.observacao, 14, yObs, { maxWidth: 180 });
+        }
+        const nomeArquivo = `fatura-${(cliente.nome || 'cliente').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${nota.data}.pdf`;
+        mostrarPopupAcoesPdf('Fatura gerada', doc.output('blob'), nomeArquivo);
+    } catch (erro) {
+        alert('A venda foi salva, mas não consegui gerar o PDF agora: ' + erro.message + '\nVocê pode gerar de novo pela aba Vendas.');
+    }
+}
+
+// ---------------------------------------------------------------
+// VENDAS (histórico) -- reimprimir a fatura de qualquer venda
+// ---------------------------------------------------------------
+function vendasFiltradas() {
+    const inicio = document.getElementById('filtroVendaInicio').value;
+    const fim = document.getElementById('filtroVendaFim').value;
+    const cliente = document.getElementById('filtroVendaCliente').value.trim().toLowerCase();
+    return vendasCarregadas.filter(v =>
+        (!inicio || v.data >= inicio) && (!fim || v.data <= fim) &&
+        (!cliente || (v.pessoa?.nome || '').toLowerCase().includes(cliente)));
+}
+function renderizarTabelaVendas() {
+    const lista = vendasFiltradas();
+    document.getElementById('vendasVazio').style.display = lista.length ? 'none' : '';
+    document.getElementById('corpoTabelaVendas').innerHTML = lista.map(v => {
+        const s = situacaoVenda(v);
+        const bloqueada = (titulosPorVenda[v.id] || []).some(t => t.data_pagamento);
+        const dicaBloqueio = bloqueada ? ' disabled title="Venda com recebimento registrado — não pode ser alterada"' : '';
+        return `
+        <tr>
+            <td>${formatarDataSemFuso(v.data)}</td>
+            <td>${escapeHtml(v.pessoa?.nome || '—')}</td>
+            <td class="num">${formatarMoeda(v.valor_total)}</td>
+            <td>${escapeHtml(descricaoPagamento(v))}</td>
+            <td><span class="pill ${s.classe}">${escapeHtml(s.texto)}</span></td>
+            <td><div class="acoes-linha">
+                <button class="btn btn-principal btn-sm" data-recebimentos-venda="${v.id}">💰 Recebimentos</button>
+                <button class="btn btn-cinza btn-sm" data-fatura-venda="${v.id}">📄 Fatura</button>
+                <button class="btn btn-cinza btn-sm" data-editar-venda="${v.id}"${dicaBloqueio}>✏️ Editar</button>
+                <button class="btn btn-perigo btn-sm" data-excluir-venda="${v.id}"${dicaBloqueio}>🗑️ Excluir</button>
+            </div></td>
+        </tr>`;
+    }).join('');
+    document.querySelectorAll('[data-editar-venda]').forEach(b => b.addEventListener('click', () => iniciarEdicaoVenda(b.dataset.editarVenda)));
+    document.querySelectorAll('[data-excluir-venda]').forEach(b => b.addEventListener('click', () => excluirVenda(b.dataset.excluirVenda)));
+    document.querySelectorAll('[data-fatura-venda]').forEach(b => b.addEventListener('click', () => reimprimirFatura(b.dataset.faturaVenda)));
+    document.querySelectorAll('[data-recebimentos-venda]').forEach(b => b.addEventListener('click', () => abrirRecebimentos(b.dataset.recebimentosVenda)));
+}
+['filtroVendaInicio', 'filtroVendaFim', 'filtroVendaCliente'].forEach(id => {
+    document.getElementById(id).addEventListener('input', renderizarTabelaVendas);
+    document.getElementById(id).addEventListener('change', renderizarTabelaVendas);
+});
+
+async function reimprimirFatura(notaId) {
+    const venda = vendasCarregadas.find(v => v.id === notaId);
+    if (!venda) return;
+    const [{ data: movs, error }, { data: pessoa }] = await Promise.all([
+        sb.from('armarinho_movimentacoes').select('qtd, valor_unit, produto_id, armarinho_produtos(nome, un)').eq('nota_id', notaId).eq('tipo', 'saida'),
+        sb.from('pessoa').select('nome, documento, telefone, cidade, endereco').eq('id', venda.cliente_pessoa_id).single(),
+    ]);
+    if (error) { alert('Erro ao carregar os itens da venda: ' + error.message); return; }
+    const itens = (movs || []).map(m => ({ nome: m.armarinho_produtos?.nome || '—', un: m.armarinho_produtos?.un || 'UN', qtd: Number(m.qtd), valorUnit: Number(m.valor_unit) }));
+    const titulos = (titulosPorVenda[notaId] || []).slice().sort((a, b) => (a.data_vencimento || '').localeCompare(b.data_vencimento || ''));
+    const parcelas = titulos.length
+        ? titulos.map(t => ({ vencimento: t.data_vencimento, valor: Number(t.valor_titulo) }))
+        : [{ vencimento: venda.data, valor: Number(venda.valor_total) }];
+    await gerarPdfFatura(venda, pessoa || { nome: venda.pessoa?.nome || '—' }, itens, parcelas);
+}
+
+// ---------------------------------------------------------------
+// CADASTRO RÁPIDO DE CONTA (financeiro_contas_correntes, mesma tabela
+// do Financeiro -- só nome + código sequencial da unidade)
+// ---------------------------------------------------------------
+let selectContaAlvo = null;
+function abrirNovaConta(idSelectAlvo) {
+    selectContaAlvo = idSelectAlvo;
+    document.getElementById('conta_nome').value = '';
+    document.getElementById('statusConta').textContent = '';
+    document.getElementById('modal-conta').classList.add('aberto');
+    document.getElementById('conta_nome').focus();
+}
+document.getElementById('btnNovaContaVenda').addEventListener('click', () => abrirNovaConta('vendaConta'));
+document.getElementById('btnNovaContaBaixa').addEventListener('click', () => abrirNovaConta('baixaConta'));
+document.getElementById('btnFecharConta').addEventListener('click', () => document.getElementById('modal-conta').classList.remove('aberto'));
+document.getElementById('conta_nome').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('btnSalvarConta').click(); });
+document.getElementById('btnSalvarConta').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusConta');
+    const nome = document.getElementById('conta_nome').value.trim();
+    if (!nome) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o nome da conta.'; return; }
+    const repetida = contasCarregadas.find(c => c.nome.trim().toLowerCase() === nome.toLowerCase());
+    if (repetida && !confirm(`Já existe uma conta chamada "${repetida.nome}". Criar outra com o mesmo nome?`)) return;
+    const btn = document.getElementById('btnSalvarConta');
+    btn.disabled = true;
+    try {
+        const { data: maxCodigo } = await sb.from('financeiro_contas_correntes').select('codigo').eq('unidade_negocio_id', meuPerfil.unidadeId).order('codigo', { ascending: false }).limit(1);
+        const proximoCodigo = (maxCodigo && maxCodigo.length && maxCodigo[0].codigo) ? maxCodigo[0].codigo + 1 : 1;
+        const { data: nova, error } = await sb.from('financeiro_contas_correntes').insert({ unidade_negocio_id: meuPerfil.unidadeId, nome, codigo: proximoCodigo, ativo: true }).select().single();
+        if (error) throw error;
+        await carregarContas();
+        if (selectContaAlvo) document.getElementById(selectContaAlvo).value = nova.id;
+        document.getElementById('modal-conta').classList.remove('aberto');
+    } catch (erro) {
+        statusEl.className = 'status-msg erro'; statusEl.textContent = 'Erro: ' + erro.message;
+    } finally { btn.disabled = false; }
+});
+
+// ---------------------------------------------------------------
+// RECEBIMENTOS -- baixa das parcelas (títulos a receber) direto pelo
+// armarinho. Grava igual à baixa rápida do Financeiro: atualiza o
+// título e lança o crédito em financeiro_movimentacao_contas; recebimento
+// parcial divide o título (parte paga + novo título com o saldo).
+// ---------------------------------------------------------------
+let vendaRecebimentosId = null;
+let tituloBaixaAtual = null;
+
+function ordenarTitulos(lista) {
+    return lista.slice().sort((a, b) => (a.data_vencimento || '').localeCompare(b.data_vencimento || '') || String(a.id).localeCompare(String(b.id), undefined, { numeric: true }));
+}
+function titulosDaVendaOrdenados(notaId) {
+    return ordenarTitulos(titulosPorVenda[notaId] || []);
+}
+function abrirRecebimentos(notaId) {
+    const venda = vendasCarregadas.find(v => v.id === notaId);
+    if (!venda) return;
+    vendaRecebimentosId = notaId;
+    document.getElementById('recebimentosTitulo').textContent = `Recebimentos — ${venda.pessoa?.nome || '—'} · ${formatarMoeda(venda.valor_total)}`;
+    renderizarRecebimentos();
+    document.getElementById('modal-recebimentos').classList.add('aberto');
+}
+function renderizarRecebimentos() {
+    const titulos = titulosDaVendaOrdenados(vendaRecebimentosId);
+    const hoje = hojeISO();
+    document.getElementById('corpoRecebimentos').innerHTML = titulos.map((t, i) => {
+        const vencida = !t.data_pagamento && t.data_vencimento < hoje;
+        const situacao = t.data_pagamento
+            ? `<span class="pill pill-ok">Recebido em ${formatarDataSemFuso(t.data_pagamento)}</span>`
+            : (vencida ? '<span class="pill pill-baixo">Vencida</span>' : '<span class="pill pill-aberto">Em aberto</span>');
+        return `
+        <tr>
+            <td>${i + 1}/${titulos.length}</td>
+            <td>${formatarDataSemFuso(t.data_vencimento)}</td>
+            <td class="num">${formatarMoeda(valorLiquidoTitulo(t))}</td>
+            <td>${situacao}</td>
+            <td>${t.data_pagamento ? '' : `<button class="btn btn-principal btn-sm" data-receber-titulo="${t.id}">Receber</button>`}</td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="5" class="vazio">Essa venda não tem títulos a receber.</td></tr>';
+    document.querySelectorAll('[data-receber-titulo]').forEach(b => b.addEventListener('click', () => abrirBaixa(b.dataset.receberTitulo)));
+}
+document.getElementById('btnFecharRecebimentos').addEventListener('click', () => document.getElementById('modal-recebimentos').classList.remove('aberto'));
+
+function recalcularBaixa() {
+    if (!tituloBaixaAtual) return;
+    const liquido = arredondar2((Number(tituloBaixaAtual.valor_titulo) || 0) - (parseFloat(document.getElementById('baixaDesconto').value) || 0) + (parseFloat(document.getElementById('baixaAcrescimo').value) || 0));
+    document.getElementById('baixaLiquido').value = formatarMoeda(liquido);
+    document.getElementById('baixaRecebido').value = liquido > 0 ? liquido.toFixed(2) : '';
+    document.getElementById('baixaRecebido').dataset.liquido = liquido;
+    atualizarAvisoParcial();
+}
+function atualizarAvisoParcial() {
+    const liquido = parseFloat(document.getElementById('baixaRecebido').dataset.liquido) || 0;
+    const recebido = parseFloat(document.getElementById('baixaRecebido').value) || 0;
+    document.getElementById('baixaAvisoParcial').style.display = (recebido > 0 && liquido - recebido > 0.009) ? '' : 'none';
+}
+document.getElementById('baixaDesconto').addEventListener('input', recalcularBaixa);
+document.getElementById('baixaAcrescimo').addEventListener('input', recalcularBaixa);
+document.getElementById('baixaRecebido').addEventListener('input', atualizarAvisoParcial);
+
+function abrirBaixa(tituloId) {
+    const t = (titulosPorVenda[vendaRecebimentosId] || []).find(x => String(x.id) === String(tituloId));
+    if (!t) return;
+    tituloBaixaAtual = t;
+    document.getElementById('baixaSub').textContent = `${t.titulo || 'Título a receber'} · vence em ${formatarDataSemFuso(t.data_vencimento)}`;
+    document.getElementById('baixaValorOriginal').value = formatarMoeda(t.valor_titulo);
+    document.getElementById('baixaData').value = hojeISO();
+    document.getElementById('baixaDesconto').value = Number(t.descontos) || 0;
+    document.getElementById('baixaAcrescimo').value = Number(t.acrescimos) || 0;
+    document.getElementById('baixaConta').value = t.id_conta_pagamento || '';
+    document.getElementById('statusBaixa').textContent = '';
+    recalcularBaixa();
+    document.getElementById('modal-baixa').classList.add('aberto');
+}
+document.getElementById('btnFecharBaixa').addEventListener('click', () => document.getElementById('modal-baixa').classList.remove('aberto'));
+
+document.getElementById('btnConfirmarBaixa').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusBaixa');
+    const erro = (msg) => { statusEl.className = 'status-msg erro'; statusEl.textContent = msg; };
+    const t = tituloBaixaAtual;
+    if (!t) return;
+    const contaId = document.getElementById('baixaConta').value;
+    const dataPag = document.getElementById('baixaData').value;
+    const desconto = parseFloat(document.getElementById('baixaDesconto').value) || 0;
+    const acrescimo = parseFloat(document.getElementById('baixaAcrescimo').value) || 0;
+    const liquido = arredondar2((Number(t.valor_titulo) || 0) - desconto + acrescimo);
+    const recebido = arredondar2(parseFloat(document.getElementById('baixaRecebido').value) || 0);
+    if (!contaId) return erro('Escolha a conta que recebeu.');
+    if (!dataPag) return erro('Informe a data do recebimento.');
+    if (desconto < 0 || acrescimo < 0) return erro('Desconto e acréscimo não podem ser negativos.');
+    if (recebido <= 0) return erro('Informe um valor recebido maior que zero.');
+    if (recebido > liquido + 0.009) return erro('O valor recebido não pode ser maior que o valor líquido da parcela.');
+    const saldo = arredondar2(liquido - recebido);
+    const parcial = saldo > 0.009;
+
+    const btn = document.getElementById('btnConfirmarBaixa');
+    btn.disabled = true;
+    statusEl.className = 'status-msg'; statusEl.textContent = 'Confirmando...';
+    let etapa = 'atualizar o título';
+    try {
+        const venda = vendasCarregadas.find(v => v.id === vendaRecebimentosId);
+        const nomeTitulo = t.titulo ? ' - ' + t.titulo : '';
+        if (!parcial) {
+            const { error } = await sb.from('financeiro_titulos').update({ data_pagamento: dataPag, id_conta_pagamento: contaId, descontos: desconto, acrescimos: acrescimo }).eq('id', t.id);
+            if (error) throw error;
+        } else {
+            const { error } = await sb.from('financeiro_titulos').update({
+                valor_titulo: recebido, descontos: 0, acrescimos: 0, data_pagamento: dataPag, id_conta_pagamento: contaId,
+                observacao: (t.observacao ? t.observacao + ' -- ' : '') + `Baixa parcial (valor original ${formatarMoeda(t.valor_titulo)})`,
+            }).eq('id', t.id);
+            if (error) throw error;
+        }
+
+        etapa = 'lançar na conta (título já atualizado)';
+        const { error: erroMov } = await sb.from('financeiro_movimentacao_contas').insert({
+            unidade_negocio_id: meuPerfil.unidadeId, operacao_id: t.operacao_id,
+            origem: t.origem, id_registro_na_origem: t.id_registro_na_origem,
+            id_conta: contaId, data: dataPag, data_competencia: t.data_competencia,
+            historico: (parcial ? 'Baixa parcial do título #' : 'Baixa do título #') + (t.codigo ?? t.id) + nomeTitulo,
+            valor: recebido, tipo_movimento: 'C',
+        });
+        if (erroMov) throw erroMov;
+
+        if (parcial) {
+            etapa = 'criar o título do saldo (recebimento já lançado)';
+            const { error } = await sb.from('financeiro_titulos').insert({
+                unidade_negocio_id: meuPerfil.unidadeId, operacao_id: t.operacao_id,
+                tipo_movimento: t.tipo_movimento, origem: t.origem, id_registro_na_origem: t.id_registro_na_origem,
+                id_fornecedor_cliente: t.id_fornecedor_cliente, descricao_avulsa: t.descricao_avulsa,
+                titulo: t.titulo, valor_titulo: saldo, data_vencimento: t.data_vencimento,
+                data_competencia: t.data_competencia, id_conta_pagamento: t.id_conta_pagamento,
+                documento_fiscal: t.documento_fiscal, observacao: `Saldo remanescente da baixa parcial do título #${t.codigo ?? t.id}`,
+            });
+            if (error) throw error;
+        }
+
+        await registrarSentinela('armarinho_titulo_baixado', `${parcial ? 'Baixa PARCIAL' : 'Baixa'} de parcela de venda armarinho -- cliente ${venda?.pessoa?.nome || '—'} -- recebido ${formatarMoeda(recebido)} de ${formatarMoeda(liquido)}${parcial ? ', saldo ' + formatarMoeda(saldo) : ''} (conta id ${contaId}, em ${formatarDataSemFuso(dataPag)})`);
+        document.getElementById('modal-baixa').classList.remove('aberto');
+        await carregarVendas();
+        renderizarTabelaVendas(); renderizarDashboard(); renderizarRecebimentos();
+    } catch (e) {
+        erro(`⚠️ Falhou ao ${etapa}: ${e.message}. Confira o título no Financeiro antes de tentar de novo, pra não lançar em duplicidade.`);
+        await carregarVendas(); renderizarTabelaVendas(); renderizarRecebimentos();
+    } finally { btn.disabled = false; }
+});
+
+// ---------------------------------------------------------------
+// EDITAR / EXCLUIR VENDA
+// Regra de ouro: venda com QUALQUER recebimento (título com
+// data_pagamento, ou lançamento em financeiro_movimentacao_contas)
+// nunca é editada nem excluída. A checagem é feita no banco no exato
+// momento da ação (não confia na lista em tela, que pode estar velha
+// se a baixa foi dada no Financeiro) e, se a checagem falhar, a ação é
+// bloqueada. Toda ação -- feita, bloqueada ou que falhou -- vai pra
+// Sentinela com o retrato da venda (itens e parcelas), já que o
+// original deixa de existir.
+// ---------------------------------------------------------------
+async function verificarPagamentosVenda(nota) {
+    const [rt, rm] = await Promise.all([
+        sb.from('financeiro_titulos').select(COLUNAS_TITULO).eq('unidade_negocio_id', meuPerfil.unidadeId).eq('origem', 'armarinho').eq('id_registro_na_origem', nota.id),
+        sb.from('financeiro_movimentacao_contas').select('id').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('origem', 'armarinho').eq('id_registro_na_origem', nota.id).limit(1),
+    ]);
+    const falha = rt.error || rm.error;
+    if (falha) throw new Error('Não consegui confirmar se a venda já tem recebimento (' + falha.message + '). Por segurança, nada foi alterado.');
+    const titulos = ordenarTitulos(rt.data || []);
+    return { pago: titulos.some(t => t.data_pagamento) || (rm.data || []).length > 0, titulos };
+}
+async function lerItensVenda(notaId) {
+    const { data, error } = await sb.from('armarinho_movimentacoes').select('id, produto_id, qtd, valor_unit, armarinho_produtos(nome, un, estoque)').eq('nota_id', notaId).eq('tipo', 'saida');
+    if (error) throw new Error('Erro ao ler os itens da venda: ' + error.message);
+    return (data || []).map(m => ({
+        movId: m.id, produtoId: m.produto_id, nome: m.armarinho_produtos?.nome || '—', un: m.armarinho_produtos?.un || 'UN',
+        estoqueAtual: Number(m.armarinho_produtos?.estoque) || 0, qtd: Number(m.qtd), valorUnit: Number(m.valor_unit),
+    }));
+}
+const arred4 = (v) => Math.round((Number(v) || 0) * 10000) / 10000;
+function somarPorProduto(itens) {
+    const soma = {};
+    itens.forEach(i => { soma[i.produtoId] = arred4((soma[i.produtoId] || 0) + i.qtd); });
+    return soma;
+}
+const textoItens = (itens) => itens.map(i => `${i.nome} ${formatarNumero(i.qtd)}×${formatarMoeda(i.valorUnit)}`).join('; ') || 'sem itens';
+const textoParcelas = (parcelas) => parcelas.map(p => `${formatarDataSemFuso(p.vencimento)} ${formatarMoeda(p.valor)}`).join('; ') || 'sem parcelas';
+const parcelasDeTitulos = (titulos) => titulos.map(t => ({ vencimento: t.data_vencimento, valor: Number(t.valor_titulo) }));
+const rotuloVenda = (nota) => `venda de ${formatarDataSemFuso(nota.data)} — ${nota.pessoa?.nome || '—'} (${formatarMoeda(nota.valor_total)})`;
+
+// deltas = { produtoId: quantidade a MAIS baixada do estoque }; negativo devolve.
+// Usa a RPC de saída (aceita quantidade negativa) porque a de entrada
+// sobrescreveria o preço de custo. Se um produto falhar, desfaz os já
+// aplicados e relança o erro -- ou seja, ou aplica tudo ou nada.
+async function ajustarEstoqueVenda(deltas) {
+    const aplicados = [];
+    try {
+        for (const [produtoId, delta] of Object.entries(deltas)) {
+            if (!delta) continue;
+            const { error } = await sb.rpc('armarinho_registrar_saida', { p_produto_id: produtoId, p_qtd: delta });
+            if (error) throw error;
+            aplicados.push([produtoId, delta]);
+        }
+    } catch (e) {
+        await desfazerAjusteEstoque(aplicados);
+        throw e;
+    }
+    return aplicados;
+}
+async function desfazerAjusteEstoque(aplicados) {
+    for (const [produtoId, delta] of aplicados) {
+        try { await sb.rpc('armarinho_registrar_saida', { p_produto_id: produtoId, p_qtd: -delta }); }
+        catch (e) { console.warn('Não consegui desfazer o ajuste de estoque de', produtoId, e.message); }
+    }
+}
+async function bloquearPorRecebimento(acao, nota) {
+    await registrarSentinela('armarinho_venda_bloqueada', `Tentativa de ${acao} ${rotuloVenda(nota)} BLOQUEADA: a venda já tem recebimento registrado`);
+    alert(`Essa venda já tem recebimento registrado — não pode ser ${acao === 'EDITAR' ? 'editada' : 'excluída'}.`);
+    await carregarVendas(); renderizarTabelaVendas(); renderizarDashboard();
+}
+async function recarregarAposAlterarVenda() {
+    await carregarProdutos(); renderizarProdutos();
+    await carregarVendas(); renderizarTabelaVendas(); renderizarDashboard();
+}
+
+// ---- excluir ----
+async function excluirVenda(notaId) {
+    const venda = vendasCarregadas.find(v => v.id === notaId);
+    if (!venda) return;
+    document.getElementById('statusVendas').textContent = '';
+    let chk, itens = [];
+    try {
+        chk = await verificarPagamentosVenda(venda);
+        if (!chk.pago) itens = await lerItensVenda(notaId);
+    } catch (e) { alert(e.message); return; }
+    if (chk.pago) { await bloquearPorRecebimento('EXCLUIR', venda); return; }
+
+    if (!confirm(`Excluir a ${rotuloVenda(venda)}?\n\n• O estoque dos ${itens.length} item(ns) volta.\n• ${chk.titulos.length} título(s) a receber serão apagados do Financeiro.\n\nNão dá pra desfazer.`)) return;
+    const resumo = `${rotuloVenda(venda)} -- itens: ${textoItens(itens)} -- parcelas: ${textoParcelas(parcelasDeTitulos(chk.titulos))}`;
+    let etapa = 'devolver o estoque', algoApagado = false, aplicados = [];
+    try {
+        const deltas = {};
+        Object.entries(somarPorProduto(itens)).forEach(([produtoId, qtd]) => { deltas[produtoId] = -qtd; });
+        aplicados = await ajustarEstoqueVenda(deltas);
+
+        etapa = 'apagar os títulos a receber';
+        if (chk.titulos.length) {
+            const { error } = await sb.from('financeiro_titulos').delete().in('id', chk.titulos.map(t => t.id));
+            if (error) throw error;
+        }
+        algoApagado = true; // daqui pra frente não dá mais pra voltar atrás sozinho
+
+        etapa = 'apagar o rateio e a operação do Financeiro';
+        for (const operacaoId of new Set(chk.titulos.map(t => t.operacao_id).filter(Boolean))) {
+            const { error: erroRateio } = await sb.from('unidade_rateios').delete().eq('operacao_id', operacaoId);
+            if (erroRateio) throw erroRateio;
+            const { error: erroOp } = await sb.from('unidade_operacao').delete().eq('id', operacaoId);
+            if (erroOp) throw erroOp;
+        }
+        etapa = 'apagar os itens da venda';
+        const { error: erroMov } = await sb.from('armarinho_movimentacoes').delete().eq('nota_id', notaId);
+        if (erroMov) throw erroMov;
+        etapa = 'apagar a venda';
+        const { error: erroNota } = await sb.from('armarinho_notas').delete().eq('id', notaId);
+        if (erroNota) throw erroNota;
+
+        await registrarSentinela('armarinho_venda_excluida', `Excluiu ${resumo} -- estoque devolvido`);
+        document.getElementById('statusVendas').className = 'status-msg sucesso';
+        document.getElementById('statusVendas').textContent = '✅ Venda excluída e estoque devolvido.';
+    } catch (e) {
+        if (!algoApagado) await desfazerAjusteEstoque(aplicados);
+        await registrarSentinela('armarinho_venda_exclusao_falhou', `Falha ao EXCLUIR ${resumo} -- etapa "${etapa}": ${e.message} -- ${algoApagado ? 'exclusão PARCIAL (parte já apagada)' : 'nada foi alterado'}`);
+        alert(algoApagado
+            ? `A exclusão parou na etapa "${etapa}": ${e.message}.\nParte da venda já foi apagada — avise o administrador antes de tentar de novo.`
+            : `Não consegui excluir (falhou ao ${etapa}): ${e.message}.\nNada foi apagado e o estoque foi mantido.`);
+    }
+    await recarregarAposAlterarVenda();
+}
+
+// ---- editar ----
+function sairModoEdicao() {
+    vendaEmEdicao = null;
+    document.getElementById('bannerEdicaoVenda').style.display = 'none';
+    document.getElementById('btnFaturar').textContent = '🧾 Faturar venda';
+    carrinho = []; renderizarCarrinho();
+    selecionarCliente(null);
+    document.getElementById('vendaObservacao').value = '';
+    document.getElementById('vendaCondicao').value = 'avista';
+    document.getElementById('vendaData').value = hojeISO();
+    document.getElementById('vendaVencimento').value = hojeISO();
+    atualizarPreviewParcelas();
+}
+document.getElementById('btnCancelarEdicaoVenda').addEventListener('click', () => {
+    sairModoEdicao();
+    document.getElementById('statusVenda').textContent = '';
+    irParaAba('vendas');
+});
+
+async function iniciarEdicaoVenda(notaId) {
+    const venda = vendasCarregadas.find(v => v.id === notaId);
+    if (!venda) return;
+    document.getElementById('statusVendas').textContent = '';
+    if (vendaEmEdicao && !confirm('Já existe uma venda em edição. Descartar e abrir esta?')) return;
+    if (!vendaEmEdicao && carrinho.length && !confirm('O carrinho da venda em andamento será descartado. Continuar?')) return;
+    let chk, itens, pessoa;
+    try {
+        chk = await verificarPagamentosVenda(venda);
+        if (chk.pago) { await bloquearPorRecebimento('EDITAR', venda); return; }
+        itens = await lerItensVenda(notaId);
+        const { data } = await sb.from('pessoa').select('id, codigo, nome, documento, telefone, cidade, endereco').eq('id', venda.cliente_pessoa_id).single();
+        pessoa = data || { id: venda.cliente_pessoa_id, nome: venda.pessoa?.nome || '—' };
+    } catch (e) { alert(e.message); return; }
+
+    vendaEmEdicao = { nota: venda, qtdAntiga: somarPorProduto(itens) };
+    // o que a venda já baixou volta a ficar disponível enquanto se edita
+    carrinho = itens.map(i => ({ produtoId: i.produtoId, nome: i.nome, un: i.un, qtd: i.qtd, valorUnit: i.valorUnit, estoque: i.estoqueAtual + (vendaEmEdicao.qtdAntiga[i.produtoId] || 0) }));
+    selecionarCliente(pessoa);
+    document.getElementById('vendaData').value = venda.data;
+    document.getElementById('vendaObservacao').value = venda.observacao || '';
+    document.getElementById('vendaConta').value = chk.titulos[0]?.id_conta_pagamento || '';
+    const tits = chk.titulos;
+    const parcelado = tits.length > 1;
+    document.getElementById('vendaCondicao').value = parcelado ? 'parcelado' : 'avista';
+    document.getElementById('vendaVencimento').value = tits[0]?.data_vencimento || venda.data;
+    if (parcelado) {
+        const primeira = tits[0].data_vencimento;
+        document.getElementById('vendaQtdParcelas').value = tits.length;
+        const mesmoDiaDoMes = tits.every((t, i) => calcularDataParcela(primeira, i, 'diames', 0) === t.data_vencimento);
+        document.getElementById('vendaRegraParcelas').value = mesmoDiaDoMes ? 'diames' : 'intervalo';
+        if (!mesmoDiaDoMes) {
+            const dias = Math.round((new Date(tits[1].data_vencimento) - new Date(primeira)) / 86400000);
+            document.getElementById('vendaIntervalo').value = dias >= 1 ? dias : 30;
+        }
+    }
+    document.getElementById('textoBannerEdicao').textContent = `Editando a ${rotuloVenda(venda)}. Ao salvar, o estoque e as parcelas são recalculados.`;
+    document.getElementById('bannerEdicaoVenda').style.display = 'flex';
+    document.getElementById('btnFaturar').textContent = '💾 Salvar alterações da venda';
+    document.getElementById('statusVenda').textContent = '';
+    renderizarCarrinho();
+    irParaAba('vender');
+}
+
+async function salvarEdicaoVenda({ contaId, parcelas, total, dataVenda, parcelado, observacao }) {
+    const statusEl = document.getElementById('statusVenda');
+    const btn = document.getElementById('btnFaturar');
+    const nota = vendaEmEdicao.nota;
+    btn.disabled = true;
+    statusEl.className = 'status-msg'; statusEl.textContent = 'Verificando e salvando...';
+    let fase = 'verificar a venda', resumoAntes = rotuloVenda(nota);
+    let aplicados = [], novosMovIds = [], novosTitIds = [], operacaoId = null, operacaoCriada = false;
+    const notaAntes = { cliente_pessoa_id: nota.cliente_pessoa_id, parcelado: nota.parcelado, qtd_parcelas: nota.qtd_parcelas, valor_total: nota.valor_total, data: nota.data, observacao: nota.observacao };
+    try {
+        const chk = await verificarPagamentosVenda(nota);
+        if (chk.pago) {
+            await bloquearPorRecebimento('EDITAR', nota);
+            sairModoEdicao(); statusEl.textContent = ''; irParaAba('vendas');
+            return;
+        }
+        const itensAntigos = await lerItensVenda(nota.id);
+        const titulosAntigos = chk.titulos;
+        resumoAntes = `${rotuloVenda(nota)} -- itens: ${textoItens(itensAntigos)} -- parcelas: ${textoParcelas(parcelasDeTitulos(titulosAntigos))}`;
+        operacaoId = titulosAntigos.find(t => t.operacao_id)?.operacao_id || null;
+
+        // rateio lançado no Financeiro fica desatualizado se o valor mudar
+        let apagarRateio = false;
+        if (operacaoId && Math.abs(total - Number(nota.valor_total)) > 0.009) {
+            const { data: rateio, error } = await sb.from('unidade_rateios').select('operacao_id').eq('operacao_id', operacaoId).limit(1);
+            if (error) throw error;
+            apagarRateio = (rateio || []).length > 0;
+            if (apagarRateio && !confirm('Essa venda tem rateio lançado no Financeiro e o valor total mudou. Ao salvar, o rateio será apagado e precisa ser lançado de novo lá. Continuar?')) {
+                statusEl.textContent = '';
+                return;
+            }
+        }
+
+        const novo = somarPorProduto(carrinho), antigo = somarPorProduto(itensAntigos);
+        const deltas = {};
+        new Set([...Object.keys(novo), ...Object.keys(antigo)]).forEach(pid => {
+            const d = arred4((novo[pid] || 0) - (antigo[pid] || 0));
+            if (d) deltas[pid] = d;
+        });
+        fase = 'ajustar o estoque';
+        aplicados = await ajustarEstoqueVenda(deltas);
+
+        // 1ª parte: grava o NOVO antes de tirar o antigo -- se algo falhar aqui, desfaz tudo e a venda fica como estava
+        try {
+            fase = 'gravar os novos itens';
+            const { data: novosMovs, error: erroMov } = await sb.from('armarinho_movimentacoes').insert(carrinho.map(it => ({
+                unidade_negocio_id: meuPerfil.unidadeId, produto_id: it.produtoId, nota_id: nota.id,
+                tipo: 'saida', qtd: it.qtd, valor_unit: it.valorUnit, data: dataVenda,
+            }))).select('id');
+            if (erroMov) throw erroMov;
+            novosMovIds = (novosMovs || []).map(m => m.id);
+
+            fase = 'gravar as novas parcelas';
+            if (!operacaoId) { operacaoId = (await criarOperacaoArmarinho(nota.id)).id; operacaoCriada = true; }
+            novosTitIds = await inserirTitulosVenda({ operacaoId, notaId: nota.id, pessoaId: clienteSelecionado.id, contaId, parcelas, dataVenda });
+
+            fase = 'atualizar a venda';
+            const { error: erroNota } = await sb.from('armarinho_notas').update({
+                cliente_pessoa_id: clienteSelecionado.id, parcelado, qtd_parcelas: parcelas.length, valor_total: total, data: dataVenda, observacao,
+            }).eq('id', nota.id);
+            if (erroNota) throw erroNota;
+        } catch (e) {
+            try {
+                if (novosMovIds.length) await sb.from('armarinho_movimentacoes').delete().in('id', novosMovIds);
+                if (novosTitIds.length) await sb.from('financeiro_titulos').delete().in('id', novosTitIds);
+                if (operacaoCriada) await sb.from('unidade_operacao').delete().eq('id', operacaoId);
+                await sb.from('armarinho_notas').update(notaAntes).eq('id', nota.id);
+                await desfazerAjusteEstoque(aplicados);
+            } catch (e2) { console.warn('Falha ao desfazer a edição:', e2.message); }
+            throw Object.assign(new Error(e.message), { desfeito: true });
+        }
+
+        // 2ª parte: remove o antigo (só chega aqui se o novo já está todo gravado)
+        fase = 'remover os itens antigos';
+        if (itensAntigos.length) {
+            const { error } = await sb.from('armarinho_movimentacoes').delete().in('id', itensAntigos.map(i => i.movId));
+            if (error) throw error;
+        }
+        fase = 'remover as parcelas antigas';
+        if (titulosAntigos.length) {
+            const { error } = await sb.from('financeiro_titulos').delete().in('id', titulosAntigos.map(t => t.id));
+            if (error) throw error;
+        }
+        if (apagarRateio) {
+            fase = 'apagar o rateio desatualizado';
+            const { error } = await sb.from('unidade_rateios').delete().eq('operacao_id', operacaoId);
+            if (error) throw error;
+        }
+
+        const itensNovos = carrinho.map(it => ({ nome: it.nome, qtd: it.qtd, valorUnit: it.valorUnit }));
+        await registrarSentinela('armarinho_venda_editada', `Editou ${resumoAntes} -- PASSOU PARA: venda de ${formatarDataSemFuso(dataVenda)} — ${clienteSelecionado.nome} (${formatarMoeda(total)}) -- itens: ${textoItens(itensNovos)} -- parcelas: ${textoParcelas(parcelas)}`);
+        sairModoEdicao();
+        statusEl.textContent = '';
+        document.getElementById('statusVendas').className = 'status-msg sucesso';
+        document.getElementById('statusVendas').textContent = '✅ Venda atualizada.';
+        irParaAba('vendas');
+    } catch (e) {
+        const semAlteracao = e.desfeito || fase === 'verificar a venda' || fase === 'ajustar o estoque';
+        const msg = semAlteracao
+            ? `⚠️ Não consegui salvar (falhou ao ${fase}): ${e.message}. Nada foi alterado na venda.`
+            : `⚠️ As alterações foram gravadas, mas falhou ao ${fase}: ${e.message}. A venda pode ficar com itens/parcelas antigos duplicados — avise o administrador.`;
+        statusEl.className = 'status-msg erro'; statusEl.textContent = msg;
+        await registrarSentinela('armarinho_venda_edicao_falhou', `Falha ao EDITAR ${resumoAntes} -- etapa "${fase}": ${e.message} -- ${semAlteracao ? 'nada foi alterado' : 'edição PARCIAL'}`);
+    } finally {
+        btn.disabled = false;
+    }
+    await recarregarAposAlterarVenda();
+}
+
+// ---------------------------------------------------------------
+// MODAL DE AJUDA
+// ---------------------------------------------------------------
+const AJUDA_ARMARINHO = {
+    titulo: 'Armarinho e Cosméticos',
+    ultimaRevisao: '20/09/2026',
+    secoes: [
+        { id: 'geral', titulo: 'Visão geral', corpo: `
+            <p>Controle de estoque e venda de armarinho e cosméticos: você cadastra os produtos
+            (com <strong>preço de venda</strong>), dá entrada no estoque (por XML da nota ou
+            digitando), e vende/fatura para clientes — cada venda baixa o estoque, gera um
+            <strong>título a receber no Financeiro</strong> e um <strong>PDF de fatura</strong>.</p>
+            <p>O <strong>cliente</strong> é a mesma tabela de pessoas usada no Financeiro — cadastrar
+            um cliente aqui já deixa ele disponível lá, e vice-versa. O catálogo de produtos deste
+            módulo é próprio (não mistura com o estoque geral da unidade).</p>
+            <p><strong>Como começar</strong>, na ordem:</p>
+            <ol style="margin:0 0 12px 18px;">
+                <li><strong>Dê entrada no estoque</strong> (aba Entrada de estoque) — por XML da nota ou manual.
+                Produtos que ainda não existem são cadastrados na hora.</li>
+                <li>Confira/ajuste o <strong>preço de venda</strong> na aba Produtos.</li>
+                <li>Faça a <strong>venda</strong> na aba Vender / Faturar (cliente, itens, conta e parcelas).</li>
+                <li>Acompanhe e dê <strong>baixa nos recebimentos</strong> na aba Vendas.</li>
+            </ol>
+            <p><strong>Termos</strong>: <em>estoque</em> = saldo atual do produto; <em>custo</em> = valor
+            da última entrada; <em>título a receber</em> = a parcela que aparece no Financeiro; <em>baixa</em> =
+            registrar que o cliente pagou; <em>Sentinela</em> = registro de auditoria das ações sensíveis.</p>
+            <p>O menu <strong>Ajuda</strong> abre direto na seção da aba em que você está. As demais seções
+            explicam cada tela; a última (<strong>Bloqueios e auditoria</strong>) resume o que o sistema impede
+            e o que fica registrado.</p>
+        ` },
+        { id: 'dashboard', titulo: 'Dashboard', corpo: `
+            <p>Visão rápida da loja, atualizada a cada ação:</p>
+            <ul>
+                <li><strong>Produtos ativos</strong>: quantos produtos estão cadastrados e não foram inativados.</li>
+                <li><strong>Valor em estoque (a custo)</strong>: soma de <em>estoque × último custo</em> dos
+                produtos com saldo positivo. É valor de custo, não de venda.</li>
+                <li><strong>Vendas no mês</strong>: quantidade e valor total das vendas com data no mês corrente.</li>
+                <li><strong>A receber em aberto</strong>: soma das parcelas ainda não recebidas (já considerando
+                desconto e juros lançados na baixa).</li>
+                <li><strong>Últimas vendas</strong>: as 8 mais recentes.</li>
+                <li><strong>Produtos com estoque baixo</strong>: os que estão com saldo zerado ou negativo (até 10).
+                Saldo negativo acontece quando se vende acima do estoque — o sistema pede confirmação antes.</li>
+            </ul>
+        ` },
+        { id: 'produtos', titulo: 'Produtos', corpo: `
+            <p>Cadastre nome, categoria (Armarinho, Cosméticos ou outra), unidade e
+            <strong>preço de venda</strong>. O <strong>preço de custo</strong> e o
+            <strong>estoque</strong> não são digitados aqui — são atualizados sozinhos a cada
+            entrada de estoque (o custo guardado é o da <strong>última</strong> entrada, não uma
+            média). A coluna <strong>Margem</strong> compara venda e custo.</p>
+            <p>A lista de produtos nasce recolhida — clique em "Ver produtos cadastrados" pra abrir e
+            buscar. <strong>Inativar</strong> tira o produto das listas de venda sem apagar o histórico.</p>
+        ` },
+        { id: 'entrada', titulo: 'Entrada de estoque', corpo: `
+            <ul>
+                <li><strong>Importar XML (NF-e)</strong>: escolha o arquivo — fornecedor, nota e itens
+                são preenchidos sozinhos. Cada item casa com um produto já cadastrado (pelo código de
+                barras/código do fornecedor, depois pelo nome igual) ou vira <strong>produto novo</strong>;
+                nesse caso defina o preço de venda (ou use "Aplicar margem" pra calcular
+                custo + %). Desconto/frete lançados no próprio item entram no custo; desconto/frete
+                só no total da nota <strong>não</strong> são rateados nessa versão. A mesma nota
+                (mesma chave de acesso) não pode ser importada duas vezes.</li>
+                <li><strong>Entrada manual</strong>: monte a lista de itens (produto existente ou novo,
+                qtd, custo, preço de venda) e registre tudo de uma vez.</li>
+                <li><strong>Entradas registradas</strong>: histórico, com opção de excluir — o estoque
+                dos itens é revertido (pode ficar negativo se já foram vendidos).</li>
+            </ul>
+        ` },
+        { id: 'vender', titulo: 'Vender / Faturar', corpo: `
+            <ol style="margin:0 0 12px 18px;">
+                <li>Escolha o <strong>cliente</strong> (busca por nome, código ou documento; o botão
+                "+" cadastra um novo na hora).</li>
+                <li>Monte o <strong>carrinho</strong>: o valor sugerido é o preço de venda do produto,
+                mas dá pra editar (é assim que se dá desconto). Vender acima do estoque pede
+                confirmação.</li>
+                <li>Escolha a <strong>conta de recebimento</strong> (o botão "+" cria uma conta nova na
+                hora, no Financeiro da unidade) e a condição: <strong>à vista</strong>
+                (1 título) ou <strong>parcelado</strong> (de 2 a 36 parcelas, a cada N dias ou no mesmo
+                dia do mês; a última parcela absorve o resto do arredondamento).</li>
+                <li><strong>Faturar</strong>: grava a venda, baixa o estoque, cria o(s) título(s) a
+                receber no Financeiro e abre o PDF da fatura (Visualizar/Baixar/Compartilhar).</li>
+            </ol>
+            <p>Se algo falhar no meio (ex: já baixou o estoque mas não conseguiu criar o título), o
+            sistema avisa em qual etapa parou — avise o administrador antes de refazer, pra não
+            duplicar.</p>
+        ` },
+        { id: 'vendas', titulo: 'Vendas', corpo: `
+            <p>Histórico de todas as vendas, filtrável por período e cliente. A coluna
+            <strong>Situação</strong> mostra o andamento dos recebimentos (Em aberto / x/y pagas /
+            Recebido em parte / Pago). O botão <strong>📄 Fatura</strong> gera o PDF de novo a qualquer momento.</p>
+            <p><strong>💰 Recebimentos</strong> lista as parcelas da venda; em cada parcela em aberto,
+            <strong>Receber</strong> registra a baixa: data, conta que recebeu (o "+" cria conta nova),
+            desconto ou juros, e o valor recebido. Se o cliente pagar <strong>só uma parte</strong>, a
+            parcela é dividida — a parte paga fica quitada e o saldo vira uma nova parcela em aberto.
+            A baixa também aparece no Financeiro (título quitado e lançamento na conta), então
+            <strong>não</strong> dê a mesma baixa nos dois lugares.</p>
+            <p><strong>✏️ Editar</strong> reabre a venda na aba Vender/Faturar (cliente, itens, valores,
+            data, conta e parcelas) — ao salvar, o estoque é recalculado e as parcelas do Financeiro são
+            substituídas pelas novas. <strong>🗑️ Excluir</strong> apaga a venda, devolve o estoque e apaga os
+            títulos a receber dela.</p>
+            <p><strong>Regra de segurança:</strong> venda que já tem <strong>qualquer recebimento</strong>
+            (mesmo parcial, e mesmo que a baixa tenha sido dada no Financeiro) <strong>nunca</strong> pode ser
+            editada nem excluída — os botões ficam desabilitados e o sistema confere de novo no banco na hora
+            da ação. Toda edição, exclusão, tentativa bloqueada ou falha fica registrada na Sentinela, com o
+            retrato da venda (itens e parcelas).</p>
+            <p>Desfazer uma baixa e estornar uma venda com recebimento não existem nessa versão
+            (uma baixa lançada errada precisa ser corrigida no Financeiro).</p>
+        ` },
+        { id: 'seguranca', titulo: 'Bloqueios e auditoria', corpo: `
+            <p><strong>O que o sistema impede</strong></p>
+            <ul>
+                <li><strong>Venda com recebimento não muda</strong>: nenhuma venda que já tenha recebimento
+                (parcial ou total, dado aqui ou no Financeiro) pode ser editada ou excluída. Os botões
+                ficam desabilitados e, na hora da ação, o sistema confere de novo no banco. Se não conseguir
+                conferir, também bloqueia (por segurança).</li>
+                <li><strong>Nota de XML repetida</strong>: a mesma chave de acesso não entra duas vezes.</li>
+                <li><strong>Baixa acima do devido</strong>: o valor recebido não pode passar do líquido da parcela.</li>
+                <li><strong>Falha no meio de uma operação</strong>: a mensagem diz em qual etapa parou; quando dá,
+                o sistema desfaz sozinho o que já tinha gravado (edição de venda, por exemplo). Se sobrar algo
+                parcial, ele avisa pra procurar o administrador antes de repetir.</li>
+            </ul>
+            <p><strong>Acesso e assinatura</strong></p>
+            <ul>
+                <li>Quem está vinculado à unidade acessa o módulo; este módulo não tem papéis próprios.
+                Quem está em mais de uma unidade escolhe qual usar (e troca no menu, "Trocar unidade").</li>
+                <li>O módulo precisa estar <strong>assinado</strong> pela unidade. Com pendência de assinatura
+                aparece um aviso amarelo no topo; com bloqueio, uma tela cobre o aplicativo (dá pra escolher
+                outra unidade ou sair). A liberação é feita no Admin Plataforma.</li>
+            </ul>
+            <p><strong>Aparência da unidade</strong>: a cor principal, a imagem de fundo do menu e o logo são
+            configurados fora deste módulo, pelo administrador da unidade — o Armarinho só aplica. O logo
+            também aparece no cabeçalho do PDF da fatura.</p>
+            <p><strong>Sentinela (auditoria)</strong>: ficam registrados, com quem fez e o que mudou —
+            produto editado ou inativado, entrada de estoque excluída, baixa de parcela (total ou parcial),
+            venda editada, venda excluída, tentativa de editar/excluir venda bloqueada e falhas nessas
+            operações. Nas edições e exclusões de venda o registro guarda o retrato completo (cliente, itens e
+            parcelas), já que o original deixa de existir.</p>
+        ` },
+    ]
+};
+function renderizarAjudaModulo(secaoId) {
+    const secao = AJUDA_ARMARINHO.secoes.find(s => s.id === secaoId) || AJUDA_ARMARINHO.secoes[0];
+    document.querySelectorAll('.modal-ajuda-nav-item').forEach(el => el.classList.toggle('ativo', el.dataset.secao === secao.id));
+    document.getElementById('ajudaModuloConteudo').innerHTML = `<h4>${escapeHtml(secao.titulo)}</h4>${secao.corpo}<div class="ajuda-atualizado">Última revisão deste conteúdo: ${AJUDA_ARMARINHO.ultimaRevisao}</div>`;
+}
+function abrirModalAjuda(secaoInicial) {
+    document.getElementById('modalAjudaTitulo').textContent = '❓ Ajuda — ' + AJUDA_ARMARINHO.titulo;
+    document.getElementById('ajudaModuloNav').innerHTML = AJUDA_ARMARINHO.secoes.map(s => `<button type="button" class="modal-ajuda-nav-item" data-secao="${s.id}">${escapeHtml(s.titulo)}</button>`).join('');
+    document.querySelectorAll('.modal-ajuda-nav-item').forEach(btn => btn.addEventListener('click', () => renderizarAjudaModulo(btn.dataset.secao)));
+    renderizarAjudaModulo(secaoInicial || 'geral');
+    document.getElementById('modal-ajuda').classList.add('aberto');
+}
+document.getElementById('btnAjudaModulo').addEventListener('click', () => {
+    const abaAtivaBtn = document.querySelector('.tab-app-btn.active');
+    const abaAtiva = abaAtivaBtn ? abaAtivaBtn.dataset.appTab : 'geral';
+    abrirModalAjuda(AJUDA_ARMARINHO.secoes.some(s => s.id === abaAtiva) ? abaAtiva : 'geral');
+});
+document.getElementById('btnFecharModalAjuda').addEventListener('click', () => document.getElementById('modal-ajuda').classList.remove('aberto'));
+
+// ---------------------------------------------------------------
+// INÍCIO
+// ---------------------------------------------------------------
+renderizarCarrinho();
+checkSession();
+</script>
+</body>
+</html>

@@ -189,6 +189,7 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 .subscreen{display:none}.subscreen.on{display:block}
 .fiic{width:36px;height:36px;border-radius:8px;background:var(--nvl);display:flex;align-items:center;justify-content:center;color:var(--nv);font-size:17px;flex-shrink:0}
 .fipl{font-size:14px;font-weight:600;color:var(--tx)}.fisb{font-size:12px;color:var(--tx2);margin-top:1px}
+.fi-mini-alert{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:#991b1b;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:1px 7px;margin-top:4px}
 .sbar{padding:10px 16px;background:var(--sf);border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between}
 .sbtn{background:none;border:none;font-size:12px;color:var(--nv);cursor:pointer;font-weight:600;font-family:var(--fn);display:flex;align-items:center;gap:4px}
 .empty{padding:40px 16px;text-align:center;color:var(--tx2);font-size:13px;line-height:1.7}
@@ -229,9 +230,10 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 .man-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;user-select:none}
 .man-hdr-l{display:flex;align-items:center;gap:8px}
 .man-hdr-title{font-size:13px;font-weight:600;color:var(--tx)}
-.man-hdr-badge{font-size:11px;padding:2px 8px;border-radius:10px;background:#fef9c3;color:#854d0e;border:1px solid #fde047;font-weight:500}
+.man-hdr-badge{font-size:11px;padding:2px 8px;border-radius:10px;background:var(--bg);color:var(--tx3);border:1px solid var(--bd);font-weight:500}
 .man-hdr-badge.ok{background:#dcfce7;color:#166534;border-color:#86efac}
 .man-hdr-badge.alert{background:#fee2e2;color:#991b1b;border-color:#fca5a5}
+.man-hdr-badge.proximo{background:#fef9c3;color:#854d0e;border-color:#fde047}
 
 /* dashboard */
 .dash-card-tipo{flex:1;min-width:90px;padding:12px 8px;text-align:center;border-right:1px solid var(--bd)}
@@ -253,7 +255,7 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 .man-item:last-child{border-bottom:none}
 .man-item-title{font-size:13px;font-weight:600;color:var(--tx);display:flex;align-items:center;justify-content:space-between}
 .man-status{font-size:11px;padding:2px 8px;border-radius:10px;font-weight:500}
-.ms-ok{background:#dcfce7;color:#166534}.ms-alert{background:#fee2e2;color:#991b1b}.ms-pend{background:var(--bg);color:var(--tx3)}
+.ms-ok{background:#dcfce7;color:#166534}.ms-alert{background:#fee2e2;color:#991b1b}.ms-pend{background:var(--bg);color:var(--tx3)}.ms-proximo{background:#fef9c3;color:#854d0e}
 .man-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .man-field{display:flex;flex-direction:column;gap:4px}
 .man-field label{font-size:11px;font-weight:500;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em}
@@ -1011,6 +1013,7 @@ async function iniciarAppChecklist(){
   document.getElementById('operador-badge').textContent = '⬤ ' + meuPerfil.nomeOperador;
   document.getElementById('operador-badge').addEventListener('click', () => { if (confirm('Sair da conta?')) sair(); });
   document.getElementById('dt').value = new Date().toISOString().slice(0,10);
+  document.getElementById('rdt').value = new Date().toISOString().slice(0,10); // "Recuperar" já vem com a data de hoje, pra não precisar preencher toda vez
   document.getElementById('mot').value = lerPadrao('motorista') || '';
 
   if (souAdmin()) {
@@ -1589,10 +1592,17 @@ async function carregarManutencaoVeiculo(equipamentoId){
   renderManItens();
 }
 
+const ROTULO_STATUS_MAN = {
+  ok:      { classe: 'ms-ok',      texto: '✓ Em dia' },
+  alert:   { classe: 'ms-alert',   texto: '⚠ Vencido' },
+  proximo: { classe: 'ms-proximo', texto: '⏰ Vencimento próximo' },
+  pendente:{ classe: 'ms-pend',    texto: 'Não registrado' }
+};
+
 function renderManItens(){
   const body = document.getElementById('man-itens');
   const hoje = new Date();
-  let alertas = 0, ok = 0;
+  let alertas = 0, ok = 0, proximos = 0;
   body.innerHTML = '';
 
   if (vSel && vSel.statusFuncionamento === 'L' && vSel.locacaoAtual) {
@@ -1613,19 +1623,21 @@ function renderManItens(){
     const est = manEstado[t.id] || {};
     const stat = calcStatusMan(est, t, hoje);
     if (stat === 'alert') alertas++;
+    else if (stat === 'proximo') proximos++;
     else if (stat === 'ok') ok++;
     const motivoVencido = motivoVencimentoMan(est, hoje);
+    const rotulo = ROTULO_STATUS_MAN[stat];
 
     const div = document.createElement('div');
     div.className = 'man-item';
     div.innerHTML = `
       <div class="man-item-title">
         <span><i class="ti ti-tool" style="margin-right:5px;color:var(--nv)"></i>${escapeHtml(t.tipo)}</span>
-        <span class="man-status ${stat==='ok'?'ms-ok':stat==='alert'?'ms-alert':'ms-pend'}">
-          ${stat==='ok'?'✓ Em dia':stat==='alert'?'⚠ Vencido':'Não registrado'}
+        <span class="man-status ${rotulo.classe}">
+          ${rotulo.texto}
         </span>
       </div>
-      ${stat==='alert' ? `<div class="man-alert-bar"><i class="ti ti-alert-triangle"></i> ${escapeHtml(motivoVencido)}</div>` : ''}
+      ${(stat==='alert'||stat==='proximo') ? `<div class="man-alert-bar"><i class="ti ti-alert-triangle"></i> ${escapeHtml(motivoVencido)}</div>` : ''}
       <div class="man-grid">
         <div class="man-field">
           <label>Data da última troca</label>
@@ -1658,33 +1670,59 @@ function renderManItens(){
 
   const badge = document.getElementById('man-badge');
   if (alertas > 0) { badge.textContent = alertas + ' vencido' + (alertas > 1 ? 's' : ''); badge.className = 'man-hdr-badge alert'; }
+  else if (proximos > 0) { badge.textContent = proximos + ' vencimento' + (proximos > 1 ? 's' : '') + ' próximo' + (proximos > 1 ? 's' : ''); badge.className = 'man-hdr-badge proximo'; }
   else if (ok > 0) { badge.textContent = ok + ' em dia'; badge.className = 'man-hdr-badge ok'; }
   else { badge.textContent = 'Não registrado'; badge.className = 'man-hdr-badge'; }
 }
 
+// limiares do aviso "vencimento próximo" (amarelo) -- antes de vencer
+// de verdade (vermelho), mas já perto o suficiente pra virar prioridade.
+// LIMIAR_MEDIDA_PROXIMO vale tanto pra KM (veículo) quanto pra
+// horímetro (gerador/climatizador) -- mesmo número, unidades diferentes
+const LIMIAR_DIAS_PROXIMO = 7;
+const LIMIAR_MEDIDA_PROXIMO = 500;
+
+function diasAte(dataStr, hoje) {
+  const alvo = new Date(dataStr + 'T00:00:00');
+  const hojeZerado = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  return Math.round((alvo - hojeZerado) / 86400000);
+}
+
 function calcStatusMan(est, tipo, hoje){
   if (!est.dataUlt && !est.kmUlt) return 'pendente';
+
+  const kmAtual = Number(document.getElementById('km')?.value) || ultimoKmConhecido;
+
   if (est.dataProx) {
     const dp = new Date(est.dataProx + 'T00:00:00');
     if (dp < hoje) return 'alert';
   }
   if (est.kmProx) {
-    const kmAtual = Number(document.getElementById('km')?.value) || ultimoKmConhecido;
     if (kmAtual != null && kmAtual >= Number(est.kmProx)) return 'alert';
   }
+
+  // Vencimento próximo: ainda não venceu, mas falta pouco (<=7 dias
+  // ou <=500 na medida -- km ou horímetro)
+  if (est.dataProx && diasAte(est.dataProx, hoje) <= LIMIAR_DIAS_PROXIMO) return 'proximo';
+  if (est.kmProx && kmAtual != null && (Number(est.kmProx) - kmAtual) <= LIMIAR_MEDIDA_PROXIMO) return 'proximo';
+
   return 'ok';
 }
 
 function motivoVencimentoMan(est, hoje){
+  const kmAtual = Number(document.getElementById('km')?.value) || ultimoKmConhecido;
   const motivos = [];
   if (est.dataProx) {
     const dp = new Date(est.dataProx + 'T00:00:00');
+    const dias = diasAte(est.dataProx, hoje);
     if (dp < hoje) motivos.push('venceu em ' + est.dataProx);
+    else if (dias <= LIMIAR_DIAS_PROXIMO) motivos.push('faltam ' + dias + (dias===1?' dia':' dias') + ' (vence em ' + est.dataProx + ')');
   }
   if (est.kmProx) {
-    const kmAtual = Number(document.getElementById('km')?.value) || ultimoKmConhecido;
     if (kmAtual != null && kmAtual >= Number(est.kmProx)) {
       motivos.push(labelMedida(vSel) + ' atual (' + kmAtual.toLocaleString('pt-BR') + ') passou do previsto (' + Number(est.kmProx).toLocaleString('pt-BR') + ')');
+    } else if (kmAtual != null && (Number(est.kmProx) - kmAtual) <= LIMIAR_MEDIDA_PROXIMO) {
+      motivos.push('faltam ' + (Number(est.kmProx)-kmAtual).toLocaleString('pt-BR') + ' ' + unidadeMedidaCurta(vSel) + ' (previsto ' + Number(est.kmProx).toLocaleString('pt-BR') + ')');
     }
   }
   return motivos.length ? motivos.join(' e ') : 'Verifique a manutenção';
@@ -1897,30 +1935,59 @@ async function abrirDetalheLista(titulo, listaEquipamentos){
 
   const ids = listaEquipamentos.map(v => v.id);
   const ultimoChecklistPorEquipamento = {};
+  const vencidaPorEquipamento = {};
   if (ids.length) {
-    const { data: checklists } = await sb.from('checklist_realizados')
-      .select('equipamento_veiculo_id, data')
-      .eq('unidade_negocio_id', meuPerfil.unidadeId)
-      .in('equipamento_veiculo_id', ids)
-      .order('data', { ascending: false });
+    const [{ data: checklists }, { data: tiposMan }, { data: historicoMan }] = await Promise.all([
+      sb.from('checklist_realizados')
+        .select('equipamento_veiculo_id, data, motorista_responsavel')
+        .eq('unidade_negocio_id', meuPerfil.unidadeId)
+        .in('equipamento_veiculo_id', ids)
+        .order('data', { ascending: false }),
+      sb.from('checklist_tipos_manutencao').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true),
+      sb.from('checklist_manutencoes').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).in('equipamento_veiculo_id', ids)
+    ]);
     (checklists || []).forEach(c => {
-      if (!ultimoChecklistPorEquipamento[c.equipamento_veiculo_id]) ultimoChecklistPorEquipamento[c.equipamento_veiculo_id] = c.data;
+      if (!ultimoChecklistPorEquipamento[c.equipamento_veiculo_id]) {
+        ultimoChecklistPorEquipamento[c.equipamento_veiculo_id] = { data: c.data, motorista: c.motorista_responsavel };
+      }
+    });
+
+    // manutenção vencida por equipamento -- mesmo critério já usado no
+    // dashboard geral (data prevista passada OU medição atual já
+    // bateu/passou da prevista)
+    const hoje = new Date();
+    listaEquipamentos.forEach(v => {
+      const categoriaEquipamento = categoriaParaChecklist(v);
+      const tiposAplicaveis = (tiposMan || []).filter(t => !t.categoria_checklist || t.categoria_checklist === categoriaEquipamento);
+      const registrosEquip = (historicoMan || []).filter(h => h.equipamento_veiculo_id === v.id);
+      const temVencida = tiposAplicaveis.some(t => {
+        const reg = registrosEquip.find(h => h.tipo_manutencao_id === t.id);
+        if (!reg || (!reg.data_ultima && !reg.medicao_ultima)) return false;
+        const dataProx = reg.data_proxima ? new Date(reg.data_proxima + 'T00:00:00') : null;
+        const medidaAtual = ultimaMedidaConhecida(v);
+        const vencidaPorMedida = reg.medicao_proxima && medidaAtual != null && medidaAtual >= reg.medicao_proxima;
+        return (dataProx && dataProx < hoje) || vencidaPorMedida;
+      });
+      if (temVencida) vencidaPorEquipamento[v.id] = true;
     });
   }
 
   document.getElementById('detalhe-categoria-lista').innerHTML = listaEquipamentos.length
     ? listaEquipamentos.map(v => {
-      const ultimaData = ultimoChecklistPorEquipamento[v.id];
-      const textoUltimoChecklist = ultimaData
-        ? 'Último checklist: ' + new Date(ultimaData + 'T00:00:00').toLocaleDateString('pt-BR')
+      const ultimo = ultimoChecklistPorEquipamento[v.id];
+      const textoUltimoChecklist = ultimo
+        ? 'Último checklist: ' + new Date(ultimo.data + 'T00:00:00').toLocaleDateString('pt-BR') + (ultimo.motorista ? ' · ' + ultimo.motorista : '')
         : 'Nunca fez checklist';
+      const alertaManutencao = vencidaPorEquipamento[v.id]
+        ? `<div><span class="fi-mini-alert"><i class="ti ti-alert-triangle"></i> Manutenção vencida</span></div>` : '';
       return `
       <div class="fi">
         <div class="fiic"><i class="ti ${TPI[v.tipo] || 'ti-tool'}"></i></div>
         <div style="flex:1">
           <div class="fipl">${escapeHtml(v.nome)}${v.placa || v.identificador ? ' — ' + escapeHtml(v.placa || v.identificador) : ''}</div>
           <div class="fisb">${infoMedidaStatusLocal(v)}</div>
-          <div class="fisb" style="margin-top:2px;${ultimaData ? '' : 'color:var(--nk)'}">${escapeHtml(textoUltimoChecklist)}</div>
+          <div class="fisb" style="margin-top:2px;${ultimo ? '' : 'color:var(--nk)'}">${escapeHtml(textoUltimoChecklist)}</div>
+          ${alertaManutencao}
         </div>
         <button class="fi-btn" data-iniciar-checklist="${v.id}" title="Fazer checklist"><i class="ti ti-clipboard-list"></i></button>
       </div>
@@ -2078,14 +2145,35 @@ function renderChecklistsRecuperados(checklists, body){
 
 async function excluirChecklistRecuperado(id){
   if (!confirm('Excluir esse checklist? Os itens e fotos vinculados também serão apagados. Não tem como desfazer.')) return;
-  const { data: itens } = await sb.from('checklist_realizados_itens').select('id, checklist_realizados_itens_fotos(url)').eq('checklist_id', id);
-  const { error } = await sb.from('checklist_realizados').delete().eq('id', id);
-  if (error) { toast('Erro ao excluir: ' + error.message); return; }
+  const { data: itens, error: errBuscarItens } = await sb.from('checklist_realizados_itens').select('id, checklist_realizados_itens_fotos(url)').eq('checklist_id', id);
+  if (errBuscarItens) { toast('Erro ao excluir: ' + errBuscarItens.message); return; }
+
   const caminhos = [];
   (itens || []).forEach(it => (it.checklist_realizados_itens_fotos || []).forEach(f => {
     const partes = f.url.split('/checklist-fotos/');
     if (partes[1]) caminhos.push(partes[1]);
   }));
+
+  // apaga explicitamente na ordem certa (fotos -> itens -> histórico de
+  // manutenção -> cabeçalho) em vez de confiar só no "on delete
+  // cascade" do banco -- excluir o cabeçalho direto estava dando erro
+  // de violação de chave estrangeira, porque itens filhos E o
+  // histórico de manutenção (quando o checklist tinha uma troca
+  // registrada junto) ainda existiam apontando pra ele
+  const idsItens = (itens || []).map(it => it.id);
+  if (idsItens.length) {
+    const { error: errFotos } = await sb.from('checklist_realizados_itens_fotos').delete().in('item_id', idsItens);
+    if (errFotos) { toast('Erro ao excluir fotos: ' + errFotos.message); return; }
+    const { error: errItens } = await sb.from('checklist_realizados_itens').delete().in('id', idsItens);
+    if (errItens) { toast('Erro ao excluir itens: ' + errItens.message); return; }
+  }
+
+  const { error: errHistMan } = await sb.from('checklist_manutencoes_historico').delete().eq('checklist_id', id);
+  if (errHistMan) { toast('Erro ao excluir histórico de manutenção: ' + errHistMan.message); return; }
+
+  const { error } = await sb.from('checklist_realizados').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir: ' + error.message); return; }
+
   if (caminhos.length) await sb.storage.from('checklist-fotos').remove(caminhos);
   toast('Checklist excluído.');
   recuperarChecklists();
