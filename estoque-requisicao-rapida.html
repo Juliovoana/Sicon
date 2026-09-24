@@ -69,6 +69,19 @@
     .cartao h2 { font-family: 'Fraunces', serif; font-size: 1.02rem; font-weight: 600; margin: 0 0 14px 0; }
     .grade { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     @media (max-width: 520px) { .grade { grid-template-columns: 1fr; } }
+    .campo textarea {
+        font-family: 'Inter', sans-serif; font-size: 0.92rem; padding: 10px 12px; resize: vertical;
+        border: 1.5px solid var(--border); border-radius: 9px; width: 100%; background: var(--surface); color: var(--ink);
+    }
+    .campo textarea:focus { outline: none; border-color: var(--brand-2); }
+
+    /* tela "Nova requisição" mais compacta: menos espaço entre cartões e campos */
+    #aba-nova .cartao { padding: 12px 14px; margin-bottom: 10px; }
+    #aba-nova .cartao h2 { margin-bottom: 8px; }
+    #aba-nova .grade { gap: 6px 10px; }
+    #aba-nova .campo { gap: 3px; margin-bottom: 6px; }
+    #aba-nova .campo input, #aba-nova .campo select, #aba-nova .campo textarea { padding: 7px 10px; }
+    #aba-nova .subtitulo { margin: 2px 0 0 0; }
 
     .linha-busca { position: relative; }
     .resultados-busca {
@@ -77,6 +90,12 @@
         display: none; margin-top: 4px; box-shadow: 0 6px 18px rgba(0,0,0,0.12);
     }
     .resultados-busca.aberto { display: block; }
+    /* lista de produtos: ancorada na linha inteira (busca + botão) e um pouco
+       mais larga/alta que o campo, pra facilitar o toque no celular */
+    #linhaBuscaProduto { position: relative; }
+    #linhaBuscaProduto .linha-busca { position: static; }
+    #resultadosBuscaProduto { left: -10px; right: -10px; max-height: 60vh; }
+    #resultadosBuscaProduto .resultado-item { padding: 13px 14px; font-size: 0.95rem; }
     .resultado-item { padding: 10px 12px; cursor: pointer; font-size: 0.88rem; border-bottom: 1px solid var(--border); }
     .resultado-item:last-child { border-bottom: none; }
     .resultado-item:hover { background: var(--brand-soft); }
@@ -262,13 +281,25 @@
                     <p class="selecionado-texto" id="planoContasSelecionadoTexto"></p>
                     <p class="subtitulo" style="margin-top:2px;">Aplicado a todo item novo — pode trocar item por item na lista abaixo.</p>
                 </div>
+                <div class="campo" style="grid-column: 1 / -1;">
+                    <label>Observação *</label>
+                    <input type="text" id="campoObservacaoReq" list="listaObservacoesReq" maxlength="500" placeholder="Escolha na lista ou digite..." autocomplete="off">
+                    <datalist id="listaObservacoesReq">
+                        <option value="Material para operação">
+                        <option value="Material para reserva">
+                        <option value="Precisa comprar">
+                        <option value="Retirada a Noite">
+                        <option value="Retirado pela Manhã">
+                        <option value="Retirado a Tarde">
+                    </datalist>
+                </div>
             </div>
-            <p class="subtitulo" style="margin-top:-6px;">* campos obrigatórios</p>
+            <p class="subtitulo" style="margin-top:-2px;">* campos obrigatórios</p>
         </div>
 
         <div class="cartao" id="secaoMaterial">
             <h2>Materiais</h2>
-            <div style="display:flex; gap:8px; align-items:flex-end;">
+            <div id="linhaBuscaProduto" style="display:flex; gap:8px; align-items:flex-end;">
                 <div class="campo linha-busca" style="flex:1; margin-bottom:0;">
                     <label>Buscar produto</label>
                     <input type="text" id="campoBuscaProduto" placeholder="Digite código ou descrição..." autocomplete="off">
@@ -1830,12 +1861,14 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
     const setorId = document.getElementById('campoSetor').value;
     const solicitante = document.getElementById('campoSolicitante').value.trim();
     const numeroExterno = document.getElementById('campoNumeroExterno').value.trim();
+    const observacaoReq = document.getElementById('campoObservacaoReq').value.trim();
     const listaItensAtual = tipoRequisicaoAtual === 'material' ? itensNovaReq : itensServico;
 
     if (!almoxarifadoId) { statusEl.className = 'status-msg status-erro'; statusEl.textContent = 'Escolha o almoxarifado.'; return; }
     if (!setorId) { statusEl.className = 'status-msg status-erro'; statusEl.textContent = 'Escolha o setor.'; return; }
     if (!eventoSelecionado) { statusEl.className = 'status-msg status-erro'; statusEl.textContent = 'Escolha o evento.'; return; }
     if (!solicitante) { statusEl.className = 'status-msg status-erro'; statusEl.textContent = 'Informe o solicitante.'; return; }
+    if (!observacaoReq) { statusEl.className = 'status-msg status-erro'; statusEl.textContent = 'Informe a observação.'; document.getElementById('campoObservacaoReq').focus(); return; }
     if (!listaItensAtual.length) { statusEl.className = 'status-msg status-erro'; statusEl.textContent = 'Adicione pelo menos um item.'; return; }
 
     const btn = document.getElementById('btnEnviarRequisicao');
@@ -1849,7 +1882,8 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
                 setor_id: setorId ? Number(setorId) : null,
                 evento: eventoSelecionado ? eventoSelecionado.codigo : null,
                 solicitante,
-                numero_externo: numeroExterno || null
+                numero_externo: numeroExterno || null,
+                observacao: observacaoReq
             }).eq('id', requisicaoEmEdicaoId);
             if (eUpd) throw eUpd;
 
@@ -1932,6 +1966,7 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
             evento: eventoSelecionado ? eventoSelecionado.codigo : null,
             solicitante,
             numero_externo: numeroExterno || null,
+            observacao: observacaoReq,
             tipo: tipoRequisicaoAtual,
             criado_por: meuPerfil.userId,
             // Unidade pode dispensar a aprovação (parâmetro na aba
@@ -1977,6 +2012,7 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
         // requisição -- ver comentário em salvarUltimaEscolha()).
         document.getElementById('campoBuscaEvento').value = '';
         document.getElementById('campoNumeroExterno').value = '';
+        document.getElementById('campoObservacaoReq').value = '';
         salvarUltimaEscolha();
         statusEl.className = 'status-msg';
         statusEl.style.color = 'var(--brand-2)';
@@ -2096,6 +2132,7 @@ function renderizarRequisicoesAtender() {
                         <span class="pill badge-status-req pill-${req.status}">${STATUS_REQ_LABEL[req.status] || req.status}</span>
                         <span class="pill" style="background:#EEF0F1; color:var(--muted);">${req.tipo === 'servico_abastecimento' ? '⛽ serviço' : '📦 material'}</span>
                         <div class="meta">${almox ? escapeHtml(almox.nome) : '-'} ${setor ? '· ' + escapeHtml(setor.nome) : ''} ${req.evento ? '· evento ' + escapeHtml(req.evento) : ''} ${req.numero_externo ? '· nº externo ' + escapeHtml(req.numero_externo) : ''}</div>
+                        ${req.observacao ? `<div class="meta" style="font-style:italic;">📝 ${escapeHtml(req.observacao)}</div>` : ''}
                         <div class="meta">${new Date(req.created_at).toLocaleString('pt-BR')}</div>
                         ${req.observacao_aprovacao ? `<div class="meta" style="font-style:italic;">💬 ${escapeHtml(req.observacao_aprovacao)}</div>` : ''}
                     </div>
@@ -2215,6 +2252,7 @@ function reabrirRequisicaoParaEdicao(reqId) {
     document.getElementById('campoSetor').value = req.setor_id || '';
     document.getElementById('campoSolicitante').value = req.solicitante || '';
     document.getElementById('campoNumeroExterno').value = req.numero_externo || '';
+    document.getElementById('campoObservacaoReq').value = req.observacao || '';
     if (req.evento) {
         eventoSelecionado = eventos.find(e => e.codigo === req.evento) || { codigo: req.evento, descricao: '' };
         document.getElementById('eventoSelecionadoTexto').textContent = `Selecionado: ${eventoSelecionado.codigo}${eventoSelecionado.descricao ? ' — ' + eventoSelecionado.descricao : ''}`;
@@ -2267,6 +2305,7 @@ function cancelarEdicaoRequisicao() {
     document.getElementById('campoSetor').value = '';
     document.getElementById('campoSolicitante').value = meuPerfil.email;
     document.getElementById('campoNumeroExterno').value = '';
+    document.getElementById('campoObservacaoReq').value = '';
     document.getElementById('campoBuscaEvento').value = '';
     document.getElementById('eventoSelecionadoTexto').textContent = '';
     eventoSelecionado = null;
@@ -2767,6 +2806,7 @@ async function construirPdfRequisicao(req, itens, formato) {
         `Almoxarifado: ${almox ? almox.nome : '-'}`,
         setor ? `Setor: ${setor.nome}` : null,
         req.evento ? `Evento: ${req.evento}` : null,
+        req.observacao ? `Observação: ${req.observacao}` : null,
         `Data: ${new Date(req.created_at).toLocaleString('pt-BR')}`
     ].filter(Boolean);
     linhasCabecalho.forEach(linha => {
