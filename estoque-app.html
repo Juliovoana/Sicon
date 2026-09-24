@@ -731,6 +731,14 @@
             <button class="btn btn-azul" id="btnAplicarFiltrosMov">🔍 Buscar</button>
             <button class="btn btn-cinza" id="btnLimparFiltrosMov">Limpar filtros</button>
             <button class="btn btn-cinza" id="btnFiltrarPendentesDestino" style="background:#FBEAE8; color:#C0392B;">🏷️ Itens avulsos</button>
+            <select id="movOrdemCampo" title="Data usada para ordenar a lista" style="margin-left:auto; padding:6px; border:1px solid #ccc; border-radius:4px;">
+                <option value="lancamento">Ordenar por: data/hora do lançamento</option>
+                <option value="nota">Ordenar por: data da nota</option>
+            </select>
+            <select id="movOrdemData" title="Sentido da ordem" style="padding:6px; border:1px solid #ccc; border-radius:4px;">
+                <option value="desc">Mais recentes primeiro</option>
+                <option value="asc">Mais antigas primeiro</option>
+            </select>
         </div>
     </div>
 
@@ -1406,6 +1414,9 @@
             <div class="campo"><label>Data próxima troca</label><input type="date" id="destAvulsoDataProximaTroca"></div>
             <div class="campo"><label>Responsável pela retirada</label><input type="text" id="destAvulsoResponsavel"></div>
         </div>
+        <div class="grade col4" style="margin-top:10px;">
+            <div class="campo"><label>Tag (opcional)</label><input type="text" id="destAvulsoTag"></div>
+        </div>
         <div class="grade col2" style="margin-top:10px;">
             <div class="campo" style="position:relative;">
                 <label>Evento</label>
@@ -1522,7 +1533,10 @@
                         <p class="subtitulo" id="notaItemPlanoContasSelecionado" style="margin-top:4px;"></p>
                     </div>
                 </div>
-                <p class="subtitulo" style="margin-top:4px;">Almoxarifado, Setor, Evento e Plano de Contas são obrigatórios — ficam gravados em cada movimento de entrada, usados no rateio financeiro.</p>
+                <div class="grade col4" style="margin-top:8px;">
+                    <div class="campo"><label>Tag (opcional)</label><input type="text" id="notaItemTag" placeholder="ex: 112"></div>
+                </div>
+                <p class="subtitulo" style="margin-top:4px;">Almoxarifado, Setor, Evento e Plano de Contas são obrigatórios — ficam gravados em cada movimento de entrada, usados no rateio financeiro. A Tag é opcional.</p>
                 <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
                     <span class="subtitulo" id="notaItemProdutoSelecionado"></span>
                     <button class="btn btn-azul btn-pequeno" id="btnAdicionarItemNota">+ Adicionar item</button>
@@ -1691,6 +1705,9 @@
                 <p class="subtitulo" id="baixaItensNotaEventoSelecionado" style="margin-top:4px;"></p>
             </div>
             <div class="campo"><label>Responsável pela retirada</label><input type="text" id="baixaItensNotaResponsavel"></div>
+        </div>
+        <div class="grade col4" style="margin-top:10px;">
+            <div class="campo"><label>Tag (opcional — vale pra todos os itens)</label><input type="text" id="baixaItensNotaTag"></div>
         </div>
         <div style="margin-top:10px; text-align:right;">
             <button class="btn btn-cinza btn-pequeno" id="btnAplicarTodosBaixa">⬇️ Aplicar a todos os itens abaixo</button>
@@ -2404,7 +2421,7 @@ async function chamarPost(acao, d) {
         const m = d.movimentacao;
         const { error: e1 } = await sb.from('estoque_movimentacoes').insert({
             data: m.data, produto_id: m.produtoId || null, descricao_avulsa: m.descricaoAvulsa || null, tipo: 'saida', qtd: m.qtd, valor_unit: m.valorUnit,
-            responsavel: m.responsavel || '', observacao: m.observacao || '', evento: m.evento || '',
+            responsavel: m.responsavel || '', observacao: m.observacao || '', evento: m.evento || '', tag: m.tag || '',
             fornecedor_nome: 'Almoxarifado',
             setor_id: m.setorId || null, subsetor_id: m.subsetorId || null,
             plano_contas_id: m.planoContasId || null, equipamento_veiculo_id: m.veiculoId || null,
@@ -5441,6 +5458,7 @@ function renderizarRequisicao(id) {
         });
         corpo.querySelectorAll('[data-atender]').forEach(btn => {
             btn.addEventListener('click', () => {
+                if (!podeAtenderItemRequisicao()) { alert('Seu perfil (Engenheiro) não pode atender itens de requisição.'); return; }
                 if (travadoAtender) { alert('Esse projeto está finalizado — não é mais possível lançar baixa de material.'); return; }
                 const itemClicado = proj.itens.find(i => i.id === Number(btn.dataset.atender));
                 if (itemClicado && !itemClicado.produtoId) { abrirModalVincularProduto(itemClicado.id); return; }
@@ -6282,7 +6300,14 @@ document.getElementById('btnFecharModalVincularProduto').addEventListener('click
     document.getElementById('modalVincularProduto').classList.remove('aberto');
 });
 
+// Engenheiro pede o material, mas quem atende/baixa é o almoxarifado. Trava só no
+// navegador (papel vem de meuPerfil.papel, já carregado no login).
+function podeAtenderItemRequisicao() {
+    return meuPerfil.papel !== 'engenheiro';
+}
+
 async function abrirModalAtender(itemId) {
+    if (!podeAtenderItemRequisicao()) { alert('Seu perfil (Engenheiro) não pode atender itens de requisição.'); return; }
     const proj = projetos.find(p => p.id === projetoAtualId);
     const item = proj.itens.find(i => i.id === itemId);
     const prod = produtos.find(p => p.id === item.produtoId);
@@ -7761,6 +7786,8 @@ document.getElementById('btnLimparFiltrosMov').addEventListener('click', () => {
     buscarPainelMovimentacoes();
 });
 
+['movOrdemData', 'movOrdemCampo'].forEach(id => document.getElementById(id).addEventListener('change', () => buscarPainelMovimentacoes()));
+
 document.getElementById('btnAplicarFiltrosMov').addEventListener('click', () => {
     filtroItensAvulsosAtivo = false;
     document.querySelectorAll('.col-so-avulso').forEach(el => el.style.display = 'none');
@@ -7955,7 +7982,7 @@ async function buscarPainelMovimentacoes() {
     try {
         const dados = await chamarGet('listarMovimentacoesFiltradas', filtros);
         let lista = (dados || []).map(m => ({
-            id: Number(m.id), data: formatarData(m.data), produtoId: m.produto_id != null ? Number(m.produto_id) : null, tipo: m.tipo,
+            id: Number(m.id), data: formatarData(m.data), dataOrdem: String(m.data || ''), produtoId: m.produto_id != null ? Number(m.produto_id) : null, tipo: m.tipo,
             qtd: Number(m.qtd) || 0, valorUnit: Number(m.valor_unit) || 0, tag: m.tag || '', evento: m.evento || '',
             observacao: m.observacao || '', responsavel: m.responsavel || '', projetoId: m.projeto_id || null,
             nfNumero: m.nf_numero || '', fornecedorCnpj: m.fornecedor_cnpj || '', fornecedorNome: m.fornecedor_nome || '',
@@ -7965,6 +7992,41 @@ async function buscarPainelMovimentacoes() {
             setorId: m.setor_id != null ? Number(m.setor_id) : null,
             veiculoId: m.equipamento_veiculo_id != null ? Number(m.equipamento_veiculo_id) : null
         }));
+
+        // ordem da lista: por data/hora do lançamento (padrão) ou pela data
+        // da nota; sentido padrão = mais recentes primeiro. Sempre desempata
+        // pelo id (id maior = lançado depois)
+        const sentidoOrdem = document.getElementById('movOrdemData').value === 'asc' ? 1 : -1;
+        const ordenarPorNota = document.getElementById('movOrdemCampo').value === 'nota';
+        if (ordenarPorNota) {
+            // data da nota = emissão (ou entrada, se não houver) da nota
+            // ligada à movimentação; sem nota, cai na data da própria
+            // movimentação
+            const idsNotas = [...new Set((dados || []).map(m => m.estoque_nota_id).filter(v => v != null))];
+            const dataPorNota = {};
+            for (let i = 0; i < idsNotas.length; i += 200) {
+                const { data: notasLote, error: erroNotas } = await sb.from('estoque_notas').select('id, data_emissao, data_entrada').in('id', idsNotas.slice(i, i + 200));
+                if (erroNotas) throw erroNotas;
+                (notasLote || []).forEach(n => { dataPorNota[n.id] = String(n.data_emissao || n.data_entrada || ''); });
+            }
+            const dadosPorId = {};
+            (dados || []).forEach(m => { dadosPorId[Number(m.id)] = m; });
+            lista.forEach(m => {
+                const bruto = dadosPorId[m.id];
+                m.chaveOrdem = (bruto && dataPorNota[bruto.estoque_nota_id]) || m.dataOrdem;
+            });
+        } else {
+            // data/hora do lançamento: usa a coluna de carimbo de tempo se a
+            // tabela tiver (criado_em/created_at); senão o id, que cresce na
+            // ordem em que os lançamentos foram gravados
+            const dadosPorId = {};
+            (dados || []).forEach(m => { dadosPorId[Number(m.id)] = m; });
+            lista.forEach(m => {
+                const bruto = dadosPorId[m.id] || {};
+                m.chaveOrdem = String(bruto.criado_em || bruto.created_at || '');
+            });
+        }
+        lista.sort((a, b) => sentidoOrdem * (a.chaveOrdem.localeCompare(b.chaveOrdem) || (a.id - b.id)));
 
         // guia de avulsos: mostra TODA linha avulsa, entrada E saída, como
         // duas linhas separadas e sempre visíveis (decisão explícita do
@@ -8090,6 +8152,7 @@ async function abrirModalDestinarAvulso(entradaId) {
         document.getElementById('destAvulsoKmProximaTroca').value = '';
         document.getElementById('destAvulsoDataProximaTroca').value = '';
         document.getElementById('destAvulsoResponsavel').value = '';
+        document.getElementById('destAvulsoTag').value = mov.tag || '';
 
         document.getElementById('destAvulsoEventoBusca').value = '';
         eventoSelecionadoDestAvulso = mov.evento ? (eventos.find(e => e.codigo === mov.evento) || { codigo: mov.evento, descricao: '' }) : null;
@@ -8160,6 +8223,7 @@ document.getElementById('btnConfirmarDestinarAvulso').addEventListener('click', 
                 veiculoId: document.getElementById('destAvulsoVeiculo').value || null,
                 planoContasId: planoContasSelecionadoDestAvulso ? planoContasSelecionadoDestAvulso.id : null,
                 evento: eventoSelecionadoDestAvulso ? eventoSelecionadoDestAvulso.codigo : '',
+                tag: document.getElementById('destAvulsoTag').value.trim(),
                 km: document.getElementById('destAvulsoKm').value || null,
                 kmProximaTroca: document.getElementById('destAvulsoKmProximaTroca').value || null,
                 dtProximaTroca: document.getElementById('destAvulsoDataProximaTroca').value || null,
@@ -8651,6 +8715,8 @@ async function prepararCamposClassificacaoItemNota() {
         });
     }
 
+    document.getElementById('notaItemTag').value = '';
+
     document.getElementById('notaItemPlanoContasBusca').value = '';
     const planoContasAindaExiste = ultimaClassificacao.planoContasId && (catalogosBaixa.planoContas || []).some(p => String(p.id) === ultimaClassificacao.planoContasId);
     planoContasSelecionadoNotaItem = planoContasAindaExiste ? preencherPlanoContasSelecionadoUI('notaItemPlanoContasSelecionado', ultimaClassificacao.planoContasId) : null;
@@ -9071,6 +9137,7 @@ document.getElementById('btnAdicionarItemNota').addEventListener('click', async 
                 data: document.getElementById('notaDataEntrada').value, produtoId, qtd, valorUnit, tipo: notaTipoEmEdicao,
                 almoxarifadoId: Number(almoxarifadoId),
                 setorId: Number(setorId), evento: eventoSelecionadoNotaItem.codigo, planoContasId: planoContasSelecionadoNotaItem.id,
+                tag: document.getElementById('notaItemTag').value.trim(),
                 observacao: `${notaTipoEmEdicao === 'saida' ? 'Saída' : 'Entrada direta'} — NF ${document.getElementById('notaNumeroNf').value || ''}`.trim(),
                 responsavel: document.getElementById('notaResponsavel').value.trim().toUpperCase(),
                 fornecedorCnpj: document.getElementById('notaFornecedorCnpj').value.trim(),
@@ -9155,6 +9222,7 @@ document.getElementById('btnRegistrarBaixaDiretaNota').addEventListener('click',
                     almoxarifadoId: item.almoxarifado_id || null,
                     setorId: Number(setorId), subsetorId, veiculoId, planoContasId,
                     km, kmProximaTroca, dtProximaTroca, evento,
+                    tag: document.getElementById('notaItemTag').value.trim(),
                     movimentacaoOrigemId: item.id,
                     observacao: `Baixa direta da nota #${notaEmEdicaoId}`
                 }
@@ -9656,6 +9724,7 @@ async function abrirModalBaixaItensNota() {
     document.getElementById('baixaItensNotaEventoSelecionado').textContent = '';
     eventoSelecionadoBaixaItensNota = null;
     document.getElementById('baixaItensNotaResponsavel').value = '';
+    document.getElementById('baixaItensNotaTag').value = '';
 
     try {
         catalogosBaixa = await chamarGet('listarCatalogosBaixa');
@@ -9876,6 +9945,7 @@ document.getElementById('btnConfirmarBaixaItensNota').addEventListener('click', 
                     veiculoId: linha.veiculoId || null, planoContasId: linha.planoContasId || null,
                     km: linha.km || null, kmProximaTroca: linha.kmProximaTroca || null,
                     dtProximaTroca: linha.dtProximaTroca || null, evento: linha.evento || '',
+                    tag: document.getElementById('baixaItensNotaTag').value.trim(),
                     movimentacaoOrigemId: linha.itemOrigemId,
                     observacao: `Baixa direto da nota #${notaEmEdicaoId}`
                 }

@@ -1761,6 +1761,7 @@
     const podeSetor = temPermissaoEventos('cadastrar_setor');
     document.getElementById('btnNovoSetor').style.display = podeSetor ? '' : 'none';
     document.getElementById('avisoSemPermissaoSetor').style.display = podeSetor ? 'none' : '';
+    renderListaSetores(); // redesenha com as permissões já carregadas (a 1ª renderização acontece antes delas)
     if(ehAdminOuPrincipalEventos()) carregarUsuariosPapeisEventos();
   }
 
@@ -3248,6 +3249,8 @@
         </div>
         <span class="status-tag ${s.ativo !== false ? 'ativo' : 'inativo'}">${s.ativo !== false ? 'ativo' : 'inativo'}</span>
       `;
+      // a permissão é checada no clique (e não só ao desenhar): a lista pode ser renderizada
+      // antes de carregarPapelEPermissoesEventos terminar, quando temPermissaoEventos ainda libera tudo
       if(temPermissaoEventos('cadastrar_setor')) row.addEventListener('click', () => abrirDrawerCadastro('setor', s.id));
       else row.style.cursor = 'default';
       lista.appendChild(row);
@@ -3321,6 +3324,7 @@
   document.getElementById('btnFecharDrawerCadastro').addEventListener('click', () => document.getElementById('drawerCadastroOverlay').classList.remove('show'));
 
   function abrirDrawerCadastro(tipo, id){
+    if(tipo === 'setor' && !temPermissaoEventos('cadastrar_setor')){ alert('Você não tem permissão pra cadastrar/editar setores.'); return; }
     cadastroTipoAtual = tipo;
     cadastroIdAtual = id;
     const titulo = document.getElementById('drawerCadastroTitulo');
@@ -6045,6 +6049,7 @@
 
   document.getElementById('btnExcluirCadastro').addEventListener('click', async () => {
     if(!cadastroIdAtual) return;
+    if(cadastroTipoAtual === 'setor' && !temPermissaoEventos('cadastrar_setor')){ alert('Você não tem permissão pra excluir setores.'); return; }
     if(!confirm(cadastroTipoAtual === 'setor' ? 'Excluir esse setor? Ele é o mesmo cadastro usado nos outros módulos — na dúvida, prefira marcar como Inativo.' : 'Excluir esse registro?')) return;
     const tabela = cadastroTipoAtual === 'clienteEntidade' ? 'unidade_entidades' : MAPA_TABELA_CADASTRO[cadastroTipoAtual];
     const { error } = await sb.from(tabela).delete().eq('id', cadastroIdAtual);
