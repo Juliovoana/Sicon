@@ -4560,7 +4560,7 @@ async function processarImportacaoNFe(tipo) {
     };
 
     if (tipo === 'saida' && nfeItensParseados.some(i => i.criarNovo)) {
-        if (!confirm('Alguns itens estão marcados como "novo produto" e serão criados com estoque zerado antes da baixa (o estoque pode ficar negativo). Deseja continuar?')) return;
+        if (!confirm('Alguns itens estão marcados como "novo produto" e serão criados no catálogo com estoque zerado; a entrada da nota e a baixa são registradas juntas, então o saldo final fica zerado. Deseja continuar?')) return;
     }
 
     statusEl.className = '';
@@ -4712,10 +4712,17 @@ async function processarImportacaoNFe(tipo) {
             }
 
             if (qtdALancar > 0) {
-                await chamarPost('registrarMovimentacao', {
+                // Baixa Direta = o material entra E sai na hora (compra
+                // consumida direto). Precisa das DUAS movimentações: a
+                // entrada (que soma no estoque, atualiza preço médio/última
+                // compra e é o "item da nota") e a saída ligada a ela.
+                // Gravar só a saída, como era antes pra produto de
+                // catálogo, tirava do estoque algo que nunca entrou -- saldo
+                // negativo -- e a nota ficava sem o item.
+                const entradaGerada = await chamarPost('registrarMovimentacao', {
                     movimentacao: {
                         data, produtoId, qtd: qtdALancar, valorUnit: item.valorUnit,
-                        valorUnitOriginal: item.valorUnitOriginal, tipo,
+                        valorUnitOriginal: item.valorUnitOriginal, tipo: 'entrada',
                         tag, evento,
                         almoxarifadoId: item.almoxarifadoId,
                         observacao: observacaoBase || `Importado da NF-e`,
@@ -4724,9 +4731,24 @@ async function processarImportacaoNFe(tipo) {
                         fornecedorCnpj: nfeDadosNota ? nfeDadosNota.emitCnpj : '',
                         fornecedorNome: nfeDadosNota ? nfeDadosNota.emitNome : '',
                         estoqueNotaId,
-                        ...destinacao
+                        setorId, planoContasId
                     }
                 });
+                if (tipo === 'saida') {
+                    await chamarPost('registrarMovimentacao', {
+                        movimentacao: {
+                            data, produtoId, qtd: qtdALancar, valorUnit: item.valorUnit,
+                            tipo: 'saida',
+                            tag, evento,
+                            almoxarifadoId: item.almoxarifadoId,
+                            movimentacaoOrigemId: entradaGerada.id,
+                            observacao: observacaoBase || 'Baixa direta da NF-e',
+                            responsavel, projetoId: null, itemProjetoId: null,
+                            estoqueNotaId,
+                            ...destinacao
+                        }
+                    });
+                }
             }
         }
 
