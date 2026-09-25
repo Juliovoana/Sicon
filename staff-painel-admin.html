@@ -361,6 +361,17 @@
   .spinner{ width:32px; height:32px; border:3px solid var(--border); border-top-color:var(--brand); border-radius:50%; animation:spin .8s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
 </style>
+<script>
+/* Aviso padrão quando o banco recusa a ação por falta de permissão (RLS) */
+(function(){
+  var MSG_SEM_PERMISSAO = '🔒 Usuário sem permissão para esta ação. Fale com o administrador da unidade.';
+  var alertOriginal = window.alert.bind(window);
+  window.alert = function(m){
+    if (/row-level security|permission denied/i.test(String(m))) m = MSG_SEM_PERMISSAO;
+    alertOriginal(m);
+  };
+})();
+</script>
 </head>
 <body>
 
@@ -471,6 +482,7 @@
   <div id="telaSemAcesso" class="tela-sem-acesso" style="display:none;">
     <h2>Sem acesso ao módulo Staff</h2>
     <p>Seu usuário está vinculado à unidade, mas ainda não tem um papel liberado no Staff (Administrador, Financeiro, Operacional ou Consulta). Peça ao administrador da unidade pra liberar seu acesso.</p>
+    <p id="semAcessoDetalhe" style="font-size:0.75rem; opacity:0.7;"></p>
     <button class="btn-primary" id="btnSairSemAcesso" style="max-width:200px;">Sair</button>
   </div>
 
@@ -1770,10 +1782,33 @@
   async function carregarPapelStaff(){
     const { data, error } = await sb.rpc('fn_staff_papel_usuario', { p_unidade_negocio_id: agenciaId });
     papelStaffAtual = error ? null : data;
+    const erroRpc = error ? error.message : '';
+
+    // reconfere o vínculo direto no banco pra unidade em uso, sem depender
+    // do valor guardado na tela (o usuário pode ter mais de um vínculo/linha
+    // e o guardado pode ser de outra linha ou unidade)
+    let vinculoLido = 'não lido';
+    try{
+      const { data: { session } } = await sb.auth.getSession();
+      if(session){
+        const { data: linhas, error: erroLinhas } = await sb.from('servir_unidade_usuarios')
+          .select('eh_principal').eq('unidade_negocio_id', agenciaId).eq('user_id', session.user.id);
+        if(erroLinhas){ vinculoLido = 'erro: ' + erroLinhas.message; }
+        else{
+          vinculoLido = (linhas || []).length + ' vínculo(s), principal=' + ((linhas || []).some(l => l.eh_principal) ? 'sim' : 'não');
+          if((linhas || []).some(l => l.eh_principal)) ehPrincipalAtual = true;
+        }
+      }
+    }catch(e){ vinculoLido = 'erro: ' + e.message; }
+
     // principal da unidade tem acesso total sempre, mesmo sem um papel
     // explícito liberado no Staff -- mesma regra usada nos outros
     // módulos do Servir (eh_principal >= qualquer papel específico)
     if (ehPrincipalAtual) papelStaffAtual = 'administrador';
+
+    // detalhes técnicos na tela de "sem acesso", pra facilitar o suporte
+    const detalhe = document.getElementById('semAcessoDetalhe');
+    if(detalhe) detalhe.textContent = `Unidade: ${agenciaNome || agenciaId} · vínculo: ${vinculoLido} · papel no Staff: ${data || 'nenhum'}${erroRpc ? ' · erro: ' + erroRpc : ''}`;
   }
 
   const mapaPapelLabel = { administrador: 'Administrador', financeiro: 'Financeiro', operacional: 'Operacional', consulta: 'Consulta' };
