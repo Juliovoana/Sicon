@@ -333,7 +333,7 @@
     <div class="panel-app" id="app-panel-produtos">
         <div class="cartao">
             <h2 id="tituloFormProduto">Novo produto</h2>
-            <p class="desc">Preço de custo e estoque não são digitados aqui — vêm das entradas de estoque.</p>
+            <p class="desc">O preço de custo vem das entradas de estoque. O estoque pode ser informado no cadastro novo e ajustado na edição.</p>
             <div class="ia-foto-box">
                 <button type="button" class="btn btn-principal btn-sm" id="btnCadastrarPorFoto" title="Tira a foto da embalagem e a IA preenche o cadastro">✨ Cadastrar por foto</button>
                 <button type="button" class="btn btn-cinza btn-sm" id="btnCadastrarPorFotoGaleria">🖼️ Da galeria</button>
@@ -355,7 +355,7 @@
                 <div class="campo"><label id="prodCustoRotulo">Valor de custo (R$)</label><input type="number" step="0.01" min="0" id="prodPrecoCusto" placeholder="0,00"></div>
             </div>
             <div class="grade-4" id="blocoEstoqueInicial">
-                <div class="campo"><label>Estoque inicial</label><input type="number" step="0.01" min="0" id="prodEstoqueInicial" placeholder="0"></div>
+                <div class="campo"><label id="prodEstoqueRotulo">Estoque inicial</label><input type="number" step="0.01" min="0" id="prodEstoqueInicial" placeholder="0"></div>
                 <div class="aviso-dia-util" id="prodEstoqueInicialAviso" style="grid-column: span 3; align-self:end;">Com estoque inicial e valor de custo informados, o sistema já registra uma <strong>entrada</strong> na movimentação do produto.</div>
             </div>
             <div class="grade">
@@ -1510,7 +1510,10 @@ function ajustarCamposEstoqueInicial(emEdicao) {
     custo.readOnly = emEdicao;
     custo.type = emEdicao ? 'text' : 'number';
     document.getElementById('prodCustoRotulo').textContent = emEdicao ? 'Preço de custo (último)' : 'Valor de custo (R$)';
-    document.getElementById('blocoEstoqueInicial').style.display = emEdicao ? 'none' : '';
+    document.getElementById('prodEstoqueRotulo').textContent = emEdicao ? 'Estoque atual' : 'Estoque inicial';
+    document.getElementById('prodEstoqueInicialAviso').innerHTML = emEdicao
+        ? 'Alterar este valor <strong>ajusta o estoque</strong>: se aumentar, registra uma <strong>entrada</strong> (ajuste) na movimentação; se diminuir, baixa a diferença do estoque e registra na auditoria.'
+        : 'Com estoque inicial e valor de custo informados, o sistema já registra uma <strong>entrada</strong> na movimentação do produto.';
 }
 document.getElementById('btnCancelarEdicaoProduto').addEventListener('click', limparFormProduto);
 
@@ -1522,7 +1525,12 @@ document.getElementById('btnSalvarProduto').addEventListener('click', async () =
     if (isNaN(precoVenda) || precoVenda < 0) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o preço de venda.'; return; }
     // estoque inicial + custo (só cadastro novo)
     const novoCadastro = !produtoEmEdicaoId;
-    const estoqueInicial = novoCadastro ? (parseFloat(document.getElementById('prodEstoqueInicial').value) || 0) : 0;
+    const estoqueDigitado = parseFloat(document.getElementById('prodEstoqueInicial').value) || 0;
+    const estoqueInicial = novoCadastro ? estoqueDigitado : 0;
+    const produtoAtual = novoCadastro ? null : produtosCarregados.find(x => x.id === produtoEmEdicaoId);
+    const estoqueAntes = produtoAtual ? Number(produtoAtual.estoque) || 0 : 0;
+    const deltaEstoque = novoCadastro ? 0 : Math.round((estoqueDigitado - estoqueAntes) * 1000) / 1000;
+    if (!novoCadastro && estoqueDigitado < 0) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'O estoque não pode ser negativo.'; document.getElementById('prodEstoqueInicial').focus(); return; }
     const custoTexto = novoCadastro ? document.getElementById('prodPrecoCusto').value.trim() : '';
     const custoInformado = custoTexto === '' ? null : parseFloat(custoTexto);
     if (novoCadastro) {
@@ -1583,10 +1591,30 @@ document.getElementById('btnSalvarProduto').addEventListener('click', async () =
                 avisoEstoqueInicial = ` ⚠️ O produto foi salvo, mas o estoque inicial NÃO foi lançado (${e.message}). Confira em "Movimentação" antes de lançar de novo — se preciso, use a aba Entrada de estoque.`;
             }
         }
+        let avisoAjusteEstoque = '';
+        if (idAntes && deltaEstoque !== 0) {
+            // alteração do estoque no cadastro: aumento = entrada de ajuste (com o último custo);
+            // redução = baixa da diferença (sem nota, só estoque + auditoria)
+            try {
+                if (deltaEstoque > 0) {
+                    await gravarEntrada({
+                        fornecedor_nome: 'AJUSTE DE ESTOQUE', fornecedor_cnpj: null, numero_nf: null,
+                        data: hojeISO(), responsavel: meuPerfil.nomeOperador || meuPerfil.email || 'sistema',
+                        observacao: `Ajuste de estoque no cadastro do produto "${nome}" (de ${formatarNumero(estoqueAntes)} para ${formatarNumero(estoqueDigitado)})`,
+                    }, [{ produtoId: idAntes, qtd: deltaEstoque, custo: Number(existente?.preco_custo) || 0 }]);
+                } else {
+                    await ajustarEstoqueVenda({ [idAntes]: -deltaEstoque });
+                }
+                await registrarSentinela('armarinho_estoque_ajustado', `Ajustou estoque de "${nome}": ${formatarNumero(estoqueAntes)} → ${formatarNumero(estoqueDigitado)}`, idAntes);
+            } catch (e) {
+                avisoAjusteEstoque = ` ⚠️ O produto foi salvo, mas o ajuste de estoque NÃO foi aplicado (${e.message}). Confira em "Movimentação" antes de tentar de novo.`;
+            }
+        }
         if (fotoAlterada && existente?.foto_url) await removerFotoDoBucket(existente.foto_url); // troca/remoção: some a antiga do bucket
         if (idAntes) await registrarSentinela('armarinho_produto_editado', `Editou produto "${nome}" -- preço de venda ${formatarMoeda(precoVenda)}${fotoAlterada ? ' -- foto ' + (payload.foto_url ? 'trocada' : 'removida') : ''}`, idAntes);
-        statusEl.className = avisoEstoqueInicial ? 'status-msg erro' : 'status-msg sucesso';
-        statusEl.textContent = (avisoEstoqueInicial ? '' : '✅ Produto salvo' + (novoCadastro && estoqueInicial > 0 ? ` com estoque inicial de ${formatarNumero(estoqueInicial)} (entrada registrada).` : '.')) + avisoEstoqueInicial;
+        const avisoEstoque = avisoEstoqueInicial || avisoAjusteEstoque;
+        statusEl.className = avisoEstoque ? 'status-msg erro' : 'status-msg sucesso';
+        statusEl.textContent = (avisoEstoque ? '' : '✅ Produto salvo' + (novoCadastro && estoqueInicial > 0 ? ` com estoque inicial de ${formatarNumero(estoqueInicial)} (entrada registrada).` : (deltaEstoque ? ` Estoque ajustado para ${formatarNumero(estoqueDigitado)}.` : '.'))) + avisoEstoque;
         limparFormProduto();
         await carregarProdutos();
         renderizarProdutos();
@@ -1659,6 +1687,7 @@ function editarProduto(id) {
     document.getElementById('prodUn').value = p.un || 'UN';
     document.getElementById('prodPrecoVenda').value = p.preco_venda;
     ajustarCamposEstoqueInicial(true);
+    document.getElementById('prodEstoqueInicial').value = Number(p.estoque) || 0;
     document.getElementById('prodPrecoCusto').value = Number(p.preco_custo) ? formatarMoeda(p.preco_custo) : '';
     document.getElementById('prodDescricao').value = p.descricao || '';
     document.getElementById('prodDescricaoContador').textContent = (p.descricao || '').length + '/300';
@@ -3978,7 +4007,7 @@ document.getElementById('btnGerarCatalogoPdf').addEventListener('click', async (
 // ---------------------------------------------------------------
 const AJUDA_ARMARINHO = {
     titulo: 'Armarinho e Cosméticos',
-    ultimaRevisao: '25/09/2026',
+    ultimaRevisao: '26/09/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>Controle de estoque e venda de armarinho e cosméticos: você cadastra os produtos
@@ -4032,10 +4061,12 @@ const AJUDA_ARMARINHO = {
             registra uma <strong>entrada</strong> ("Estoque inicial") na movimentação do produto, com
             essa quantidade e esse custo. Se informar só o custo, ele apenas fica guardado no
             produto. Com estoque inicial, o custo é obrigatório (pode ser 0).</p>
-            <p>Depois de cadastrado, o <strong>preço de custo</strong> e o <strong>estoque</strong> não são
-            digitados aqui — são atualizados sozinhos a cada entrada de estoque (o custo guardado é o
-            da <strong>última</strong> entrada, não uma média). A coluna <strong>Margem</strong> compara
-            venda e custo.</p>
+            <p>Depois de cadastrado, o <strong>preço de custo</strong> não é digitado aqui — é atualizado
+            a cada entrada de estoque (o custo guardado é o da <strong>última</strong> entrada, não uma
+            média). Já o <strong>estoque</strong> aparece na edição como "Estoque atual" e pode ser
+            <strong>ajustado</strong>: se aumentar, registra uma entrada de ajuste (com o último custo);
+            se diminuir, baixa a diferença do estoque. Os dois casos ficam na auditoria. A coluna
+            <strong>Margem</strong> compara venda e custo.</p>
             <p>A lista de produtos nasce recolhida — clique em "Ver produtos cadastrados" pra abrir e
             buscar. <strong>Inativar</strong> tira o produto das listas de venda sem apagar o histórico.</p>
             <p>O campo <strong>Marca</strong> (opcional) guarda a marca do produto — Avon, Círculo, Corrente... Ao digitar,
