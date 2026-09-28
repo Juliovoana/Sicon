@@ -122,6 +122,17 @@
         .modal-ajuda-nav-item{ margin-bottom:0; flex-shrink:0; }
     }
 </style>
+<script>
+/* Aviso padrão quando o banco recusa a ação por falta de permissão (RLS) */
+(function(){
+  var MSG_SEM_PERMISSAO = '🔒 Usuário sem permissão para esta ação. Fale com o administrador da unidade.';
+  var alertOriginal = window.alert.bind(window);
+  window.alert = function(m){
+    if (/row-level security|permission denied/i.test(String(m))) m = MSG_SEM_PERMISSAO;
+    alertOriginal(m);
+  };
+})();
+</script>
 </head>
 <body>
 
@@ -236,7 +247,10 @@
         <div class="cartao">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
                 <h2 style="margin:0;">Itens de catálogo</h2>
-                <button type="button" class="btn btn-principal" id="btnNovoItemCatalogo" style="width:auto;">+ Novo item</button>
+                <div style="display:flex; gap:8px;">
+                    <button type="button" class="btn btn-cinza" id="btnConfigRecibo" style="width:auto;">🧾 Dados do recibo</button>
+                    <button type="button" class="btn btn-principal" id="btnNovoItemCatalogo" style="width:auto;">+ Novo item</button>
+                </div>
             </div>
             <div id="listaCatalogo"></div>
             <div id="vazioCatalogo" class="vazio hidden">Nenhum item cadastrado ainda.</div>
@@ -260,6 +274,8 @@
         <h3>Nova entrega</h3>
         <p class="subtitulo" id="novaEntregaProfissionalTexto" style="margin-bottom:14px;"></p>
 
+        <div class="campo"><label>Data de entrega (vale pra todos os itens deste recibo)</label><input type="date" id="campoDataEntrega"></div>
+
         <div style="display:flex; gap:8px; margin-bottom:14px;">
             <button type="button" class="btn tipo-item-btn ativa" data-tipo-item="catalogado" style="flex:1;">📋 Do catálogo</button>
             <button type="button" class="btn tipo-item-btn" data-tipo-item="avulso" style="flex:1;">✏️ Avulso</button>
@@ -282,16 +298,52 @@
         <div class="grade">
             <div class="campo"><label>Quantidade</label><input type="number" min="1" step="1" id="campoQtdEntrega" value="1"></div>
             <div class="campo"><label>Valor unitário (R$)</label><input type="number" min="0" step="0.01" id="campoValorEntrega"></div>
-            <div class="campo"><label>Data de entrega</label><input type="date" id="campoDataEntrega"></div>
-            <div class="campo"><label>Data prevista p/ nova aquisição</label><input type="date" id="campoDataPrevista"></div>
+            <div class="campo" style="grid-column: span 2;"><label>Data prevista p/ nova aquisição (opcional)</label><input type="date" id="campoDataPrevista"></div>
         </div>
-        <div class="campo"><label>Observação (opcional)</label><input type="text" id="campoObservacaoEntrega"></div>
+        <button type="button" class="btn btn-cinza" id="btnAdicionarItemCarrinho" style="width:100%; margin-bottom:4px;">+ Adicionar item à entrega</button>
+        <p class="status-msg" id="statusItemCarrinho"></p>
+
+        <div id="blocoCarrinhoEntrega" class="hidden" style="margin:10px 0; padding-top:10px; border-top:1px solid var(--border);">
+            <p class="subtitulo" style="margin:0 0 8px 0; font-weight:600; color:var(--ink);">Itens desta entrega</p>
+            <div id="listaCarrinhoEntrega"></div>
+        </div>
+
+        <div class="campo"><label>Observação (opcional, vale pro recibo inteiro)</label><input type="text" id="campoObservacaoEntrega"></div>
 
         <div style="display:flex; gap:8px; margin-top:6px;">
             <button type="button" class="btn btn-cinza" id="btnCancelarNovaEntrega" style="flex:1;">Cancelar</button>
-            <button type="button" class="btn btn-principal" id="btnSalvarNovaEntrega" style="flex:1;">Registrar entrega</button>
+            <button type="button" class="btn btn-principal" id="btnSalvarNovaEntrega" style="flex:1;">Confirmar entrega</button>
         </div>
         <p class="status-msg" id="statusNovaEntrega"></p>
+    </div>
+</div>
+
+<!-- ==================== MODAL: DADOS DO RECIBO ==================== -->
+<div id="modal-config-recibo" class="modal-overlay">
+    <div class="modal-caixa" style="max-width:420px;">
+        <h3>Dados do recibo</h3>
+        <p class="subtitulo" style="margin-bottom:14px;">Usados no texto do recibo de entrega/devolução/descarte gerado em PDF.</p>
+        <div class="campo"><label>Razão social (quem entrega o uniforme)</label><input type="text" id="campoRazaoSocialRecibo" placeholder="Ex: Hs Ferragens e Ferramentas Ltda"></div>
+        <div class="campo"><label>Cidade (assinatura do recibo)</label><input type="text" id="campoCidadeRecibo" placeholder="Ex: Porto Seguro"></div>
+        <div style="display:flex; gap:8px; margin-top:6px;">
+            <button type="button" class="btn btn-cinza" id="btnCancelarConfigRecibo" style="flex:1;">Cancelar</button>
+            <button type="button" class="btn btn-principal" id="btnSalvarConfigRecibo" style="flex:1;">Salvar</button>
+        </div>
+        <p class="status-msg" id="statusConfigRecibo"></p>
+    </div>
+</div>
+
+<!-- ==================== MODAL: AÇÕES DO PDF ==================== -->
+<div class="modal-overlay" id="modalAcoesPdf">
+    <div class="modal-caixa" style="max-width:360px; text-align:center;">
+        <h3 id="tituloModalAcoesPdf">Recibo gerado</h3>
+        <p class="subtitulo">O que você quer fazer com o PDF?</p>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+            <button class="btn btn-principal" id="btnVisualizarPdfGerado">👁️ Visualizar</button>
+            <button class="btn btn-cinza" id="btnBaixarPdfGerado">⬇️ Baixar</button>
+            <button class="btn btn-cinza" id="btnCompartilharPdfGerado">📤 Compartilhar</button>
+            <button class="btn btn-cinza" id="btnFecharModalAcoesPdf" style="margin-top:6px;">Fechar</button>
+        </div>
     </div>
 </div>
 
@@ -437,7 +489,7 @@ function somarDias(dataISO, dias) {
 // ---------------------------------------------------------------
 const AJUDA_UNIFORMES_EPI = {
     titulo: 'Uniformes / EPI',
-    ultimaRevisao: '14/09/2026',
+    ultimaRevisao: '28/09/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>Controle de peças de uniforme e EPI entregues aos profissionais do Staff --
@@ -450,8 +502,16 @@ const AJUDA_UNIFORMES_EPI = {
         { id: 'registrar', titulo: 'Registrar entrega', corpo: `
             <p>Busca o profissional, depois <strong>+ Nova entrega</strong>.</p>
             <ul>
+                <li><strong>Virou um carrinho</strong>: escolhe um item (do catálogo ou avulso),
+                quantidade e valor, e clica <strong>"+ Adicionar item à entrega"</strong> --
+                repete quantas vezes precisar (é assim que se monta um recibo com várias peças
+                diferentes, igual o modelo em papel). Só ao clicar <strong>"Confirmar
+                entrega"</strong> é que tudo é gravado de uma vez, com <strong>1 número de
+                recibo</strong> pro lote inteiro (campo <code>numero_recibo_entrega</code>) --
+                a <strong>Data de entrega</strong> no topo do formulário vale pra todos os itens
+                do carrinho.</li>
                 <li><strong>Do catálogo</strong>: baixa de verdade no estoque do almoxarifado
-                dedicado. Registrar quantidade 3, por exemplo, gera 3 registros independentes
+                dedicado. Quantidade 3 num item, por exemplo, gera 3 registros independentes
                 (um por peça) -- assim dá pra devolver ou descartar uma peça sem mexer nas
                 outras -- mas conta como um movimento só de estoque.</li>
                 <li><strong>Avulso</strong>: pra item que não está no catálogo (ex: peça
@@ -459,6 +519,13 @@ const AJUDA_UNIFORMES_EPI = {
                 estoque</strong> nenhum -- não existe produto de catálogo pra afetar.</li>
                 <li><strong>Data prevista p/ nova aquisição</strong> é sugerida automaticamente
                 quando o item de catálogo tem "vida útil" cadastrada, mas pode ser trocada.</li>
+                <li>Depois de confirmar, o <strong>PDF do recibo</strong> abre sozinho (popup
+                Visualizar/Baixar/Compartilhar) -- 2 vias na mesma folha, com linha de corte,
+                pro profissional assinar. Pra reimprimir depois, cada grupo "🧾 Recibo Nº X" na
+                lista de itens em aberto tem o botão <strong>"🖨️ Gerar recibo"</strong>.
+                O texto do recibo (razão social de quem entrega, cidade da assinatura) vem de
+                <strong>"🧾 Dados do recibo"</strong>, na aba Catálogo -- configura uma vez, só
+                quem gerencia o catálogo.</li>
                 <li>Na ficha do profissional, cada item em aberto tem <strong>Devolver</strong> e
                 <strong>Descartar</strong>. Devolver pergunta a condição da peça --
                 <strong>"Sem uso (como novo)"</strong> ou <strong>"Usado"</strong> -- em
@@ -466,12 +533,15 @@ const AJUDA_UNIFORMES_EPI = {
                 condição é só um registro pra triagem futura, não trava o reaproveitamento.
                 Descartar não pergunta condição (a peça já não volta pro estoque de jeito
                 nenhum) e não gera nenhum movimento -- ela já tinha saído do saldo na
-                entrega.</li>
+                entrega. Cada devolução/descarte confirmado também ganha o seu próprio número
+                de recibo (<code>numero_recibo_baixa</code>) e abre o PDF sozinho, do mesmo
+                jeito.</li>
                 <li>Devolvidos e descartados saem da lista "em aberto" e vão pro
                 <strong>Histórico</strong>, logo abaixo, na ficha do profissional -- com data,
-                condição e motivo. De lá dá pra <strong>↩️ Reverter</strong>, se foi engano
-                (devolveu ou descartou o item errado, por exemplo) -- volta pra "em aberto" e
-                desfaz o efeito no estoque, se tinha algum.</li>
+                condição e motivo, e o botão pra reabrir o recibo daquela baixa. De lá dá pra
+                <strong>↩️ Reverter</strong>, se foi engano (devolveu ou descartou o item
+                errado, por exemplo) -- volta pra "em aberto", desfaz o efeito no estoque (se
+                tinha algum) e apaga o número de recibo daquela baixa.</li>
                 <li><strong>✕ Excluir</strong> (nos itens em aberto) é diferente de devolver/
                 descartar -- use só quando a entrega nunca deveria ter sido registrada
                 (profissional ou quantidade errada). Some com o registro e corrige o estoque de
@@ -585,6 +655,8 @@ let tipoItemNovaEntrega = 'catalogado';
 let tipoCatalogoAtual = 'uniforme';
 let catalogoEmEdicaoId = null;
 let entregaAlvoBaixa = null; // {id, tipoBaixa}
+let carrinhoEntrega = []; // itens adicionados na "Nova entrega" antes de confirmar (vira 1 recibo)
+let configRecibo = { razao_social: '', cidade: '' };
 
 function podeRegistrar() { return meuPerfil.ehPrincipal || papelStaffAtual === 'administrador' || papelStaffAtual === 'operacional'; }
 function podeGerenciarCatalogo() { return meuPerfil.ehPrincipal || papelStaffAtual === 'administrador'; }
@@ -723,8 +795,9 @@ async function iniciarApp() {
     document.getElementById('app').classList.remove('hidden');
     document.getElementById('btnNovaEntrega').style.display = podeRegistrar() ? '' : 'none';
     document.getElementById('aba-btn-catalogo').style.display = podeGerenciarCatalogo() ? '' : 'none';
+    document.getElementById('btnConfigRecibo').style.display = podeGerenciarCatalogo() ? '' : 'none';
 
-    await Promise.all([carregarProfissionais(), carregarAlmoxarifados(), carregarCatalogo()]);
+    await Promise.all([carregarProfissionais(), carregarAlmoxarifados(), carregarCatalogo(), carregarConfigRecibo()]);
     renderizarCatalogoAdmin();
     atualizarBlocoCriarAlmoxarifado();
     await carregarRenovacoes();
@@ -769,6 +842,45 @@ document.getElementById('btnCriarAlmoxarifadoDedicado').addEventListener('click'
     await registrarSentinela('almoxarifado_criado', 'Almoxarifado dedicado "' + NOME_ALMOXARIFADO_DEDICADO + '" criado');
     await carregarAlmoxarifados();
     atualizarBlocoCriarAlmoxarifado();
+});
+
+// ---------------------------------------------------------------
+// DADOS DO RECIBO (razão social + cidade usados no texto do PDF de
+// entrega/devolução/descarte) -- 1 linha por unidade, só quem
+// gerencia o catálogo edita (mesma regra de podeGerenciarCatalogo()).
+// ---------------------------------------------------------------
+async function carregarConfigRecibo() {
+    const { data, error } = await sb.from('staff_uniformes_epi_config')
+        .select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).maybeSingle();
+    configRecibo = (error || !data) ? { razao_social: '', cidade: '' } : data;
+}
+document.getElementById('btnConfigRecibo').addEventListener('click', () => {
+    document.getElementById('campoRazaoSocialRecibo').value = configRecibo.razao_social || '';
+    document.getElementById('campoCidadeRecibo').value = configRecibo.cidade || '';
+    document.getElementById('statusConfigRecibo').textContent = '';
+    document.getElementById('modal-config-recibo').classList.add('aberto');
+});
+document.getElementById('btnCancelarConfigRecibo').addEventListener('click', () => document.getElementById('modal-config-recibo').classList.remove('aberto'));
+document.getElementById('btnSalvarConfigRecibo').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusConfigRecibo');
+    statusEl.textContent = '';
+    const razaoSocial = document.getElementById('campoRazaoSocialRecibo').value.trim();
+    const cidade = document.getElementById('campoCidadeRecibo').value.trim();
+    const btn = document.getElementById('btnSalvarConfigRecibo');
+    btn.disabled = true; btn.textContent = 'Salvando...';
+    try {
+        const { error } = await sb.from('staff_uniformes_epi_config').upsert({
+            unidade_negocio_id: meuPerfil.unidadeId, razao_social: razaoSocial || null, cidade: cidade || null
+        });
+        if (error) throw error;
+        configRecibo = { razao_social: razaoSocial, cidade };
+        await registrarSentinela('config_recibo_uniforme_epi_editada', 'Dados do recibo atualizados (razão social/cidade)');
+        document.getElementById('modal-config-recibo').classList.remove('aberto');
+    } catch (e) {
+        statusEl.textContent = 'Erro ao salvar: ' + (e.message || e);
+    } finally {
+        btn.disabled = false; btn.textContent = 'Salvar';
+    }
 });
 
 // ---------------------------------------------------------------
@@ -857,35 +969,63 @@ function renderizarHistoricoProfissional() {
                 <div class="nome">${escapeHtml(nome)} <span class="pill pill-${it.status}">${it.status === 'devolvido' ? 'Devolvido' : 'Descartado'}</span></div>
                 <div class="meta">${it.tamanho ? 'Tamanho ' + escapeHtml(it.tamanho) + ' · ' : ''}${formatarDataSemFuso(it.data_baixa)}${condicaoTexto}${it.motivo_baixa ? ' · ' + escapeHtml(it.motivo_baixa) : ''}</div>
             </div>
-            <div class="acoes"><button type="button" class="btn btn-cinza" data-reverter-baixa="${it.id}">↩️ Reverter</button></div>
+            <div class="acoes">
+                ${it.numero_recibo_baixa != null ? `<button type="button" class="btn btn-cinza" data-recibo-baixa="${it.id}">🖨️ Recibo Nº ${it.numero_recibo_baixa}</button>` : ''}
+                <button type="button" class="btn btn-cinza" data-reverter-baixa="${it.id}">↩️ Reverter</button>
+            </div>
         </div>`;
     }).join('');
 }
 document.getElementById('listaHistoricoProfissional').addEventListener('click', (e) => {
-    const btn = e.target.closest('[data-reverter-baixa]');
-    if (btn) reverterBaixa(btn.dataset.reverterBaixa);
+    const btnReverter = e.target.closest('[data-reverter-baixa]');
+    if (btnReverter) { reverterBaixa(btnReverter.dataset.reverterBaixa); return; }
+    const btnRecibo = e.target.closest('[data-recibo-baixa]');
+    if (btnRecibo) gerarEAbrirReciboBaixa(btnRecibo.dataset.reciboBaixa);
 });
 
+// Agrupada por número de recibo de entrega -- itens registrados no
+// mesmo lote (mesmo clique em "Confirmar entrega") saem juntos, com
+// 1 botão de recibo pro grupo inteiro. Item sem número (SQL de
+// recibos ainda não rodado) cai num grupo "sem recibo", sem o botão.
 function renderizarItensAbertos() {
     const wrap = document.getElementById('listaItensAbertos');
     const vazio = document.getElementById('vazioItensAbertos');
     if (!itensAbertosAtual.length) { wrap.innerHTML = ''; vazio.classList.remove('hidden'); return; }
     vazio.classList.add('hidden');
-    wrap.innerHTML = itensAbertosAtual.map(it => {
-        const cat = it.staff_uniformes_epi_catalogo;
-        const nome = cat ? cat.nome : (it.descricao_avulsa + ' (avulso)');
-        const tipoPill = cat ? `<span class="pill pill-${cat.tipo}">${cat.tipo}</span>` : '';
-        return `<div class="item-linha">
-            <div class="info">
-                <div class="nome">${escapeHtml(nome)} ${tipoPill}</div>
-                <div class="meta">${it.tamanho ? 'Tamanho ' + escapeHtml(it.tamanho) + ' · ' : ''}Entregue em ${formatarDataSemFuso(it.data_entrega)}${it.valor_unitario ? ' · ' + formatarMoeda(it.valor_unitario) : ''}${it.data_prevista_nova_aquisicao ? ' · Próxima aquisição: ' + formatarDataSemFuso(it.data_prevista_nova_aquisicao) : ''}</div>
-            </div>
-            <div class="acoes">
-                <button type="button" class="btn btn-cinza" data-devolver="${it.id}">↩️ Devolver</button>
-                <button type="button" class="btn btn-perigo" data-descartar="${it.id}">🗑️ Descartar</button>
-                <button type="button" class="btn btn-perigo" data-excluir-entrega="${it.id}">✕ Excluir</button>
-            </div>
-        </div>`;
+
+    const grupos = new Map();
+    itensAbertosAtual.forEach(it => {
+        const chave = it.numero_recibo_entrega != null ? String(it.numero_recibo_entrega) : 'sem-recibo';
+        if (!grupos.has(chave)) grupos.set(chave, []);
+        grupos.get(chave).push(it);
+    });
+    const gruposOrdenados = [...grupos.entries()].sort((a, b) => (b[1][0].data_entrega || '').localeCompare(a[1][0].data_entrega || ''));
+
+    wrap.innerHTML = gruposOrdenados.map(([chave, itens]) => {
+        const primeiro = itens[0];
+        const cabecalho = chave === 'sem-recibo'
+            ? `<div class="meta" style="margin-bottom:8px;">Entregue em ${formatarDataSemFuso(primeiro.data_entrega)}</div>`
+            : `<div class="meta" style="margin-bottom:8px; display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+                 <span>🧾 Recibo Nº ${escapeHtml(chave)} — ${formatarDataSemFuso(primeiro.data_entrega)}</span>
+                 <button type="button" class="btn btn-cinza" style="padding:4px 10px; font-size:.76rem;" data-recibo-entrega="${escapeHtml(chave)}">🖨️ Gerar recibo</button>
+               </div>`;
+        const linhas = itens.map(it => {
+            const cat = it.staff_uniformes_epi_catalogo;
+            const nome = cat ? cat.nome : (it.descricao_avulsa + ' (avulso)');
+            const tipoPill = cat ? `<span class="pill pill-${cat.tipo}">${cat.tipo}</span>` : '';
+            return `<div class="item-linha" style="margin-bottom:6px;">
+                <div class="info">
+                    <div class="nome">${escapeHtml(nome)} ${tipoPill}</div>
+                    <div class="meta">${it.tamanho ? 'Tamanho ' + escapeHtml(it.tamanho) + ' · ' : ''}${it.valor_unitario ? formatarMoeda(it.valor_unitario) + ' · ' : ''}${it.data_prevista_nova_aquisicao ? 'Próxima aquisição: ' + formatarDataSemFuso(it.data_prevista_nova_aquisicao) : ''}</div>
+                </div>
+                <div class="acoes">
+                    <button type="button" class="btn btn-cinza" data-devolver="${it.id}">↩️ Devolver</button>
+                    <button type="button" class="btn btn-perigo" data-descartar="${it.id}">🗑️ Descartar</button>
+                    <button type="button" class="btn btn-perigo" data-excluir-entrega="${it.id}">✕ Excluir</button>
+                </div>
+            </div>`;
+        }).join('');
+        return `<div style="border:1px solid var(--border); border-radius:12px; padding:12px 14px; margin-bottom:12px;">${cabecalho}${linhas}</div>`;
     }).join('');
 }
 
@@ -893,9 +1033,11 @@ document.getElementById('listaItensAbertos').addEventListener('click', (e) => {
     const btnDev = e.target.closest('[data-devolver]');
     const btnDesc = e.target.closest('[data-descartar]');
     const btnExcluir = e.target.closest('[data-excluir-entrega]');
+    const btnRecibo = e.target.closest('[data-recibo-entrega]');
     if (btnDev) abrirModalBaixa(btnDev.dataset.devolver, 'devolucao');
     if (btnDesc) abrirModalBaixa(btnDesc.dataset.descartar, 'descarte');
     if (btnExcluir) excluirEntregaAberta(btnExcluir.dataset.excluirEntrega);
+    if (btnRecibo) gerarEAbrirReciboEntrega(Number(btnRecibo.dataset.reciboEntrega), profissionalSelecionado.id);
 });
 
 // ---------------------------------------------------------------
@@ -904,21 +1046,28 @@ document.getElementById('listaItensAbertos').addEventListener('click', (e) => {
 document.getElementById('btnNovaEntrega').addEventListener('click', () => {
     if (!profissionalSelecionado) return;
     document.getElementById('novaEntregaProfissionalTexto').textContent = 'Pra: ' + profissionalSelecionado.nome_completo;
+    document.getElementById('campoDataEntrega').value = hojeISO();
+    document.getElementById('campoObservacaoEntrega').value = '';
+    document.getElementById('statusNovaEntrega').textContent = '';
+    carrinhoEntrega = [];
+    renderizarCarrinhoEntrega();
+    limparCamposItemEntrega();
+    definirTipoItemNovaEntrega('catalogado');
+    document.getElementById('modal-nova-entrega').classList.add('aberto');
+});
+document.getElementById('btnCancelarNovaEntrega').addEventListener('click', () => document.getElementById('modal-nova-entrega').classList.remove('aberto'));
+
+function limparCamposItemEntrega() {
     document.getElementById('campoBuscaItemCatalogo').value = '';
     document.getElementById('itemCatalogoSelecionadoTexto').textContent = '';
     document.getElementById('campoDescricaoAvulsa').value = '';
     document.getElementById('campoTamanhoAvulso').value = '';
     document.getElementById('campoQtdEntrega').value = 1;
     document.getElementById('campoValorEntrega').value = '';
-    document.getElementById('campoDataEntrega').value = hojeISO();
     document.getElementById('campoDataPrevista').value = '';
-    document.getElementById('campoObservacaoEntrega').value = '';
-    document.getElementById('statusNovaEntrega').textContent = '';
+    document.getElementById('statusItemCarrinho').textContent = '';
     itemCatalogoSelEntrega = null;
-    definirTipoItemNovaEntrega('catalogado');
-    document.getElementById('modal-nova-entrega').classList.add('aberto');
-});
-document.getElementById('btnCancelarNovaEntrega').addEventListener('click', () => document.getElementById('modal-nova-entrega').classList.remove('aberto'));
+}
 
 function definirTipoItemNovaEntrega(tipo) {
     tipoItemNovaEntrega = tipo;
@@ -961,35 +1110,105 @@ resultadosBuscaItemCatalogo.addEventListener('mousedown', (e) => {
 });
 campoBuscaItemCatalogo.addEventListener('blur', () => setTimeout(() => resultadosBuscaItemCatalogo.classList.remove('aberto'), 200));
 
-document.getElementById('btnSalvarNovaEntrega').addEventListener('click', async () => {
-    const statusEl = document.getElementById('statusNovaEntrega');
+// "+ Adicionar item à entrega" -- valida o item atual do formulário e
+// empilha no carrinho, sem gravar nada ainda. Só ao "Confirmar
+// entrega" é que tudo vira registro de verdade, com 1 número de
+// recibo pro lote inteiro (ver AJUDA_UNIFORMES_EPI, seção "registrar").
+document.getElementById('btnAdicionarItemCarrinho').addEventListener('click', () => {
+    const statusEl = document.getElementById('statusItemCarrinho');
     statusEl.textContent = '';
     const quantidade = Number(document.getElementById('campoQtdEntrega').value) || 0;
     const valorUnit = Number(document.getElementById('campoValorEntrega').value) || 0;
-    const dataEntrega = document.getElementById('campoDataEntrega').value || hojeISO();
     const dataPrevista = document.getElementById('campoDataPrevista').value || null;
-    const observacao = document.getElementById('campoObservacaoEntrega').value.trim();
-
     if (quantidade < 1) { statusEl.textContent = 'Quantidade precisa ser pelo menos 1.'; return; }
 
-    let catalogoId = null, descricaoAvulsa = null, tamanho = null;
+    let catalogoId = null, descricaoAvulsa = null, tamanho = null, nomeExibicao = '';
     if (tipoItemNovaEntrega === 'catalogado') {
         if (!itemCatalogoSelEntrega) { statusEl.textContent = 'Busque e selecione um item do catálogo.'; return; }
         catalogoId = itemCatalogoSelEntrega.id;
         tamanho = itemCatalogoSelEntrega.tamanho;
+        nomeExibicao = itemCatalogoSelEntrega.nome;
     } else {
         descricaoAvulsa = document.getElementById('campoDescricaoAvulsa').value.trim();
         if (!descricaoAvulsa) { statusEl.textContent = 'Descreva o item avulso.'; return; }
         tamanho = document.getElementById('campoTamanhoAvulso').value.trim() || null;
+        nomeExibicao = descricaoAvulsa;
     }
+
+    carrinhoEntrega.push({ catalogoId, descricaoAvulsa, tamanho, quantidade, valorUnit, dataPrevista, nomeExibicao });
+    renderizarCarrinhoEntrega();
+    const tipoAtual = tipoItemNovaEntrega;
+    limparCamposItemEntrega();
+    definirTipoItemNovaEntrega(tipoAtual);
+    document.getElementById('campoBuscaItemCatalogo').focus();
+});
+
+function renderizarCarrinhoEntrega() {
+    const bloco = document.getElementById('blocoCarrinhoEntrega');
+    const wrap = document.getElementById('listaCarrinhoEntrega');
+    bloco.classList.toggle('hidden', !carrinhoEntrega.length);
+    wrap.innerHTML = carrinhoEntrega.map((it, i) => `
+        <div class="item-linha" style="padding:8px 10px; margin-bottom:6px;">
+            <div class="info">
+                <div class="nome">${it.quantidade}x ${escapeHtml(it.nomeExibicao)}${it.tamanho ? ' — ' + escapeHtml(it.tamanho) : ''}</div>
+                <div class="meta">${it.valorUnit ? formatarMoeda(it.valorUnit) + ' cada' : ''}</div>
+            </div>
+            <div class="acoes"><button type="button" class="btn btn-perigo" data-remover-item-carrinho="${i}" style="padding:6px 10px; font-size:.78rem;">✕</button></div>
+        </div>
+    `).join('');
+    document.getElementById('btnSalvarNovaEntrega').textContent = carrinhoEntrega.length ? `Confirmar entrega (${carrinhoEntrega.length})` : 'Confirmar entrega';
+}
+document.getElementById('listaCarrinhoEntrega').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-remover-item-carrinho]');
+    if (!btn) return;
+    carrinhoEntrega.splice(Number(btn.dataset.removerItemCarrinho), 1);
+    renderizarCarrinhoEntrega();
+});
+
+// próximo número de recibo (entrega ou baixa) pra essa unidade -- max
+// atual + 1, calculado no cliente (mesmo padrão já usado noutros
+// cadastros da plataforma, ex: código de conta/pessoa -- risco de
+// corrida aceito, volume de uso é baixo)
+async function proximoNumeroRecibo(coluna) {
+    const { data, error } = await sb.from('staff_uniformes_epi_entregas')
+        .select(coluna)
+        .eq('unidade_negocio_id', meuPerfil.unidadeId)
+        .not(coluna, 'is', null)
+        .order(coluna, { ascending: false })
+        .limit(1);
+    if (error) throw error;
+    const atual = data && data[0] ? Number(data[0][coluna]) || 0 : 0;
+    return atual + 1;
+}
+
+document.getElementById('btnSalvarNovaEntrega').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusNovaEntrega');
+    statusEl.textContent = '';
+    if (!carrinhoEntrega.length) { statusEl.textContent = 'Adicione pelo menos um item à entrega.'; return; }
+    const dataEntrega = document.getElementById('campoDataEntrega').value || hojeISO();
+    const observacao = document.getElementById('campoObservacaoEntrega').value.trim();
 
     const btn = document.getElementById('btnSalvarNovaEntrega');
     btn.disabled = true; btn.textContent = 'Registrando...';
     try {
-        await registrarNovaEntrega({
-            profissionalId: profissionalSelecionado.id, catalogoId, descricaoAvulsa, tamanho,
-            quantidade, valorUnit, dataEntrega, dataPrevista, observacao
-        });
+        const numeroRecibo = await proximoNumeroRecibo('numero_recibo_entrega');
+        // itera uma CÓPIA -- carrinhoEntrega.shift() dentro do loop muda o
+        // array original a cada volta; iterar ele mesmo com for..of pularia
+        // item (o iterador avança um índice por vez, e o shift() desloca
+        // tudo pra trás no meio do caminho)
+        const itensParaRegistrar = [...carrinhoEntrega];
+        for (const it of itensParaRegistrar) {
+            await registrarNovaEntrega({
+                profissionalId: profissionalSelecionado.id, catalogoId: it.catalogoId,
+                descricaoAvulsa: it.descricaoAvulsa, tamanho: it.tamanho,
+                quantidade: it.quantidade, valorUnit: it.valorUnit,
+                dataEntrega, dataPrevista: it.dataPrevista, observacao, numeroRecibo
+            });
+            // já sai do carrinho (o original, exibido na tela) conforme é
+            // gravado -- se algo falhar no meio, o que restou reflete só o
+            // que ainda não foi registrado (evita duplicar ao tentar de novo)
+            carrinhoEntrega.shift();
+        }
         document.getElementById('modal-nova-entrega').classList.remove('aberto');
         await carregarItensAbertos(profissionalSelecionado.id);
         // Recarrega e RE-RENDERIZA o catálogo -- carregarCatalogo() só
@@ -1000,10 +1219,12 @@ document.getElementById('btnSalvarNovaEntrega').addEventListener('click', async 
         await carregarCatalogo();
         renderizarCatalogoAdmin();
         await carregarRenovacoes();
+        await gerarEAbrirReciboEntrega(numeroRecibo, profissionalSelecionado.id);
     } catch (e) {
-        statusEl.textContent = 'Erro ao registrar: ' + (e.message || e);
+        statusEl.textContent = 'Erro ao registrar: ' + (e.message || e) + (carrinhoEntrega.length ? ' -- os itens restantes continuam no carrinho, confira "Itens em aberto" antes de tentar de novo.' : '');
+        renderizarCarrinhoEntrega();
     } finally {
-        btn.disabled = false; btn.textContent = 'Registrar entrega';
+        btn.disabled = false;
     }
 });
 
@@ -1011,7 +1232,7 @@ document.getElementById('btnSalvarNovaEntrega').addEventListener('click', async 
 // estoque_movimentacoes/fabrica_ajustar_estoque já usado pelo
 // estoque-requisicao-rapida.html (não existe RPC dedicada de estoque
 // pra isso, é o padrão da plataforma)
-async function registrarNovaEntrega({ profissionalId, catalogoId, descricaoAvulsa, tamanho, quantidade, valorUnit, dataEntrega, dataPrevista, observacao }) {
+async function registrarNovaEntrega({ profissionalId, catalogoId, descricaoAvulsa, tamanho, quantidade, valorUnit, dataEntrega, dataPrevista, observacao, numeroRecibo }) {
     const nomeProfissional = profissionalSelecionado.nome_completo;
     const loteId = crypto.randomUUID();
     let movimentacaoId = null;
@@ -1059,6 +1280,7 @@ async function registrarNovaEntrega({ profissionalId, catalogoId, descricaoAvuls
         tamanho, quantidade: 1, valor_unitario: valorUnit || null, almoxarifado_id: almoxarifadoId,
         data_entrega: dataEntrega, data_prevista_nova_aquisicao: dataPrevista,
         lote_entrega_id: loteId, estoque_movimentacao_entrega_id: movimentacaoId,
+        numero_recibo_entrega: numeroRecibo || null,
         responsavel_user_id: meuPerfil.userId, observacao: observacao || null
     }));
     const { error: eEnt } = await sb.from('staff_uniformes_epi_entregas').insert(linhas);
@@ -1106,7 +1328,9 @@ document.getElementById('btnConfirmarBaixa').addEventListener('click', async () 
     const btn = document.getElementById('btnConfirmarBaixa');
     btn.disabled = true; btn.textContent = 'Confirmando...';
     try {
-        await confirmarBaixa(entregaAlvoBaixa.id, entregaAlvoBaixa.tipoBaixa, dataBaixa, motivo, condicaoDevolucaoAtual);
+        const numeroReciboBaixa = await proximoNumeroRecibo('numero_recibo_baixa');
+        await confirmarBaixa(entregaAlvoBaixa.id, entregaAlvoBaixa.tipoBaixa, dataBaixa, motivo, condicaoDevolucaoAtual, numeroReciboBaixa);
+        const entregaIdConfirmada = entregaAlvoBaixa.id;
         document.getElementById('modal-baixa').classList.remove('aberto');
         await carregarItensAbertos(profissionalSelecionado.id);
         await carregarHistoricoProfissional(profissionalSelecionado.id);
@@ -1115,6 +1339,7 @@ document.getElementById('btnConfirmarBaixa').addEventListener('click', async () 
         await carregarCatalogo();
         renderizarCatalogoAdmin();
         await carregarRenovacoes();
+        await gerarEAbrirReciboBaixa(entregaIdConfirmada);
     } catch (e) {
         statusEl.textContent = 'Erro: ' + (e.message || e);
     } finally {
@@ -1122,13 +1347,14 @@ document.getElementById('btnConfirmarBaixa').addEventListener('click', async () 
     }
 });
 
-async function confirmarBaixa(entregaId, tipoBaixa, dataBaixa, motivo, condicaoDevolucao) {
+async function confirmarBaixa(entregaId, tipoBaixa, dataBaixa, motivo, condicaoDevolucao, numeroReciboBaixa) {
     const item = itensAbertosAtual.find(i => i.id === entregaId);
     if (!item) throw new Error('Item não encontrado.');
 
     const atualizacao = {
         status: tipoBaixa === 'devolucao' ? 'devolvido' : 'descartado', data_baixa: dataBaixa, tipo_baixa: tipoBaixa, motivo_baixa: motivo || null,
-        condicao_devolucao: tipoBaixa === 'devolucao' ? condicaoDevolucao : null
+        condicao_devolucao: tipoBaixa === 'devolucao' ? condicaoDevolucao : null,
+        numero_recibo_baixa: numeroReciboBaixa
     };
 
     if (tipoBaixa === 'devolucao' && item.catalogo_id) {
@@ -1259,7 +1485,7 @@ async function reverterBaixa(entregaId) {
 
         const { error } = await sb.from('staff_uniformes_epi_entregas').update({
             status: 'entregue', data_baixa: null, tipo_baixa: null, motivo_baixa: null,
-            condicao_devolucao: null, estoque_movimentacao_baixa_id: null
+            condicao_devolucao: null, estoque_movimentacao_baixa_id: null, numero_recibo_baixa: null
         }).eq('id', entregaId);
         if (error) throw error;
 
@@ -1637,6 +1863,184 @@ function renderizarMovimentoItem(movs) {
             </div>
         </div>
     `).join('');
+}
+
+// ---------------------------------------------------------------
+// RECIBO EM PDF -- jsPDF sob demanda + popup com 3 ações (Visualizar/
+// Baixar/Compartilhar), mesmo padrão já usado em armarinho-app.html/
+// financeiro-painel-admin.html/servir-admin-plataforma.html.
+// ---------------------------------------------------------------
+let jsPdfCarregado = false;
+function carregarScriptExterno(src) {
+    return new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src; script.onload = resolve; script.onerror = reject;
+        document.head.appendChild(script);
+    });
+}
+async function carregarJsPdf() {
+    if (jsPdfCarregado) return;
+    await carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    jsPdfCarregado = true;
+}
+
+let pdfAtual = null;
+function mostrarPopupAcoesPdf(tituloModal, blob, nomeArquivo) {
+    pdfAtual = { blob, nomeArquivo };
+    document.getElementById('tituloModalAcoesPdf').textContent = tituloModal;
+    document.getElementById('modalAcoesPdf').classList.add('aberto');
+}
+document.getElementById('btnFecharModalAcoesPdf').addEventListener('click', () => document.getElementById('modalAcoesPdf').classList.remove('aberto'));
+document.getElementById('btnVisualizarPdfGerado').addEventListener('click', () => { if (pdfAtual) window.open(URL.createObjectURL(pdfAtual.blob), '_blank'); });
+document.getElementById('btnBaixarPdfGerado').addEventListener('click', () => {
+    if (!pdfAtual) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(pdfAtual.blob);
+    a.download = pdfAtual.nomeArquivo;
+    a.click();
+});
+document.getElementById('btnCompartilharPdfGerado').addEventListener('click', async () => {
+    if (!pdfAtual) return;
+    try {
+        const arquivo = new File([pdfAtual.blob], pdfAtual.nomeArquivo, { type: 'application/pdf' });
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [arquivo] })) await navigator.share({ files: [arquivo], title: pdfAtual.nomeArquivo });
+        else alert('Compartilhamento direto não disponível nesse navegador -- use Baixar.');
+    } catch (erro) { /* pessoa cancelou o compartilhamento */ }
+});
+
+const MESES_PT_RECIBO = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+function formatarDataExtensoRecibo(dataISO) {
+    const m = String(dataISO || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return dataISO || '';
+    return `${m[3]} de ${MESES_PT_RECIBO[Number(m[2]) - 1]} ${m[1]}`;
+}
+function nomeArquivoRecibo(prefixo, numero) {
+    const nomeProf = (profissionalSelecionado?.nome_completo || '').toLowerCase()
+        .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    return `${prefixo}-${numero}-${nomeProf || 'profissional'}.pdf`;
+}
+
+// desenha o texto do recibo (título + declaração + lista de peças +
+// cidade/data + assinatura) numa posição Y, pra caber 2 vias na mesma
+// página A4 -- mesmo padrão de "2ª via" já usado no recibo de
+// pagamento da Admin Plataforma (corte no meio, não é uma trava
+// jurídica, só facilita separar as 2 cópias impressas)
+function desenharViaRecibo(doc, yInicio, dados) {
+    const margem = 14, larguraUtil = 210 - margem * 2;
+    let y = yInicio;
+    doc.setFontSize(8); doc.setTextColor(150);
+    doc.text('Recibo nº ' + (dados.numero ?? '—'), 210 - margem, y, { align: 'right' });
+    doc.setTextColor(0);
+
+    doc.setFontSize(12); doc.setFont(undefined, 'bold');
+    const linhasTitulo = doc.splitTextToSize(dados.titulo, larguraUtil);
+    doc.text(linhasTitulo, margem, y);
+    y += linhasTitulo.length * 6 + 3;
+
+    doc.setFontSize(10); doc.setFont(undefined, 'normal');
+    const linhasDeclaracao = doc.splitTextToSize(`${dados.profissionalNome}, ${dados.frase}`, larguraUtil);
+    doc.text(linhasDeclaracao, margem, y);
+    y += linhasDeclaracao.length * 5 + 3;
+
+    const linhasResp = doc.splitTextToSize(dados.paragrafo, larguraUtil);
+    doc.text(linhasResp, margem, y);
+    y += linhasResp.length * 5 + 5;
+
+    doc.text(dados.itens.length > 1 ? 'Com as seguintes peças listadas abaixo:' : 'Com a seguinte peça listada abaixo:', margem, y);
+    y += 6;
+    dados.itens.forEach((it, i) => {
+        if (i % 2 === 0) { doc.setFillColor(245, 245, 245); doc.rect(margem, y - 4.3, larguraUtil, 6, 'F'); }
+        doc.text(String(it.qtd), margem + 2, y);
+        doc.text(it.nome, margem + 12, y);
+        y += 6;
+    });
+    y += 8;
+
+    const cidade = configRecibo.cidade || '________________';
+    doc.text(`${cidade}, ${formatarDataExtensoRecibo(dados.data)}`, margem, y);
+    y += 16;
+    doc.text(dados.profissionalNome, margem, y);
+    return y;
+}
+
+async function gerarPdfRecibo(dados) {
+    await carregarJsPdf();
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    desenharViaRecibo(doc, 20, dados);
+    doc.setDrawColor(180); doc.setLineDashPattern([2, 2], 0);
+    doc.line(14, 148.5, 196, 148.5);
+    doc.setLineDashPattern([], 0);
+    doc.setFontSize(7); doc.setTextColor(150);
+    doc.text('✂ corte aqui — 2ª via', 105, 147, { align: 'center' });
+    doc.setTextColor(0);
+    desenharViaRecibo(doc, 152, dados);
+    mostrarPopupAcoesPdf(dados.tituloPopup, doc.output('blob'), dados.nomeArquivo);
+}
+
+function agruparItensParaRecibo(itens) {
+    const mapa = new Map();
+    itens.forEach(it => {
+        const cat = it.staff_uniformes_epi_catalogo;
+        const nome = cat ? cat.nome + (cat.tamanho ? ' — ' + cat.tamanho : '') : (it.descricao_avulsa || 'Item') + (it.tamanho ? ' — ' + it.tamanho : '');
+        mapa.set(nome, (mapa.get(nome) || 0) + (Number(it.quantidade) || 1));
+    });
+    return [...mapa.entries()].map(([nome, qtd]) => ({ nome, qtd }));
+}
+
+async function gerarEAbrirReciboEntrega(numeroRecibo, profissionalId) {
+    try {
+        const { data, error } = await sb.from('staff_uniformes_epi_entregas')
+            .select('*, staff_uniformes_epi_catalogo(nome, tamanho)')
+            .eq('unidade_negocio_id', meuPerfil.unidadeId)
+            .eq('profissional_id', profissionalId)
+            .eq('numero_recibo_entrega', numeroRecibo);
+        if (error) throw error;
+        const itens = data || [];
+        if (!itens.length) { alert('Não encontrei os itens desse recibo pra gerar o PDF.'); return; }
+        const empresa = configRecibo.razao_social || meuPerfil.unidadeNome || '________________';
+        await gerarPdfRecibo({
+            titulo: 'RECIBO DE ENTREGA DE UNIFORME E EQUIPAMENTOS DE SEGURANÇA',
+            tituloPopup: 'Recibo de entrega gerado',
+            numero: numeroRecibo,
+            profissionalNome: (profissionalSelecionado?.nome_completo || '').toUpperCase(),
+            frase: `declaro e confirmo que recebi de ${empresa}, nesta data, o uniforme e ou equipamentos para uso exclusivo em serviço,`,
+            paragrafo: 'Declaro ainda que serei responsável pelo ressarcimento de um no caso de seu extravio antes do tempo determinado para substituição. Estou ainda ciente de que terei de devolver em caso de desligamento da empresa.',
+            data: itens[0].data_entrega,
+            itens: agruparItensParaRecibo(itens),
+            nomeArquivo: nomeArquivoRecibo('recibo-entrega', numeroRecibo)
+        });
+    } catch (e) { alert('Não consegui gerar o PDF do recibo: ' + (e.message || e)); }
+}
+
+async function gerarEAbrirReciboBaixa(entregaId) {
+    try {
+        const { data: item, error } = await sb.from('staff_uniformes_epi_entregas')
+            .select('*, staff_uniformes_epi_catalogo(nome, tamanho)')
+            .eq('id', entregaId).single();
+        if (error) throw error;
+        if (item.numero_recibo_baixa == null) { alert('Esse registro não tem número de recibo de baixa (rode staff-uniformes-epi-recibos.sql).'); return; }
+        const nome = item.staff_uniformes_epi_catalogo
+            ? item.staff_uniformes_epi_catalogo.nome + (item.staff_uniformes_epi_catalogo.tamanho ? ' — ' + item.staff_uniformes_epi_catalogo.tamanho : '')
+            : (item.descricao_avulsa || 'Item') + (item.tamanho ? ' — ' + item.tamanho : '');
+        const empresa = configRecibo.razao_social || meuPerfil.unidadeNome || '________________';
+        const ehDevolucao = item.tipo_baixa === 'devolucao';
+        await gerarPdfRecibo({
+            titulo: ehDevolucao ? 'RECIBO DE DEVOLUÇÃO DE UNIFORME E EQUIPAMENTOS DE SEGURANÇA' : 'RECIBO DE DESCARTE DE UNIFORME E EQUIPAMENTOS DE SEGURANÇA',
+            tituloPopup: ehDevolucao ? 'Recibo de devolução gerado' : 'Recibo de descarte gerado',
+            numero: item.numero_recibo_baixa,
+            profissionalNome: (profissionalSelecionado?.nome_completo || '').toUpperCase(),
+            frase: ehDevolucao
+                ? `declaro que devolvi a ${empresa}, nesta data, o uniforme e ou equipamento recebido anteriormente para uso exclusivo em serviço,`
+                : `declaro que o uniforme e ou equipamento recebido anteriormente de ${empresa} para uso exclusivo em serviço foi descartado nesta data,`,
+            paragrafo: ehDevolucao
+                ? 'A peça retorna ao estoque da empresa' + (item.condicao_devolucao === 'usado' ? ', na condição de usada.' : ', sem uso.')
+                : 'A peça não retorna ao estoque da empresa -- já não pode mais ser reaproveitada.',
+            data: item.data_baixa,
+            itens: [{ nome, qtd: 1 }],
+            nomeArquivo: nomeArquivoRecibo(ehDevolucao ? 'recibo-devolucao' : 'recibo-descarte', item.numero_recibo_baixa)
+        });
+    } catch (e) { alert('Não consegui gerar o PDF do recibo: ' + (e.message || e)); }
 }
 
 // ---------------------------------------------------------------
