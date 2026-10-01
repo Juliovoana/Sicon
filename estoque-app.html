@@ -3459,10 +3459,13 @@ async function editarProdutoPrompt(id) {
 function configurarBuscaCatalogoSimples(idBusca, idResultados, getLista, aoSelecionar) {
     const inputBusca = document.getElementById(idBusca);
     const elResultados = document.getElementById(idResultados);
-    inputBusca.addEventListener('input', () => {
-        const termo = inputBusca.value.trim().toUpperCase();
-        if (!termo) { elResultados.classList.remove('aberto'); elResultados.innerHTML = ''; return; }
-        const lista = getLista().filter(item => item.nome.toUpperCase().includes(termo));
+    // sem termo digitado: mostra os primeiros da lista (em vez de nada),
+    // tanto ao clicar/focar no campo vazio quanto ao apagar o que foi
+    // digitado -- com termo, filtra normalmente
+    function renderizarResultados(termo) {
+        const lista = termo
+            ? getLista().filter(item => item.nome.toUpperCase().includes(termo))
+            : getLista().slice(0, 20);
         elResultados.innerHTML = lista.length
             ? ''
             : '<div class="item-resultado">Nenhum resultado encontrado.</div>';
@@ -3480,7 +3483,10 @@ function configurarBuscaCatalogoSimples(idBusca, idResultados, getLista, aoSelec
             });
             elResultados.appendChild(div);
         });
-    });
+    }
+    inputBusca.addEventListener('input', () => renderizarResultados(inputBusca.value.trim().toUpperCase()));
+    inputBusca.addEventListener('focus', () => { if (!inputBusca.value.trim()) renderizarResultados(''); });
+    inputBusca.addEventListener('click', () => { if (!inputBusca.value.trim()) renderizarResultados(''); });
     document.addEventListener('click', (e) => {
         if (e.target !== inputBusca && !elResultados.contains(e.target)) {
             elResultados.classList.remove('aberto');
@@ -5718,16 +5724,20 @@ function preencherEventoSelecionadoUI(idTexto, codigoEvento) {
 function configurarBuscaPlanoContas(idBusca, idResultados, idSelecionadoTexto, aoSelecionar) {
     const inputBusca = document.getElementById(idBusca);
     const elResultados = document.getElementById(idResultados);
-    inputBusca.addEventListener('input', () => {
-        const termo = inputBusca.value.trim().toUpperCase();
-        if (!termo) { elResultados.classList.remove('aberto'); return; }
-        const lista = catalogosBaixa.planoContas.filter(p =>
-            p.codigo.toUpperCase().includes(termo) || p.descricao.toUpperCase().includes(termo)
-        ).slice(0, 30);
+    // sem termo digitado: mostra os primeiros planos de contas (em vez de
+    // nada), tanto ao clicar/focar no campo vazio quanto ao apagar o que
+    // foi digitado -- com termo, filtra normalmente
+    function renderizarResultados(termo) {
+        const lista = termo
+            ? catalogosBaixa.planoContas.filter(p =>
+                p.codigo.toUpperCase().includes(termo) || p.descricao.toUpperCase().includes(termo)
+              ).slice(0, 30)
+            : catalogosBaixa.planoContas.slice(0, 20);
         elResultados.innerHTML = lista.length
             ? ''
             : '<div class="item-resultado">Nenhum plano de contas encontrado.</div>';
-        if (!lista.length) { elResultados.classList.add('aberto'); return; }
+        elResultados.classList.add('aberto');
+        if (!lista.length) return;
         lista.forEach(p => {
             const div = document.createElement('div');
             div.className = 'item-resultado';
@@ -5749,8 +5759,10 @@ function configurarBuscaPlanoContas(idBusca, idResultados, idSelecionadoTexto, a
             });
             elResultados.appendChild(div);
         });
-        elResultados.classList.add('aberto');
-    });
+    }
+    inputBusca.addEventListener('input', () => renderizarResultados(inputBusca.value.trim().toUpperCase()));
+    inputBusca.addEventListener('focus', () => { if (!inputBusca.value.trim()) renderizarResultados(''); });
+    inputBusca.addEventListener('click', () => { if (!inputBusca.value.trim()) renderizarResultados(''); });
 }
 
 // preenche a UI de "Selecionado: ..." de plano de contas a partir de um
@@ -5767,14 +5779,17 @@ function preencherPlanoContasSelecionadoUI(idTexto, planoContasId) {
 function configurarBuscaEvento(idBusca, idResultados, idSelecionadoTexto, aoSelecionar) {
     const inputBusca = document.getElementById(idBusca);
     const elResultados = document.getElementById(idResultados);
-    inputBusca.addEventListener('input', () => {
-        const termo = inputBusca.value;
-        if (!termo.trim()) { elResultados.classList.remove('aberto'); return; }
+    // sem termo digitado: mostra os primeiros eventos (em vez de nada),
+    // tanto ao clicar/focar no campo vazio quanto ao apagar o que foi
+    // digitado -- buscarEventos('') já devolve os primeiros 30 sozinho,
+    // só não era chamada nesse caso antes
+    function renderizarResultados(termo) {
         const lista = buscarEventos(termo);
         elResultados.innerHTML = lista.length
             ? ''
             : '<div class="item-resultado">Nenhum evento encontrado.</div>';
-        if (!lista.length) { elResultados.classList.add('aberto'); return; }
+        elResultados.classList.add('aberto');
+        if (!lista.length) return;
         lista.forEach(ev => {
             const div = document.createElement('div');
             div.className = 'item-resultado';
@@ -5796,8 +5811,10 @@ function configurarBuscaEvento(idBusca, idResultados, idSelecionadoTexto, aoSele
             });
             elResultados.appendChild(div);
         });
-        elResultados.classList.add('aberto');
-    });
+    }
+    inputBusca.addEventListener('input', () => renderizarResultados(inputBusca.value));
+    inputBusca.addEventListener('focus', () => { if (!inputBusca.value.trim()) renderizarResultados(''); });
+    inputBusca.addEventListener('click', () => { if (!inputBusca.value.trim()) renderizarResultados(''); });
 }
 
 // Busca genérica por NOME (+ campo extra opcional, ex: placa do
@@ -5823,13 +5840,16 @@ function configurarBuscaListaGenerica(idBusca, idResultados, idSelecionadoTexto,
             aoSelecionar(null);
         });
     }
-    inputBusca.addEventListener('input', () => {
-        const termo = inputBusca.value.trim().toUpperCase();
-        if (!termo) { elResultados.classList.remove('aberto'); elResultados.innerHTML = ''; return; }
-        const lista = getLista().filter(item => {
-            const texto = (item.nome + ' ' + (campoExtra && item[campoExtra] ? item[campoExtra] : '')).toUpperCase();
-            return texto.includes(termo);
-        }).slice(0, 30);
+    // sem termo digitado: mostra os primeiros da lista (em vez de nada),
+    // tanto ao clicar/focar no campo vazio quanto ao apagar o que foi
+    // digitado -- com termo, filtra normalmente
+    function renderizarResultados(termo) {
+        const lista = termo
+            ? getLista().filter(item => {
+                const texto = (item.nome + ' ' + (campoExtra && item[campoExtra] ? item[campoExtra] : '')).toUpperCase();
+                return texto.includes(termo);
+              }).slice(0, 30)
+            : getLista().slice(0, 20);
         elResultados.innerHTML = lista.length ? '' : '<div class="item-resultado">Nenhum resultado encontrado.</div>';
         elResultados.classList.add('aberto');
         lista.forEach(item => {
@@ -5846,7 +5866,10 @@ function configurarBuscaListaGenerica(idBusca, idResultados, idSelecionadoTexto,
             });
             elResultados.appendChild(div);
         });
-    });
+    }
+    inputBusca.addEventListener('input', () => renderizarResultados(inputBusca.value.trim().toUpperCase()));
+    inputBusca.addEventListener('focus', () => { if (!inputBusca.value.trim()) renderizarResultados(''); });
+    inputBusca.addEventListener('click', () => { if (!inputBusca.value.trim()) renderizarResultados(''); });
     document.addEventListener('click', (e) => {
         if (e.target !== inputBusca && !elResultados.contains(e.target)) elResultados.classList.remove('aberto');
     });
