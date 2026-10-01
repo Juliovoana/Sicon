@@ -201,7 +201,42 @@
   .btn-add-inline:hover{ background:#245a41; }
   .campo-com-add{ display:flex; gap:6px; align-items:flex-start; }
   .campo-com-add .campo-autocomplete{ flex:1; }
+
+  .stat-cards{ display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:14px; margin-bottom:24px; }
+  .stat-card{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px; display:flex; flex-direction:column; gap:8px; }
+  .stat-card .icon-badge{ width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; background:var(--brand-soft); color:var(--brand-2); }
+  .stat-card .icon-badge svg{ width:17px; height:17px; }
+  .stat-card .icon-badge.badge-pagar{ background:var(--danger-soft); color:var(--danger); }
+  .stat-card .label{ font-size:.8rem; color:var(--muted); font-weight:500; }
+  .stat-card .value{ font-size:1.4rem; font-weight:700; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .stat-card .value.alerta{ color:var(--danger); }
+
+  .chart-box{ background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:22px; margin-bottom:20px; }
+  .chart-box h3{ font-size:.92rem; font-weight:700; margin:0 0 2px 0; }
+  .chart-box .chart-sub{ font-size:.8rem; color:var(--muted); margin-bottom:16px; }
+
+  .barra-linha{ display:grid; grid-template-columns:130px 1fr 190px; align-items:center; gap:12px; padding:7px 8px; border-radius:8px; }
+  .barra-linha.clicavel{ cursor:pointer; }
+  .barra-linha.clicavel:hover, .barra-linha.clicavel:focus-visible{ background:var(--brand-soft); outline:none; }
+  .barra-linha .rotulo{ font-size:.85rem; font-weight:600; }
+  .barra-trilho{ height:12px; background:#F1EEF0; border-radius:6px; overflow:hidden; }
+  .barra-fill{ height:100%; border-radius:0 4px 4px 0; background:var(--brand-2); min-width:0; transition:width .3s ease; }
+  .barra-fill.atrasado{ background:var(--danger); }
+  .barra-linha .valores{ font-size:.82rem; text-align:right; font-variant-numeric:tabular-nums; }
+  .barra-linha .valores small{ display:block; color:var(--muted); font-size:.74rem; }
+  @media (max-width:720px){ .barra-linha{ grid-template-columns:1fr; gap:4px; } .barra-linha .valores{ text-align:left; } }
 </style>
+<script>
+/* Aviso padrão quando o banco recusa a ação por falta de permissão (RLS) */
+(function(){
+  var MSG_SEM_PERMISSAO = '🔒 Usuário sem permissão para esta ação. Fale com o administrador da unidade.';
+  var alertOriginal = window.alert.bind(window);
+  window.alert = function(m){
+    if (/row-level security|permission denied/i.test(String(m))) m = MSG_SEM_PERMISSAO;
+    alertOriginal(m);
+  };
+})();
+</script>
 </head>
 <body>
 
@@ -319,7 +354,11 @@
     <div class="app-shell">
       <aside class="sidebar">
         <div class="sidebar-brand">Servir<small id="nomeAgencia">Financeiro</small></div>
-        <button class="nav-item tab-app-btn active" data-app-tab="titulos">
+        <button class="nav-item tab-app-btn active" data-app-tab="dashboard">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>
+          <span class="nav-label">Dashboard</span>
+        </button>
+        <button class="nav-item tab-app-btn" data-app-tab="titulos">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>
           <span class="nav-label">Títulos</span>
         </button>
@@ -352,7 +391,7 @@
 
       <div class="content-area">
         <div class="content-header">
-          <h1 id="tituloConteudo">Títulos</h1>
+          <h1 id="tituloConteudo">Dashboard</h1>
           <div style="display:flex; gap:8px; align-items:center;">
             <button type="button" class="btn-ajuda-modulo" id="btnAjudaModulo">❓ Ajuda</button>
             <span class="operador-pill" id="operadorPill">—</span>
@@ -361,8 +400,44 @@
         </div>
 
         <main class="app-main">
+          <!-- ================= DASHBOARD ================= -->
+          <div class="panel-app active" id="app-panel-dashboard">
+            <div class="stat-cards">
+              <div class="stat-card">
+                <div class="icon-badge badge-pagar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+                <div class="label">A pagar em aberto</div>
+                <div class="value" id="statAPagar">—</div>
+              </div>
+              <div class="stat-card">
+                <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+                <div class="label">A receber em aberto</div>
+                <div class="value" id="statAReceber">—</div>
+              </div>
+              <div class="stat-card">
+                <div class="icon-badge badge-pagar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+                <div class="label">Vencidos a pagar</div>
+                <div class="value alerta" id="statPagarVencido">—</div>
+              </div>
+              <div class="stat-card">
+                <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+                <div class="label">Vencidos a receber</div>
+                <div class="value alerta" id="statReceberVencido">—</div>
+              </div>
+            </div>
+            <div class="chart-box">
+              <h3>Contas a pagar por vencimento</h3>
+              <div class="chart-sub" id="subGraficoAPagar">Títulos ainda não pagos.</div>
+              <div id="graficoAPagar"></div>
+            </div>
+            <div class="chart-box">
+              <h3>Contas a receber por vencimento</h3>
+              <div class="chart-sub" id="subGraficoAReceber">Títulos ainda não recebidos.</div>
+              <div id="graficoAReceber"></div>
+            </div>
+          </div>
+
           <!-- ================= TÍTULOS ================= -->
-          <div class="panel-app active" id="app-panel-titulos">
+          <div class="panel-app" id="app-panel-titulos">
             <div class="filtros">
               <input type="text" id="filtroBuscaTitulo" placeholder="Buscar por título ou pessoa...">
               <select id="filtroTipoTitulo">
@@ -523,6 +598,22 @@
         <p style="font-size:.85rem; color:var(--muted); margin-bottom:14px;">Compartilhe este código com quem você quer convidar. Gerar um novo código invalida o anterior.</p>
         <div class="mono" id="codigoConviteDisplay" style="text-align:center; font-size:1.6rem; font-weight:700; background:var(--brand-soft); color:var(--brand); padding:16px; border-radius:10px; letter-spacing:.1em;">— — — —</div>
         <button class="btn-primary" id="btnCopiarCodigoConvite" style="margin-top:16px;">Copiar código</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: FAIXA DO DASHBOARD ================= -->
+  <div class="modal-lista-overlay" id="modalFaixaDashboard">
+    <div class="modal-lista" style="max-width:720px;">
+      <div class="modal-lista-head">
+        <div>
+          <h3 id="faixaDashboardTitulo">Títulos</h3>
+          <p style="font-size:.8rem; color:var(--muted); margin-top:2px;" id="faixaDashboardSub"></p>
+        </div>
+        <button class="drawer-close" id="btnFecharFaixaDashboard">✕</button>
+      </div>
+      <div class="modal-lista-body">
+        <div class="lista-cadastro" id="listaFaixaDashboard"></div>
       </div>
     </div>
   </div>
@@ -1174,13 +1265,14 @@
   // =================================================================
   // TABS DO APP
   // =================================================================
-  const titulosAba = { titulos: 'Títulos', movimentacao: 'Movimentação de Contas', cadastros: 'Cadastros', parametros: 'Parâmetros' };
+  const titulosAba = { dashboard: 'Dashboard', titulos: 'Títulos', movimentacao: 'Movimentação de Contas', cadastros: 'Cadastros', parametros: 'Parâmetros' };
   document.querySelectorAll('.tab-app-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tab-app-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.panel-app').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
       document.getElementById('app-panel-' + btn.dataset.appTab).classList.add('active');
+      if(btn.dataset.appTab === 'dashboard') renderizarDashboardFinanceiro();
       document.getElementById('tituloConteudo').textContent = titulosAba[btn.dataset.appTab] || '';
     });
   });
@@ -1197,8 +1289,26 @@
   // =================================================================
   const AJUDA_FINANCEIRO = {
     titulo: 'Financeiro — Títulos, Contas e Rateio',
-    ultimaRevisao: '10/09/2026',
+    ultimaRevisao: '01/10/2026',
     secoes: [
+      { id: 'dashboard', titulo: 'Dashboard', corpo: `
+        <p>Visão geral do contas a pagar e a receber da unidade, no mesmo estilo do painel do
+        Armarinho: cartões de resumo em cima e dois gráficos de barras embaixo, um pra
+        <strong>Contas a pagar</strong> e outro pra <strong>Contas a receber</strong>, sempre só com
+        títulos <strong>em aberto</strong> (ainda não pagos/recebidos).</p>
+        <ul>
+          <li>Os gráficos agrupam os títulos em 5 faixas por dias até o vencimento:
+          <strong>Atrasados</strong>, <strong>Até 7 dias</strong>, <strong>8 a 15 dias</strong>,
+          <strong>16 a 30 dias</strong> e <strong>Mais de 30 dias</strong>. O vencimento de hoje
+          conta na faixa "Até 7 dias" (ainda não é atraso).</li>
+          <li>O tamanho da barra é proporcional ao <strong>valor líquido</strong> da faixa
+          (valor do título menos desconto mais acréscimo), não à quantidade de títulos.</li>
+          <li>Clicar numa barra abre a lista dos títulos daquela faixa; o botão 💰 em cada título
+          abre a mesma tela de <strong>quitação rápida</strong> usada na aba Títulos, já
+          identificando se é pagamento ou recebimento.</li>
+          <li>Os cartões "Vencidos a pagar"/"Vencidos a receber" somam só a faixa Atrasados.</li>
+        </ul>
+      ` },
       { id: 'geral', titulo: 'Visão geral', corpo: `
         <p>O Financeiro controla o <strong>contas a pagar/receber</strong> da unidade e o
         <strong>livro caixa</strong> das contas correntes, sempre exigindo que todo lançamento diga
@@ -1503,6 +1613,134 @@
     if(error){ console.error(error.message); return; }
     todosTitulos = data || [];
     renderizarListaTitulos();
+    renderizarDashboardFinanceiro();
+  }
+
+  // -----------------------------------------------------------------
+  // DASHBOARD -- contas a pagar/receber vencidas e a vencer, no
+  // mesmo estilo do gráfico "Contas a receber por vencimento" do
+  // Armarinho (armarinho-app.html). Aqui existem DOIS gráficos (um
+  // por tipo_movimento), reaproveitando o modal de quitação rápida
+  // já existente (abrirModalPagamentoRapido) pra pagar/receber direto
+  // da faixa clicada.
+  // -----------------------------------------------------------------
+  function valorLiquidoTitulo(t){
+    return (Number(t.valor_titulo) || 0) - (Number(t.descontos) || 0) + (Number(t.acrescimos) || 0);
+  }
+  // faixas por dias até o vencimento; "hoje" ainda não é atraso e conta em "Até 7 dias"
+  const FAIXAS_VENCIMENTO = [
+    { chave: 'atrasado', rotulo: 'Atrasados', atrasado: true, contem: d => d < 0 },
+    { chave: 'ate7', rotulo: 'Até 7 dias', contem: d => d >= 0 && d <= 7 },
+    { chave: 'ate15', rotulo: '8 a 15 dias', contem: d => d >= 8 && d <= 15 },
+    { chave: 'ate30', rotulo: '16 a 30 dias', contem: d => d >= 16 && d <= 30 },
+    { chave: 'mais30', rotulo: 'Mais de 30 dias', contem: d => d > 30 },
+  ];
+  function diasAteVencer(vencimentoISO){
+    const [a, m, d] = vencimentoISO.slice(0, 10).split('-').map(Number);
+    const hoje = new Date();
+    const [ha, hm, hd] = [hoje.getFullYear(), hoje.getMonth() + 1, hoje.getDate()];
+    return Math.round((Date.UTC(a, m - 1, d) - Date.UTC(ha, hm - 1, hd)) / 86400000);
+  }
+  const textoQtdTitulos = (n) => `${n} título${n === 1 ? '' : 's'}`;
+
+  // títulos em aberto de um tipo_movimento que caem na faixa, do vencimento mais antigo pro mais novo
+  function titulosDaFaixaDashboard(tipoMovimento, chave){
+    const faixa = FAIXAS_VENCIMENTO.find(f => f.chave === chave);
+    return todosTitulos
+      .filter(t => t.tipo_movimento === tipoMovimento && !t.data_pagamento && t.data_vencimento)
+      .map(t => ({ t, dias: diasAteVencer(t.data_vencimento) }))
+      .filter(x => faixa.contem(x.dias))
+      .sort((a, b) => a.t.data_vencimento.localeCompare(b.t.data_vencimento) || String(a.t.id).localeCompare(String(b.t.id), undefined, { numeric: true }));
+  }
+  function renderizarGraficoDashboard(tipoMovimento){
+    const sufixo = tipoMovimento === 'PAGAR' ? 'APagar' : 'AReceber';
+    const verbo = tipoMovimento === 'PAGAR' ? 'pagos' : 'recebidos';
+    const faixas = FAIXAS_VENCIMENTO.map(f => {
+      const lista = titulosDaFaixaDashboard(tipoMovimento, f.chave);
+      return { ...f, qtd: lista.length, valor: lista.reduce((acc, x) => acc + valorLiquidoTitulo(x.t), 0) };
+    });
+    const totalQtd = faixas.reduce((acc, f) => acc + f.qtd, 0);
+    const totalValor = faixas.reduce((acc, f) => acc + f.valor, 0);
+    const maior = Math.max(...faixas.map(f => f.valor), 0);
+    document.getElementById('subGrafico' + sufixo).textContent = totalQtd
+      ? `${textoQtdTitulos(totalQtd)} ainda não ${verbo} · ${formatarMoeda(totalValor)}. Vencimento hoje conta em "Até 7 dias". Clique numa barra para ver os títulos.`
+      : `Nenhum título em aberto.`;
+    const grafico = document.getElementById('grafico' + sufixo);
+    grafico.innerHTML = faixas.map(f => {
+      const largura = maior > 0 && f.valor > 0 ? Math.max(2, (f.valor / maior) * 100) : 0;
+      const clicavel = f.qtd > 0;
+      return `
+      <div class="barra-linha${clicavel ? ' clicavel' : ''}" data-faixa="${f.chave}" data-tipo="${tipoMovimento}"${clicavel ? ' role="button" tabindex="0"' : ''} title="${escapeHtml(f.rotulo)}: ${textoQtdTitulos(f.qtd)}, ${formatarMoeda(f.valor)}${clicavel ? ' — clique para ver os títulos' : ''}">
+        <div class="rotulo">${escapeHtml(f.rotulo)}</div>
+        <div class="barra-trilho" aria-hidden="true"><div class="barra-fill${f.atrasado ? ' atrasado' : ''}" style="width:${largura}%"></div></div>
+        <div class="valores"><strong>${formatarMoeda(f.valor)}</strong><small>${textoQtdTitulos(f.qtd)}</small></div>
+      </div>`;
+    }).join('');
+    grafico.querySelectorAll('.barra-linha.clicavel').forEach(el => {
+      el.addEventListener('click', () => abrirFaixaDashboard(el.dataset.tipo, el.dataset.faixa));
+      el.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); abrirFaixaDashboard(el.dataset.tipo, el.dataset.faixa); } });
+    });
+  }
+
+  // ---- popup dos títulos de uma faixa (com quitação rápida daqui) ----
+  let faixaDashboardAtiva = null; // {tipoMovimento, chave}
+  function abrirFaixaDashboard(tipoMovimento, chave){
+    faixaDashboardAtiva = { tipoMovimento, chave };
+    document.getElementById('modalFaixaDashboard').classList.add('show');
+    renderizarFaixaDashboard();
+  }
+  function renderizarFaixaDashboard(){
+    if(!faixaDashboardAtiva || !document.getElementById('modalFaixaDashboard').classList.contains('show')) return;
+    const { tipoMovimento, chave } = faixaDashboardAtiva;
+    const faixa = FAIXAS_VENCIMENTO.find(f => f.chave === chave);
+    const lista = titulosDaFaixaDashboard(tipoMovimento, chave);
+    const total = lista.reduce((acc, x) => acc + valorLiquidoTitulo(x.t), 0);
+    const acao = tipoMovimento === 'PAGAR' ? 'Pagar' : 'Receber';
+    document.getElementById('faixaDashboardTitulo').textContent = `${faixa.rotulo} — ${acao} · ${textoQtdTitulos(lista.length)} · ${formatarMoeda(total)}`;
+    document.getElementById('faixaDashboardSub').textContent = faixa.atrasado
+      ? `Títulos vencidos e ainda não ${tipoMovimento === 'PAGAR' ? 'pagos' : 'recebidos'}. Use "${acao}" para dar a baixa.`
+      : `Títulos ainda não ${tipoMovimento === 'PAGAR' ? 'pagos' : 'recebidos'} nessa faixa de vencimento. Use "${acao}" para dar a baixa.`;
+    const lst = document.getElementById('listaFaixaDashboard');
+    lst.innerHTML = lista.length ? lista.map(({ t, dias }) => {
+      const situacao = dias < 0
+        ? `<span class="pill pill-pagar">${-dias} dia${dias === -1 ? '' : 's'} de atraso</span>`
+        : `<span class="pill pill-receber">${dias === 0 ? 'Vence hoje' : 'Vence em ' + dias + ' dia' + (dias === 1 ? '' : 's')}</span>`;
+      return `
+      <div class="cadastro-row">
+        <div class="cadastro-thumb">${t.codigo ?? '—'}</div>
+        <div class="cadastro-info">
+          <div class="principal">${escapeHtml(t.titulo || t.pessoa?.nome || 'Sem título')} ${situacao}</div>
+          <div class="meta">${escapeHtml(t.pessoa?.nome || (t.descricao_avulsa ? '0 — ' + t.descricao_avulsa : '—'))} · Vence ${formatarData(t.data_vencimento)}</div>
+        </div>
+        <div class="cadastro-valor"><div class="valor mono">${formatarMoeda(valorLiquidoTitulo(t))}</div></div>
+        <button type="button" class="btn-add-inline" data-quitar-faixa="${t.id}" title="${acao}" style="background:var(--brand-2); flex-shrink:0;">💰</button>
+      </div>`;
+    }).join('') : '<div class="vazio">Nenhum título nessa faixa.</div>';
+    lst.querySelectorAll('[data-quitar-faixa]').forEach(b => b.addEventListener('click', () => {
+      document.getElementById('modalFaixaDashboard').classList.remove('show');
+      abrirModalPagamentoRapido(Number(b.dataset.quitarFaixa));
+    }));
+  }
+  document.getElementById('btnFecharFaixaDashboard').addEventListener('click', () => {
+    faixaDashboardAtiva = null;
+    document.getElementById('modalFaixaDashboard').classList.remove('show');
+  });
+
+  function renderizarDashboardFinanceiro(){
+    let aPagar = 0, aReceber = 0, pagarVencido = 0, receberVencido = 0;
+    todosTitulos.forEach(t => {
+      if(t.data_pagamento) return;
+      const liquido = valorLiquidoTitulo(t);
+      const vencido = t.data_vencimento && diasAteVencer(t.data_vencimento) < 0;
+      if(t.tipo_movimento === 'PAGAR'){ aPagar += liquido; if(vencido) pagarVencido += liquido; }
+      else if(t.tipo_movimento === 'RECEBER'){ aReceber += liquido; if(vencido) receberVencido += liquido; }
+    });
+    document.getElementById('statAPagar').textContent = formatarMoeda(aPagar);
+    document.getElementById('statAReceber').textContent = formatarMoeda(aReceber);
+    document.getElementById('statPagarVencido').textContent = formatarMoeda(pagarVencido);
+    document.getElementById('statReceberVencido').textContent = formatarMoeda(receberVencido);
+    renderizarGraficoDashboard('PAGAR');
+    renderizarGraficoDashboard('RECEBER');
   }
   let operacaoIdsFiltroAvancado = null; // null = filtro avançado inativo; Set = restringe a esses operacao_id
   function obterTitulosFiltrados(){
