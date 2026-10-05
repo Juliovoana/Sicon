@@ -76,6 +76,11 @@
   #btnMusica:hover{ background:rgba(0,0,0,.8); }
   #btnMusica.ativa{ display:inline-block; }
 
+  /* janelinha do YouTube oculta: o player continua no lugar (tocando) só que invisível e sem receber clique; os avisos sobem pro canto */
+  body.player-oculto #musica{ opacity:0; pointer-events:none; box-shadow:none; }
+  body.player-oculto #btnMusica{ right:2vw; }
+  body.player-oculto #avisoSom{ top:calc(3vh + max(38px, 6vmin) + 1vh); }
+
   /* aviso de falha da música: fica na tela até dispensar, trocar o link ou a música tocar */
   #avisoMusica{ position:fixed; right:2vw; top:3vh; z-index:11; width:min(46vw, 560px); background:rgba(122,32,22,.94); border:1px solid rgba(255,255,255,.28); border-radius:1.6vmin; padding:1.8vmin 2.2vmin; font-size:clamp(13px, 2vmin, 20px); line-height:1.4; display:none; box-shadow:0 1.4vmin 4vmin rgba(0,0,0,.5); }
   #avisoMusica.show{ display:block; }
@@ -93,6 +98,8 @@
   #painelSom input[type=text]{ width:100%; padding:1.2vmin 1.6vmin; border-radius:1vmin; border:1.5px solid rgba(255,255,255,.3); background:rgba(255,255,255,.08); color:#fff; font-size:inherit; font-family:inherit; outline:none; }
   #painelSom input[type=text]:focus{ border-color:var(--accent); }
   #painelSom input[type=range]{ width:100%; accent-color:var(--accent); }
+  #painelSom label.opcao{ display:flex; align-items:center; gap:1.2vmin; font-weight:600; cursor:pointer; margin-top:2vmin; }
+  #painelSom label.opcao input{ width:20px; height:20px; accent-color:var(--accent); flex-shrink:0; }
   #painelSom .status{ opacity:.85; font-size:.92em; }
   #painelSom #somErro{ color:#ffb4a8; font-weight:600; margin-top:1vmin; min-height:1.2em; }
   #painelSom .acoes{ display:flex; gap:1.2vmin; margin-top:2vmin; flex-wrap:wrap; }
@@ -125,6 +132,7 @@
     <button id="btnAnterior" title="Anterior (←)">⏮</button>
     <button id="btnPausa" title="Pausar / continuar (espaço)">⏸</button>
     <button id="btnProximo" title="Próximo (→)">⏭</button>
+    <button id="btnVerPlayer" style="display:none" title="Mostrar/ocultar a janelinha do YouTube (V)">👁</button>
     <button id="btnConfigSom" title="Trocar link e volume da música (L)">🎵</button>
     <button id="btnTelaCheia" title="Tela cheia (F)">⛶</button>
   </div>
@@ -143,6 +151,7 @@
       <input type="text" id="somLink" placeholder="https://www.youtube.com/playlist?list=..." autocomplete="off" spellcheck="false">
       <label for="somVolume">Volume: <span id="somVolRot">40</span>%</label>
       <input type="range" id="somVolume" min="0" max="100" step="1" value="40">
+      <label class="opcao"><input type="checkbox" id="somMostrarPlayer" checked> Mostrar a janelinha do YouTube no canto da TV</label>
       <div id="somErro"></div>
       <div class="acoes">
         <button id="somAplicar">Aplicar</button>
@@ -150,7 +159,7 @@
         <button id="somRestaurar" class="sec">Usar o link da loja</button>
         <button id="somFechar" class="sec">Fechar</button>
       </div>
-      <div class="dica">Vale só neste aparelho/navegador. Pra mudar em todas as TVs, edite o link na aba Vitrine do app. Dica: clipes oficiais costumam bloquear a reprodução fora do YouTube — prefira playlists de música ou vídeos de canais que permitem incorporar.</div>
+      <div class="dica">Ocultar a janelinha só esconde a imagem — a música continua tocando (o YouTube recomenda manter o player visível). Vale só neste aparelho/navegador. Pra mudar o link em todas as TVs, edite na aba Vitrine do app. Dica: clipes oficiais costumam bloquear a reprodução fora do YouTube — prefira playlists de música ou vídeos de canais que permitem incorporar.</div>
     </div>
   </div>
   <div id="dica">Pressione F ou dê dois cliques para tela cheia</div>
@@ -366,7 +375,23 @@
   function atualizarBotaoMusica(){
     $('btnMusica').textContent = somAtivo() ? '🔊' : '🔇';
     $('avisoSom').classList.toggle('show', !!ytPlayer && !somLiberado);
+    $('btnVerPlayer').style.display = ytPlayer ? '' : 'none';     // só faz sentido com música tocando
   }
+
+  // ---- mostrar/ocultar a janelinha do YouTube (só neste aparelho; a música continua tocando) ----
+  const CHAVE_PLAYER = 'vitrine_player_oculto_' + (token || '');
+  function lerPlayerOculto(){ try{ return localStorage.getItem(CHAVE_PLAYER) === '1'; } catch(e){ return false; } }
+  function aplicarPlayerOculto(oculto, gravar){
+    document.body.classList.toggle('player-oculto', oculto);
+    $('btnVerPlayer').textContent = oculto ? '🙈' : '👁';
+    $('btnVerPlayer').title = (oculto ? 'Mostrar' : 'Ocultar') + ' a janelinha do YouTube (V)';
+    $('somMostrarPlayer').checked = !oculto;
+    if(gravar){ try{ if(oculto) localStorage.setItem(CHAVE_PLAYER, '1'); else localStorage.removeItem(CHAVE_PLAYER); } catch(e){ /* vale só até recarregar */ } }
+  }
+  const alternarPlayer = () => aplicarPlayerOculto(!document.body.classList.contains('player-oculto'), true);
+  $('btnVerPlayer').addEventListener('click', (e) => { e.stopPropagation(); alternarPlayer(); });
+  $('somMostrarPlayer').addEventListener('change', () => aplicarPlayerOculto(!$('somMostrarPlayer').checked, true));
+  aplicarPlayerOculto(lerPlayerOculto(), false);
   function carregarApiYoutube(){
     if(ytApi) return ytApi;
     ytApi = new Promise((resolve, reject) => {
@@ -568,6 +593,7 @@
     else if(e.key === ' '){ e.preventDefault(); alternarPausa(); }
     else if(e.key === 'f' || e.key === 'F') alternarTelaCheia();
     else if(e.key === 'm' || e.key === 'M') alternarSom();
+    else if((e.key === 'v' || e.key === 'V') && ytPlayer) alternarPlayer();
   });
 
   // mantém a tela da TV acordada (quando o navegador permite)
