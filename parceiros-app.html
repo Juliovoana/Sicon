@@ -1,0 +1,2751 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Servir — Parceiros Comerciais</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' rx='46' fill='%231B4332'/%3E%3Ccircle cx='72' cy='72' r='24' fill='%23F0F4EE'/%3E%3Ccircle cx='132' cy='72' r='24' fill='%23F2A93B'/%3E%3Cpath d='M26 158c4-32 24-46 46-46s42 14 46 46zM86 158c4-32 24-46 46-46s42 14 46 46z' fill='%23F0F4EE' opacity='.92'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+    :root {
+        --ink:#171E1A; --bg:#F6F7F9; --surface:#FFFFFF; --border:#E8EAED;
+        --muted:#6B7280; --brand:#1B4332; --brand-2:#2D6A4F; --brand-soft:#EAF2EE; --brand-escuro:#122E23;
+        --accent:#F2A93B; --accent-ink:#8A5E12; --danger:#C0392B; --danger-soft:#FBEAE8;
+        --success-soft:#E8F3EC; --aviso-soft:#FEF3D8;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Inter', sans-serif; }
+    .hidden { display: none !important; }
+
+    #tela-login { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(160deg, var(--brand), var(--brand-escuro)); }
+    .caixa-login { background: var(--surface); border-radius: 16px; padding: 32px 28px; width: 100%; max-width: 360px; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
+    .caixa-login h1 { font-family: 'Fraunces', serif; font-size: 1.4rem; color: var(--brand); margin: 0 0 4px 0; }
+    .caixa-login .subtitulo { color: var(--muted); font-size: 0.85rem; margin: 0 0 20px 0; }
+    .campo { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .campo label { font-size: 0.82rem; font-weight: 600; }
+    .campo .dica { font-size: .76rem; color: var(--muted); font-weight: 400; }
+    .campo input, .campo select, .campo textarea {
+        font-family: 'Inter', sans-serif; font-size: 0.92rem; padding: 10px 12px;
+        border: 1.5px solid var(--border); border-radius: 9px; width: 100%; background: var(--surface); color: var(--ink);
+    }
+    .campo textarea { resize: vertical; min-height: 64px; }
+    .campo input:focus, .campo select:focus, .campo textarea:focus { outline: none; border-color: var(--brand-2); }
+    .campo-check { display: flex; align-items: flex-start; gap: 9px; font-size: .84rem; margin-bottom: 14px; cursor: pointer; line-height: 1.4; }
+    .campo-check input { width: 17px; height: 17px; margin-top: 2px; accent-color: var(--brand); flex-shrink: 0; }
+    .btn { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.92rem; border: none; border-radius: 9px; padding: 11px 18px; cursor: pointer; }
+    .btn-principal { background: var(--brand); color: white; width: 100%; padding: 13px; }
+    .btn-principal:hover { background: var(--brand-2); }
+    .btn-principal:disabled { background: var(--muted); cursor: not-allowed; }
+    .btn-cinza { background: #EEF0F1; color: var(--ink); }
+    .btn-perigo { background: var(--danger-soft); color: var(--danger); }
+    .btn-sucesso { background: var(--success-soft); color: var(--brand-2); }
+    .btn-sm { padding: 7px 10px; font-size: 0.78rem; }
+    .btn-inline { width: auto; padding: 10px 18px; }
+    .status-msg { font-size: 0.85rem; margin-top: 10px; text-align: center; }
+    .status-msg.erro { color: var(--danger); }
+    .status-msg.sucesso { color: var(--brand-2); }
+
+    #app { display: none; }
+    .app-shell { display: flex; min-height: 100vh; }
+    .sidebar { width: 232px; flex-shrink: 0; background: var(--brand); color: #fff; display: flex; flex-direction: column; padding: 24px 16px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+    .sidebar-brand { padding: 8px 10px 28px; font-weight: 700; font-size: 1.1rem; letter-spacing: -.01em; }
+    .sidebar-brand small { display: block; font-weight: 400; font-size: .74rem; color: rgba(255,255,255,.55); margin-top: 3px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: none; color: rgba(255,255,255,.72); font-family: 'Inter', sans-serif; font-size: .88rem; font-weight: 500; padding: 10px 12px; border-radius: 9px; cursor: pointer; margin-bottom: 2px; transition: background .15s, color .15s; }
+    .nav-item svg { width: 17px; height: 17px; flex-shrink: 0; }
+    .nav-item:hover { background: rgba(255,255,255,.06); color: #fff; }
+    .nav-item.active { background: rgba(255,255,255,.12); color: #fff; }
+    .nav-badge { margin-left: auto; background: var(--accent); color: #3B2A06; border-radius: 10px; font-size: .68rem; font-weight: 700; padding: 1px 7px; }
+    .sidebar-spacer { flex: 1; }
+    .btn-sidebar-sair { display: flex; align-items: center; gap: 10px; background: none; border: 1px solid rgba(255,255,255,.18); color: rgba(255,255,255,.75); font-family: 'Inter', sans-serif; font-size: .85rem; padding: 10px 12px; border-radius: 9px; cursor: pointer; width: 100%; margin-bottom: 6px; }
+    .btn-sidebar-sair:hover { background: rgba(255,255,255,.06); color: #fff; }
+    .btn-sidebar-sair svg { width: 16px; height: 16px; }
+
+    .content-area { flex: 1; min-width: 0; }
+    .content-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 22px 36px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+    .content-header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.01em; margin: 0; }
+    .content-header .unidade-pill { font-size: .78rem; color: var(--brand-2); background: var(--brand-soft); padding: 6px 12px; border-radius: 20px; font-weight: 600; }
+    main.app-main { max-width: 1100px; margin: 0 auto; padding: 28px 36px 60px; }
+    .panel-app { display: none; }
+    .panel-app.active { display: block; animation: fadeInParc .25s ease; }
+    @keyframes fadeInParc { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    @media (max-width: 760px) {
+        .sidebar { width: 64px; padding: 16px 8px; align-items: center; }
+        .sidebar-brand { display: none; }
+        .nav-item { justify-content: center; padding: 12px 0; gap: 0; position: relative; }
+        .nav-item .nav-label { display: none; }
+        .nav-badge { position: absolute; top: 2px; right: 4px; margin: 0; padding: 0 5px; }
+        .btn-sidebar-sair { justify-content: center; padding: 12px 0; gap: 0; }
+        .btn-sidebar-sair .nav-label { display: none; }
+        .content-header { padding: 16px 18px; }
+        main.app-main { padding: 20px 14px 48px; }
+    }
+
+    .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 24px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 8px; }
+    .stat-card .icon-badge { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; background: var(--brand-soft); color: var(--brand-2); }
+    .stat-card .icon-badge svg { width: 17px; height: 17px; }
+    .stat-card .label { font-size: .8rem; color: var(--muted); font-weight: 500; }
+    .stat-card .value { font-size: 1.4rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+    .stat-card .value.alerta { color: var(--accent-ink); }
+    .stat-card.clicavel { cursor: pointer; transition: box-shadow .12s ease, border-color .12s ease; }
+    .stat-card.clicavel:hover { border-color: var(--brand-2); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+
+    .chart-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
+    .chart-box h3 { font-size: .92rem; font-weight: 700; margin: 0 0 2px 0; }
+    .chart-box .chart-sub { font-size: .8rem; color: var(--muted); margin-bottom: 16px; }
+    .barra-linha { display: grid; grid-template-columns: 160px 1fr 230px; align-items: center; gap: 12px; padding: 7px 8px; border-radius: 8px; }
+    .barra-linha .rotulo { font-size: .85rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .barra-trilho { height: 12px; background: #F1EEF0; border-radius: 6px; overflow: hidden; }
+    .barra-fill { height: 100%; border-radius: 0 4px 4px 0; background: var(--brand-2); min-width: 0; transition: width .3s ease; }
+    .barra-fill.alerta { background: var(--accent); }
+    .barra-fill.perigo { background: var(--danger); }
+    .barra-linha .valores { font-size: .82rem; text-align: right; font-variant-numeric: tabular-nums; }
+    .barra-linha .valores small { display: block; color: var(--muted); font-size: .74rem; }
+    @media (max-width: 720px) { .barra-linha { grid-template-columns: 1fr; gap: 4px; } .barra-linha .valores { text-align: left; } }
+
+    .cartao { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+    .cartao h2 { font-size: 1.02rem; font-weight: 700; margin: 0 0 14px 0; }
+    .cartao .desc { color: var(--muted); font-size: .82rem; margin: -8px 0 14px 0; line-height: 1.45; }
+    .grade { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grade-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    @media (max-width: 640px) { .grade, .grade-3 { grid-template-columns: 1fr; } }
+
+    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+    .toolbar input, .toolbar select { padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 9px; font-family: inherit; font-size: .88rem; background: var(--surface); color: var(--ink); }
+    .toolbar .busca { flex: 1; min-width: 200px; }
+
+    .aviso-pendentes { background: var(--aviso-soft); border: 1px solid var(--accent); color: var(--accent-ink); border-radius: 12px; padding: 12px 16px; font-size: .88rem; font-weight: 600; margin-bottom: 16px; cursor: pointer; }
+    .aviso-pendentes:hover { filter: brightness(.97); }
+
+    .parc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+    .parc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; cursor: pointer; display: flex; gap: 12px; transition: border-color .12s, box-shadow .12s; }
+    .parc-card:hover { border-color: var(--brand-2); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+    .parc-avatar { width: 56px; height: 56px; border-radius: 12px; background: var(--brand-soft); color: var(--brand-2); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; overflow: hidden; flex-shrink: 0; }
+    .parc-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .parc-info { min-width: 0; flex: 1; }
+    .parc-nome { font-weight: 700; font-size: .93rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .parc-meta { font-size: .78rem; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .parc-rodape { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .btn-zap { background: #E3F6EA; color: #1E7A43; border: none; border-radius: 8px; padding: 4px 9px; font-size: .74rem; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+    .btn-zap:hover { background: #cfeedb; }
+    .estrelas { color: var(--accent); letter-spacing: 1px; font-size: .8rem; }
+    .estrelas .vazia { color: #D8DBDF; }
+
+    table.tabela { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    table.tabela th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); font-weight: 700; padding: 8px 10px; border-bottom: 2px solid var(--border); white-space: nowrap; }
+    table.tabela td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    table.tabela td.num, table.tabela th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    table.tabela tbody tr:hover { background: var(--brand-soft); }
+    table.tabela select { padding: 5px 7px; border: 1.5px solid var(--border); border-radius: 7px; font-family: inherit; font-size: .8rem; background: var(--surface); }
+    .tabela-scroll { overflow-x: auto; }
+    .vazio { text-align: center; padding: 24px 0; color: var(--muted); font-size: 0.88rem; }
+    .valor-pos { color: var(--brand-2); font-weight: 600; }
+    .valor-neg { color: var(--danger); font-weight: 600; }
+    small.sub { display: block; color: var(--muted); font-size: .74rem; }
+
+    .pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; white-space: nowrap; }
+    .pill-ativo, .pill-concluido, .pill-confirmada, .pill-credito { background: var(--success-soft); color: var(--brand-2); }
+    .pill-pendente, .pill-indicado, .pill-ajuste { background: var(--aviso-soft); color: var(--accent-ink); }
+    .pill-contratado { background: #E4EEFB; color: #1F4E8C; }
+    .pill-inativo, .pill-cancelado, .pill-cancelada { background: #EEF0F1; color: var(--muted); }
+    .pill-recusado, .pill-estorno { background: var(--danger-soft); color: var(--danger); }
+    .pill-comissao, .pill-pagamento { background: #E4EEFB; color: #1F4E8C; }
+    .pill-cashback, .pill-resgate { background: #F3E8FB; color: #6B2C91; }
+
+    .linha-busca { position: relative; }
+    .resultados-busca { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; max-height: 240px; overflow-y: auto; display: none; margin-top: 4px; box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+    .resultados-busca.show { display: block; }
+    .resultado-item { padding: 10px 12px; cursor: pointer; font-size: 0.88rem; border-bottom: 1px solid var(--border); }
+    .resultado-item:last-child { border-bottom: none; }
+    .resultado-item:hover { background: var(--brand-soft); }
+    .resultado-item .sub, .sugestao .sub { font-size: .76rem; color: var(--muted); }
+    .sugestao-autocomplete-vazia { padding: 10px 12px; font-size: .85rem; color: var(--muted); }
+
+    .sugestoes { max-height: 270px; overflow-y: auto; border: 1.5px solid var(--border); border-radius: 10px; background: var(--surface); }
+    .sugestao { padding: 10px 12px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: .87rem; }
+    .sugestao:last-child { border-bottom: none; }
+    .sugestao:hover { background: var(--brand-soft); }
+    .sugestao.sel { background: var(--brand-soft); box-shadow: inset 3px 0 0 var(--brand-2); }
+    .preview-recompensa { background: var(--brand-soft); border-radius: 10px; padding: 11px 13px; font-size: .86rem; line-height: 1.45; margin-bottom: 14px; }
+    .preview-recompensa.aviso { background: var(--aviso-soft); color: var(--accent-ink); }
+
+    .detalhe-topo { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 14px; }
+    .detalhe-topo .parc-avatar { width: 72px; height: 72px; font-size: 1.4rem; }
+    .detalhe-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; font-size: .86rem; margin-bottom: 14px; }
+    .detalhe-grid dt { color: var(--muted); font-size: .7rem; text-transform: uppercase; letter-spacing: .03em; font-weight: 700; margin: 0; }
+    .detalhe-grid dd { margin: 2px 0 0 0; word-break: break-word; }
+    .detalhe-grid .largo { grid-column: 1 / -1; }
+    @media (max-width: 560px) { .detalhe-grid { grid-template-columns: 1fr; } }
+    .link-box { display: flex; gap: 8px; }
+    .link-box input { flex: 1; min-width: 0; font-size: .78rem; padding: 9px 10px; border: 1.5px solid var(--border); border-radius: 9px; background: var(--bg); color: var(--muted); font-family: inherit; }
+    .acoes-linha { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .foto-cartao { max-width: 100%; max-height: 220px; border-radius: 10px; border: 1px solid var(--border); cursor: zoom-in; display: block; }
+    .bloco-cartao { border: 1.5px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+    .bloco-cartao-titulo { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); margin-bottom: 8px; }
+    .cartao-vazio { background: var(--aviso-soft); color: var(--accent-ink); border-radius: 9px; padding: 14px; font-size: .84rem; text-align: center; }
+    .sem-cartao-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: .86rem; }
+    .sem-cartao-item:last-child { border-bottom: none; }
+    .foto-form { display: flex; align-items: center; gap: 12px; }
+    .foto-form img { width: 90px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+
+    .ad-thumb { width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; background: #EEF0F1; overflow: hidden; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: .8rem; text-align: center; }
+    .ad-thumb span { padding: 10px; }
+    .ad-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .ramo-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); font-size: .86rem; }
+    .ramo-item.inativo { opacity: .55; }
+    .ramo-item .nome { flex: 1; }
+    .lista-ramos { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; margin-top: 12px; }
+    .qr-wrap { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+    #qrCadastro { background: #fff; padding: 10px; border: 1px solid var(--border); border-radius: 12px; min-width: 150px; min-height: 150px; }
+
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; padding: 16px; }
+    .modal-overlay.aberto { display: flex; }
+    .modal-caixa { background: var(--surface); border-radius: 14px; padding: 24px; width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; }
+    .modal-caixa h3 { font-family: 'Fraunces', serif; margin: 0 0 4px 0; color: var(--brand); }
+    .modal-caixa .sub { color: var(--muted); font-size: .82rem; margin: 0 0 16px 0; }
+    .modal-rodape { display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+
+    .btn-ajuda-modulo{ display:flex; align-items:center; gap:6px; background:none; border:1.5px solid var(--border); color:var(--muted); font-size:.8rem; font-weight:600; padding:7px 12px; border-radius:8px; cursor:pointer; flex-shrink:0; }
+    .modal-ajuda-head{ display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border); }
+    .modal-ajuda-head h3{ font-family:'Fraunces', serif; margin:0; color:var(--brand); font-size:1.05rem; }
+    .modal-ajuda-body{ display:flex; flex:1; min-height:0; overflow:hidden; }
+    .modal-ajuda-nav{ width:210px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface); overflow-y:auto; padding:10px; }
+    .modal-ajuda-nav-item{ display:block; width:100%; text-align:left; background:none; border:none; color:var(--muted); font-size:.82rem; font-weight:600; padding:9px 10px; border-radius:8px; cursor:pointer; margin-bottom:2px; font-family:'Inter', sans-serif; }
+    .modal-ajuda-nav-item:hover{ background:var(--brand-soft); color:var(--ink); }
+    .modal-ajuda-nav-item.ativo{ background:var(--brand); color:#fff; }
+    .modal-ajuda-conteudo{ flex:1; overflow-y:auto; padding:22px 26px; font-size:.88rem; line-height:1.55; color:var(--ink); }
+    .modal-ajuda-conteudo h4{ font-size:1rem; font-weight:700; margin:0 0 10px 0; }
+    .modal-ajuda-conteudo p{ margin:0 0 10px 0; }
+    .modal-ajuda-conteudo ul{ margin:0 0 12px 18px; padding:0; }
+    .modal-ajuda-conteudo li{ margin-bottom:6px; }
+    .ajuda-atualizado{ font-size:.72rem; color:var(--muted); margin-top:18px; padding-top:12px; border-top:1px solid var(--border); }
+    #modal-ajuda .modal-caixa { max-width: 760px; padding: 0; display: flex; flex-direction: column; max-height: 82vh; }
+    @media (max-width:680px){ .modal-ajuda-body{ flex-direction:column; } .modal-ajuda-nav{ width:100%; border-right:none; border-bottom:1px solid var(--border); } }
+</style>
+<script>
+/* Aviso padrão quando o banco recusa a ação por falta de permissão (RLS) */
+(function(){
+  var MSG_SEM_PERMISSAO = '🔒 Usuário sem permissão para esta ação. Fale com o administrador da unidade.';
+  var alertOriginal = window.alert.bind(window);
+  window.alert = function(m){
+    if (/row-level security|permission denied/i.test(String(m))) m = MSG_SEM_PERMISSAO;
+    alertOriginal(m);
+  };
+})();
+</script>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="tela-login">
+    <div class="caixa-login">
+        <h1>🤝 Parceiros</h1>
+        <p class="subtitulo">Servir — parceiros comerciais, indicações e recompensas</p>
+        <div class="campo"><label>E-mail</label><input type="email" id="login-email"></div>
+        <div class="campo">
+            <label>Senha</label>
+            <div style="position:relative;">
+                <input type="password" id="login-senha" style="padding-right:38px;">
+                <button type="button" class="btn-olho-senha" data-alvo="login-senha" style="position:absolute; top:50%; right:5px; transform:translateY(-50%); background:none; border:none; padding:6px; cursor:pointer; color:var(--muted);"></button>
+            </div>
+        </div>
+        <button class="btn btn-principal" id="btn-login">Entrar</button>
+        <div style="text-align:center; margin-top:12px;"><a href="#" id="link-esqueci-senha" style="font-size:.82rem; color:var(--muted);">Esqueci minha senha</a></div>
+        <div class="status-msg" id="status-login"></div>
+    </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app">
+  <div class="app-shell">
+    <aside class="sidebar">
+        <div class="sidebar-brand">🤝 Parceiros<small id="unidade-logada"></small></div>
+        <button class="nav-item tab-app-btn active" data-app-tab="dashboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+            <span class="nav-label">Dashboard</span>
+        </button>
+        <button class="nav-item tab-app-btn" data-app-tab="parceiros">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            <span class="nav-label">Parceiros</span>
+            <span class="nav-badge hidden" id="badgePendentes">0</span>
+        </button>
+        <button class="nav-item tab-app-btn" data-app-tab="servicos">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+            <span class="nav-label">Indicar serviço</span>
+        </button>
+        <button class="nav-item tab-app-btn" data-app-tab="vendas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+            <span class="nav-label">Vendas indicadas</span>
+        </button>
+        <button class="nav-item tab-app-btn" data-app-tab="recompensas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            <span class="nav-label">Recompensas</span>
+        </button>
+        <button class="nav-item tab-app-btn" data-app-tab="vitrine">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            <span class="nav-label">Vitrine (TV)</span>
+        </button>
+        <button class="nav-item tab-app-btn" data-app-tab="parametros">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            <span class="nav-label">Parâmetros</span>
+        </button>
+        <div class="sidebar-spacer"></div>
+        <button class="btn-sidebar-sair" id="btnAjudaModulo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span class="nav-label">Ajuda</span>
+        </button>
+        <button class="btn-sidebar-sair" id="btn-trocar-unidade" style="display:none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+            <span class="nav-label">Trocar unidade</span>
+        </button>
+        <button class="btn-sidebar-sair" id="btn-sair">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            <span class="nav-label">Sair</span>
+        </button>
+    </aside>
+
+    <div class="content-area">
+      <div class="content-header">
+        <h1 id="tituloConteudo">Dashboard</h1>
+        <span class="unidade-pill" id="unidadePillHeader">—</span>
+      </div>
+      <main class="app-main">
+
+    <!-- ---------- DASHBOARD ---------- -->
+    <div class="panel-app active" id="app-panel-dashboard">
+        <div class="stat-cards">
+            <div class="stat-card">
+                <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div>
+                <div class="label">Parceiros ativos</div>
+                <div class="value" id="statAtivos">—</div>
+            </div>
+            <div class="stat-card clicavel" id="cardPendentes" title="Ver cadastros aguardando aprovação">
+                <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+                <div class="label">Aguardando aprovação</div>
+                <div class="value alerta" id="statPendentes">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></div>
+                <div class="label">Vendas indicadas no mês</div>
+                <div class="value" id="statVendasMes">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+                <div class="label">Comissão a pagar</div>
+                <div class="value alerta" id="statAPagar">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div>
+                <div class="label">Cashback em aberto</div>
+                <div class="value" id="statCashback">—</div>
+            </div>
+        </div>
+        <div class="chart-box">
+            <h3>Top parceiros por vendas indicadas</h3>
+            <div class="chart-sub" id="subTopParceiros">Últimos 12 meses, só vendas confirmadas.</div>
+            <div id="graficoTopParceiros"></div>
+        </div>
+        <div class="chart-box">
+            <h3>Indicações de serviço por situação</h3>
+            <div class="chart-sub">Clientes que a loja indicou pra algum parceiro.</div>
+            <div id="graficoServicos"></div>
+        </div>
+        <div class="chart-box">
+            <h3>Parceiros ativos por ramo de atividade</h3>
+            <div class="chart-sub">Pra saber onde falta gente na vitrine de indicações.</div>
+            <div id="graficoRamos"></div>
+        </div>
+    </div>
+
+    <!-- ---------- PARCEIROS ---------- -->
+    <div class="panel-app" id="app-panel-parceiros">
+        <div class="aviso-pendentes hidden" id="avisoPendentes"></div>
+        <div class="toolbar">
+            <input type="text" class="busca" id="parcBusca" placeholder="Buscar por nome, empresa, código, telefone, cidade...">
+            <div class="linha-busca" style="min-width:220px;">
+                <input type="text" id="parcFiltroRamo_busca" placeholder="Todos os ramos — digite pra buscar" autocomplete="off" style="width:100%;">
+                <input type="hidden" id="parcFiltroRamo">
+                <div class="resultados-busca" id="parcFiltroRamo_resultados"></div>
+            </div>
+            <select id="parcFiltroStatus">
+                <option value="ativo">Só ativos</option>
+                <option value="pendente">Aguardando aprovação</option>
+                <option value="inativo">Inativos</option>
+                <option value="recusado">Recusados</option>
+                <option value="">Todos</option>
+            </select>
+            <button class="btn btn-principal btn-inline" id="btnNovoParceiro">+ Novo parceiro</button>
+        </div>
+        <div class="parc-grid" id="listaParceiros"></div>
+    </div>
+
+    <!-- ---------- INDICAR SERVIÇO ---------- -->
+    <div class="panel-app" id="app-panel-servicos">
+        <div class="cartao">
+            <h2>Indicar um parceiro pra um cliente</h2>
+            <p class="desc">O cliente da loja precisa de um serviço (pedreiro, eletricista, pintor...)? Escolha o ramo, veja os parceiros ativos e registre a indicação pra acompanhar até o serviço ser concluído.</p>
+            <div class="grade">
+                <div class="campo"><label>Nome do cliente *</label><input type="text" id="svcCliente"></div>
+                <div class="campo"><label>WhatsApp/telefone do cliente</label><input type="text" id="svcContato" placeholder="(00) 00000-0000"></div>
+            </div>
+            <div class="campo"><label>Que serviço o cliente precisa? *</label><input type="text" id="svcDescricao" placeholder="Ex: trocar a fiação da cozinha"></div>
+            <div class="grade">
+                <div class="campo"><label>Ramo de atividade</label>
+                    <div class="linha-busca">
+                        <input type="text" id="svcRamo_busca" placeholder="Todos os ramos — digite pra buscar" autocomplete="off">
+                        <input type="hidden" id="svcRamo">
+                        <div class="resultados-busca" id="svcRamo_resultados"></div>
+                    </div></div>
+                <div class="campo"><label>Filtrar parceiros</label><input type="text" id="svcBusca" placeholder="Nome, cidade, especialidade..."></div>
+            </div>
+            <div class="campo">
+                <label>Parceiro indicado * <span class="dica" id="svcDicaSelecionado"></span></label>
+                <div class="sugestoes" id="svcSugestoes"></div>
+            </div>
+            <div class="campo"><label>Observação</label><textarea id="svcObs" rows="2"></textarea></div>
+            <button class="btn btn-principal btn-inline" id="btnRegistrarServico">Registrar indicação</button>
+            <div class="status-msg" id="statusServico"></div>
+            <div class="hidden" id="blocoPosServico" style="margin-top:12px; background:var(--brand-soft); border-radius:12px; padding:14px;">
+                <div style="font-size:.88rem; font-weight:600; margin-bottom:8px;">✅ Indicação registrada. Quer já avisar pelo WhatsApp?</div>
+                <div class="acoes-linha" style="margin-top:0;">
+                    <a class="btn btn-sucesso btn-sm" id="btnZapCliente" target="_blank" rel="noopener">Enviar contato do parceiro ao cliente</a>
+                    <a class="btn btn-sucesso btn-sm" id="btnZapParceiro" target="_blank" rel="noopener">Avisar o parceiro</a>
+                </div>
+            </div>
+        </div>
+        <div class="cartao">
+            <h2>Indicações de serviço</h2>
+            <div class="toolbar">
+                <input type="text" class="busca" id="svcFiltroBusca" placeholder="Buscar por cliente, serviço ou parceiro...">
+                <select id="svcFiltroStatus">
+                    <option value="">Todas as situações</option>
+                    <option value="indicado">Indicado</option>
+                    <option value="contratado">Contratado</option>
+                    <option value="concluido">Concluído</option>
+                    <option value="cancelado">Cancelado</option>
+                </select>
+            </div>
+            <div class="tabela-scroll"><table class="tabela">
+                <thead><tr><th>Data</th><th>Cliente</th><th>Serviço</th><th>Parceiro</th><th>Situação</th><th>Avaliação</th></tr></thead>
+                <tbody id="corpoServicos"></tbody>
+            </table></div>
+        </div>
+    </div>
+
+    <!-- ---------- VENDAS INDICADAS ---------- -->
+    <div class="panel-app" id="app-panel-vendas">
+        <div class="cartao">
+            <h2>Registrar venda indicada por parceiro</h2>
+            <p class="desc">Um parceiro trouxe um comprador (ou comprou citando o código dele)? Registre aqui: a recompensa do parceiro é calculada e lançada no extrato dele automaticamente, com o percentual de hoje congelado nessa venda.</p>
+            <div class="campo">
+                <label>Parceiro *</label>
+                <div class="linha-busca">
+                    <input type="text" id="vndParceiroBusca" placeholder="Nome, código, empresa ou telefone — clique pra listar" autocomplete="off">
+                    <div class="resultados-busca" id="vndParceiroResultados"></div>
+                </div>
+            </div>
+            <div class="grade">
+                <div class="campo"><label>Valor da venda (R$) *</label><input type="number" step="0.01" min="0" id="vndValor"></div>
+                <div class="campo"><label>Data da venda</label><input type="date" id="vndData"></div>
+            </div>
+            <div class="grade">
+                <div class="campo"><label>Cliente comprador</label><input type="text" id="vndCliente"></div>
+                <div class="campo"><label>Contato do cliente</label><input type="text" id="vndContato"></div>
+            </div>
+            <div class="grade">
+                <div class="campo"><label>Nº do pedido / NF / cupom</label><input type="text" id="vndReferencia"></div>
+                <div class="campo"><label>O que foi vendido</label><input type="text" id="vndDescricao"></div>
+            </div>
+            <div class="preview-recompensa hidden" id="vndPreview"></div>
+            <button class="btn btn-principal btn-inline" id="btnRegistrarVenda">Registrar venda indicada</button>
+            <div class="status-msg" id="statusVenda"></div>
+        </div>
+        <div class="cartao">
+            <h2>Vendas indicadas</h2>
+            <div class="toolbar">
+                <input type="text" class="busca" id="vndFiltroBusca" placeholder="Buscar por parceiro, cliente ou referência...">
+                <select id="vndFiltroStatus">
+                    <option value="confirmada">Só confirmadas</option>
+                    <option value="cancelada">Canceladas</option>
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <div class="tabela-scroll"><table class="tabela">
+                <thead><tr><th>Data</th><th>Parceiro</th><th>Cliente / referência</th><th class="num">Venda</th><th class="num">Recompensa</th><th>Situação</th><th></th></tr></thead>
+                <tbody id="corpoVendas"></tbody>
+            </table></div>
+            <div class="vazio" style="padding-top:10px; font-size:.78rem;" id="notaLimiteVendas"></div>
+        </div>
+    </div>
+
+    <!-- ---------- RECOMPENSAS ---------- -->
+    <div class="panel-app" id="app-panel-recompensas">
+        <div class="stat-cards">
+            <div class="stat-card">
+                <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+                <div class="label">Comissão a pagar (total)</div>
+                <div class="value alerta" id="recTotalComissao">—</div>
+            </div>
+            <div class="stat-card">
+                <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div>
+                <div class="label">Cashback em aberto (total)</div>
+                <div class="value" id="recTotalCashback">—</div>
+            </div>
+        </div>
+        <div class="cartao">
+            <h2>Saldo por parceiro</h2>
+            <p class="desc"><strong>Comissão</strong> é paga em dinheiro: "Pagar" gera um título a pagar em aberto no Financeiro e baixa o saldo aqui. <strong>Cashback</strong> vira crédito: "Resgatar" abate o saldo quando o parceiro usa o crédito numa compra.</p>
+            <div class="tabela-scroll"><table class="tabela">
+                <thead><tr><th>Parceiro</th><th>Recompensa</th><th class="num">Saldo</th><th></th></tr></thead>
+                <tbody id="corpoSaldos"></tbody>
+            </table></div>
+        </div>
+        <div class="cartao hidden" id="painelExtrato">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px;">
+                <div><h2 id="extratoTitulo" style="margin-bottom:2px;">Extrato</h2><p class="desc" id="extratoSub" style="margin:0 0 14px 0;"></p></div>
+                <button class="btn btn-cinza btn-sm" id="btnFecharExtrato">Fechar</button>
+            </div>
+            <div class="tabela-scroll"><table class="tabela">
+                <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th class="num">Valor</th><th class="num">Saldo após</th></tr></thead>
+                <tbody id="corpoExtrato"></tbody>
+            </table></div>
+        </div>
+    </div>
+
+    <!-- ---------- VITRINE (TV) ---------- -->
+    <div class="panel-app" id="app-panel-vitrine">
+        <div class="aviso-pendentes hidden" id="avisoVitrineSql" style="cursor:default;">⚠️ A vitrine ainda não existe no banco. Rode o arquivo parceiros-vitrine.sql no SQL Editor do Supabase (depois do parceiros.sql) e recarregue esta página.</div>
+        <div class="cartao">
+            <h2>Vitrine para a TV da loja</h2>
+            <p class="desc">Uma página em <strong>tela cheia</strong> que fica passando, uma por vez, os parceiros ativos (com cartão de visita, ramo, especialidades e WhatsApp com QR Code) e as propagandas cadastradas abaixo. Abra o link no navegador da TV ou do computador do balcão.</p>
+            <label class="campo-check"><input type="checkbox" id="vtAtiva"> Vitrine ligada <span style="color:var(--muted);">(com ela desligada o link mostra "indisponível")</span></label>
+            <div class="grade-3">
+                <div class="campo"><label>Segundos por slide (padrão)</label><input type="number" min="3" max="120" id="vtSegundos"><span class="dica">Cada parceiro e cada propaganda pode ter o próprio tempo.</span></div>
+                <div class="campo"><label>1 propaganda a cada quantos parceiros?</label><input type="number" min="0" max="20" id="vtIntercalar"><span class="dica">0 = só parceiros, sem propaganda.</span></div>
+                <div class="campo"><label>Ordem dos parceiros</label><select id="vtOrdem"><option value="aleatoria">Aleatória a cada rodada</option><option value="alfabetica">Alfabética</option></select></div>
+            </div>
+            <button class="btn btn-principal btn-inline" id="btnSalvarVitrine">Salvar</button>
+            <div class="status-msg" id="statusVitrine"></div>
+            <div class="campo" style="margin-top:14px;"><label>Link da vitrine</label>
+                <div class="link-box"><input type="text" id="vtLink" readonly><button class="btn btn-cinza btn-sm" id="btnCopiarVtLink">Copiar</button><a class="btn btn-cinza btn-sm" id="btnAbrirVt" target="_blank" rel="noopener" style="text-decoration:none; display:inline-flex; align-items:center;">Abrir</a></div>
+                <span class="dica">Na TV: abra o link e aperte <strong>F</strong> (ou dê dois cliques) pra tela cheia; <strong>espaço</strong> pausa e as setas trocam de slide. Quem tem o link vê a vitrine — "Gerar novo link" invalida o antigo.</span>
+                <div class="acoes-linha" style="margin-top:8px;"><button class="btn btn-cinza btn-sm" id="btnNovoLinkVt">Gerar novo link</button></div>
+            </div>
+            <div class="preview-recompensa" id="vtResumo"></div>
+            <div class="hidden" id="vtSemCartao" style="margin-top:14px;"></div>
+        </div>
+
+        <div class="cartao">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap; margin-bottom:6px;">
+                <div><h2 style="margin-bottom:2px;">Propagandas</h2><p class="desc" style="margin:0;">Imagens (ou só texto) que entram entre os parceiros. Use imagem na proporção da TV (16:9) pra preencher a tela.</p></div>
+                <button class="btn btn-principal btn-inline" id="btnNovaPropaganda">+ Nova propaganda</button>
+            </div>
+            <div class="parc-grid" id="listaPropagandas" style="margin-top:14px;"></div>
+        </div>
+    </div>
+
+    <!-- ---------- PARÂMETROS ---------- -->
+    <div class="panel-app" id="app-panel-parametros">
+        <div class="cartao">
+            <h2>Recompensa padrão</h2>
+            <p class="desc">Vale pra todo parceiro que não tiver um percentual próprio. A mudança vale só pras vendas registradas daqui pra frente — o que já foi lançado não é recalculado.</p>
+            <div class="grade">
+                <div class="campo"><label>Tipo padrão (pra novos parceiros)</label>
+                    <select id="cfgTipoPadrao"><option value="comissao">Comissão (paga em dinheiro)</option><option value="cashback">Cashback (crédito na loja)</option></select></div>
+                <div class="campo"><label>Percentual padrão sobre a venda (%)</label><input type="number" step="0.1" min="0" max="100" id="cfgPercentualPadrao"></div>
+            </div>
+            <button class="btn btn-principal btn-inline" id="btnSalvarCfgRecompensa">Salvar</button>
+            <div class="status-msg" id="statusCfgRecompensa"></div>
+        </div>
+
+        <div class="cartao">
+            <h2>Autocadastro por link / QR Code</h2>
+            <p class="desc">O próprio parceiro preenche o cadastro (e envia a foto do cartão de visita) pelo celular. O cadastro entra como <strong>"aguardando aprovação"</strong> — só vira parceiro depois que alguém da loja aprovar na aba Parceiros.</p>
+            <label class="campo-check"><input type="checkbox" id="cfgAutocadastro"> Aceitar autocadastro pelo link/QR</label>
+            <div class="campo"><label>Mensagem de boas-vindas (aparece no formulário)</label><textarea id="cfgMensagem" rows="2" placeholder="Ex: Cadastre-se e receba indicações de clientes que precisam do seu serviço."></textarea></div>
+            <button class="btn btn-principal btn-inline" id="btnSalvarCfgAutocadastro">Salvar</button>
+            <div class="status-msg" id="statusCfgAutocadastro"></div>
+            <div class="campo" style="margin-top:14px;"><label>Link do formulário</label>
+                <div class="link-box"><input type="text" id="linkCadastro" readonly><button class="btn btn-cinza btn-sm" id="btnCopiarLinkCadastro">Copiar</button></div>
+                <span class="dica" id="avisoLinkCadastro"></span>
+            </div>
+            <div class="qr-wrap">
+                <div id="qrCadastro"></div>
+                <div>
+                    <p class="desc" style="margin:0 0 10px 0;">Imprima o cartaz com o QR Code e deixe no balcão da loja.</p>
+                    <button class="btn btn-cinza" id="btnCartazPdf">📄 Gerar cartaz (PDF)</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="cartao">
+            <h2>Ramos de atividade</h2>
+            <p class="desc">As categorias que organizam os parceiros (e filtram a hora de indicar um serviço). Ramo em uso não pode ser excluído — só desativado.</p>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <input type="text" id="novoRamoNome" placeholder="Novo ramo (ex: Pedreiro)" style="flex:1; min-width:200px; padding:10px 12px; border:1.5px solid var(--border); border-radius:9px; font-family:inherit;">
+                <button class="btn btn-principal btn-inline" id="btnAdicionarRamo">Adicionar</button>
+                <button class="btn btn-cinza" id="btnRamosSugeridos">Carregar ramos sugeridos</button>
+            </div>
+            <div class="lista-ramos" id="listaRamos"></div>
+        </div>
+    </div>
+
+      </main>
+    </div>
+  </div>
+</div>
+
+<!-- ================= MODAL ESCOLHA UNIDADE ================= -->
+<div class="modal-overlay" id="modal-unidade">
+    <div class="modal-caixa" style="max-width:420px;">
+        <h3>Escolha a unidade</h3>
+        <div id="lista-unidades-escolha" style="display:flex; flex-direction:column; gap:8px; margin-top:12px;"></div>
+    </div>
+</div>
+
+<!-- ================= MODAL PARCEIRO (cadastro/edição) ================= -->
+<div class="modal-overlay" id="modal-parceiro">
+    <div class="modal-caixa">
+        <h3 id="tituloParceiroForm">Novo parceiro</h3>
+        <p class="sub">Cadastro feito no balcão — o parceiro já nasce ativo.</p>
+        <div class="grade">
+            <div class="campo"><label>Nome *</label><input type="text" id="pf_nome"></div>
+            <div class="campo"><label>Empresa / nome fantasia</label><input type="text" id="pf_empresa"></div>
+        </div>
+        <div class="campo"><label>Ramo de atividade *</label>
+            <div style="display:flex; gap:6px;">
+                <div class="linha-busca" style="flex:1;">
+                    <input type="text" id="pf_ramo_busca" placeholder="Digite parte do nome ou clique pra listar" autocomplete="off">
+                    <input type="hidden" id="pf_ramo">
+                    <div class="resultados-busca" id="pf_ramo_resultados"></div>
+                </div>
+                <button type="button" class="btn btn-cinza btn-sm" id="btnNovoRamoRapido" title="Criar um ramo novo">+</button>
+            </div>
+        </div>
+        <div class="grade">
+            <div class="campo"><label>WhatsApp *</label><input type="text" id="pf_whatsapp" placeholder="(00) 00000-0000"></div>
+            <div class="campo"><label>Outro telefone</label><input type="text" id="pf_telefone"></div>
+        </div>
+        <div class="grade">
+            <div class="campo"><label>E-mail</label><input type="email" id="pf_email"></div>
+            <div class="campo"><label>CPF / CNPJ</label><input type="text" id="pf_documento"></div>
+        </div>
+        <div class="grade">
+            <div class="campo"><label>Cidade</label><input type="text" id="pf_cidade"></div>
+            <div class="campo"><label>Endereço</label><input type="text" id="pf_endereco"></div>
+        </div>
+        <div class="campo"><label>Especialidades</label><input type="text" id="pf_especialidades" placeholder="Ex: reforma de banheiro, assentamento de piso, alvenaria"></div>
+        <div class="campo"><label>Descrição / apresentação</label><textarea id="pf_descricao" rows="2"></textarea></div>
+        <div class="grade">
+            <div class="campo"><label>Recompensa por indicar vendas</label>
+                <select id="pf_tipo"><option value="comissao">Comissão (paga em dinheiro)</option><option value="cashback">Cashback (crédito na loja)</option></select></div>
+            <div class="campo"><label>Percentual próprio (%)</label><input type="number" step="0.1" min="0" max="100" id="pf_percentual"><span class="dica" id="pf_dica_percentual"></span></div>
+        </div>
+        <div class="grade hidden" id="blocoVitrineForm">
+            <label class="campo-check" style="align-self:end;"><input type="checkbox" id="pf_vitrine" checked> Exibir na vitrine da TV</label>
+            <div class="campo"><label>Segundos na vitrine</label><input type="number" min="3" max="120" id="pf_vitrine_segundos"><span class="dica">Em branco = padrão da vitrine. Só aparece com a autorização de divulgação marcada.</span></div>
+        </div>
+        <div class="campo"><label>📇 Cartão de visita (foto)</label>
+            <div class="foto-form">
+                <img id="pf_foto_preview" class="hidden" alt="Cartão de visita">
+                <input type="file" id="pf_foto" accept="image/*">
+                <button type="button" class="btn btn-perigo btn-sm hidden" id="btnRemoverFoto">Remover</button>
+            </div>
+        </div>
+        <div class="campo"><label>Observação interna</label><textarea id="pf_observacao" rows="2"></textarea></div>
+        <label class="campo-check"><input type="checkbox" id="pf_autorizou"> O parceiro autorizou a loja a divulgar o contato dele pra clientes que precisarem do serviço</label>
+        <div class="modal-rodape">
+            <button class="btn btn-principal btn-inline" id="btnSalvarParceiro">Salvar</button>
+            <button class="btn btn-cinza" id="btnFecharParceiro">Cancelar</button>
+        </div>
+        <div class="status-msg" id="statusParceiro"></div>
+    </div>
+</div>
+
+<!-- ================= MODAL DETALHE DO PARCEIRO ================= -->
+<div class="modal-overlay" id="modal-detalhe">
+    <div class="modal-caixa" style="max-width:620px;">
+        <div id="detalheCorpo"></div>
+        <div class="modal-rodape" style="margin-top:14px;"><button class="btn btn-cinza" id="btnFecharDetalhe">Fechar</button></div>
+    </div>
+</div>
+
+<!-- ================= MODAL CONCLUIR SERVIÇO ================= -->
+<div class="modal-overlay" id="modal-concluir">
+    <div class="modal-caixa" style="max-width:420px;">
+        <h3>Serviço concluído</h3>
+        <p class="sub" id="concluirSub"></p>
+        <div class="campo"><label>Como foi o serviço do parceiro?</label>
+            <select id="cs_avaliacao"><option value="">Sem avaliação</option><option value="5">★★★★★ Excelente</option><option value="4">★★★★ Bom</option><option value="3">★★★ Regular</option><option value="2">★★ Ruim</option><option value="1">★ Péssimo</option></select>
+            <span class="dica">A nota ajuda a ordenar os parceiros na hora de indicar.</span></div>
+        <div class="campo"><label>Valor do serviço (R$) — opcional</label><input type="number" step="0.01" min="0" id="cs_valor"></div>
+        <div class="modal-rodape">
+            <button class="btn btn-principal btn-inline" id="btnConfirmarConcluir">Concluir</button>
+            <button class="btn btn-cinza" id="btnFecharConcluir">Cancelar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL LANÇAMENTO (pagar / resgatar / ajustar) ================= -->
+<div class="modal-overlay" id="modal-lancamento">
+    <div class="modal-caixa" style="max-width:460px;">
+        <h3 id="lancTitulo">Lançamento</h3>
+        <p class="sub" id="lancSub"></p>
+        <div class="campo"><label id="lancRotuloValor">Valor (R$) *</label><input type="number" step="0.01" id="lancValor"></div>
+        <div class="campo"><label>Descrição / motivo <span id="lancObrigatorio"></span></label><input type="text" id="lancDescricao"></div>
+        <div id="blocoPagamento">
+            <div class="grade">
+                <div class="campo"><label>Conta de pagamento *</label><select id="lancConta"></select></div>
+                <div class="campo"><label>Vencimento</label><input type="date" id="lancVencimento"></div>
+            </div>
+            <div class="preview-recompensa">Vai criar um <strong>título a pagar em aberto</strong> no Financeiro (a baixa — o pagamento de verdade — é feita lá) e debitar esse valor do saldo do parceiro.</div>
+        </div>
+        <div class="modal-rodape">
+            <button class="btn btn-principal btn-inline" id="btnConfirmarLanc">Confirmar</button>
+            <button class="btn btn-cinza" id="btnFecharLanc">Cancelar</button>
+        </div>
+        <div class="status-msg" id="statusLanc"></div>
+    </div>
+</div>
+
+<!-- seletores de arquivo do cadastro rápido do cartão de visita (câmera / arquivo) -->
+<input type="file" id="inputCartaoArquivo" accept="image/*" class="hidden">
+<input type="file" id="inputCartaoCamera" accept="image/*" capture="environment" class="hidden">
+
+<!-- ================= MODAL PROPAGANDA ================= -->
+<div class="modal-overlay" id="modal-propaganda">
+    <div class="modal-caixa" style="max-width:520px;">
+        <h3 id="tituloPropaganda">Nova propaganda</h3>
+        <p class="sub">Aparece na vitrine da TV, entre os parceiros.</p>
+        <div class="campo"><label>Título (só pra você identificar) *</label><input type="text" id="pa_titulo" maxlength="120" placeholder="Ex: Promoção de cimento"></div>
+        <div class="campo"><label>Imagem</label>
+            <div class="foto-form">
+                <img id="pa_preview" class="hidden" alt="Prévia" style="width:150px; height:84px;">
+                <input type="file" id="pa_foto" accept="image/*">
+                <button type="button" class="btn btn-perigo btn-sm hidden" id="btnRemoverImgPropaganda">Remover</button>
+            </div>
+            <span class="dica">Ideal 1920×1080 (16:9). Sem imagem, o slide mostra só o título e o texto.</span>
+        </div>
+        <div class="campo"><label>Texto (legenda sobre a imagem)</label><textarea id="pa_texto" rows="2" maxlength="200" placeholder="Ex: Cimento CP-II com 10% de desconto até sexta!"></textarea></div>
+        <div class="grade-3">
+            <div class="campo"><label>Segundos na tela</label><input type="number" min="3" max="120" id="pa_segundos"><span class="dica">Em branco = padrão.</span></div>
+            <div class="campo"><label>Exibir a partir de</label><input type="date" id="pa_inicio"></div>
+            <div class="campo"><label>Exibir até</label><input type="date" id="pa_fim"></div>
+        </div>
+        <label class="campo-check"><input type="checkbox" id="pa_ativa" checked> Propaganda ativa</label>
+        <div class="modal-rodape">
+            <button class="btn btn-principal btn-inline" id="btnSalvarPropaganda">Salvar</button>
+            <button class="btn btn-cinza" id="btnFecharPropaganda">Cancelar</button>
+        </div>
+        <div class="status-msg" id="statusPropaganda"></div>
+    </div>
+</div>
+
+<!-- ================= MODAL PDF (3 ações) ================= -->
+<div class="modal-overlay" id="modalAcoesPdf">
+    <div class="modal-caixa" style="max-width:360px; text-align:center;">
+        <h3 id="tituloModalAcoesPdf">PDF gerado</h3>
+        <p class="sub">O que você quer fazer com o PDF?</p>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+            <button class="btn btn-principal" id="btnVisualizarPdfGerado">👁️ Visualizar</button>
+            <button class="btn btn-cinza" id="btnBaixarPdfGerado">⬇️ Baixar</button>
+            <button class="btn btn-cinza" id="btnCompartilharPdfGerado">📤 Compartilhar</button>
+            <button class="btn btn-cinza" id="btnFecharModalAcoesPdf" style="margin-top:6px;">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL AJUDA ================= -->
+<div class="modal-overlay" id="modal-ajuda">
+    <div class="modal-caixa">
+        <div class="modal-ajuda-head">
+            <h3 id="modalAjudaTitulo">❓ Ajuda</h3>
+            <button class="btn btn-cinza btn-sm" id="btnFecharModalAjuda">Fechar</button>
+        </div>
+        <div class="modal-ajuda-body">
+            <div class="modal-ajuda-nav" id="ajudaModuloNav"></div>
+            <div class="modal-ajuda-conteudo" id="ajudaModuloConteudo"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------
+// CONFIG
+// ---------------------------------------------------------------
+const SUPABASE_URL = 'https://frzvcrcshkpvjdbbqkhz.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_h-JuDyjYgb5YKGYFRKtLEg_8gnJor9w';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const BUCKET_CARTOES = 'parceiros-cartoes';
+const BUCKET_PROPAGANDAS = 'parceiros-propagandas';
+// onde as páginas públicas (parceiros-cadastro.html / parceiros-consulta.html)
+// ficam publicadas -- mesmo site do formulário do Staff
+const URL_BASE_PUBLICA = 'https://www.servirfacil.com.br/';
+const $ = (id) => document.getElementById(id);
+
+const STATUS_PARCEIRO = { pendente: 'Aguardando aprovação', ativo: 'Ativo', inativo: 'Inativo', recusado: 'Recusado' };
+const STATUS_SERVICO = { indicado: 'Indicado', contratado: 'Contratado', concluido: 'Concluído', cancelado: 'Cancelado' };
+const TIPO_RECOMPENSA = { comissao: 'Comissão', cashback: 'Cashback' };
+const TIPO_LANCAMENTO = { credito: 'Crédito', pagamento: 'Pagamento', resgate: 'Resgate', estorno: 'Estorno', ajuste: 'Ajuste' };
+const RAMOS_SUGERIDOS = ['Pedreiro', 'Eletricista', 'Encanador', 'Pintor', 'Gesseiro', 'Azulejista / Ladrilheiro', 'Carpinteiro / Marceneiro', 'Serralheiro', 'Vidraceiro', 'Telhadista', 'Arquiteto(a)', 'Engenheiro(a) civil', 'Mestre de obras', 'Empreiteiro', 'Instalador de ar-condicionado', 'Jardineiro / Paisagista', 'Marmorista', 'Impermeabilização', 'Fretes e carretos', 'Limpeza pós-obra'];
+
+function escapeHtml(texto) {
+    if (texto == null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(texto);
+    return div.innerHTML;
+}
+function formatarMoeda(v) { return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+function formatarDataSemFuso(dataStr) {
+    if (!dataStr) return '';
+    const m = String(dataStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : dataStr;
+}
+function formatarDataHora(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return isNaN(d) ? '' : d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+function hojeISO() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function arredondar2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+function normalizar(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+function soDigitos(s) { return String(s == null ? '' : s).replace(/\D/g, ''); }
+function formatarFone(s) {
+    const d = soDigitos(s);
+    if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+    if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+    return s || '';
+}
+function linkWhatsApp(telefone, texto) {
+    let d = soDigitos(telefone);
+    if (d.length < 10) return null;
+    if (d.length <= 11) d = '55' + d;
+    return `https://wa.me/${d}${texto ? '?text=' + encodeURIComponent(texto) : ''}`;
+}
+function iniciais(nome) {
+    const partes = String(nome || '?').trim().split(/\s+/);
+    return ((partes[0] || '?')[0] + (partes.length > 1 ? partes[partes.length - 1][0] : '')).toUpperCase();
+}
+function primeiroNome(nome) { return String(nome || '').trim().split(/\s+/)[0] || ''; }
+function estrelas(nota) {
+    const n = Math.round(Number(nota) || 0);
+    return `<span class="estrelas">${'★'.repeat(n)}<span class="vazia">${'★'.repeat(5 - n)}</span></span>`;
+}
+function novoToken() {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// o PostgREST devolve no máximo 1000 linhas por consulta -- pagina
+// (fabrica() precisa devolver uma consulta NOVA a cada chamada)
+async function buscarTudo(fabrica) {
+    const TAM = 1000, todos = [];
+    for (let ini = 0; ; ini += TAM) {
+        const { data, error } = await fabrica().range(ini, ini + TAM - 1);
+        if (error) throw error;
+        todos.push(...(data || []));
+        if (!data || data.length < TAM) break;
+    }
+    return todos;
+}
+function erroDeTabelaAusente(error) {
+    return !!error && (error.code === '42P01' || error.code === 'PGRST205' || error.code === 'PGRST202' || /does not exist|schema cache|Could not find/i.test(error.message || ''));
+}
+
+// ---------------------------------------------------------------
+// SENTINELA (auditoria) -- mesmo padrão dos outros módulos
+// ---------------------------------------------------------------
+async function registrarSentinela(tipoAcao, descricao) {
+    try {
+        await sb.from('servir_sentinela').insert({
+            unidade_negocio_id: meuPerfil.unidadeId, modulo: 'parceiros',
+            tipo_acao: tipoAcao, descricao, operador: meuPerfil.email, operador_user_id: meuPerfil.userId || null,
+        });
+    } catch (erro) {
+        console.warn('Não consegui registrar na sentinela:', erro.message);
+    }
+}
+
+// ---------------------------------------------------------------
+// olho de mostrar/ocultar senha
+// ---------------------------------------------------------------
+const svgOlhoAberto = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+const svgOlhoFechado = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+document.querySelectorAll('.btn-olho-senha').forEach(btn => {
+    btn.innerHTML = svgOlhoFechado;
+    btn.addEventListener('click', () => {
+        const input = $(btn.dataset.alvo);
+        if (!input) return;
+        const mostrando = input.type === 'text';
+        input.type = mostrando ? 'password' : 'text';
+        btn.innerHTML = mostrando ? svgOlhoFechado : svgOlhoAberto;
+    });
+});
+
+// ---------------------------------------------------------------
+// ESTADO GLOBAL
+// ---------------------------------------------------------------
+let meuPerfil = { unidadeId: null, unidadeNome: '', ehPrincipal: false, userId: null, nomeOperador: '', email: '' };
+let vinculosGlobais = [];
+let config = null;
+let ramos = [];
+let parceiros = [];
+let saldos = {};          // parceiro_id -> saldo
+let indServicos = [];
+let indVendas = [];       // últimos 12 meses
+let contasCarregadas = [];
+let propagandas = [];
+let sqlPendente = false;
+let vitrineSqlPendente = false;   // parceiros-vitrine.sql ainda não rodou (a vitrine é opcional, o resto do módulo funciona sem ela)
+
+// ---------------------------------------------------------------
+// LOGIN / SESSÃO (mesmo padrão do resto do Sicon)
+// ---------------------------------------------------------------
+$('btn-login').addEventListener('click', async () => {
+    const email = $('login-email').value.trim();
+    const senha = $('login-senha').value;
+    const statusEl = $('status-login');
+    statusEl.textContent = '';
+    if (!email || !senha) { statusEl.textContent = 'Preencha e-mail e senha.'; return; }
+    const btn = $('btn-login');
+    btn.disabled = true; btn.textContent = 'Entrando...';
+    const { error } = await sb.auth.signInWithPassword({ email, password: senha });
+    btn.disabled = false; btn.textContent = 'Entrar';
+    if (error) {
+        const msg = (error.message || '').toLowerCase();
+        if (msg.includes('email not confirmed')) statusEl.textContent = 'Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada.';
+        else if (msg.includes('invalid login credentials') || msg.includes('invalid_credentials')) statusEl.textContent = 'E-mail ou senha incorretos.';
+        else if (msg.includes('rate limit') || msg.includes('too many')) statusEl.textContent = 'Muitas tentativas seguidas. Aguarde um instante e tente de novo.';
+        else if (!navigator.onLine) statusEl.textContent = 'Sem conexão com a internet. Verifique sua rede e tente de novo.';
+        else statusEl.textContent = 'Não foi possível entrar: ' + error.message;
+        return;
+    }
+    await onLogin();
+});
+$('login-senha').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-login').click(); });
+$('link-esqueci-senha').addEventListener('click', async (e) => {
+    e.preventDefault();
+    const statusEl = $('status-login');
+    const email = $('login-email').value.trim();
+    if (!email) { statusEl.textContent = 'Digite seu e-mail no campo acima primeiro, depois clique em "Esqueci minha senha".'; return; }
+    statusEl.style.color = ''; statusEl.textContent = 'Enviando...';
+    try {
+        const { error } = await sb.auth.resetPasswordForEmail(email);
+        if (error) throw error;
+        statusEl.style.color = 'var(--brand-2)';
+        statusEl.textContent = 'Se esse e-mail estiver cadastrado, você vai receber um link pra redefinir a senha.';
+    } catch (erro) { statusEl.style.color = ''; statusEl.textContent = 'Não foi possível enviar: ' + erro.message; }
+});
+$('btn-sair').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
+
+async function checkSession() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) await onLogin();
+}
+
+async function onLogin() {
+    $('tela-login').classList.add('hidden');
+    const { data: sessao } = await sb.auth.getUser();
+    meuPerfil.email = sessao?.user?.email || '';
+    meuPerfil.nomeOperador = sessao?.user?.user_metadata?.nome || sessao?.user?.user_metadata?.full_name || meuPerfil.email;
+    const userId = sessao?.user?.id;
+    meuPerfil.userId = userId;
+    if (!userId) return;
+
+    const { data: vinculos, error } = await sb.from('servir_unidade_usuarios')
+        .select('unidade_negocio_id, eh_principal, servir_unidades_negocio(nome)')
+        .eq('user_id', userId);
+    if (error || !vinculos || !vinculos.length) {
+        alert('Não encontramos nenhuma unidade vinculada ao seu usuário. Fale com o administrador.');
+        return;
+    }
+    vinculosGlobais = vinculos.map(v => ({ unidade_id: v.unidade_negocio_id, eh_principal: v.eh_principal, nome: v.servir_unidades_negocio?.nome || '' }));
+
+    if (vinculosGlobais.length === 1) {
+        await definirUnidadeAtiva(vinculosGlobais[0]);
+        await iniciarApp();
+    } else {
+        abrirEscolhaUnidade();
+    }
+}
+
+function abrirEscolhaUnidade() {
+    const wrap = $('lista-unidades-escolha');
+    wrap.innerHTML = '';
+    vinculosGlobais.forEach(v => {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-cinza';
+        btn.style.width = '100%';
+        btn.textContent = v.nome;
+        btn.addEventListener('click', async () => {
+            await definirUnidadeAtiva(v);
+            $('modal-unidade').classList.remove('aberto');
+            await iniciarApp();
+        });
+        wrap.appendChild(btn);
+    });
+    $('modal-unidade').classList.add('aberto');
+}
+$('btn-trocar-unidade').addEventListener('click', abrirEscolhaUnidade);
+
+async function definirUnidadeAtiva(vinculo) {
+    meuPerfil.unidadeId = vinculo.unidade_id;
+    meuPerfil.unidadeNome = vinculo.nome;
+    meuPerfil.ehPrincipal = !!vinculo.eh_principal;
+    $('unidade-logada').textContent = vinculo.nome;
+    $('unidadePillHeader').textContent = vinculo.nome;
+    $('btn-trocar-unidade').style.display = vinculosGlobais.length > 1 ? '' : 'none';
+}
+
+// ---------------------------------------------------------------
+// PERSONALIZAÇÃO VISUAL POR UNIDADE (copiado de staff-painel-admin.html)
+// ---------------------------------------------------------------
+function clarearCor(hex, percentual) {
+    hex = (hex || '').replace('#', '');
+    if (hex.length !== 6) return hex;
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const misturar = (canal) => Math.round(canal + (255 - canal) * percentual);
+    return '#' + [misturar(r), misturar(g), misturar(b)].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function escurecerCor(hex, percentual) {
+    hex = (hex || '').replace('#', '');
+    if (hex.length !== 6) return hex;
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const escurecer = (canal) => Math.round(canal * (1 - percentual));
+    return '#' + [escurecer(r), escurecer(g), escurecer(b)].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function aplicarPersonalizacao(corPrincipal, imagemFundoUrl) {
+    if (corPrincipal) {
+        const raiz = document.documentElement.style;
+        raiz.setProperty('--brand', corPrincipal);
+        raiz.setProperty('--brand-2', clarearCor(corPrincipal, 0.2));
+        raiz.setProperty('--brand-soft', clarearCor(corPrincipal, 0.92));
+        raiz.setProperty('--brand-escuro', escurecerCor(corPrincipal, 0.35));
+    }
+    if (imagemFundoUrl) {
+        const sidebar = document.querySelector('.sidebar');
+        sidebar.style.backgroundImage = `linear-gradient(180deg, rgba(15,43,34,.82) 0%, rgba(15,43,34,.7) 100%), url('${imagemFundoUrl}')`;
+        sidebar.style.backgroundSize = 'cover';
+        sidebar.style.backgroundPosition = 'center';
+    }
+}
+async function carregarPersonalizacao() {
+    const { data, error } = await sb.from('servir_unidades_negocio').select('cor_principal, imagem_fundo_url, logo_url').eq('id', meuPerfil.unidadeId).single();
+    if (error || !data) return;
+    aplicarPersonalizacao(data.cor_principal, data.imagem_fundo_url);
+}
+
+// ---------------------------------------------------------------
+// LICENÇA (mesmo padrão do resto da plataforma)
+// ---------------------------------------------------------------
+function mostrarAvisoLicenca(texto) {
+    if (!texto) return;
+    if ($('avisoPendenciaLicenca')) return;
+    const banner = document.createElement('div');
+    banner.id = 'avisoPendenciaLicenca';
+    banner.style.cssText = 'position:sticky; top:0; z-index:99999; background:var(--aviso-soft); color:var(--accent-ink); padding:10px 16px; font-size:.85rem; text-align:center; border-bottom:2px solid var(--accent); display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 2px 6px rgba(0,0,0,.08);';
+    const span = document.createElement('span');
+    span.textContent = texto;
+    banner.innerHTML = '⚠️ ';
+    banner.appendChild(span);
+    document.body.prepend(banner);
+}
+function bloquearAcessoTotal(mensagem) {
+    if ($('overlayBloqueioLicenca')) return;
+    const botaoTrocar = $('btn-trocar-unidade');
+    const temTrocar = botaoTrocar && botaoTrocar.style.display !== 'none';
+    const overlay = document.createElement('div');
+    overlay.id = 'overlayBloqueioLicenca';
+    overlay.style.cssText = 'position:fixed; inset:0; z-index:999999; background:var(--bg); display:flex; align-items:center; justify-content:center; padding:20px;';
+    overlay.innerHTML = `
+    <div style="background:var(--surface); border-radius:16px; padding:36px; max-width:440px; text-align:center; box-shadow:0 8px 28px rgba(20,30,50,.1);">
+      <div style="font-size:2.5rem; margin-bottom:12px;">🔒</div>
+      <h2 style="color:var(--danger); margin-bottom:12px; font-size:1.2rem;">Acesso bloqueado</h2>
+      <p style="color:var(--ink); font-size:.92rem; line-height:1.5; margin-bottom:20px;">${escapeHtml(mensagem)}</p>
+      <div style="display:flex; gap:10px; flex-direction:column;">
+        ${temTrocar ? '<button id="btnTrocarUnidadeBloqueio" style="padding:10px; border-radius:8px; border:1.5px solid var(--brand); background:none; color:var(--brand); font-weight:600; cursor:pointer;">🔄 Escolher outra unidade</button>' : ''}
+        <button id="btnSairBloqueio" style="padding:10px; border-radius:8px; border:none; background:var(--brand); color:#fff; font-weight:600; cursor:pointer;">Sair</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    if (temTrocar) $('btnTrocarUnidadeBloqueio').addEventListener('click', () => { overlay.remove(); botaoTrocar.click(); });
+    $('btnSairBloqueio').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
+}
+async function verificarPendenciaLicenca(unidadeIdAlvo, moduloChave) {
+    try {
+        const { data, error } = await sb.rpc('fn_verificar_pendencia_licenca', { p_unidade_negocio_id: unidadeIdAlvo, p_modulo_chave: moduloChave });
+        if (error || !data) return false;
+        if (data.bloqueia) { bloquearAcessoTotal(data.mensagem); return true; }
+        mostrarAvisoLicenca(data.mensagem);
+        return false;
+    } catch (erro) {
+        console.warn('Não consegui checar pendência de licença:', erro.message);
+        return false;
+    }
+}
+
+// ---------------------------------------------------------------
+// CARREGAMENTO
+// ---------------------------------------------------------------
+async function iniciarApp() {
+    $('app').style.display = 'block';
+    await carregarPersonalizacao(); // antes da checagem de licença -- a tela de bloqueio também deve refletir a cor da unidade
+    if (await verificarPendenciaLicenca(meuPerfil.unidadeId, 'parceiros')) return;
+    sqlPendente = false;
+    await carregarConfig();
+    if (sqlPendente) { mostrarAvisoSqlPendente(); return; }
+    await Promise.all([carregarRamos(), carregarParceiros(), carregarSaldos(), carregarIndServicos(), carregarIndVendas(), carregarPropagandas()]);
+    $('vndData').value = hojeISO();
+    renderizarTudo();
+}
+
+function mostrarAvisoSqlPendente() {
+    if ($('avisoSqlPendente')) return;
+    const aviso = document.createElement('div');
+    aviso.id = 'avisoSqlPendente';
+    aviso.className = 'aviso-pendentes';
+    aviso.style.cursor = 'default';
+    aviso.textContent = '⚠️ As tabelas do módulo ainda não existem no banco. Rode o arquivo parceiros.sql no SQL Editor do Supabase e recarregue esta página.';
+    document.querySelector('main.app-main').prepend(aviso);
+}
+
+async function carregarConfig() {
+    const { data, error } = await sb.from('parceiros_config').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).maybeSingle();
+    if (error) {
+        if (erroDeTabelaAusente(error)) sqlPendente = true; else console.error(error);
+        return;
+    }
+    if (data) { config = data; return; }
+    // 1º acesso da unidade: cria a configuração padrão (autocadastro DESLIGADO até a loja ligar)
+    const padrao = { unidade_negocio_id: meuPerfil.unidadeId, autocadastro_ativo: false, tipo_recompensa_padrao: 'comissao', percentual_padrao: 5 };
+    const { data: criada } = await sb.from('parceiros_config').upsert(padrao, { onConflict: 'unidade_negocio_id', ignoreDuplicates: true }).select().maybeSingle();
+    config = criada || padrao;
+}
+async function carregarRamos() {
+    const { data, error } = await sb.from('parceiros_ramos').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('nome');
+    ramos = error ? [] : (data || []);
+}
+async function carregarParceiros() {
+    try {
+        parceiros = await buscarTudo(() => sb.from('parceiros_parceiros').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('nome').order('id'));
+    } catch (erro) { console.error(erro); parceiros = []; }
+}
+async function carregarSaldos() {
+    const { data, error } = await sb.rpc('parceiros_saldos');
+    saldos = {};
+    if (!error) (data || []).forEach(l => { saldos[l.parceiro_id] = arredondar2(l.saldo); });
+}
+async function carregarIndServicos() {
+    try {
+        indServicos = await buscarTudo(() => sb.from('parceiros_indicacoes_servico').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('criado_em', { ascending: false }).order('id'));
+    } catch (erro) { console.error(erro); indServicos = []; }
+}
+async function carregarIndVendas() {
+    const d = new Date(); d.setFullYear(d.getFullYear() - 1);
+    const limite = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    try {
+        indVendas = await buscarTudo(() => sb.from('parceiros_indicacoes_venda').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).gte('data_venda', limite).order('data_venda', { ascending: false }).order('id'));
+    } catch (erro) { console.error(erro); indVendas = []; }
+}
+async function carregarPropagandas() {
+    const { data, error } = await sb.from('parceiros_propagandas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('criado_em');
+    if (error) { vitrineSqlPendente = erroDeTabelaAusente(error); if (!vitrineSqlPendente) console.error(error); propagandas = []; return; }
+    vitrineSqlPendente = false;
+    propagandas = data || [];
+}
+// a vitrine só vale se o SQL dela rodou (a coluna do token existe na configuração)
+const vitrineDisponivel = () => !vitrineSqlPendente && !!config && config.vitrine_token !== undefined;
+async function carregarContas() {
+    const { data, error } = await sb.from('financeiro_contas_correntes').select('id, nome').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('ativo', true).order('nome');
+    contasCarregadas = error ? [] : (data || []);
+}
+
+// ---------------------------------------------------------------
+// ATALHOS DE DADOS
+// ---------------------------------------------------------------
+const parceiroPorId = (id) => parceiros.find(p => p.id === id);
+const ramoNome = (id) => (ramos.find(r => r.id === id) || {}).nome || '';
+const saldoDe = (id) => saldos[id] || 0;
+const percentualEfetivo = (p) => (p && p.percentual_recompensa != null) ? Number(p.percentual_recompensa) : Number(config?.percentual_padrao || 0);
+function avaliacaoDe(parceiroId) {
+    const notas = indServicos.filter(s => s.parceiro_id === parceiroId && s.avaliacao != null).map(s => Number(s.avaliacao));
+    return notas.length ? { media: notas.reduce((a, b) => a + b, 0) / notas.length, qtd: notas.length } : null;
+}
+function urlCartao(path) { return path ? sb.storage.from(BUCKET_CARTOES).getPublicUrl(path).data.publicUrl : ''; }
+function linkConsultaParceiro(p) { return `${URL_BASE_PUBLICA}parceiros-consulta.html?t=${p.token_acesso}`; }
+function linkCadastroPublico() { return `${URL_BASE_PUBLICA}parceiros-cadastro.html?unidade=${meuPerfil.unidadeId}`; }
+
+// ---------------------------------------------------------------
+// NAVEGAÇÃO (menu lateral)
+// ---------------------------------------------------------------
+const TITULOS_ABA = { dashboard: 'Dashboard', parceiros: 'Parceiros', servicos: 'Indicar serviço', vendas: 'Vendas indicadas', recompensas: 'Recompensas', vitrine: 'Vitrine (TV)', parametros: 'Parâmetros' };
+function irParaAba(aba) {
+    document.querySelectorAll('.tab-app-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel-app').forEach(p => p.classList.remove('active'));
+    const btnAlvo = document.querySelector(`.tab-app-btn[data-app-tab="${aba}"]`);
+    if (btnAlvo) btnAlvo.classList.add('active');
+    $('app-panel-' + aba).classList.add('active');
+    $('tituloConteudo').textContent = TITULOS_ABA[aba] || '';
+    if (aba === 'dashboard') renderizarDashboard();
+    if (aba === 'parceiros') renderizarParceiros();
+    if (aba === 'servicos') { renderizarSugestoesServico(); renderizarTabelaServicos(); }
+    if (aba === 'vendas') { renderizarPreviewVenda(); renderizarTabelaVendas(); }
+    if (aba === 'recompensas') renderizarRecompensas();
+    if (aba === 'vitrine') renderizarVitrine();
+    if (aba === 'parametros') renderizarParametros();
+}
+document.querySelectorAll('.tab-app-btn').forEach(btn => btn.addEventListener('click', () => irParaAba(btn.dataset.appTab)));
+
+function renderizarTudo() {
+    renderizarSelectsRamo();
+    renderizarParceiros();
+    renderizarSugestoesServico();
+    renderizarTabelaServicos();
+    renderizarPreviewVenda();
+    renderizarTabelaVendas();
+    renderizarRecompensas();
+    renderizarVitrine();
+    renderizarParametros();
+    renderizarDashboard();
+}
+
+// ---------------------------------------------------------------
+// AUTOCOMPLETE GENÉRICO -- ao clicar no campo vazio já lista os
+// primeiros itens (mesmo comportamento das buscas do estoque-app)
+// ---------------------------------------------------------------
+function ligarBusca(input, caixa, getLista, rotuloFn, subFn, aoSelecionar) {
+    function render(termo) {
+        const t = normalizar(termo.trim());
+        // x.busca (opcional) = texto extra só pra casar a busca (ex: telefone sem máscara)
+        const lista = getLista().filter(x => !t || normalizar(rotuloFn(x) + ' ' + (subFn ? subFn(x) : '') + ' ' + (x.busca || '')).includes(t)).slice(0, 20);
+        caixa.innerHTML = lista.length
+            ? lista.map((x, i) => `<div class="resultado-item" data-i="${i}">${escapeHtml(rotuloFn(x))}${subFn ? `<div class="sub">${escapeHtml(subFn(x))}</div>` : ''}</div>`).join('')
+            : '<div class="sugestao-autocomplete-vazia">Nada encontrado.</div>';
+        caixa.classList.add('show');
+        caixa.querySelectorAll('[data-i]').forEach(el => el.addEventListener('click', () => {
+            const x = lista[Number(el.dataset.i)];
+            input.value = rotuloFn(x);
+            caixa.classList.remove('show');
+            aoSelecionar(x);
+        }));
+    }
+    input.addEventListener('input', () => { aoSelecionar(null); render(input.value); });
+    input.addEventListener('focus', () => render(input.value));
+    input.addEventListener('click', () => render(input.value));
+    document.addEventListener('click', (e) => { if (e.target !== input && !caixa.contains(e.target)) caixa.classList.remove('show'); });
+}
+
+// ---------------------------------------------------------------
+// FOTO: comprime no navegador antes de enviar
+// ---------------------------------------------------------------
+function comprimirImagem(arquivo, maxDimensao = 1400, qualidade = 0.82) {
+    return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(arquivo);
+        const img = new Image();
+        img.onload = () => {
+            let { width, height } = img;
+            if (width > maxDimensao || height > maxDimensao) {
+                if (width > height) { height = Math.round(height * (maxDimensao / width)); width = maxDimensao; }
+                else { width = Math.round(width * (maxDimensao / height)); height = maxDimensao; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width; canvas.height = height;
+            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+            URL.revokeObjectURL(url);
+            canvas.toBlob(blob => blob ? resolve(blob) : reject(new Error('Não foi possível processar a imagem.')), 'image/jpeg', qualidade);
+        };
+        img.onerror = () => reject(new Error('Não foi possível ler o arquivo de imagem.'));
+        img.src = url;
+    });
+}
+
+// ---------------------------------------------------------------
+// PDF -- jsPDF sob demanda + popup com 3 ações (Visualizar/Baixar/Compartilhar)
+// ---------------------------------------------------------------
+const scriptsCarregados = {};
+function carregarScriptExterno(src) {
+    if (scriptsCarregados[src]) return scriptsCarregados[src];
+    scriptsCarregados[src] = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src; script.onload = resolve; script.onerror = () => { delete scriptsCarregados[src]; reject(new Error('Não foi possível carregar ' + src)); };
+        document.head.appendChild(script);
+    });
+    return scriptsCarregados[src];
+}
+const carregarJsPdf = () => carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+const carregarQrCode = () => carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js');
+
+let pdfAtual = null;
+function mostrarPopupAcoesPdf(tituloModal, blob, nomeArquivo) {
+    pdfAtual = { blob, nomeArquivo };
+    $('tituloModalAcoesPdf').textContent = tituloModal;
+    $('modalAcoesPdf').classList.add('aberto');
+}
+$('btnFecharModalAcoesPdf').addEventListener('click', () => $('modalAcoesPdf').classList.remove('aberto'));
+$('btnVisualizarPdfGerado').addEventListener('click', () => { if (pdfAtual) window.open(URL.createObjectURL(pdfAtual.blob), '_blank'); });
+$('btnBaixarPdfGerado').addEventListener('click', () => {
+    if (!pdfAtual) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(pdfAtual.blob);
+    a.download = pdfAtual.nomeArquivo;
+    a.click();
+});
+$('btnCompartilharPdfGerado').addEventListener('click', async () => {
+    if (!pdfAtual) return;
+    try {
+        const arquivo = new File([pdfAtual.blob], pdfAtual.nomeArquivo, { type: 'application/pdf' });
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [arquivo] })) await navigator.share({ files: [arquivo], title: pdfAtual.nomeArquivo });
+        else alert('Compartilhamento direto não disponível nesse navegador -- use Baixar.');
+    } catch (erro) { /* pessoa cancelou o compartilhamento */ }
+});
+// ---------------------------------------------------------------
+// PARCEIROS (lista, cadastro, detalhe)
+// ---------------------------------------------------------------
+// Campo de ramo por BUSCA (qualquer parte do nome; clicar no campo vazio lista os
+// primeiros). O valor (id do ramo, '' = nenhum/todos) fica num <input hidden> com o
+// id do campo; o texto digitado fica em <id>_busca. Digitar sem escolher da lista
+// deixa o valor vazio, e ao sair do campo o texto solto é apagado.
+const camposRamo = {};
+function ligarCampoRamo(idHidden, aoMudar) {
+    const hidden = $(idHidden), input = $(idHidden + '_busca'), caixa = $(idHidden + '_resultados');
+    const mostrarNome = () => { const r = ramos.find(x => x.id === hidden.value); input.value = r ? r.nome : ''; if (!r) hidden.value = ''; };
+    // só ramos ativos entram na lista (o já escolhido continua valendo mesmo se for desativado depois)
+    ligarBusca(input, caixa, () => ramos.filter(r => r.ativo), r => r.nome, null, (r) => {
+        hidden.value = r ? r.id : '';
+        if (aoMudar) aoMudar();
+    });
+    input.addEventListener('blur', () => setTimeout(() => { if (!hidden.value) input.value = ''; }, 200));
+    camposRamo[idHidden] = {
+        definir(id) { hidden.value = id || ''; mostrarNome(); },
+        atualizarTexto: mostrarNome,
+    };
+}
+// reaplica o nome (ex: ramo renomeado/excluído) nos três campos
+function renderizarSelectsRamo() { Object.values(camposRamo).forEach(c => c.atualizarTexto()); }
+ligarCampoRamo('parcFiltroRamo', () => renderizarParceiros());
+ligarCampoRamo('svcRamo', () => renderizarSugestoesServico());
+ligarCampoRamo('pf_ramo', null);
+
+function parceirosFiltrados() {
+    const t = normalizar($('parcBusca').value.trim());
+    const ramo = $('parcFiltroRamo').value;
+    const st = $('parcFiltroStatus').value;
+    return parceiros.filter(p =>
+        (!st || p.status === st) && (!ramo || p.ramo_id === ramo) &&
+        (!t || normalizar([p.nome, p.empresa, p.codigo, p.whatsapp, p.telefone, p.cidade, p.especialidades, ramoNome(p.ramo_id)].join(' ')).includes(t))
+    ).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+
+function cardParceiro(p) {
+    const aval = avaliacaoDe(p.id);
+    const zap = linkWhatsApp(p.whatsapp || p.telefone, '');
+    const foto = p.cartao_path ? `<img src="${escapeHtml(urlCartao(p.cartao_path))}" alt="" loading="lazy">` : escapeHtml(iniciais(p.nome));
+    return `
+    <div class="parc-card" data-abrir="${p.id}">
+        <div class="parc-avatar">${foto}</div>
+        <div class="parc-info">
+            <div class="parc-nome">${escapeHtml(p.nome)}</div>
+            <div class="parc-meta">${escapeHtml([p.empresa, ramoNome(p.ramo_id)].filter(Boolean).join(' · ') || '—')}</div>
+            <div class="parc-meta">#${p.codigo ?? '—'}${p.cidade ? ' · ' + escapeHtml(p.cidade) : ''}</div>
+            <div class="parc-rodape">
+                <span class="pill pill-${p.status}">${STATUS_PARCEIRO[p.status] || p.status}</span>
+                ${aval ? `${estrelas(aval.media)}<small style="color:var(--muted)">(${aval.qtd})</small>` : ''}
+                ${zap ? `<a class="btn-zap" href="${zap}" target="_blank" rel="noopener" data-zap>WhatsApp</a>` : ''}
+            </div>
+        </div>
+    </div>`;
+}
+
+function atualizarIndicadoresPendentes() {
+    const pend = parceiros.filter(p => p.status === 'pendente').length;
+    const badge = $('badgePendentes');
+    badge.textContent = pend;
+    badge.classList.toggle('hidden', !pend);
+    const aviso = $('avisoPendentes');
+    aviso.classList.toggle('hidden', !pend || $('parcFiltroStatus').value === 'pendente');
+    aviso.textContent = `🔔 ${pend} cadastro${pend === 1 ? '' : 's'} aguardando aprovação — clique pra revisar`;
+}
+
+function renderizarParceiros() {
+    atualizarIndicadoresPendentes();
+    const lista = parceirosFiltrados();
+    const el = $('listaParceiros');
+    el.innerHTML = lista.length ? lista.map(cardParceiro).join('') : '<div class="vazio" style="grid-column:1/-1;">Nenhum parceiro encontrado com esses filtros.</div>';
+    el.querySelectorAll('[data-abrir]').forEach(card => card.addEventListener('click', (e) => {
+        if (e.target.closest('[data-zap]')) return;
+        abrirDetalhe(card.dataset.abrir);
+    }));
+}
+['parcBusca'].forEach(id => $(id).addEventListener('input', renderizarParceiros));
+$('parcFiltroStatus').addEventListener('change', renderizarParceiros);
+$('avisoPendentes').addEventListener('click', () => { $('parcFiltroStatus').value = 'pendente'; renderizarParceiros(); });
+$('cardPendentes').addEventListener('click', () => { $('parcFiltroStatus').value = 'pendente'; irParaAba('parceiros'); });
+
+// depois de qualquer mudança em parceiro, atualiza tudo que depende da lista
+function aposMudarParceiros() {
+    renderizarParceiros();
+    renderizarSugestoesServico();
+    renderizarTabelaServicos();
+    renderizarTabelaVendas();
+    renderizarRecompensas();
+    renderizarVitrine();
+    renderizarDashboard();
+}
+
+// ---- formulário (novo/editar) ----
+let parceiroEmEdicaoId = null;
+let fotoNova = null;          // { blob, previewUrl }
+let removerFotoAtual = false;
+
+function atualizarPreviewFoto(url) {
+    const img = $('pf_foto_preview');
+    img.src = url || '';
+    img.classList.toggle('hidden', !url);
+    $('btnRemoverFoto').classList.toggle('hidden', !url);
+}
+
+function abrirFormParceiro(id) {
+    const p = id ? parceiroPorId(id) : null;
+    parceiroEmEdicaoId = p ? p.id : null;
+    fotoNova = null; removerFotoAtual = false;
+    $('pf_foto').value = '';
+    $('tituloParceiroForm').textContent = p ? 'Editar parceiro' : 'Novo parceiro';
+    $('pf_nome').value = p?.nome || '';
+    $('pf_empresa').value = p?.empresa || '';
+    camposRamo.pf_ramo.definir(p?.ramo_id || '');   // ramo já desativado continua aparecendo ao editar
+    $('pf_whatsapp').value = p?.whatsapp ? formatarFone(p.whatsapp) : '';
+    $('pf_telefone').value = p?.telefone || '';
+    $('pf_email').value = p?.email || '';
+    $('pf_documento').value = p?.documento || '';
+    $('pf_cidade').value = p?.cidade || '';
+    $('pf_endereco').value = p?.endereco || '';
+    $('pf_especialidades').value = p?.especialidades || '';
+    $('pf_descricao').value = p?.descricao || '';
+    $('pf_tipo').value = p?.tipo_recompensa || config?.tipo_recompensa_padrao || 'comissao';
+    $('pf_percentual').value = p?.percentual_recompensa ?? '';
+    $('pf_dica_percentual').textContent = `Em branco = padrão da loja (${Number(config?.percentual_padrao || 0)}%).`;
+    $('pf_observacao').value = p?.observacao || '';
+    $('pf_autorizou').checked = !!p?.autorizou_divulgacao;
+    $('blocoVitrineForm').classList.toggle('hidden', !vitrineDisponivel());
+    $('pf_vitrine').checked = p ? p.exibir_vitrine !== false : true;
+    $('pf_vitrine_segundos').value = p?.vitrine_segundos ?? '';
+    atualizarPreviewFoto(p?.cartao_path ? urlCartao(p.cartao_path) : '');
+    $('statusParceiro').textContent = '';
+    $('modal-parceiro').classList.add('aberto');
+}
+$('btnNovoParceiro').addEventListener('click', () => abrirFormParceiro(null));
+$('btnFecharParceiro').addEventListener('click', () => $('modal-parceiro').classList.remove('aberto'));
+
+$('pf_foto').addEventListener('change', async (e) => {
+    const arquivo = e.target.files[0];
+    if (!arquivo) return;
+    try {
+        const blob = await comprimirImagem(arquivo);
+        fotoNova = { blob, previewUrl: URL.createObjectURL(blob) };
+        removerFotoAtual = false;
+        atualizarPreviewFoto(fotoNova.previewUrl);
+    } catch (erro) { alert(erro.message); }
+});
+$('btnRemoverFoto').addEventListener('click', () => {
+    fotoNova = null; removerFotoAtual = true; $('pf_foto').value = '';
+    atualizarPreviewFoto('');
+});
+
+// "+" ao lado do ramo: cria um ramo novo sem sair do cadastro
+async function criarRamo(nome) {
+    nome = (nome || '').trim();
+    if (!nome) return null;
+    const existente = ramos.find(r => normalizar(r.nome) === normalizar(nome));
+    if (existente) {
+        if (!existente.ativo) { await sb.from('parceiros_ramos').update({ ativo: true }).eq('id', existente.id); existente.ativo = true; }
+        return existente;
+    }
+    const { data, error } = await sb.from('parceiros_ramos').insert({ unidade_negocio_id: meuPerfil.unidadeId, nome }).select().single();
+    if (error) { alert('Não consegui criar o ramo: ' + error.message); return null; }
+    ramos.push(data);
+    ramos.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    return data;
+}
+$('btnNovoRamoRapido').addEventListener('click', async () => {
+    const nome = prompt('Nome do novo ramo de atividade:');
+    const r = await criarRamo(nome);
+    if (!r) return;
+    camposRamo.pf_ramo.definir(r.id);
+    renderizarParametros();
+});
+
+$('btnSalvarParceiro').addEventListener('click', async () => {
+    const statusEl = $('statusParceiro');
+    const erro = (m) => { statusEl.className = 'status-msg erro'; statusEl.textContent = m; };
+    const nome = $('pf_nome').value.trim();
+    const whatsapp = soDigitos($('pf_whatsapp').value);
+    const telefone = $('pf_telefone').value.trim();
+    const ramoId = $('pf_ramo').value;
+    if (!nome) return erro('Informe o nome.');
+    if (!ramoId) return erro('Escolha o ramo de atividade.');
+    if (whatsapp.length < 10 && soDigitos(telefone).length < 10) return erro('Informe um WhatsApp (com DDD) ou outro telefone.');
+    const pctTxt = $('pf_percentual').value;
+    const pct = pctTxt === '' ? null : parseFloat(pctTxt);
+    if (pct != null && (isNaN(pct) || pct < 0 || pct > 100)) return erro('Percentual inválido (use de 0 a 100).');
+    const segVitrineTxt = $('pf_vitrine_segundos').value;
+    const segVitrine = segVitrineTxt === '' ? null : parseInt(segVitrineTxt, 10);
+    if (vitrineDisponivel() && segVitrine != null && (isNaN(segVitrine) || segVitrine < 3 || segVitrine > 120)) return erro('Segundos na vitrine: use de 3 a 120 (ou deixe em branco).');
+    if (whatsapp) {
+        const dup = parceiros.find(p => p.id !== parceiroEmEdicaoId && p.status !== 'recusado' && soDigitos(p.whatsapp) === whatsapp);
+        if (dup && !confirm(`Já existe um parceiro com esse WhatsApp: ${dup.nome} (#${dup.codigo}). Cadastrar mesmo assim?`)) return;
+    }
+    const atual = parceiroEmEdicaoId ? parceiroPorId(parceiroEmEdicaoId) : null;
+    const btn = $('btnSalvarParceiro');
+    btn.disabled = true; statusEl.className = 'status-msg'; statusEl.textContent = 'Salvando...';
+    let pathNovoEnviado = null;
+    try {
+        let cartaoPath = atual ? atual.cartao_path : null;
+        let pathAntigo = null;
+        if (fotoNova) {
+            pathNovoEnviado = `${meuPerfil.unidadeId}/${crypto.randomUUID()}.jpg`;
+            const { error: eUp } = await sb.storage.from(BUCKET_CARTOES).upload(pathNovoEnviado, fotoNova.blob, { contentType: 'image/jpeg' });
+            if (eUp) throw new Error('Erro ao enviar a foto: ' + eUp.message);
+            pathAntigo = cartaoPath; cartaoPath = pathNovoEnviado;
+        } else if (removerFotoAtual && cartaoPath) { pathAntigo = cartaoPath; cartaoPath = null; }
+        const autorizou = $('pf_autorizou').checked;
+        const payload = {
+            nome, empresa: $('pf_empresa').value.trim() || null, ramo_id: ramoId,
+            whatsapp: whatsapp || null, telefone: telefone || null, email: $('pf_email').value.trim() || null,
+            documento: $('pf_documento').value.trim() || null, cidade: $('pf_cidade').value.trim() || null,
+            endereco: $('pf_endereco').value.trim() || null, especialidades: $('pf_especialidades').value.trim() || null,
+            descricao: $('pf_descricao').value.trim() || null, tipo_recompensa: $('pf_tipo').value, percentual_recompensa: pct,
+            observacao: $('pf_observacao').value.trim() || null, cartao_path: cartaoPath,
+            autorizou_divulgacao: autorizou,
+            autorizou_em: autorizou ? (atual?.autorizou_em || new Date().toISOString()) : null,
+        };
+        // colunas da vitrine só existem depois de rodar parceiros-vitrine.sql
+        if (vitrineDisponivel()) { payload.exibir_vitrine = $('pf_vitrine').checked; payload.vitrine_segundos = segVitrine; }
+        let salvoId;
+        if (atual) {
+            const { error } = await sb.from('parceiros_parceiros').update(payload).eq('id', atual.id);
+            if (error) throw error;
+            salvoId = atual.id;
+            await registrarSentinela('parceiro_editado', `Editou o parceiro #${atual.codigo} "${nome}"`);
+        } else {
+            const { data, error } = await sb.from('parceiros_parceiros').insert({ ...payload, unidade_negocio_id: meuPerfil.unidadeId, status: 'ativo', origem: 'balcao', aprovado_em: new Date().toISOString(), aprovado_por: meuPerfil.email }).select().single();
+            if (error) throw error;
+            salvoId = data.id;
+            await registrarSentinela('parceiro_criado', `Cadastrou o parceiro #${data.codigo} "${nome}" no balcão`);
+        }
+        if (pathAntigo) { try { await sb.storage.from(BUCKET_CARTOES).remove([pathAntigo]); } catch (e) { /* arquivo órfão não atrapalha */ } }
+        await carregarParceiros();
+        aposMudarParceiros();
+        $('modal-parceiro').classList.remove('aberto');
+        abrirDetalhe(salvoId);
+    } catch (e) {
+        if (pathNovoEnviado) { try { await sb.storage.from(BUCKET_CARTOES).remove([pathNovoEnviado]); } catch (e2) { /* ignora */ } }
+        erro('Erro ao salvar: ' + (e.message || e));
+    } finally { btn.disabled = false; }
+});
+
+// ---- detalhe ----
+let detalheId = null;
+function abrirDetalhe(id) {
+    const p = parceiroPorId(id);
+    if (!p) return;
+    detalheId = id;
+    const aval = avaliacaoDe(id);
+    const vendasP = indVendas.filter(v => v.parceiro_id === id && v.status === 'confirmada');
+    const totalVendido = vendasP.reduce((a, v) => a + Number(v.valor_venda || 0), 0);
+    const servP = indServicos.filter(s => s.parceiro_id === id);
+    const saldo = saldoDe(id);
+    const foto = p.cartao_path ? urlCartao(p.cartao_path) : '';
+    const zap = linkWhatsApp(p.whatsapp || p.telefone, '');
+    const linha = (rotulo, valor, largo) => valor ? `<div${largo ? ' class="largo"' : ''}><dt>${rotulo}</dt><dd>${valor}</dd></div>` : '';
+    const acoes = {
+        pendente: `<button class="btn btn-principal btn-inline" data-acao="aprovar">✅ Aprovar</button><button class="btn btn-perigo" data-acao="recusar">Recusar</button>`,
+        ativo: `<button class="btn btn-cinza" data-acao="servico">🔧 Indicar serviço</button><button class="btn btn-cinza" data-acao="venda">🛒 Registrar venda indicada</button><button class="btn btn-perigo" data-acao="inativar">Inativar</button>`,
+        inativo: `<button class="btn btn-principal btn-inline" data-acao="reativar">Reativar</button>`,
+        recusado: `<button class="btn btn-principal btn-inline" data-acao="reativar">Aprovar mesmo assim</button><button class="btn btn-perigo" data-acao="excluir">Excluir</button>`,
+    }[p.status] || '';
+    $('detalheCorpo').innerHTML = `
+        <div class="detalhe-topo">
+            <div class="parc-avatar">${foto ? `<img src="${escapeHtml(foto)}" alt="">` : escapeHtml(iniciais(p.nome))}</div>
+            <div style="min-width:0;">
+                <h3 style="margin:0;">${escapeHtml(p.nome)}</h3>
+                <div class="parc-meta" style="white-space:normal;">${escapeHtml([p.empresa, ramoNome(p.ramo_id)].filter(Boolean).join(' · ') || '—')}</div>
+                <div class="parc-rodape">
+                    <span class="pill pill-${p.status}">${STATUS_PARCEIRO[p.status]}</span>
+                    <span class="pill pill-${p.tipo_recompensa}">${TIPO_RECOMPENSA[p.tipo_recompensa]} ${percentualEfetivo(p)}%</span>
+                    ${aval ? `${estrelas(aval.media)}<small style="color:var(--muted)">${aval.media.toFixed(1)} (${aval.qtd})</small>` : ''}
+                    <small style="color:var(--muted)">Código #${p.codigo ?? '—'} · ${p.origem === 'autocadastro' ? 'autocadastro' : 'balcão'}</small>
+                </div>
+            </div>
+        </div>
+        <div class="bloco-cartao">
+            <div class="bloco-cartao-titulo">📇 Cartão de visita</div>
+            ${foto
+                ? `<a href="${escapeHtml(foto)}" target="_blank" rel="noopener"><img class="foto-cartao" src="${escapeHtml(foto)}" alt="Cartão de visita"></a>`
+                : `<div class="cartao-vazio">Sem cartão de visita cadastrado${vitrineDisponivel() ? ' — na vitrine da TV o slide mostra só as iniciais.' : '.'}</div>`}
+            <div class="acoes-linha" style="margin-top:8px;">
+                <button class="btn btn-sucesso btn-sm" data-acao="cartao-camera">📷 Tirar foto</button>
+                <button class="btn btn-cinza btn-sm" data-acao="cartao-arquivo">📁 ${foto ? 'Trocar por outro arquivo' : 'Escolher arquivo'}</button>
+                ${foto ? '<button class="btn btn-perigo btn-sm" data-acao="cartao-remover">Remover</button>' : ''}
+            </div>
+        </div>
+        <dl class="detalhe-grid">
+            ${linha('WhatsApp', p.whatsapp ? `${escapeHtml(formatarFone(p.whatsapp))} ${zap ? `<a class="btn-zap" href="${zap}" target="_blank" rel="noopener">Abrir conversa</a>` : ''}` : '')}
+            ${linha('Outro telefone', escapeHtml(p.telefone || ''))}
+            ${linha('E-mail', escapeHtml(p.email || ''))}
+            ${linha('CPF / CNPJ', escapeHtml(p.documento || ''))}
+            ${linha('Cidade', escapeHtml(p.cidade || ''))}
+            ${linha('Endereço', escapeHtml(p.endereco || ''))}
+            ${linha('Especialidades', escapeHtml(p.especialidades || ''), true)}
+            ${linha('Apresentação', escapeHtml(p.descricao || ''), true)}
+            ${linha('Observação interna', escapeHtml(p.observacao || ''), true)}
+            ${linha('Divulgação de contato', p.autorizou_divulgacao ? `✅ Autorizada${p.autorizou_em ? ' em ' + formatarDataSemFuso(p.autorizou_em) : ''}` : '⚠️ Sem autorização registrada')}
+            ${vitrineDisponivel() ? linha('Vitrine da TV', escapeHtml(motivoForaDaVitrine(p) || `Aparece${p.vitrine_segundos ? ' por ' + p.vitrine_segundos + 's' : ' (tempo padrão)'}`)) : ''}
+            ${linha('Cadastrado em', formatarDataHora(p.criado_em))}
+        </dl>
+        <div class="preview-recompensa">
+            <strong>Recompensa:</strong> saldo ${saldo >= 0 ? '' : '(negativo) '}<strong class="${saldo < 0 ? 'valor-neg' : 'valor-pos'}">${formatarMoeda(saldo)}</strong>
+            · ${vendasP.length} venda${vendasP.length === 1 ? '' : 's'} indicada${vendasP.length === 1 ? '' : 's'} (${formatarMoeda(totalVendido)} em 12 meses)
+            · ${servP.length} indicaç${servP.length === 1 ? 'ão' : 'ões'} de serviço
+        </div>
+        ${p.status === 'ativo' ? `
+        <div class="campo" style="margin-bottom:6px;"><label>Link pessoal do parceiro (consultar saldo e indicações)</label>
+            <div class="link-box"><input type="text" readonly value="${escapeHtml(linkConsultaParceiro(p))}"><button class="btn btn-cinza btn-sm" data-acao="copiar">Copiar</button></div>
+            <div class="acoes-linha" style="margin-top:8px;"><button class="btn btn-sucesso btn-sm" data-acao="zap-link">Enviar link por WhatsApp</button><button class="btn btn-cinza btn-sm" data-acao="novo-token">Gerar novo link</button></div>
+        </div>` : ''}
+        <div class="acoes-linha"><button class="btn btn-cinza" data-acao="editar">✏️ Editar</button>${acoes}</div>
+        <div class="status-msg" id="statusDetalhe"></div>`;
+    $('modal-detalhe').classList.add('aberto');
+}
+$('btnFecharDetalhe').addEventListener('click', () => { detalheId = null; $('modal-detalhe').classList.remove('aberto'); });
+
+async function atualizarParceiro(id, campos, tipoSentinela, descricaoSentinela) {
+    const { error } = await sb.from('parceiros_parceiros').update(campos).eq('id', id);
+    if (error) { alert('Erro: ' + error.message); return false; }
+    if (tipoSentinela) await registrarSentinela(tipoSentinela, descricaoSentinela);
+    await carregarParceiros();
+    aposMudarParceiros();
+    return true;
+}
+// ---- cadastro rápido do cartão de visita (câmera ou arquivo), sem abrir o formulário inteiro ----
+let cartaoRapidoParceiroId = null;
+function escolherCartao(parceiroId, camera) {
+    cartaoRapidoParceiroId = parceiroId;
+    const inp = $(camera ? 'inputCartaoCamera' : 'inputCartaoArquivo');
+    inp.value = '';
+    inp.click();
+}
+async function salvarCartaoRapido(arquivo) {
+    const p = parceiroPorId(cartaoRapidoParceiroId);
+    if (!p || !arquivo) return;
+    let pathNovo = null;
+    try {
+        const blob = await comprimirImagem(arquivo);
+        pathNovo = `${meuPerfil.unidadeId}/${crypto.randomUUID()}.jpg`;
+        const { error: eUp } = await sb.storage.from(BUCKET_CARTOES).upload(pathNovo, blob, { contentType: 'image/jpeg' });
+        if (eUp) throw new Error('Erro ao enviar a foto: ' + eUp.message);
+        const pathAntigo = p.cartao_path;
+        const { error } = await sb.from('parceiros_parceiros').update({ cartao_path: pathNovo }).eq('id', p.id);
+        if (error) throw error;
+        if (pathAntigo) { try { await sb.storage.from(BUCKET_CARTOES).remove([pathAntigo]); } catch (e) { /* órfão não atrapalha */ } }
+        await registrarSentinela('parceiro_cartao', `${pathAntigo ? 'Trocou' : 'Cadastrou'} o cartão de visita do parceiro #${p.codigo} "${p.nome}"`);
+        await carregarParceiros();
+        aposMudarParceiros();
+        if (detalheId === p.id) abrirDetalhe(p.id);
+    } catch (e) {
+        if (pathNovo) { try { await sb.storage.from(BUCKET_CARTOES).remove([pathNovo]); } catch (e2) { /* ignora */ } }
+        alert('Não foi possível salvar o cartão: ' + (e.message || e));
+    }
+}
+['inputCartaoArquivo', 'inputCartaoCamera'].forEach(id => $(id).addEventListener('change', (e) => salvarCartaoRapido(e.target.files[0])));
+
+function mensagemBoasVindas(p) {
+    return `Olá, ${primeiroNome(p.nome)}! Aqui é da ${meuPerfil.unidadeNome}. Seu cadastro de parceiro foi aprovado (código ${p.codigo}). Acompanhe suas indicações e recompensas por este link: ${linkConsultaParceiro(p)}`;
+}
+
+$('detalheCorpo').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-acao]');
+    if (!btn || !detalheId) return;
+    const p = parceiroPorId(detalheId);
+    if (!p) return;
+    const acao = btn.dataset.acao;
+    const rotulo = `#${p.codigo} "${p.nome}"`;
+    if (acao === 'editar') { $('modal-detalhe').classList.remove('aberto'); abrirFormParceiro(p.id); return; }
+    if (acao === 'cartao-camera') { escolherCartao(p.id, true); return; }
+    if (acao === 'cartao-arquivo') { escolherCartao(p.id, false); return; }
+    if (acao === 'cartao-remover') {
+        if (!confirm('Remover o cartão de visita deste parceiro?')) return;
+        if (await atualizarParceiro(p.id, { cartao_path: null }, 'parceiro_cartao', `Removeu o cartão de visita do parceiro ${rotulo}`)) {
+            if (p.cartao_path) { try { await sb.storage.from(BUCKET_CARTOES).remove([p.cartao_path]); } catch (err) { /* ignora */ } }
+            abrirDetalhe(p.id);
+        }
+        return;
+    }
+    if (acao === 'copiar') {
+        try { await navigator.clipboard.writeText(linkConsultaParceiro(p)); btn.textContent = 'Copiado ✓'; } catch (err) { prompt('Copie o link:', linkConsultaParceiro(p)); }
+        return;
+    }
+    if (acao === 'zap-link') {
+        const url = linkWhatsApp(p.whatsapp || p.telefone, `Olá, ${primeiroNome(p.nome)}! Aqui é da ${meuPerfil.unidadeNome}. Acompanhe suas indicações e recompensas por este link: ${linkConsultaParceiro(p)}`);
+        if (url) window.open(url, '_blank'); else alert('Esse parceiro não tem WhatsApp/telefone com DDD cadastrado.');
+        return;
+    }
+    if (acao === 'novo-token') {
+        if (!confirm('Gerar um novo link? O link antigo deixa de funcionar — avise o parceiro depois.')) return;
+        if (await atualizarParceiro(p.id, { token_acesso: novoToken() }, 'parceiro_novo_link', `Gerou novo link de consulta do parceiro ${rotulo}`)) abrirDetalhe(p.id);
+        return;
+    }
+    if (acao === 'servico') { $('modal-detalhe').classList.remove('aberto'); irParaAba('servicos'); selecionarParceiroServico(p.id); return; }
+    if (acao === 'venda') { $('modal-detalhe').classList.remove('aberto'); irParaAba('vendas'); selecionarParceiroVenda(p.id); return; }
+    if (acao === 'aprovar' || acao === 'reativar') {
+        const veioDePendente = p.status === 'pendente';
+        if (await atualizarParceiro(p.id, { status: 'ativo', aprovado_em: new Date().toISOString(), aprovado_por: meuPerfil.email }, 'parceiro_aprovado', `${veioDePendente ? 'Aprovou' : 'Reativou'} o parceiro ${rotulo}`)) {
+            abrirDetalhe(p.id);
+            const url = linkWhatsApp(p.whatsapp || p.telefone, mensagemBoasVindas(p));
+            if (veioDePendente && url && confirm('Parceiro aprovado! Quer avisar agora pelo WhatsApp (com o link pessoal dele)?')) window.open(url, '_blank');
+        }
+        return;
+    }
+    if (acao === 'recusar') {
+        if (!confirm(`Recusar o cadastro de ${p.nome}?`)) return;
+        if (await atualizarParceiro(p.id, { status: 'recusado' }, 'parceiro_recusado', `Recusou o cadastro do parceiro ${rotulo}`)) abrirDetalhe(p.id);
+        return;
+    }
+    if (acao === 'inativar') {
+        const saldo = saldoDe(p.id);
+        const aviso = saldo ? `\n\nAtenção: ele ainda tem saldo de ${formatarMoeda(saldo)} — inativar NÃO apaga o saldo, e o link pessoal dele para de funcionar.` : '\n\nO link pessoal dele para de funcionar.';
+        if (!confirm(`Inativar ${p.nome}? Ele deixa de aparecer nas sugestões de indicação.${aviso}`)) return;
+        if (await atualizarParceiro(p.id, { status: 'inativo' }, 'parceiro_inativado', `Inativou o parceiro ${rotulo}`)) abrirDetalhe(p.id);
+        return;
+    }
+    if (acao === 'excluir') {
+        if (!confirm(`Excluir definitivamente o cadastro de ${p.nome}?`)) return;
+        const { error } = await sb.from('parceiros_parceiros').delete().eq('id', p.id);
+        if (error) { alert('Não foi possível excluir (talvez já tenha histórico): ' + error.message); return; }
+        if (p.cartao_path) { try { await sb.storage.from(BUCKET_CARTOES).remove([p.cartao_path]); } catch (err) { /* ignora */ } }
+        await registrarSentinela('parceiro_excluido', `Excluiu o parceiro ${rotulo}`);
+        detalheId = null; $('modal-detalhe').classList.remove('aberto');
+        await carregarParceiros(); aposMudarParceiros();
+    }
+});
+// ---------------------------------------------------------------
+// INDICAR SERVIÇO (a loja indica um parceiro a um cliente)
+// ---------------------------------------------------------------
+let svcParceiroSelecionadoId = null;
+const concluidosDe = (id) => indServicos.filter(s => s.parceiro_id === id && s.status === 'concluido').length;
+
+function parceirosParaIndicar() {
+    const ramo = $('svcRamo').value;
+    const t = normalizar($('svcBusca').value.trim());
+    return parceiros.filter(p => p.status === 'ativo' && (!ramo || p.ramo_id === ramo) &&
+        (!t || normalizar([p.nome, p.empresa, p.cidade, p.especialidades, p.descricao, ramoNome(p.ramo_id)].join(' ')).includes(t)))
+        .sort((a, b) => (avaliacaoDe(b.id)?.media || 0) - (avaliacaoDe(a.id)?.media || 0) || concluidosDe(b.id) - concluidosDe(a.id) || a.nome.localeCompare(b.nome, 'pt-BR'));
+}
+function renderizarSugestoesServico() {
+    const lista = parceirosParaIndicar();
+    if (svcParceiroSelecionadoId && !parceiroPorId(svcParceiroSelecionadoId)) svcParceiroSelecionadoId = null;
+    const el = $('svcSugestoes');
+    el.innerHTML = lista.length ? lista.map(p => {
+        const aval = avaliacaoDe(p.id);
+        return `<div class="sugestao${p.id === svcParceiroSelecionadoId ? ' sel' : ''}" data-sel-parc="${p.id}">
+            <div style="min-width:0;"><strong>${escapeHtml(p.nome)}</strong>${p.empresa ? ' · ' + escapeHtml(p.empresa) : ''}
+                <div class="sub">${escapeHtml([ramoNome(p.ramo_id), p.cidade, p.especialidades].filter(Boolean).join(' · '))}</div></div>
+            <div style="text-align:right; flex-shrink:0;">${aval ? estrelas(aval.media) : '<small style="color:var(--muted)">sem nota</small>'}<div class="sub">${concluidosDe(p.id)} concluído${concluidosDe(p.id) === 1 ? '' : 's'}</div></div>
+        </div>`;
+    }).join('') : '<div class="vazio">Nenhum parceiro ativo com esse filtro. Cadastre ou aprove parceiros na aba Parceiros.</div>';
+    el.querySelectorAll('[data-sel-parc]').forEach(row => row.addEventListener('click', () => selecionarParceiroServico(row.dataset.selParc)));
+    const sel = parceiroPorId(svcParceiroSelecionadoId);
+    $('svcDicaSelecionado').textContent = sel ? `— selecionado: ${sel.nome}` : '';
+}
+function selecionarParceiroServico(id) {
+    svcParceiroSelecionadoId = id;
+    const p = parceiroPorId(id);
+    // se já há um ramo filtrado e o parceiro escolhido é de outro, o filtro acompanha o parceiro
+    if (p && $('svcRamo').value && p.ramo_id !== $('svcRamo').value) camposRamo.svcRamo.definir(p.ramo_id || '');
+    renderizarSugestoesServico();
+}
+$('svcBusca').addEventListener('input', renderizarSugestoesServico);
+
+$('btnRegistrarServico').addEventListener('click', async () => {
+    const statusEl = $('statusServico');
+    const erro = (m) => { statusEl.className = 'status-msg erro'; statusEl.textContent = m; };
+    const cliente = $('svcCliente').value.trim();
+    const descricao = $('svcDescricao').value.trim();
+    const p = parceiroPorId(svcParceiroSelecionadoId);
+    if (!cliente) return erro('Informe o nome do cliente.');
+    if (!descricao) return erro('Descreva o serviço que o cliente precisa.');
+    if (!p) return erro('Escolha o parceiro que vai ser indicado.');
+    const btn = $('btnRegistrarServico');
+    btn.disabled = true; statusEl.className = 'status-msg'; statusEl.textContent = 'Salvando...';
+    try {
+        const contato = $('svcContato').value.trim();
+        const { error } = await sb.from('parceiros_indicacoes_servico').insert({
+            unidade_negocio_id: meuPerfil.unidadeId, parceiro_id: p.id, cliente_nome: cliente, cliente_contato: contato || null,
+            descricao_servico: descricao, ramo_id: p.ramo_id || null, observacao: $('svcObs').value.trim() || null, criado_por: meuPerfil.email,
+        });
+        if (error) throw error;
+        await registrarSentinela('indicacao_servico', `Indicou o parceiro #${p.codigo} "${p.nome}" ao cliente "${cliente}" (${descricao})`);
+        await carregarIndServicos();
+        // links de WhatsApp montados ANTES de limpar o formulário
+        const textoCliente = `Olá, ${primeiroNome(cliente)}! Aqui é da ${meuPerfil.unidadeNome}. Pro serviço que você precisa (${descricao}), indicamos ${p.nome}${p.empresa ? ' (' + p.empresa + ')' : ''}${ramoNome(p.ramo_id) ? ' — ' + ramoNome(p.ramo_id) : ''}. Contato: ${formatarFone(p.whatsapp || p.telefone)}.`;
+        const textoParceiro = `Olá, ${primeiroNome(p.nome)}! Aqui é da ${meuPerfil.unidadeNome}. Indicamos você pra um cliente nosso: ${cliente} precisa de "${descricao}"${contato ? '. Contato: ' + contato : ''}. Acompanhe suas indicações pelo seu link: ${linkConsultaParceiro(p)}`;
+        const zapCliente = $('btnZapCliente'), zapParceiro = $('btnZapParceiro');
+        const urlCliente = p.autorizou_divulgacao ? linkWhatsApp(contato, textoCliente) : null;
+        zapCliente.classList.toggle('hidden', !urlCliente);
+        if (urlCliente) zapCliente.href = urlCliente;
+        const urlParceiro = linkWhatsApp(p.whatsapp || p.telefone, textoParceiro);
+        zapParceiro.classList.toggle('hidden', !urlParceiro);
+        if (urlParceiro) zapParceiro.href = urlParceiro;
+        $('blocoPosServico').classList.remove('hidden');
+        statusEl.className = 'status-msg sucesso';
+        statusEl.textContent = p.autorizou_divulgacao ? 'Indicação registrada.' : 'Indicação registrada. Esse parceiro não tem autorização de divulgação registrada — peça a autorização antes de passar o contato dele ao cliente.';
+        ['svcCliente', 'svcContato', 'svcDescricao', 'svcObs'].forEach(id => { $(id).value = ''; });
+        svcParceiroSelecionadoId = null;
+        renderizarSugestoesServico(); renderizarTabelaServicos(); renderizarDashboard(); renderizarParceiros();
+    } catch (e) { erro('Erro: ' + (e.message || e)); } finally { btn.disabled = false; }
+});
+
+function renderizarTabelaServicos() {
+    const t = normalizar($('svcFiltroBusca').value.trim());
+    const st = $('svcFiltroStatus').value;
+    const lista = indServicos.filter(s => (!st || s.status === st) &&
+        (!t || normalizar([s.cliente_nome, s.descricao_servico, parceiroPorId(s.parceiro_id)?.nome].join(' ')).includes(t)));
+    $('corpoServicos').innerHTML = lista.map(s => {
+        const p = parceiroPorId(s.parceiro_id);
+        return `<tr>
+            <td>${formatarDataSemFuso(s.criado_em)}</td>
+            <td>${escapeHtml(s.cliente_nome)}${s.cliente_contato ? `<small class="sub">${escapeHtml(s.cliente_contato)}</small>` : ''}</td>
+            <td>${escapeHtml(s.descricao_servico)}${s.observacao ? `<small class="sub">${escapeHtml(s.observacao)}</small>` : ''}</td>
+            <td>${p ? `<a href="#" data-abrir-parc="${p.id}">${escapeHtml(p.nome)}</a>` : '—'}</td>
+            <td><select data-status-svc="${s.id}">${Object.entries(STATUS_SERVICO).map(([k, v]) => `<option value="${k}"${k === s.status ? ' selected' : ''}>${v}</option>`).join('')}</select></td>
+            <td>${s.status === 'concluido' ? `${s.avaliacao ? estrelas(s.avaliacao) : '<small class="sub">sem nota</small>'} <a href="#" data-avaliar="${s.id}" title="Editar nota/valor">✎</a>${s.valor_servico ? `<small class="sub">${formatarMoeda(s.valor_servico)}</small>` : ''}` : '—'}</td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="6" class="vazio">Nenhuma indicação de serviço ainda.</td></tr>';
+    $('corpoServicos').querySelectorAll('[data-status-svc]').forEach(sel => sel.addEventListener('change', () => mudarStatusServico(sel.dataset.statusSvc, sel.value)));
+    $('corpoServicos').querySelectorAll('[data-abrir-parc]').forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); abrirDetalhe(a.dataset.abrirParc); }));
+    $('corpoServicos').querySelectorAll('[data-avaliar]').forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); abrirConcluir(a.dataset.avaliar); }));
+}
+$('svcFiltroBusca').addEventListener('input', renderizarTabelaServicos);
+$('svcFiltroStatus').addEventListener('change', renderizarTabelaServicos);
+
+async function mudarStatusServico(id, novo) {
+    const s = indServicos.find(x => x.id === id);
+    if (!s || s.status === novo) return;
+    if (novo === 'concluido') { abrirConcluir(id); renderizarTabelaServicos(); return; }
+    if (novo === 'cancelado' && !confirm('Marcar essa indicação como cancelada?')) { renderizarTabelaServicos(); return; }
+    const { error } = await sb.from('parceiros_indicacoes_servico').update({ status: novo, atualizado_em: new Date().toISOString() }).eq('id', id);
+    if (error) { alert('Erro: ' + error.message); renderizarTabelaServicos(); return; }
+    await registrarSentinela('indicacao_servico_status', `Indicação de serviço de "${s.cliente_nome}": ${STATUS_SERVICO[s.status]} → ${STATUS_SERVICO[novo]}`);
+    await carregarIndServicos();
+    renderizarTabelaServicos(); renderizarDashboard(); renderizarParceiros(); renderizarSugestoesServico();
+}
+
+let concluirServicoId = null;
+function abrirConcluir(id) {
+    const s = indServicos.find(x => x.id === id);
+    if (!s) return;
+    concluirServicoId = id;
+    $('concluirSub').textContent = `${s.cliente_nome} — ${s.descricao_servico}`;
+    $('cs_avaliacao').value = s.avaliacao != null ? String(s.avaliacao) : '';
+    $('cs_valor').value = s.valor_servico ?? '';
+    $('modal-concluir').classList.add('aberto');
+}
+$('btnFecharConcluir').addEventListener('click', () => $('modal-concluir').classList.remove('aberto'));
+$('btnConfirmarConcluir').addEventListener('click', async () => {
+    const s = indServicos.find(x => x.id === concluirServicoId);
+    if (!s) return;
+    const nota = $('cs_avaliacao').value ? parseInt($('cs_avaliacao').value, 10) : null;
+    const valorTxt = $('cs_valor').value;
+    const valor = valorTxt === '' ? null : parseFloat(valorTxt);
+    const { error } = await sb.from('parceiros_indicacoes_servico').update({ status: 'concluido', avaliacao: nota, valor_servico: valor, atualizado_em: new Date().toISOString() }).eq('id', s.id);
+    if (error) { alert('Erro: ' + error.message); return; }
+    await registrarSentinela('indicacao_servico_status', `Indicação de serviço de "${s.cliente_nome}" concluída${nota ? ` (nota ${nota})` : ''}`);
+    $('modal-concluir').classList.remove('aberto');
+    await carregarIndServicos();
+    renderizarTabelaServicos(); renderizarDashboard(); renderizarParceiros(); renderizarSugestoesServico();
+});
+
+// ---------------------------------------------------------------
+// VENDAS INDICADAS (parceiro indicou um comprador -> recompensa)
+// ---------------------------------------------------------------
+let vndParceiroSelecionadoId = null;
+ligarBusca($('vndParceiroBusca'), $('vndParceiroResultados'),
+    () => parceiros.filter(p => p.status === 'ativo').map(p => ({ ...p, busca: `${p.whatsapp || ''} ${p.telefone || ''} ${p.documento || ''}` })),
+    p => `#${p.codigo} ${p.nome}`,
+    p => [p.empresa, ramoNome(p.ramo_id), p.whatsapp ? formatarFone(p.whatsapp) : ''].filter(Boolean).join(' · '),
+    p => { vndParceiroSelecionadoId = p ? p.id : null; renderizarPreviewVenda(); });
+function selecionarParceiroVenda(id) {
+    const p = parceiroPorId(id);
+    if (!p) return;
+    vndParceiroSelecionadoId = id;
+    $('vndParceiroBusca').value = `#${p.codigo} ${p.nome}`;
+    renderizarPreviewVenda();
+}
+$('vndValor').addEventListener('input', renderizarPreviewVenda);
+
+function renderizarPreviewVenda() {
+    const el = $('vndPreview');
+    const p = parceiroPorId(vndParceiroSelecionadoId);
+    if (!p) { el.classList.add('hidden'); return; }
+    const valor = parseFloat($('vndValor').value) || 0;
+    const pct = percentualEfetivo(p);
+    el.classList.remove('hidden');
+    if (pct <= 0) {
+        el.classList.add('aviso');
+        el.innerHTML = `⚠️ ${escapeHtml(p.nome)} está com percentual 0% — a venda é registrada, mas sem recompensa. Ajuste o padrão em Parâmetros ou o percentual no cadastro do parceiro.`;
+        return;
+    }
+    el.classList.remove('aviso');
+    el.innerHTML = `${TIPO_RECOMPENSA[p.tipo_recompensa]} de <strong>${pct}%</strong> ${valor > 0 ? `= <strong>${formatarMoeda(arredondar2(valor * pct / 100))}</strong>` : '(informe o valor da venda)'} — ${p.tipo_recompensa === 'comissao' ? 'a pagar em dinheiro' : 'crédito na loja'}.`;
+}
+
+$('btnRegistrarVenda').addEventListener('click', async () => {
+    const statusEl = $('statusVenda');
+    const erro = (m) => { statusEl.className = 'status-msg erro'; statusEl.textContent = m; };
+    const p = parceiroPorId(vndParceiroSelecionadoId);
+    const valor = parseFloat($('vndValor').value);
+    if (!p) return erro('Escolha o parceiro (clique no campo pra listar).');
+    if (!(valor > 0)) return erro('Informe o valor da venda.');
+    const btn = $('btnRegistrarVenda');
+    btn.disabled = true; statusEl.className = 'status-msg'; statusEl.textContent = 'Registrando...';
+    try {
+        const { data: id, error } = await sb.rpc('parceiros_registrar_venda', {
+            p_parceiro_id: p.id, p_cliente_nome: $('vndCliente').value.trim(), p_cliente_contato: $('vndContato').value.trim(),
+            p_descricao: $('vndDescricao').value.trim(), p_valor_venda: valor, p_data: $('vndData').value || hojeISO(),
+            p_referencia: $('vndReferencia').value.trim(), p_criado_por: meuPerfil.email,
+        });
+        if (error) throw error;
+        await Promise.all([carregarIndVendas(), carregarSaldos()]);
+        const nova = indVendas.find(v => v.id === id);
+        await registrarSentinela('venda_indicada', `Registrou venda indicada de ${formatarMoeda(valor)} pelo parceiro #${p.codigo} "${p.nome}"${nova ? ` (${TIPO_RECOMPENSA[nova.tipo_recompensa]} ${formatarMoeda(nova.valor_recompensa)})` : ''}`);
+        statusEl.className = 'status-msg sucesso';
+        statusEl.textContent = nova && Number(nova.valor_recompensa) > 0 ? `Venda registrada. ${TIPO_RECOMPENSA[nova.tipo_recompensa]} de ${formatarMoeda(nova.valor_recompensa)} lançada no extrato de ${p.nome}.` : 'Venda registrada (sem recompensa, percentual 0%).';
+        ['vndValor', 'vndCliente', 'vndContato', 'vndReferencia', 'vndDescricao'].forEach(i => { $(i).value = ''; });
+        renderizarPreviewVenda(); renderizarTabelaVendas(); renderizarRecompensas(); renderizarDashboard();
+    } catch (e) { erro('Erro: ' + (e.message || e)); } finally { btn.disabled = false; }
+});
+
+function renderizarTabelaVendas() {
+    const t = normalizar($('vndFiltroBusca').value.trim());
+    const st = $('vndFiltroStatus').value;
+    const lista = indVendas.filter(v => (!st || v.status === st) &&
+        (!t || normalizar([parceiroPorId(v.parceiro_id)?.nome, v.cliente_nome, v.referencia, v.descricao].join(' ')).includes(t)));
+    $('corpoVendas').innerHTML = lista.map(v => {
+        const p = parceiroPorId(v.parceiro_id);
+        return `<tr>
+            <td>${formatarDataSemFuso(v.data_venda)}</td>
+            <td>${p ? `<a href="#" data-abrir-parc="${p.id}">#${p.codigo} ${escapeHtml(p.nome)}</a>` : '—'}</td>
+            <td>${escapeHtml(v.cliente_nome || '—')}${v.referencia ? `<small class="sub">${escapeHtml(v.referencia)}</small>` : ''}${v.descricao ? `<small class="sub">${escapeHtml(v.descricao)}</small>` : ''}</td>
+            <td class="num">${formatarMoeda(v.valor_venda)}</td>
+            <td class="num"><span class="pill pill-${v.tipo_recompensa}">${TIPO_RECOMPENSA[v.tipo_recompensa]} ${Number(v.percentual_aplicado)}%</span><br>${formatarMoeda(v.valor_recompensa)}</td>
+            <td><span class="pill pill-${v.status}">${v.status === 'confirmada' ? 'Confirmada' : 'Cancelada'}</span>${v.motivo_cancelamento ? `<small class="sub">${escapeHtml(v.motivo_cancelamento)}</small>` : ''}</td>
+            <td>${v.status === 'confirmada' ? `<button class="btn btn-perigo btn-sm" data-cancelar-venda="${v.id}">Cancelar</button>` : ''}</td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="7" class="vazio">Nenhuma venda indicada ainda.</td></tr>';
+    $('corpoVendas').querySelectorAll('[data-cancelar-venda]').forEach(b => b.addEventListener('click', () => cancelarVendaIndicada(b.dataset.cancelarVenda)));
+    $('corpoVendas').querySelectorAll('[data-abrir-parc]').forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); abrirDetalhe(a.dataset.abrirParc); }));
+    $('notaLimiteVendas').textContent = 'Mostrando as vendas indicadas dos últimos 12 meses.';
+}
+$('vndFiltroBusca').addEventListener('input', renderizarTabelaVendas);
+$('vndFiltroStatus').addEventListener('change', renderizarTabelaVendas);
+
+async function cancelarVendaIndicada(id) {
+    const v = indVendas.find(x => x.id === id);
+    if (!v) return;
+    const p = parceiroPorId(v.parceiro_id);
+    const motivo = prompt(`Cancelar a venda indicada de ${formatarMoeda(v.valor_venda)}${p ? ' (' + p.nome + ')' : ''}?\nA recompensa de ${formatarMoeda(v.valor_recompensa)} será estornada do extrato do parceiro.\n\nMotivo (opcional) — OK confirma, Cancelar desiste:`);
+    if (motivo === null) return;
+    const { error } = await sb.rpc('parceiros_cancelar_venda', { p_indicacao_id: id, p_motivo: motivo, p_criado_por: meuPerfil.email });
+    if (error) { alert('Erro: ' + error.message); return; }
+    await registrarSentinela('venda_indicada_cancelada', `Cancelou venda indicada de ${formatarMoeda(v.valor_venda)}${p ? ` do parceiro #${p.codigo} "${p.nome}"` : ''}${motivo ? ` — ${motivo}` : ''}`);
+    await Promise.all([carregarIndVendas(), carregarSaldos()]);
+    renderizarTabelaVendas(); renderizarRecompensas(); renderizarDashboard();
+}
+
+// ---------------------------------------------------------------
+// RECOMPENSAS (saldo, extrato, pagar comissão, resgatar cashback)
+// ---------------------------------------------------------------
+function renderizarRecompensas() {
+    let com = 0, cash = 0;
+    parceiros.forEach(p => { const s = saldoDe(p.id); if (s > 0) { if (p.tipo_recompensa === 'comissao') com += s; else cash += s; } });
+    $('recTotalComissao').textContent = formatarMoeda(com);
+    $('recTotalCashback').textContent = formatarMoeda(cash);
+    const comHistorico = new Set(indVendas.map(v => v.parceiro_id));
+    const lista = parceiros.filter(p => saldoDe(p.id) !== 0 || comHistorico.has(p.id)).sort((a, b) => saldoDe(b.id) - saldoDe(a.id) || a.nome.localeCompare(b.nome, 'pt-BR'));
+    $('corpoSaldos').innerHTML = lista.map(p => {
+        const s = saldoDe(p.id);
+        return `<tr>
+            <td><a href="#" data-abrir-parc="${p.id}">#${p.codigo} ${escapeHtml(p.nome)}</a>${p.status !== 'ativo' ? ` <span class="pill pill-${p.status}">${STATUS_PARCEIRO[p.status]}</span>` : ''}</td>
+            <td><span class="pill pill-${p.tipo_recompensa}">${TIPO_RECOMPENSA[p.tipo_recompensa]}</span> <small class="sub" style="display:inline;">${percentualEfetivo(p)}%</small></td>
+            <td class="num ${s < 0 ? 'valor-neg' : (s > 0 ? 'valor-pos' : '')}">${formatarMoeda(s)}</td>
+            <td style="white-space:nowrap;">
+                ${s > 0 && p.tipo_recompensa === 'comissao' ? `<button class="btn btn-principal btn-sm" style="width:auto;padding:7px 10px;" data-lanc="pagamento" data-parc="${p.id}">Pagar</button>` : ''}
+                ${s > 0 && p.tipo_recompensa === 'cashback' ? `<button class="btn btn-principal btn-sm" style="width:auto;padding:7px 10px;" data-lanc="resgate" data-parc="${p.id}">Resgatar</button>` : ''}
+                <button class="btn btn-cinza btn-sm" data-lanc="ajuste" data-parc="${p.id}">Ajuste</button>
+                <button class="btn btn-cinza btn-sm" data-extrato="${p.id}">Extrato</button>
+            </td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="4" class="vazio">Nenhum parceiro com recompensa ainda — registre uma venda indicada.</td></tr>';
+    $('corpoSaldos').querySelectorAll('[data-lanc]').forEach(b => b.addEventListener('click', () => abrirLancamento(b.dataset.lanc, b.dataset.parc)));
+    $('corpoSaldos').querySelectorAll('[data-extrato]').forEach(b => b.addEventListener('click', () => abrirExtrato(b.dataset.extrato)));
+    $('corpoSaldos').querySelectorAll('[data-abrir-parc]').forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); abrirDetalhe(a.dataset.abrirParc); }));
+}
+
+let extratoParceiroId = null;
+async function abrirExtrato(parceiroId) {
+    const p = parceiroPorId(parceiroId);
+    if (!p) return;
+    extratoParceiroId = parceiroId;
+    const { data, error } = await sb.from('parceiros_lancamentos').select('*').eq('parceiro_id', parceiroId).order('criado_em', { ascending: false }).order('id').limit(300);
+    if (error) { alert('Erro ao carregar o extrato: ' + error.message); return; }
+    let acumulado = saldoDe(parceiroId);
+    const linhas = (data || []).map(l => { const r = { ...l, saldoApos: acumulado }; acumulado = arredondar2(acumulado - Number(l.valor)); return r; });
+    $('extratoTitulo').textContent = `Extrato — #${p.codigo} ${p.nome}`;
+    $('extratoSub').textContent = `Saldo atual: ${formatarMoeda(saldoDe(parceiroId))} · ${linhas.length >= 300 ? 'últimos 300 lançamentos' : linhas.length + ' lançamento(s)'}`;
+    $('corpoExtrato').innerHTML = linhas.map(l => `<tr>
+        <td>${formatarDataHora(l.criado_em)}</td>
+        <td><span class="pill pill-${l.tipo}">${TIPO_LANCAMENTO[l.tipo]}</span></td>
+        <td>${escapeHtml(l.descricao || '')}${l.titulo_id ? `<small class="sub">Título #${l.titulo_id} no Financeiro</small>` : ''}${l.criado_por ? `<small class="sub">${escapeHtml(l.criado_por)}</small>` : ''}</td>
+        <td class="num ${Number(l.valor) < 0 ? 'valor-neg' : 'valor-pos'}">${formatarMoeda(l.valor)}</td>
+        <td class="num">${formatarMoeda(l.saldoApos)}</td>
+    </tr>`).join('') || '<tr><td colspan="5" class="vazio">Sem lançamentos.</td></tr>';
+    $('painelExtrato').classList.remove('hidden');
+    $('painelExtrato').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+$('btnFecharExtrato').addEventListener('click', () => { extratoParceiroId = null; $('painelExtrato').classList.add('hidden'); });
+
+// ---- modal de lançamento (pagar / resgatar / ajustar) ----
+let lancEstado = null;   // { tipo, parceiroId }
+async function abrirLancamento(tipo, parceiroId) {
+    const p = parceiroPorId(parceiroId);
+    if (!p) return;
+    lancEstado = { tipo, parceiroId };
+    const saldo = saldoDe(parceiroId);
+    const titulos = { pagamento: 'Pagar comissão', resgate: 'Resgatar cashback', ajuste: 'Ajuste de saldo' };
+    $('lancTitulo').textContent = `${titulos[tipo]} — ${p.nome}`;
+    $('lancSub').textContent = `Saldo atual: ${formatarMoeda(saldo)}`;
+    $('statusLanc').textContent = '';
+    $('blocoPagamento').classList.toggle('hidden', tipo !== 'pagamento');
+    $('lancRotuloValor').textContent = tipo === 'ajuste' ? 'Valor do ajuste (R$) — negativo reduz o saldo *' : 'Valor (R$) *';
+    $('lancObrigatorio').textContent = tipo === 'ajuste' ? '*' : '(opcional)';
+    $('lancValor').value = tipo === 'ajuste' ? '' : (saldo > 0 ? saldo : '');
+    $('lancDescricao').value = '';
+    $('lancDescricao').placeholder = { pagamento: 'Pagamento de comissão', resgate: 'Ex: usado no pedido 123', ajuste: 'Explique o motivo do ajuste' }[tipo];
+    $('btnConfirmarLanc').disabled = false;
+    if (tipo === 'pagamento') {
+        await carregarContas();
+        $('lancConta').innerHTML = contasCarregadas.length
+            ? '<option value="">— selecione —</option>' + contasCarregadas.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('')
+            : '<option value="">Nenhuma conta ativa no Financeiro</option>';
+        $('lancVencimento').value = hojeISO();
+        if (!contasCarregadas.length) { $('statusLanc').className = 'status-msg erro'; $('statusLanc').textContent = 'Cadastre uma conta corrente no Financeiro antes de gerar o pagamento.'; $('btnConfirmarLanc').disabled = true; }
+    }
+    $('modal-lancamento').classList.add('aberto');
+}
+$('btnFecharLanc').addEventListener('click', () => $('modal-lancamento').classList.remove('aberto'));
+
+async function garantirPessoaDoParceiro(p) {
+    if (p.pessoa_id) return p.pessoa_id;
+    // pessoa.id não é automático (mesmo padrão do Armarinho/Financeiro)
+    const { data: proximoId, error: erroId } = await sb.rpc('fn_proximo_id_manual', { p_tabela: 'pessoa' });
+    if (erroId) throw new Error('Erro ao gerar o ID da pessoa: ' + erroId.message);
+    const { data: maxCodigo } = await sb.from('pessoa').select('codigo').eq('unidade_negocio_id', meuPerfil.unidadeId).order('codigo', { ascending: false }).limit(1);
+    const proximoCodigo = (maxCodigo && maxCodigo.length && maxCodigo[0].codigo) ? maxCodigo[0].codigo + 1 : 1;
+    const doc = soDigitos(p.documento);
+    const { data: nova, error } = await sb.from('pessoa').insert({
+        id: proximoId, codigo: proximoCodigo, unidade_negocio_id: meuPerfil.unidadeId, ativo: true,
+        nome: p.nome, tipo_pessoa: doc.length === 14 ? 'JURIDICA' : 'FISICA', documento: p.documento || null,
+        telefone: p.whatsapp || p.telefone || null, cidade: p.cidade || null, endereco: p.endereco || null,
+    }).select('id').single();
+    if (error) throw error;
+    const { error: e2 } = await sb.from('parceiros_parceiros').update({ pessoa_id: nova.id }).eq('id', p.id);
+    if (e2) throw e2;
+    p.pessoa_id = nova.id;
+    return nova.id;
+}
+
+// 1) debita o saldo (atômico, com trava de saldo) -- se falhar, nada foi criado;
+// 2) cria operação + título a PAGAR em aberto no Financeiro; se algo falhar aqui,
+//    desfaz o título/operação e o débito, pra não sobrar saldo sumido nem título solto.
+async function gerarPagamentoFinanceiro(p, valor, contaId, vencimento, descricao) {
+    const { data: lancId, error: eLanc } = await sb.rpc('parceiros_lancar', {
+        p_parceiro_id: p.id, p_tipo: 'pagamento', p_valor: valor, p_descricao: descricao, p_criado_por: meuPerfil.email,
+    });
+    if (eLanc) throw eLanc;
+    let operacaoId = null, tituloId = null;
+    try {
+        const pessoaId = await garantirPessoaDoParceiro(p);
+        const { data: maxOp } = await sb.from('unidade_operacao').select('codigo').eq('unidade_negocio_id', meuPerfil.unidadeId).order('codigo', { ascending: false }).limit(1);
+        const proximoCodigo = (maxOp && maxOp.length && maxOp[0].codigo) ? maxOp[0].codigo + 1 : 1;
+        const { data: operacao, error: eOp } = await sb.from('unidade_operacao').insert({
+            unidade_negocio_id: meuPerfil.unidadeId, codigo: proximoCodigo, origem: 'parceiros', id_registro_na_origem: lancId,
+        }).select().single();
+        if (eOp) throw eOp;
+        operacaoId = operacao.id;
+        const { data: titulo, error: eTit } = await sb.from('financeiro_titulos').insert({
+            unidade_negocio_id: meuPerfil.unidadeId, operacao_id: operacaoId, tipo_movimento: 'PAGAR', origem: 'parceiros',
+            id_registro_na_origem: lancId, id_fornecedor_cliente: pessoaId,
+            titulo: `Comissão parceiro ${p.nome}`, observacao: descricao, valor_titulo: valor,
+            data_vencimento: vencimento, data_competencia: vencimento.slice(0, 7) + '-01', id_conta_pagamento: contaId,
+        }).select('id').single();
+        if (eTit) throw eTit;
+        tituloId = titulo.id;
+        const { error: eVinc } = await sb.from('parceiros_lancamentos').update({ titulo_id: tituloId }).eq('id', lancId);
+        if (eVinc) throw eVinc;
+        return tituloId;
+    } catch (erro) {
+        if (tituloId) await sb.from('financeiro_titulos').delete().eq('id', tituloId);
+        if (operacaoId) await sb.from('unidade_operacao').delete().eq('id', operacaoId);
+        const { error: eDesfazer } = await sb.from('parceiros_lancamentos').delete().eq('id', lancId);
+        if (eDesfazer) throw new Error(`${erro.message || erro} — ATENÇÃO: não consegui desfazer o débito no extrato de ${p.nome}; confira o extrato e avise o administrador.`);
+        throw erro;
+    }
+}
+
+$('btnConfirmarLanc').addEventListener('click', async () => {
+    if (!lancEstado) return;
+    const { tipo, parceiroId } = lancEstado;
+    const p = parceiroPorId(parceiroId);
+    const statusEl = $('statusLanc');
+    const erro = (m) => { statusEl.className = 'status-msg erro'; statusEl.textContent = m; };
+    const valor = arredondar2(parseFloat($('lancValor').value));
+    const descricaoDigitada = $('lancDescricao').value.trim();
+    if (!p) return;
+    if (isNaN(valor) || valor === 0) return erro('Informe o valor.');
+    if (tipo !== 'ajuste' && valor < 0) return erro('O valor precisa ser positivo.');
+    if (tipo === 'ajuste' && !descricaoDigitada) return erro('Explique o motivo do ajuste.');
+    if (tipo !== 'ajuste' && valor > saldoDe(parceiroId) + 0.004) return erro(`O valor passa do saldo (${formatarMoeda(saldoDe(parceiroId))}).`);
+    const btn = $('btnConfirmarLanc');
+    btn.disabled = true; statusEl.className = 'status-msg'; statusEl.textContent = 'Processando...';
+    try {
+        if (tipo === 'pagamento') {
+            const contaId = $('lancConta').value;
+            const venc = $('lancVencimento').value;
+            if (!contaId) { btn.disabled = false; return erro('Escolha a conta de pagamento.'); }
+            if (!venc) { btn.disabled = false; return erro('Informe o vencimento.'); }
+            const tituloId = await gerarPagamentoFinanceiro(p, valor, contaId, venc, descricaoDigitada || 'Pagamento de comissão');
+            await registrarSentinela('parceiro_pagamento', `Gerou pagamento de ${formatarMoeda(valor)} ao parceiro #${p.codigo} "${p.nome}" (título #${tituloId} a pagar no Financeiro)`);
+            statusEl.className = 'status-msg sucesso';
+            statusEl.textContent = `Título #${tituloId} criado em aberto no Financeiro.`;
+        } else {
+            const { error } = await sb.rpc('parceiros_lancar', {
+                p_parceiro_id: p.id, p_tipo: tipo, p_valor: valor,
+                p_descricao: descricaoDigitada || (tipo === 'resgate' ? 'Resgate de cashback' : 'Ajuste'), p_criado_por: meuPerfil.email,
+            });
+            if (error) throw error;
+            await registrarSentinela(tipo === 'resgate' ? 'parceiro_resgate' : 'parceiro_ajuste', `${tipo === 'resgate' ? 'Resgate de' : 'Ajuste de'} ${formatarMoeda(valor)} no saldo do parceiro #${p.codigo} "${p.nome}"${descricaoDigitada ? ' — ' + descricaoDigitada : ''}`);
+        }
+        await carregarSaldos();
+        renderizarRecompensas(); renderizarDashboard(); renderizarParceiros();
+        if (extratoParceiroId === parceiroId) abrirExtrato(parceiroId);
+        setTimeout(() => $('modal-lancamento').classList.remove('aberto'), tipo === 'pagamento' ? 1400 : 0);
+    } catch (e) {
+        erro('Erro: ' + (e.message || e));
+        btn.disabled = false;
+    }
+});
+// ---------------------------------------------------------------
+// DASHBOARD
+// ---------------------------------------------------------------
+function renderizarBarras(idEl, itens, vazioMsg) {
+    const maior = Math.max(...itens.map(i => i.valor), 0);
+    $(idEl).innerHTML = itens.length ? itens.map(i => {
+        const largura = maior > 0 && i.valor > 0 ? Math.max(2, (i.valor / maior) * 100) : 0;
+        return `<div class="barra-linha">
+            <div class="rotulo" title="${escapeHtml(i.rotulo)}">${escapeHtml(i.rotulo)}</div>
+            <div class="barra-trilho" aria-hidden="true"><div class="barra-fill ${i.classe || ''}" style="width:${largura}%"></div></div>
+            <div class="valores"><strong>${i.textoValor}</strong>${i.textoSub ? `<small>${i.textoSub}</small>` : ''}</div>
+        </div>`;
+    }).join('') : `<div class="vazio">${vazioMsg}</div>`;
+}
+
+function renderizarDashboard() {
+    const ativos = parceiros.filter(p => p.status === 'ativo');
+    $('statAtivos').textContent = ativos.length;
+    $('statPendentes').textContent = parceiros.filter(p => p.status === 'pendente').length;
+    const mes = hojeISO().slice(0, 7);
+    const confirmadas = indVendas.filter(v => v.status === 'confirmada');
+    const doMes = confirmadas.filter(v => (v.data_venda || '').startsWith(mes));
+    $('statVendasMes').textContent = `${doMes.length} · ${formatarMoeda(doMes.reduce((a, v) => a + Number(v.valor_venda || 0), 0))}`;
+    let com = 0, cash = 0;
+    parceiros.forEach(p => { const s = saldoDe(p.id); if (s > 0) { if (p.tipo_recompensa === 'comissao') com += s; else cash += s; } });
+    $('statAPagar').textContent = formatarMoeda(com);
+    $('statCashback').textContent = formatarMoeda(cash);
+
+    // top parceiros por valor de venda indicada (12 meses)
+    const porParceiro = {};
+    confirmadas.forEach(v => {
+        const g = porParceiro[v.parceiro_id] || (porParceiro[v.parceiro_id] = { valor: 0, qtd: 0, rec: 0 });
+        g.valor += Number(v.valor_venda || 0); g.qtd += 1; g.rec += Number(v.valor_recompensa || 0);
+    });
+    const top = Object.entries(porParceiro).sort((a, b) => b[1].valor - a[1].valor).slice(0, 8).map(([id, g]) => {
+        const p = parceiroPorId(id);
+        return { rotulo: p ? `#${p.codigo} ${p.nome}` : 'Parceiro removido', valor: g.valor, textoValor: formatarMoeda(g.valor), textoSub: `${g.qtd} venda${g.qtd === 1 ? '' : 's'} · recompensa ${formatarMoeda(g.rec)}` };
+    });
+    renderizarBarras('graficoTopParceiros', top, 'Nenhuma venda indicada nos últimos 12 meses.');
+
+    // serviços por situação
+    const classes = { indicado: 'alerta', contratado: '', concluido: '', cancelado: 'perigo' };
+    renderizarBarras('graficoServicos', Object.keys(STATUS_SERVICO).map(k => {
+        const n = indServicos.filter(s => s.status === k).length;
+        return { rotulo: STATUS_SERVICO[k], valor: n, classe: classes[k], textoValor: String(n), textoSub: n === 1 ? 'indicação' : 'indicações' };
+    }), '');
+
+    // parceiros ativos por ramo
+    const porRamo = {};
+    ativos.forEach(p => { const nome = ramoNome(p.ramo_id) || 'Sem ramo'; porRamo[nome] = (porRamo[nome] || 0) + 1; });
+    renderizarBarras('graficoRamos', Object.entries(porRamo).sort((a, b) => b[1] - a[1]).map(([nome, n]) => ({ rotulo: nome, valor: n, textoValor: String(n), textoSub: n === 1 ? 'parceiro' : 'parceiros' })), 'Nenhum parceiro ativo ainda.');
+}
+
+// ---------------------------------------------------------------
+// PARÂMETROS
+// ---------------------------------------------------------------
+async function salvarConfig(campos, statusId) {
+    const statusEl = $(statusId);
+    const novo = { ...config, ...campos, unidade_negocio_id: meuPerfil.unidadeId, atualizado_em: new Date().toISOString() };
+    const { error } = await sb.from('parceiros_config').upsert(novo, { onConflict: 'unidade_negocio_id' });
+    if (error) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Erro: ' + error.message; return false; }
+    config = novo;
+    statusEl.className = 'status-msg sucesso'; statusEl.textContent = 'Salvo.';
+    return true;
+}
+$('btnSalvarCfgRecompensa').addEventListener('click', async () => {
+    const pct = parseFloat($('cfgPercentualPadrao').value);
+    if (isNaN(pct) || pct < 0 || pct > 100) { $('statusCfgRecompensa').className = 'status-msg erro'; $('statusCfgRecompensa').textContent = 'Percentual inválido (use de 0 a 100).'; return; }
+    if (await salvarConfig({ tipo_recompensa_padrao: $('cfgTipoPadrao').value, percentual_padrao: pct }, 'statusCfgRecompensa')) {
+        await registrarSentinela('parceiros_config', `Recompensa padrão: ${TIPO_RECOMPENSA[$('cfgTipoPadrao').value]} ${pct}%`);
+        renderizarPreviewVenda();
+    }
+});
+$('btnSalvarCfgAutocadastro').addEventListener('click', async () => {
+    const ativo = $('cfgAutocadastro').checked;
+    if (await salvarConfig({ autocadastro_ativo: ativo, mensagem_boas_vindas: $('cfgMensagem').value.trim() || null }, 'statusCfgAutocadastro')) {
+        await registrarSentinela('parceiros_config', `Autocadastro por link/QR ${ativo ? 'LIGADO' : 'desligado'}`);
+        renderizarParametros();
+    }
+});
+$('btnCopiarLinkCadastro').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText($('linkCadastro').value); $('btnCopiarLinkCadastro').textContent = 'Copiado ✓'; setTimeout(() => { $('btnCopiarLinkCadastro').textContent = 'Copiar'; }, 1500); }
+    catch (e) { prompt('Copie o link:', $('linkCadastro').value); }
+});
+
+let qrRenderizadoPara = null;
+async function renderizarQr() {
+    const link = linkCadastroPublico();
+    if (qrRenderizadoPara === link) return;
+    const el = $('qrCadastro');
+    try {
+        await carregarQrCode();
+        el.innerHTML = '';
+        new QRCode(el, { text: link, width: 160, height: 160, correctLevel: QRCode.CorrectLevel.M });
+        qrRenderizadoPara = link;
+    } catch (e) { el.innerHTML = '<small style="color:var(--muted)">Não foi possível gerar o QR Code (sem internet?).</small>'; }
+}
+
+function hexParaRgb(hex) {
+    hex = (hex || '').replace('#', '');
+    if (hex.length !== 6) return [27, 67, 50];
+    return [0, 2, 4].map(i => parseInt(hex.substr(i, 2), 16));
+}
+$('btnCartazPdf').addEventListener('click', async () => {
+    const btn = $('btnCartazPdf');
+    const textoOriginal = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Gerando...';
+    try {
+        await Promise.all([carregarJsPdf(), carregarQrCode()]);
+        const tmp = document.createElement('div');
+        tmp.style.cssText = 'position:fixed; left:-9999px; top:0;';
+        document.body.appendChild(tmp);
+        new QRCode(tmp, { text: linkCadastroPublico(), width: 600, height: 600, correctLevel: QRCode.CorrectLevel.M });
+        await new Promise(r => setTimeout(r, 60));
+        const canvas = tmp.querySelector('canvas');
+        const dataUrl = canvas ? canvas.toDataURL('image/png') : tmp.querySelector('img').src;
+        tmp.remove();
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+        const [r, g, b] = hexParaRgb(getComputedStyle(document.documentElement).getPropertyValue('--brand').trim());
+        doc.setFillColor(r, g, b); doc.rect(0, 0, 210, 72, 'F');
+        doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(27);
+        doc.text(doc.splitTextToSize(`Seja parceiro da ${meuPerfil.unidadeNome}`, 180), 105, 28, { align: 'center', lineHeightFactor: 1.15 });
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(14);
+        doc.text('Cadastre-se grátis e receba indicações de clientes', 105, 60, { align: 'center' });
+        doc.setTextColor(30, 30, 30);
+        doc.addImage(dataUrl, 'PNG', 55, 86, 100, 100, undefined, 'FAST');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+        doc.text('Aponte a câmera do celular para o QR Code', 105, 200, { align: 'center' });
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(12);
+        const passos = [
+            '1. Aponte a câmera do celular para o QR Code acima.',
+            '2. Preencha seus dados e envie a foto do seu cartão de visita.',
+            '3. Nossa equipe aprova o cadastro e você passa a receber indicações de clientes.',
+            '4. Indique nossos produtos e ganhe recompensa pelas vendas.',
+        ];
+        let y = 216;
+        passos.forEach(p => { const linhas = doc.splitTextToSize(p, 150); doc.text(linhas, 30, y); y += linhas.length * 6 + 3; });
+        doc.setFontSize(8); doc.setTextColor(130, 130, 130);
+        doc.text(linkCadastroPublico(), 105, 287, { align: 'center' });
+        mostrarPopupAcoesPdf('Cartaz de autocadastro gerado', doc.output('blob'), 'cartaz-parceiros.pdf');
+    } catch (erro) {
+        alert('Não foi possível gerar o cartaz: ' + (erro.message || erro));
+    } finally { btn.disabled = false; btn.textContent = textoOriginal; }
+});
+
+// ---- ramos de atividade ----
+function renderizarRamos() {
+    $('listaRamos').innerHTML = ramos.map(r => {
+        const qtd = parceiros.filter(p => p.ramo_id === r.id).length;
+        return `<div class="ramo-item${r.ativo ? '' : ' inativo'}">
+            <span class="nome">${escapeHtml(r.nome)}</span><small style="color:var(--muted)">${qtd}</small>
+            <button class="btn btn-cinza btn-sm" data-ramo-renomear="${r.id}" title="Renomear">✏️</button>
+            <button class="btn btn-cinza btn-sm" data-ramo-toggle="${r.id}">${r.ativo ? 'Desativar' : 'Ativar'}</button>
+            ${qtd ? '' : `<button class="btn btn-perigo btn-sm" data-ramo-excluir="${r.id}" title="Excluir">✕</button>`}
+        </div>`;
+    }).join('') || '<div class="vazio" style="grid-column:1/-1;">Nenhum ramo cadastrado ainda — adicione um acima ou carregue os sugeridos.</div>';
+    const el = $('listaRamos');
+    el.querySelectorAll('[data-ramo-renomear]').forEach(b => b.addEventListener('click', async () => {
+        const r = ramos.find(x => x.id === b.dataset.ramoRenomear);
+        const nome = (prompt('Novo nome do ramo:', r.nome) || '').trim();
+        if (!nome || nome === r.nome) return;
+        const { error } = await sb.from('parceiros_ramos').update({ nome }).eq('id', r.id);
+        if (error) { alert('Erro: ' + (/duplicate|unique/i.test(error.message) ? 'já existe um ramo com esse nome.' : error.message)); return; }
+        r.nome = nome; ramos.sort((a, b2) => a.nome.localeCompare(b2.nome, 'pt-BR'));
+        renderizarSelectsRamo(); renderizarRamos(); renderizarParceiros(); renderizarDashboard();
+    }));
+    el.querySelectorAll('[data-ramo-toggle]').forEach(b => b.addEventListener('click', async () => {
+        const r = ramos.find(x => x.id === b.dataset.ramoToggle);
+        const { error } = await sb.from('parceiros_ramos').update({ ativo: !r.ativo }).eq('id', r.id);
+        if (error) { alert('Erro: ' + error.message); return; }
+        r.ativo = !r.ativo;
+        renderizarSelectsRamo(); renderizarRamos(); renderizarSugestoesServico();
+    }));
+    el.querySelectorAll('[data-ramo-excluir]').forEach(b => b.addEventListener('click', async () => {
+        const r = ramos.find(x => x.id === b.dataset.ramoExcluir);
+        if (!confirm(`Excluir o ramo "${r.nome}"?`)) return;
+        const { error } = await sb.from('parceiros_ramos').delete().eq('id', r.id);
+        if (error) { alert('Erro: ' + error.message); return; }
+        ramos = ramos.filter(x => x.id !== r.id);
+        renderizarSelectsRamo(); renderizarRamos();
+    }));
+}
+$('btnAdicionarRamo').addEventListener('click', async () => {
+    const nome = $('novoRamoNome').value.trim();
+    if (!nome) return;
+    if (await criarRamo(nome)) { $('novoRamoNome').value = ''; renderizarSelectsRamo(); renderizarRamos(); }
+});
+$('novoRamoNome').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnAdicionarRamo').click(); });
+$('btnRamosSugeridos').addEventListener('click', async () => {
+    const faltantes = RAMOS_SUGERIDOS.filter(n => !ramos.some(r => normalizar(r.nome) === normalizar(n)));
+    if (!faltantes.length) { alert('Todos os ramos sugeridos já estão cadastrados.'); return; }
+    const { data, error } = await sb.from('parceiros_ramos').insert(faltantes.map(nome => ({ unidade_negocio_id: meuPerfil.unidadeId, nome }))).select();
+    if (error) { alert('Erro: ' + error.message); return; }
+    ramos = ramos.concat(data || []).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    await registrarSentinela('parceiros_ramos', `Carregou ${faltantes.length} ramos sugeridos`);
+    renderizarSelectsRamo(); renderizarRamos();
+});
+
+function renderizarParametros() {
+    if (!config) return;
+    $('cfgTipoPadrao').value = config.tipo_recompensa_padrao;
+    $('cfgPercentualPadrao').value = config.percentual_padrao;
+    $('cfgAutocadastro').checked = !!config.autocadastro_ativo;
+    $('cfgMensagem').value = config.mensagem_boas_vindas || '';
+    $('linkCadastro').value = linkCadastroPublico();
+    $('avisoLinkCadastro').textContent = config.autocadastro_ativo ? '' : 'O autocadastro está desligado — quem abrir o link vai ver "cadastro indisponível" até você ligar e salvar.';
+    renderizarRamos();
+    renderizarQr();
+}
+
+// ---------------------------------------------------------------
+// VITRINE (TV) -- configuração, link e propagandas
+// ---------------------------------------------------------------
+function linkVitrine() { return `${URL_BASE_PUBLICA}parceiros-vitrine.html?t=${config.vitrine_token}`; }
+function urlPropaganda(path) { return path ? sb.storage.from(BUCKET_PROPAGANDAS).getPublicUrl(path).data.publicUrl : ''; }
+function motivoForaDaVitrine(p) {
+    if (p.status !== 'ativo') return 'Fora da vitrine: parceiro não está ativo';
+    if (!p.autorizou_divulgacao) return 'Fora da vitrine: sem autorização de divulgação';
+    if (p.exibir_vitrine === false) return 'Fora da vitrine: marcado pra não exibir';
+    return '';
+}
+function situacaoPropaganda(a) {
+    const hoje = hojeISO();
+    if (!a.ativo) return { texto: 'Pausada', classe: 'inativo' };
+    if (a.data_fim && a.data_fim < hoje) return { texto: 'Vencida', classe: 'inativo' };
+    if (a.data_inicio && a.data_inicio > hoje) return { texto: 'Agendada', classe: 'pendente' };
+    return { texto: 'No ar', classe: 'ativo' };
+}
+
+// parceiros ativos que ainda não têm cartão de visita: o slide da TV fica só com as iniciais
+function renderizarSemCartao() {
+    const el = $('vtSemCartao');
+    const sem = parceiros.filter(p => p.status === 'ativo' && !p.cartao_path);
+    el.classList.toggle('hidden', !sem.length);
+    if (!sem.length) return;
+    el.innerHTML = `<div class="bloco-cartao"><div class="bloco-cartao-titulo">📇 ${sem.length} parceiro${sem.length === 1 ? '' : 's'} ativo${sem.length === 1 ? '' : 's'} sem cartão de visita</div>`
+        + sem.slice(0, 15).map(p => `<div class="sem-cartao-item"><span><strong>#${p.codigo}</strong> ${escapeHtml(p.nome)}${p.empresa ? ' · ' + escapeHtml(p.empresa) : ''}</span>
+            <span style="display:flex; gap:6px; flex-shrink:0;"><button class="btn btn-sucesso btn-sm" data-cartao-camera="${p.id}">📷 Tirar foto</button><button class="btn btn-cinza btn-sm" data-cartao-arquivo="${p.id}">📁 Arquivo</button></span></div>`).join('')
+        + (sem.length > 15 ? `<div class="vazio" style="padding:8px 0 0;">…e mais ${sem.length - 15}. Cadastre o cartão de cada um pela aba Parceiros.</div>` : '')
+        + '</div>';
+    el.querySelectorAll('[data-cartao-camera]').forEach(b => b.addEventListener('click', () => escolherCartao(b.dataset.cartaoCamera, true)));
+    el.querySelectorAll('[data-cartao-arquivo]').forEach(b => b.addEventListener('click', () => escolherCartao(b.dataset.cartaoArquivo, false)));
+}
+
+function renderizarVitrine() {
+    renderizarSemCartao();
+    const ok = vitrineDisponivel();
+    $('avisoVitrineSql').classList.toggle('hidden', ok);
+    ['btnSalvarVitrine', 'btnCopiarVtLink', 'btnNovoLinkVt', 'btnNovaPropaganda'].forEach(id => { $(id).disabled = !ok; });
+    if (!ok) { $('listaPropagandas').innerHTML = ''; $('vtResumo').classList.add('hidden'); return; }
+    $('vtAtiva').checked = !!config.vitrine_ativa;
+    $('vtSegundos').value = config.vitrine_segundos_padrao;
+    $('vtIntercalar').value = config.vitrine_intercalar;
+    $('vtOrdem').value = config.vitrine_aleatoria ? 'aleatoria' : 'alfabetica';
+    $('vtLink').value = linkVitrine();
+    $('btnAbrirVt').href = linkVitrine();
+
+    const ativos = parceiros.filter(p => p.status === 'ativo');
+    const noAr = ativos.filter(p => !motivoForaDaVitrine(p));
+    const foraSemAutorizacao = ativos.filter(p => !p.autorizou_divulgacao).length;
+    const foraMarcados = ativos.filter(p => p.autorizou_divulgacao && p.exibir_vitrine === false).length;
+    const adsNoAr = propagandas.filter(a => situacaoPropaganda(a).texto === 'No ar').length;
+    const el = $('vtResumo');
+    el.classList.remove('hidden');
+    el.innerHTML = `<strong>${noAr.length}</strong> parceiro${noAr.length === 1 ? '' : 's'} e <strong>${adsNoAr}</strong> propaganda${adsNoAr === 1 ? '' : 's'} no ar.`
+        + (foraSemAutorizacao ? ` ${foraSemAutorizacao} ativo${foraSemAutorizacao === 1 ? '' : 's'} fica${foraSemAutorizacao === 1 ? '' : 'm'} de fora por não ter autorização de divulgação.` : '')
+        + (foraMarcados ? ` ${foraMarcados} marcado${foraMarcados === 1 ? '' : 's'} pra não exibir.` : '')
+        + (!config.vitrine_ativa ? ' <strong>A vitrine está desligada</strong> — marque "Vitrine ligada" e salve.' : '');
+    el.classList.toggle('aviso', !config.vitrine_ativa || (!noAr.length && !adsNoAr));
+
+    const grade = $('listaPropagandas');
+    grade.innerHTML = propagandas.map(a => {
+        const s = situacaoPropaganda(a);
+        const img = urlPropaganda(a.imagem_path);
+        const periodo = a.data_inicio || a.data_fim ? `${a.data_inicio ? formatarDataSemFuso(a.data_inicio) : '…'} a ${a.data_fim ? formatarDataSemFuso(a.data_fim) : '…'}` : 'sem prazo';
+        return `<div class="parc-card" style="cursor:default; flex-direction:column; gap:10px;">
+            <div class="ad-thumb">${img ? `<img src="${escapeHtml(img)}" alt="" loading="lazy">` : `<span>${escapeHtml(a.texto || 'Só texto')}</span>`}</div>
+            <div class="parc-info">
+                <div class="parc-nome">${escapeHtml(a.titulo)}</div>
+                ${a.texto && img ? `<div class="parc-meta">${escapeHtml(a.texto)}</div>` : ''}
+                <div class="parc-rodape"><span class="pill pill-${s.classe}">${s.texto}</span><small style="color:var(--muted)">${a.segundos ? a.segundos + 's' : 'tempo padrão'} · ${periodo}</small></div>
+            </div>
+            <div class="acoes-linha" style="margin-top:0;">
+                <button class="btn btn-cinza btn-sm" data-pa-editar="${a.id}">Editar</button>
+                <button class="btn btn-cinza btn-sm" data-pa-alternar="${a.id}">${a.ativo ? 'Pausar' : 'Ativar'}</button>
+                <button class="btn btn-perigo btn-sm" data-pa-excluir="${a.id}">Excluir</button>
+            </div>
+        </div>`;
+    }).join('') || '<div class="vazio" style="grid-column:1/-1;">Nenhuma propaganda ainda — clique em "+ Nova propaganda".</div>';
+    grade.querySelectorAll('[data-pa-editar]').forEach(b => b.addEventListener('click', () => abrirFormPropaganda(b.dataset.paEditar)));
+    grade.querySelectorAll('[data-pa-alternar]').forEach(b => b.addEventListener('click', () => alternarPropaganda(b.dataset.paAlternar)));
+    grade.querySelectorAll('[data-pa-excluir]').forEach(b => b.addEventListener('click', () => excluirPropaganda(b.dataset.paExcluir)));
+}
+
+$('btnSalvarVitrine').addEventListener('click', async () => {
+    const statusEl = $('statusVitrine');
+    const seg = parseInt($('vtSegundos').value, 10), inter = parseInt($('vtIntercalar').value, 10);
+    if (isNaN(seg) || seg < 3 || seg > 120) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Segundos por slide: use de 3 a 120.'; return; }
+    if (isNaN(inter) || inter < 0 || inter > 20) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Propaganda a cada quantos parceiros: use de 0 a 20.'; return; }
+    const campos = { vitrine_ativa: $('vtAtiva').checked, vitrine_segundos_padrao: seg, vitrine_intercalar: inter, vitrine_aleatoria: $('vtOrdem').value === 'aleatoria' };
+    if (await salvarConfig(campos, 'statusVitrine')) {
+        await registrarSentinela('vitrine_config', `Vitrine ${campos.vitrine_ativa ? 'LIGADA' : 'desligada'}: ${seg}s por slide, 1 propaganda a cada ${inter} parceiro(s), ordem ${campos.vitrine_aleatoria ? 'aleatória' : 'alfabética'}`);
+        renderizarVitrine();
+    }
+});
+$('btnCopiarVtLink').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText($('vtLink').value); $('btnCopiarVtLink').textContent = 'Copiado ✓'; setTimeout(() => { $('btnCopiarVtLink').textContent = 'Copiar'; }, 1500); }
+    catch (e) { prompt('Copie o link:', $('vtLink').value); }
+});
+$('btnNovoLinkVt').addEventListener('click', async () => {
+    if (!confirm('Gerar um novo link da vitrine? O link antigo (aberto na TV) deixa de funcionar e você vai precisar abrir o novo.')) return;
+    if (await salvarConfig({ vitrine_token: novoToken() }, 'statusVitrine')) {
+        await registrarSentinela('vitrine_novo_link', 'Gerou novo link da vitrine');
+        renderizarVitrine();
+    }
+});
+
+// ---- propagandas ----
+let propagandaEmEdicaoId = null;
+let imgNovaPropaganda = null;     // { blob, previewUrl }
+let removerImgPropagandaAtual = false;
+
+function atualizarPreviewPropaganda(url) {
+    const img = $('pa_preview');
+    img.src = url || '';
+    img.classList.toggle('hidden', !url);
+    $('btnRemoverImgPropaganda').classList.toggle('hidden', !url);
+}
+function abrirFormPropaganda(id) {
+    const a = id ? propagandas.find(x => x.id === id) : null;
+    propagandaEmEdicaoId = a ? a.id : null;
+    imgNovaPropaganda = null; removerImgPropagandaAtual = false;
+    $('pa_foto').value = '';
+    $('tituloPropaganda').textContent = a ? 'Editar propaganda' : 'Nova propaganda';
+    $('pa_titulo').value = a?.titulo || '';
+    $('pa_texto').value = a?.texto || '';
+    $('pa_segundos').value = a?.segundos ?? '';
+    $('pa_inicio').value = a?.data_inicio || '';
+    $('pa_fim').value = a?.data_fim || '';
+    $('pa_ativa').checked = a ? !!a.ativo : true;
+    atualizarPreviewPropaganda(a?.imagem_path ? urlPropaganda(a.imagem_path) : '');
+    $('statusPropaganda').textContent = '';
+    $('modal-propaganda').classList.add('aberto');
+}
+$('btnNovaPropaganda').addEventListener('click', () => abrirFormPropaganda(null));
+$('btnFecharPropaganda').addEventListener('click', () => $('modal-propaganda').classList.remove('aberto'));
+$('pa_foto').addEventListener('change', async (e) => {
+    const arquivo = e.target.files[0];
+    if (!arquivo) return;
+    try {
+        const blob = await comprimirImagem(arquivo, 1920, 0.85);
+        imgNovaPropaganda = { blob, previewUrl: URL.createObjectURL(blob) };
+        removerImgPropagandaAtual = false;
+        atualizarPreviewPropaganda(imgNovaPropaganda.previewUrl);
+    } catch (erro) { alert(erro.message); }
+});
+$('btnRemoverImgPropaganda').addEventListener('click', () => {
+    imgNovaPropaganda = null; removerImgPropagandaAtual = true; $('pa_foto').value = '';
+    atualizarPreviewPropaganda('');
+});
+
+$('btnSalvarPropaganda').addEventListener('click', async () => {
+    const statusEl = $('statusPropaganda');
+    const erro = (m) => { statusEl.className = 'status-msg erro'; statusEl.textContent = m; };
+    const titulo = $('pa_titulo').value.trim();
+    const texto = $('pa_texto').value.trim();
+    const segTxt = $('pa_segundos').value;
+    const seg = segTxt === '' ? null : parseInt(segTxt, 10);
+    const inicio = $('pa_inicio').value || null, fim = $('pa_fim').value || null;
+    const atual = propagandaEmEdicaoId ? propagandas.find(x => x.id === propagandaEmEdicaoId) : null;
+    const temImagem = !!imgNovaPropaganda || (!!atual?.imagem_path && !removerImgPropagandaAtual);
+    if (!titulo) return erro('Informe o título.');
+    if (!temImagem && !texto) return erro('Coloque uma imagem ou um texto — senão o slide fica vazio.');
+    if (seg != null && (isNaN(seg) || seg < 3 || seg > 120)) return erro('Segundos na tela: use de 3 a 120 (ou deixe em branco).');
+    if (inicio && fim && fim < inicio) return erro('A data final não pode ser antes da inicial.');
+    const btn = $('btnSalvarPropaganda');
+    btn.disabled = true; statusEl.className = 'status-msg'; statusEl.textContent = 'Salvando...';
+    let pathNovo = null;
+    try {
+        let imagemPath = atual ? atual.imagem_path : null, pathAntigo = null;
+        if (imgNovaPropaganda) {
+            pathNovo = `${meuPerfil.unidadeId}/${crypto.randomUUID()}.jpg`;
+            const { error: eUp } = await sb.storage.from(BUCKET_PROPAGANDAS).upload(pathNovo, imgNovaPropaganda.blob, { contentType: 'image/jpeg' });
+            if (eUp) throw new Error('Erro ao enviar a imagem: ' + eUp.message);
+            pathAntigo = imagemPath; imagemPath = pathNovo;
+        } else if (removerImgPropagandaAtual && imagemPath) { pathAntigo = imagemPath; imagemPath = null; }
+        const payload = { titulo, texto: texto || null, imagem_path: imagemPath, segundos: seg, data_inicio: inicio, data_fim: fim, ativo: $('pa_ativa').checked };
+        if (atual) {
+            const { error } = await sb.from('parceiros_propagandas').update(payload).eq('id', atual.id);
+            if (error) throw error;
+            await registrarSentinela('propaganda_editada', `Editou a propaganda "${titulo}"`);
+        } else {
+            const { error } = await sb.from('parceiros_propagandas').insert({ ...payload, unidade_negocio_id: meuPerfil.unidadeId });
+            if (error) throw error;
+            await registrarSentinela('propaganda_criada', `Criou a propaganda "${titulo}"`);
+        }
+        if (pathAntigo) { try { await sb.storage.from(BUCKET_PROPAGANDAS).remove([pathAntigo]); } catch (e) { /* arquivo órfão não atrapalha */ } }
+        await carregarPropagandas();
+        renderizarVitrine();
+        $('modal-propaganda').classList.remove('aberto');
+    } catch (e) {
+        if (pathNovo) { try { await sb.storage.from(BUCKET_PROPAGANDAS).remove([pathNovo]); } catch (e2) { /* ignora */ } }
+        erro('Erro ao salvar: ' + (e.message || e));
+    } finally { btn.disabled = false; }
+});
+
+async function alternarPropaganda(id) {
+    const a = propagandas.find(x => x.id === id);
+    if (!a) return;
+    const { error } = await sb.from('parceiros_propagandas').update({ ativo: !a.ativo }).eq('id', id);
+    if (error) { alert('Erro: ' + error.message); return; }
+    await registrarSentinela('propaganda_editada', `${a.ativo ? 'Pausou' : 'Ativou'} a propaganda "${a.titulo}"`);
+    await carregarPropagandas(); renderizarVitrine();
+}
+async function excluirPropaganda(id) {
+    const a = propagandas.find(x => x.id === id);
+    if (!a || !confirm(`Excluir a propaganda "${a.titulo}"?`)) return;
+    const { error } = await sb.from('parceiros_propagandas').delete().eq('id', id);
+    if (error) { alert('Erro: ' + error.message); return; }
+    if (a.imagem_path) { try { await sb.storage.from(BUCKET_PROPAGANDAS).remove([a.imagem_path]); } catch (e) { /* ignora */ } }
+    await registrarSentinela('propaganda_excluida', `Excluiu a propaganda "${a.titulo}"`);
+    await carregarPropagandas(); renderizarVitrine();
+}
+
+// ---------------------------------------------------------------
+// MODAL DE AJUDA
+// ---------------------------------------------------------------
+const AJUDA_PARCEIROS = {
+    titulo: 'Parceiros Comerciais',
+    ultimaRevisao: '04/10/2026',
+    secoes: [
+        { id: 'geral', titulo: 'Visão geral', corpo: `
+            <p>Módulo pra lojas (de material de construção, por exemplo) que recebem profissionais
+            autônomos — pedreiro, eletricista, pintor, arquiteto... — e querem transformá-los em
+            <strong>parceiros</strong>. A loja ganha duas coisas:</p>
+            <ul>
+                <li><strong>Vitrine de serviços</strong>: quando um cliente da loja precisa de um
+                profissional, a equipe indica um parceiro e acompanha o serviço até o fim.</li>
+                <li><strong>Vendedores externos</strong>: o parceiro que indica compradores pra loja
+                ganha uma <strong>recompensa</strong> — comissão em dinheiro ou cashback em crédito.</li>
+            </ul>
+            <p>O parceiro entra pelo <strong>balcão</strong> (a equipe cadastra, com foto do cartão de
+            visita) ou pelo <strong>link/QR de autocadastro</strong> (ele mesmo preenche; a loja aprova).
+            Depois de ativo, ele tem um <strong>link pessoal</strong> pra consultar saldo e indicações
+            sem precisar perguntar na loja.</p>
+        ` },
+        { id: 'dashboard', titulo: 'Dashboard', corpo: `
+            <p>Visão rápida: parceiros ativos, cadastros esperando aprovação (clique no cartão pra
+            revisar), vendas indicadas do mês, comissão a pagar e cashback em aberto.</p>
+            <ul>
+                <li><strong>Top parceiros</strong>: quem mais trouxe venda nos últimos 12 meses (só
+                vendas confirmadas).</li>
+                <li><strong>Serviços por situação</strong> e <strong>parceiros por ramo</strong>: mostram
+                onde falta profissional na vitrine.</li>
+            </ul>
+        ` },
+        { id: 'parceiros', titulo: 'Parceiros', corpo: `
+            <p>Lista de todos os parceiros, com busca por nome/código/telefone e filtro por ramo e
+            situação.</p>
+            <ul>
+                <li><strong>Situações</strong>: <em>Aguardando aprovação</em> (veio do autocadastro),
+                <em>Ativo</em>, <em>Inativo</em> e <em>Recusado</em>. Só parceiro <strong>ativo</strong>
+                aparece nas indicações e pode receber recompensa.</li>
+                <li>Cadastro feito no balcão já nasce ativo. Cada parceiro recebe um
+                <strong>código</strong> (#1, #2...) que ele pode citar no balcão.</li>
+                <li><strong>Autorização de divulgação</strong> (LGPD): marque que o parceiro autorizou a
+                loja a passar o contato dele pra clientes. Sem isso, o sistema avisa na hora de indicar
+                e não oferece o botão que manda o contato dele ao cliente.</li>
+                <li><strong>Recompensa</strong>: cada parceiro é <em>comissão</em> ou <em>cashback</em>, com
+                percentual próprio ou o padrão da loja (aba Parâmetros).</li>
+                <li><strong>Cartão de visita</strong>: ao abrir um parceiro, o bloco "📇 Cartão de visita" tem
+                <strong>Tirar foto</strong> (câmera do celular) e <strong>Escolher arquivo</strong> — troca e
+                remove também. Na aba Vitrine aparece a lista dos ativos sem cartão, com os mesmos atalhos.
+                O cartão é o que aparece em destaque no slide da TV.</li>
+                <li>Aprovar um autocadastro oferece enviar, pelo WhatsApp, o link pessoal do parceiro.
+                <strong>Inativar</strong> não apaga o saldo e desliga o link pessoal.</li>
+            </ul>
+        ` },
+        { id: 'servicos', titulo: 'Indicar serviço', corpo: `
+            <p>Use quando um cliente da loja precisa de um profissional. Escolha o ramo, veja os
+            parceiros ativos (ordenados pela nota e pelos serviços concluídos), selecione um e registre.</p>
+            <ul>
+                <li>Depois de registrar, aparecem botões pra mandar, pelo WhatsApp, o contato do parceiro
+                ao cliente e o aviso ao parceiro (com o link pessoal dele).</li>
+                <li>Acompanhe a situação: <em>Indicado → Contratado → Concluído</em> (ou Cancelado). Ao
+                concluir, registre a <strong>nota</strong> (1 a 5) e, se quiser, o valor do serviço — a nota
+                alimenta a ordem das sugestões.</li>
+                <li>O parceiro vê, no link pessoal dele, as indicações em andamento (inclusive o contato do
+                cliente) — só enquanto estão <em>Indicado</em> ou <em>Contratado</em>.</li>
+            </ul>
+        ` },
+        { id: 'vendas', titulo: 'Vendas indicadas', corpo: `
+            <p>Registre aqui a venda feita por indicação de um parceiro. A recompensa é calculada e
+            lançada no extrato dele automaticamente.</p>
+            <ul>
+                <li>O <strong>percentual é congelado na venda</strong>: mudar o padrão depois não recalcula o
+                que já foi lançado.</li>
+                <li>Se o percentual do parceiro for 0%, a venda é registrada mas sem recompensa (o sistema
+                avisa antes de salvar).</li>
+                <li><strong>Cancelar</strong> uma venda estorna a recompensa dela no extrato (se a comissão
+                já tinha sido paga, o saldo do parceiro pode ficar negativo — o ajuste é feito na
+                próxima recompensa).</li>
+                <li>O valor total da venda aparece só pra loja; no link pessoal o parceiro vê data, cliente,
+                valor e a recompensa dele.</li>
+            </ul>
+        ` },
+        { id: 'recompensas', titulo: 'Recompensas', corpo: `
+            <p>Saldo de cada parceiro = soma do extrato (créditos de vendas, menos pagamentos, resgates e
+            estornos, mais/menos ajustes).</p>
+            <ul>
+                <li><strong>Comissão → "Pagar"</strong>: cria um <strong>título a pagar em aberto</strong> no
+                Financeiro (fornecedor = o parceiro, criado automaticamente na primeira vez) e baixa o
+                saldo aqui. O pagamento de verdade — dar baixa no título — é feito no Financeiro.</li>
+                <li><strong>Cashback → "Resgatar"</strong>: abate o saldo quando o parceiro usa o crédito
+                numa compra (descreva no campo, ex: "pedido 123"). Não mexe no Financeiro.</li>
+                <li><strong>Ajuste</strong>: corrige o saldo (positivo ou negativo) e exige o motivo.</li>
+                <li>Pagar/resgatar acima do saldo é bloqueado (a checagem acontece no banco, então duas
+                pessoas não conseguem gastar o mesmo saldo ao mesmo tempo).</li>
+                <li><strong>Extrato</strong> mostra todo o histórico, com o saldo após cada lançamento.</li>
+            </ul>
+        ` },
+        { id: 'vitrine', titulo: 'Vitrine (TV)', corpo: `
+            <p>Uma página em <strong>tela cheia</strong>, pensada pra TV ou monitor da loja, que fica
+            passando um slide por vez: cada parceiro (cartão de visita, ramo, especialidades e WhatsApp
+            com QR Code pro cliente apontar o celular) e as <strong>propagandas</strong> que você cadastra.</p>
+            <ul>
+                <li><strong>Como abrir</strong>: aba Vitrine → copie o link e abra no navegador da TV. Aperte
+                <strong>F</strong> (ou dê dois cliques) pra tela cheia; <strong>espaço</strong> pausa e as
+                <strong>setas</strong> trocam de slide. Não precisa de login — quem tem o link vê a vitrine;
+                "Gerar novo link" invalida o antigo.</li>
+                <li><strong>Quem aparece</strong>: só parceiro <em>ativo</em>, com <strong>autorização de
+                divulgação</strong> marcada e com "Exibir na vitrine da TV" ligado no cadastro dele. Nunca
+                aparecem e-mail, documento nem endereço.</li>
+                <li><strong>Tempo de cada slide</strong>: há um padrão (em segundos) e cada parceiro e cada
+                propaganda pode ter o seu (mínimo 3 s). Parceiro com mais destaque = mais segundos.</li>
+                <li><strong>Propagandas</strong>: imagem (ideal 1920×1080) e/ou texto, com prazo opcional
+                (exibir de/até) e a opção de pausar. Entram "1 a cada N parceiros" (você define o N; 0 =
+                só parceiros). Sem parceiros elegíveis, a vitrine roda só as propagandas.</li>
+                <li>A vitrine vem <strong>desligada</strong>; marque "Vitrine ligada" e salve. A TV busca dados
+                novos sozinha no começo de cada rodada (a cada ~5 minutos), sem precisar recarregar.</li>
+            </ul>
+        ` },
+        { id: 'parametros', titulo: 'Parâmetros', corpo: `
+            <ul>
+                <li><strong>Recompensa padrão</strong>: tipo e percentual usados quando o parceiro não tem
+                um próprio. Começa em 5% comissão — ajuste antes de usar.</li>
+                <li><strong>Autocadastro</strong>: liga/desliga o link e o QR Code. Já nasce
+                <strong>desligado</strong>. O cadastro enviado pelo parceiro sempre entra como "aguardando
+                aprovação". Dá pra gerar um <strong>cartaz em PDF</strong> com o QR pra deixar no balcão. O
+                link só funciona depois que as páginas públicas estiverem publicadas no site.</li>
+                <li><strong>Ramos de atividade</strong>: as categorias dos parceiros. Ramo em uso não pode
+                ser excluído, só desativado.</li>
+            </ul>
+        ` },
+        { id: 'publico', titulo: 'O que o parceiro vê', corpo: `
+            <p>Duas páginas sem login:</p>
+            <ul>
+                <li><strong>Cadastro</strong> (link/QR da loja): nome, WhatsApp, ramo, cidade, foto do cartão
+                e o aceite de divulgação do contato. Nada vira parceiro sem aprovação da loja.</li>
+                <li><strong>Consulta</strong> (link pessoal, só de parceiro ativo): saldo, extrato, vendas
+                indicadas e serviços que a loja indicou pra ele. O link é um código longo e secreto — quem
+                tem o link vê os dados, então avise o parceiro pra não compartilhar. Em caso de vazamento,
+                use "Gerar novo link" no cadastro dele.</li>
+            </ul>
+        ` },
+    ]
+};
+function renderizarAjudaModulo(secaoId) {
+    const secao = AJUDA_PARCEIROS.secoes.find(s => s.id === secaoId) || AJUDA_PARCEIROS.secoes[0];
+    document.querySelectorAll('.modal-ajuda-nav-item').forEach(el => el.classList.toggle('ativo', el.dataset.secao === secao.id));
+    $('ajudaModuloConteudo').innerHTML = `<h4>${escapeHtml(secao.titulo)}</h4>${secao.corpo}<div class="ajuda-atualizado">Última revisão deste conteúdo: ${AJUDA_PARCEIROS.ultimaRevisao}</div>`;
+}
+function abrirModalAjuda(secaoInicial) {
+    $('modalAjudaTitulo').textContent = '❓ Ajuda — ' + AJUDA_PARCEIROS.titulo;
+    $('ajudaModuloNav').innerHTML = AJUDA_PARCEIROS.secoes.map(s => `<button type="button" class="modal-ajuda-nav-item" data-secao="${s.id}">${escapeHtml(s.titulo)}</button>`).join('');
+    document.querySelectorAll('.modal-ajuda-nav-item').forEach(btn => btn.addEventListener('click', () => renderizarAjudaModulo(btn.dataset.secao)));
+    renderizarAjudaModulo(secaoInicial || 'geral');
+    $('modal-ajuda').classList.add('aberto');
+}
+$('btnAjudaModulo').addEventListener('click', () => {
+    const abaAtivaBtn = document.querySelector('.tab-app-btn.active');
+    const abaAtiva = abaAtivaBtn ? abaAtivaBtn.dataset.appTab : 'geral';
+    abrirModalAjuda(AJUDA_PARCEIROS.secoes.some(s => s.id === abaAtiva) ? abaAtiva : 'geral');
+});
+$('btnFecharModalAjuda').addEventListener('click', () => $('modal-ajuda').classList.remove('aberto'));
+
+// ---------------------------------------------------------------
+// INÍCIO
+// ---------------------------------------------------------------
+checkSession();
+</script>
+</body>
+</html>
