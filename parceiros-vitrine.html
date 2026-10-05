@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="robots" content="noindex, nofollow">
-<meta name="referrer" content="no-referrer">
+<!-- só o domínio vai como Referer (o player do YouTube dá erro 153 sem isso); o token na URL não vaza -->
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>Vitrine de parceiros</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' rx='46' fill='%231B4332'/%3E%3Ccircle cx='72' cy='72' r='24' fill='%23F0F4EE'/%3E%3Ccircle cx='132' cy='72' r='24' fill='%23F2A93B'/%3E%3Cpath d='M26 158c4-32 24-46 46-46s42 14 46 46zM86 158c4-32 24-46 46-46s42 14 46 46z' fill='%23F0F4EE' opacity='.92'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -58,10 +59,44 @@
   #progressoBarra{ height:100%; width:0; background:var(--accent); }
   @keyframes encher{ from{ width:0; } to{ width:100%; } }
 
-  #controles{ position:fixed; top:2vh; right:2vw; z-index:9; display:flex; gap:1vmin; opacity:0; transition:opacity .3s; }
+  #controles{ position:fixed; top:2vh; left:2vw; z-index:9; display:flex; gap:1vmin; opacity:0; transition:opacity .3s; }
   #controles.mostrando{ opacity:1; }
   #controles button{ width:6vmin; height:6vmin; min-width:38px; min-height:38px; border-radius:50%; border:none; background:rgba(0,0,0,.55); color:#fff; font-size:2.6vmin; cursor:pointer; backdrop-filter:blur(4px); }
   #controles button:hover{ background:rgba(0,0,0,.8); }
+
+  /* player do YouTube (música de fundo). O YouTube exige o player visível com no mínimo 200x200, então fica num canto, pequeno */
+  #musica{ position:fixed; right:2vw; top:3vh; z-index:8; width:max(200px, 14vw); aspect-ratio:1 / 1; border-radius:1.4vmin; overflow:hidden; background:#000; box-shadow:0 1.4vmin 4vmin rgba(0,0,0,.5); display:none; }
+  #musica.ativa{ display:block; }
+  #musica iframe{ width:100%; height:100%; border:0; display:block; }
+  #avisoSom{ position:fixed; right:2vw; top:calc(3vh + max(200px, 14vw) + 1vh); z-index:8; background:rgba(0,0,0,.72); padding:1.1vmin 2vmin; border-radius:5vmin; font-size:1.9vmin; display:none; max-width:30vw; text-align:center; }
+  #avisoSom.show{ display:block; }
+  /* botão do som fica FORA do grupo #controles (que some após 3 s sem mexer o mouse): numa TV sem mouse ele nunca apareceria.
+     Fica sempre visível ao lado do player enquanto houver música. */
+  #btnMusica{ display:none; position:fixed; top:3vh; right:calc(2vw + max(200px, 14vw) + 1.2vmin); z-index:9; width:6vmin; height:6vmin; min-width:38px; min-height:38px; border-radius:50%; border:none; background:rgba(0,0,0,.55); color:#fff; font-size:2.6vmin; cursor:pointer; backdrop-filter:blur(4px); }
+  #btnMusica:hover{ background:rgba(0,0,0,.8); }
+  #btnMusica.ativa{ display:inline-block; }
+
+  /* aviso de falha da música: fica na tela até dispensar, trocar o link ou a música tocar */
+  #avisoMusica{ position:fixed; right:2vw; top:3vh; z-index:11; width:min(46vw, 560px); background:rgba(122,32,22,.94); border:1px solid rgba(255,255,255,.28); border-radius:1.6vmin; padding:1.8vmin 2.2vmin; font-size:clamp(13px, 2vmin, 20px); line-height:1.4; display:none; box-shadow:0 1.4vmin 4vmin rgba(0,0,0,.5); }
+  #avisoMusica.show{ display:block; }
+  #avisoMusica strong{ display:block; font-size:1.12em; margin-bottom:.5vmin; }
+  #avisoMusica .acoes{ display:flex; gap:1.2vmin; margin-top:1.4vmin; flex-wrap:wrap; }
+  #avisoMusica button, #painelSom button{ border:none; border-radius:5vmin; padding:.9vmin 2.2vmin; font-weight:700; font-size:inherit; font-family:inherit; cursor:pointer; background:#fff; color:#1b2a22; min-height:34px; }
+  #avisoMusica button.sec, #painelSom button.sec{ background:rgba(255,255,255,.16); color:#fff; }
+
+  /* painel pra trocar link e volume da música (só neste aparelho) */
+  #painelSom{ position:fixed; inset:0; z-index:30; background:rgba(0,0,0,.72); display:none; align-items:center; justify-content:center; padding:3vmin; }
+  #painelSom.show{ display:flex; }
+  #painelSom .caixa{ background:#14211b; border:1px solid rgba(255,255,255,.2); border-radius:2vmin; padding:3vmin; width:min(94vw, 640px); max-height:94vh; overflow-y:auto; font-size:clamp(14px, 2.1vmin, 20px); line-height:1.4; }
+  #painelSom h3{ font-size:1.25em; margin-bottom:.8vmin; }
+  #painelSom label{ display:block; margin:1.6vmin 0 .6vmin; font-weight:600; }
+  #painelSom input[type=text]{ width:100%; padding:1.2vmin 1.6vmin; border-radius:1vmin; border:1.5px solid rgba(255,255,255,.3); background:rgba(255,255,255,.08); color:#fff; font-size:inherit; font-family:inherit; outline:none; }
+  #painelSom input[type=text]:focus{ border-color:var(--accent); }
+  #painelSom input[type=range]{ width:100%; accent-color:var(--accent); }
+  #painelSom .status{ opacity:.85; font-size:.92em; }
+  #painelSom #somErro{ color:#ffb4a8; font-weight:600; margin-top:1vmin; min-height:1.2em; }
+  #painelSom .acoes{ display:flex; gap:1.2vmin; margin-top:2vmin; flex-wrap:wrap; }
+  #painelSom .dica{ opacity:.7; font-size:.85em; margin-top:2vmin; }
 
   #mensagem{ position:fixed; inset:0; z-index:20; display:none; align-items:center; justify-content:center; text-align:center; padding:6vmin; background:linear-gradient(135deg, var(--brand), var(--brand-escuro)); }
   #mensagem.show{ display:flex; }
@@ -90,7 +125,33 @@
     <button id="btnAnterior" title="Anterior (←)">⏮</button>
     <button id="btnPausa" title="Pausar / continuar (espaço)">⏸</button>
     <button id="btnProximo" title="Próximo (→)">⏭</button>
+    <button id="btnConfigSom" title="Trocar link e volume da música (L)">🎵</button>
     <button id="btnTelaCheia" title="Tela cheia (F)">⛶</button>
+  </div>
+  <div id="musica"><div id="ytplayer"></div></div>
+  <button id="btnMusica" title="Ligar/desligar o som da música (M)">🔊</button>
+  <div id="avisoSom">🔇 Clique ou aperte qualquer tecla para ligar o som</div>
+  <div id="avisoMusica" role="alert">
+    <strong id="avisoMusicaTitulo"></strong><span id="avisoMusicaTexto"></span>
+    <div class="acoes"><button id="avisoTrocar">Trocar link (tecla L)</button><button id="avisoFechar" class="sec">Dispensar</button></div>
+  </div>
+  <div id="painelSom" role="dialog" aria-label="Música da vitrine">
+    <div class="caixa">
+      <h3>🎵 Música da vitrine</h3>
+      <div class="status" id="somStatus"></div>
+      <label for="somLink">Link do YouTube <span style="font-weight:400; opacity:.75;">(playlist, vídeo ou canal /channel/…)</span></label>
+      <input type="text" id="somLink" placeholder="https://www.youtube.com/playlist?list=..." autocomplete="off" spellcheck="false">
+      <label for="somVolume">Volume: <span id="somVolRot">40</span>%</label>
+      <input type="range" id="somVolume" min="0" max="100" step="1" value="40">
+      <div id="somErro"></div>
+      <div class="acoes">
+        <button id="somAplicar">Aplicar</button>
+        <button id="somDesligar" class="sec">Desligar música</button>
+        <button id="somRestaurar" class="sec">Usar o link da loja</button>
+        <button id="somFechar" class="sec">Fechar</button>
+      </div>
+      <div class="dica">Vale só neste aparelho/navegador. Pra mudar em todas as TVs, edite o link na aba Vitrine do app. Dica: clipes oficiais costumam bloquear a reprodução fora do YouTube — prefira playlists de música ou vídeos de canais que permitem incorporar.</div>
+    </div>
   </div>
   <div id="dica">Pressione F ou dê dois cliques para tela cheia</div>
   <div id="mensagem" class="show"><div><div class="icone">⏳</div><h2>Carregando…</h2></div></div>
@@ -254,7 +315,7 @@
     // no fim de cada rodada, busca dados novos se já passou o intervalo (se falhar, segue com os atuais)
     if(Date.now() - ultimaCarga > RECARGA_MS){
       const r = await buscarDados();
-      if(r.dados){ dados = r.dados; ultimaCarga = Date.now(); aplicarUnidade(dados.unidade); }
+      if(r.dados){ dados = r.dados; ultimaCarga = Date.now(); aplicarUnidade(dados.unidade); configurarMusica(dados.config); }
       else if(r.erro === 'invalido'){ clearTimeout(timer); mostrarMensagem('🔒', 'Vitrine indisponível', 'O link foi trocado ou a vitrine foi desligada.'); return false; }
     }
     rodada = montarRodada();
@@ -281,6 +342,207 @@
     else if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
   }
 
+  // ---- música de fundo (YouTube) ----
+  // Aceita link de playlist (list=...), vídeo/ao vivo, ou de canal no formato /channel/UC... (toca os envios do canal).
+  function parseYoutube(url){
+    url = String(url || '').trim();
+    if(!url) return null;
+    let u;
+    try{ u = new URL(/^https?:\/\//i.test(url) ? url : 'https://' + url); } catch(e){ return null; }
+    const host = u.hostname.replace(/^(www|m|music)\./, '');
+    if(!/^(youtube\.com|youtu\.be|youtube-nocookie\.com)$/.test(host)) return null;
+    const list = u.searchParams.get('list');
+    if(list && /^[A-Za-z0-9_-]{10,}$/.test(list)) return { tipo: 'playlist', id: list };
+    const canal = u.pathname.match(/^\/channel\/(UC[A-Za-z0-9_-]{20,})/);
+    if(canal) return { tipo: 'playlist', id: 'UU' + canal[1].slice(2) };
+    let v = u.searchParams.get('v');
+    if(!v && host === 'youtu.be') v = u.pathname.slice(1).split('/')[0];
+    if(!v){ const m = u.pathname.match(/^\/(?:embed|live|shorts|v)\/([A-Za-z0-9_-]{11})/); if(m) v = m[1]; }
+    return v && /^[A-Za-z0-9_-]{11}$/.test(v) ? { tipo: 'video', id: v } : null;
+  }
+
+  let ytPlayer = null, musicaChave = null, musicaVolume = 40, errosMusica = 0, somLiberado = false, ytApi = null, musicaTocou = false, ultimaCfg = null;
+  const somAtivo = () => { try{ return ytPlayer && !ytPlayer.isMuted(); } catch(e){ return false; } };
+  function atualizarBotaoMusica(){
+    $('btnMusica').textContent = somAtivo() ? '🔊' : '🔇';
+    $('avisoSom').classList.toggle('show', !!ytPlayer && !somLiberado);
+  }
+  function carregarApiYoutube(){
+    if(ytApi) return ytApi;
+    ytApi = new Promise((resolve, reject) => {
+      if(window.YT && window.YT.Player) return resolve();
+      window.onYouTubeIframeAPIReady = resolve;
+      const s = document.createElement('script');
+      s.src = 'https://www.youtube.com/iframe_api'; s.onerror = () => { ytApi = null; reject(new Error('sem acesso ao YouTube')); };
+      document.head.appendChild(s);
+    });
+    return ytApi;
+  }
+  // ---- aviso de falha da música (fica na tela até dispensar, trocar o link ou a música tocar) ----
+  const MSG_ERRO_YT = {
+    2:   ['Link inválido', 'O YouTube não reconheceu esse link/ID de vídeo ou playlist.'],
+    5:   ['Erro no player do YouTube', 'O player teve um problema ao carregar o vídeo. Tente outro link.'],
+    100: ['Vídeo indisponível', 'O vídeo foi removido ou está privado.'],
+    101: ['Esse vídeo não toca fora do YouTube', 'O dono do vídeo desativou a reprodução em outros sites (comum em clipes oficiais). Troque por outro vídeo ou playlist.'],
+    150: ['Esse vídeo não toca fora do YouTube', 'O dono do vídeo desativou a reprodução em outros sites (comum em clipes oficiais). Troque por outro vídeo ou playlist.'],
+    153: ['O YouTube recusou o player', 'Falta a identificação da página (erro 153). Abra a vitrine pelo endereço do site (https://…), e não pelo arquivo salvo no computador.'],
+  };
+  function mostrarAvisoMusica(titulo, detalhe){
+    $('avisoMusicaTitulo').textContent = '🎵 ' + titulo;
+    $('avisoMusicaTexto').textContent = detalhe + ' A vitrine continua normalmente, sem música.';
+    $('avisoMusica').classList.add('show');
+  }
+  const esconderAvisoMusica = () => $('avisoMusica').classList.remove('show');
+
+  // ---- link/volume escolhidos nesta vitrine (só neste aparelho; vale por cima do que a loja configurou) ----
+  const CHAVE_SOM = 'vitrine_musica_' + (token || '');
+  function lerSomLocal(){ try{ const v = JSON.parse(localStorage.getItem(CHAVE_SOM) || 'null'); return v && typeof v === 'object' ? v : null; } catch(e){ return null; } }
+  function gravarSomLocal(o){ try{ if(o) localStorage.setItem(CHAVE_SOM, JSON.stringify(o)); else localStorage.removeItem(CHAVE_SOM); } catch(e){ /* navegador bloqueando armazenamento: vale só até recarregar */ } }
+  // música que vale agora: a escolhida neste aparelho (ou desligada aqui), senão a da loja
+  function musicaEfetiva(cfg){
+    const loja = cfg && cfg.musica && cfg.musica.url ? { url: cfg.musica.url, volume: cfg.musica.volume } : null;
+    const local = lerSomLocal();
+    if(!local) return loja;
+    if(local.desligada) return null;
+    const url = local.url || (loja && loja.url) || '';
+    const volume = local.volume != null ? local.volume : (loja ? loja.volume : 40);
+    return url ? { url, volume } : null;
+  }
+
+  function pararMusica(falha){
+    if(ytPlayer){ try{ ytPlayer.destroy(); } catch(e){ /* já removido */ } }
+    ytPlayer = null; musicaChave = null; errosMusica = 0;
+    $('musica').classList.remove('ativa'); $('btnMusica').classList.remove('ativa');
+    $('musica').innerHTML = '<div id="ytplayer"></div>';
+    atualizarBotaoMusica();
+    if(falha) mostrarAvisoMusica(falha[0], falha[1]); else esconderAvisoMusica();
+  }
+  // liga/troca/desliga conforme a configuração mais recente (chamada no início, a cada recarga de dados e ao aplicar o painel 🎵)
+  async function configurarMusica(cfg){
+    ultimaCfg = cfg;
+    const m = musicaEfetiva(cfg);
+    const alvo = m && m.url ? parseYoutube(m.url) : null;
+    if(!alvo){
+      if(ytPlayer) pararMusica();
+      if(m && m.url) mostrarAvisoMusica('Link da música não reconhecido', 'Use link de playlist, de vídeo ou de canal (youtube.com/channel/…). Links com @nome não funcionam.');
+      else esconderAvisoMusica();
+      return;
+    }
+    musicaVolume = Math.max(0, Math.min(100, Number(m.volume)));
+    if(isNaN(musicaVolume)) musicaVolume = 40;
+    const chave = alvo.tipo + ':' + alvo.id;
+    if(ytPlayer && chave === musicaChave){ try{ ytPlayer.setVolume(musicaVolume); } catch(e){} return; }
+    if(ytPlayer) pararMusica();
+    esconderAvisoMusica();
+    musicaChave = chave;
+    try{ await carregarApiYoutube(); }
+    catch(e){ musicaChave = null; mostrarAvisoMusica('Sem acesso ao YouTube', 'Não consegui carregar o player — confira a internet da TV ou se esta rede bloqueia o YouTube.'); return; }
+    if(musicaChave !== chave) return;    // outra troca de link chegou enquanto a API carregava
+    $('musica').classList.add('ativa'); $('btnMusica').classList.add('ativa');
+    const vars = { autoplay: 1, mute: 1, controls: 0, rel: 0, playsinline: 1, modestbranding: 1, iv_load_policy: 3, disablekb: 1, fs: 0, loop: 1 };
+    if(/^https?:$/.test(location.protocol)) vars.origin = location.origin;   // o YouTube exige página http(s) (não funciona abrindo o arquivo direto do disco)
+    const opts = { width: '100%', height: '100%', playerVars: vars, events: {
+      onReady: (e) => {
+        e.target.setVolume(musicaVolume);
+        if(alvo.tipo === 'playlist'){ try{ e.target.setShuffle(true); e.target.setLoop(true); } catch(err){} }
+        e.target.playVideo();
+        if(somLiberado) e.target.unMute();
+        atualizarBotaoMusica();
+      },
+      onStateChange: (e) => {
+        if(e.data === 1){ errosMusica = 0; musicaTocou = true; esconderAvisoMusica(); atualizarBotaoMusica(); }       // tocando
+        if(e.data === 0 && alvo.tipo === 'video') e.target.playVideo();    // fim do vídeo único: repete
+        if(e.data === 5 || e.data === -1) e.target.playVideo();            // não iniciou: tenta de novo
+      },
+      onError: (e) => {
+        const msg = MSG_ERRO_YT[e.data] || ['Erro ' + e.data + ' no YouTube', 'O player não conseguiu tocar esse link.'];
+        console.warn('YouTube: erro ' + e.data + ' — ' + msg[0]);
+        // 2 = parâmetro inválido, 153 = player sem Referer: tentar outro vídeo não adianta
+        if(e.data === 2 || e.data === 153){ pararMusica(msg); return; }
+        // 100/101/150 = vídeo indisponível ou sem permissão de incorporação: vídeo único desiste; playlist pula e, se der erro demais, desiste
+        errosMusica++;
+        if(alvo.tipo === 'video'){ pararMusica(msg); return; }
+        if(errosMusica > 6){ pararMusica(['Nenhum vídeo da playlist tocou', 'Vários vídeos dessa playlist não permitem tocar fora do YouTube (ou foram removidos). Troque o link.']); return; }
+        try{ e.target.nextVideo(); } catch(err){ pararMusica(msg); }
+      },
+    } };
+    if(alvo.tipo === 'video'){ opts.videoId = alvo.id; vars.playlist = alvo.id; }
+    else { vars.listType = 'playlist'; vars.list = alvo.id; }
+    musicaTocou = false;
+    ytPlayer = new YT.Player('ytplayer', opts);
+    atualizarBotaoMusica();
+    // rede de segurança: se em 25 s nada tocou (erro que o YouTube mostra dentro do player sem avisar a página), esconde o player e AVISA
+    const chaveVigiada = chave;
+    setTimeout(() => { if(ytPlayer && musicaChave === chaveVigiada && !musicaTocou){ console.warn('YouTube: música não iniciou'); pararMusica(['A música não iniciou', 'O YouTube não respondeu em 25 segundos — confira a internet da TV e se o link está certo.']); } }, 25000);
+  }
+
+  // ---- painel 🎵: trocar link e volume aqui mesmo ----
+  function abrirPainelSom(){
+    const local = lerSomLocal();
+    const loja = ultimaCfg && ultimaCfg.musica && ultimaCfg.musica.url ? ultimaCfg.musica : null;
+    const efetiva = musicaEfetiva(ultimaCfg);
+    $('somLink').value = (local && local.url) || (loja && loja.url) || '';
+    let vol = efetiva && efetiva.volume != null ? Number(efetiva.volume) : (local && local.volume != null ? Number(local.volume) : musicaVolume);
+    if(isNaN(vol)) vol = 40;
+    $('somVolume').value = Math.max(0, Math.min(100, vol)); $('somVolRot').textContent = $('somVolume').value;
+    $('somErro').textContent = '';
+    $('somStatus').textContent = local && local.desligada ? 'Música desligada neste aparelho.'
+      : local && local.url ? 'Usando o link definido neste aparelho.'
+      : loja ? 'Usando o link configurado pela loja (app, aba Vitrine).'
+      : 'Nenhuma música configurada.';
+    $('painelSom').classList.add('show');
+    $('somLink').focus();
+  }
+  const fecharPainelSom = () => $('painelSom').classList.remove('show');
+  $('btnConfigSom').addEventListener('click', (e) => { e.stopPropagation(); abrirPainelSom(); });
+  $('avisoTrocar').addEventListener('click', abrirPainelSom);
+  $('avisoFechar').addEventListener('click', esconderAvisoMusica);
+  $('somFechar').addEventListener('click', fecharPainelSom);
+  $('painelSom').addEventListener('pointerdown', (e) => { if(e.target === $('painelSom')) fecharPainelSom(); });
+  $('somVolume').addEventListener('input', () => {
+    const v = Number($('somVolume').value);
+    $('somVolRot').textContent = v; musicaVolume = v;
+    if(ytPlayer){ try{ ytPlayer.setVolume(v); } catch(e){} }
+    const local = lerSomLocal() || {};
+    gravarSomLocal({ url: local.url || '', volume: v, desligada: !!local.desligada });
+  });
+  $('somAplicar').addEventListener('click', () => {
+    const url = $('somLink').value.trim();
+    if(!url){ $('somErro').textContent = 'Cole o link do YouTube.'; return; }
+    if(!parseYoutube(url)){ $('somErro').textContent = 'Link não reconhecido. Use playlist, vídeo ou canal /channel/… do YouTube (links com @nome não funcionam).'; return; }
+    gravarSomLocal({ url, volume: Number($('somVolume').value), desligada: false });
+    somLiberado = true;     // o clique em Aplicar já é o gesto que o navegador exige pra liberar o som
+    fecharPainelSom();
+    configurarMusica(ultimaCfg);
+  });
+  $('somDesligar').addEventListener('click', () => {
+    const local = lerSomLocal() || {};
+    gravarSomLocal({ url: local.url || '', volume: Number($('somVolume').value), desligada: true });
+    configurarMusica(ultimaCfg);
+    abrirPainelSom();
+  });
+  $('somRestaurar').addEventListener('click', () => {
+    gravarSomLocal(null);
+    configurarMusica(ultimaCfg);
+    abrirPainelSom();
+  });
+
+  // navegadores só liberam áudio depois de um gesto: o 1º clique/tecla/toque liga o som
+  function liberarSom(){
+    if(somLiberado) return;
+    somLiberado = true;
+    if(ytPlayer){ try{ ytPlayer.unMute(); ytPlayer.setVolume(musicaVolume); ytPlayer.playVideo(); } catch(e){} }
+    atualizarBotaoMusica(); setTimeout(atualizarBotaoMusica, 400);   // o YouTube confirma o estado de forma assíncrona
+  }
+  ['pointerdown', 'keydown', 'touchstart', 'dblclick'].forEach(ev => document.addEventListener(ev, liberarSom, { passive: true }));
+  function alternarSom(){
+    if(!ytPlayer) return;
+    somLiberado = true;
+    try{ if(ytPlayer.isMuted()){ ytPlayer.unMute(); ytPlayer.setVolume(musicaVolume); } else ytPlayer.mute(); } catch(e){}
+    atualizarBotaoMusica(); setTimeout(atualizarBotaoMusica, 400);
+  }
+  $('btnMusica').addEventListener('click', (e) => { e.stopPropagation(); alternarSom(); });
+
   // ---- controles (somem sozinhos, igual o cursor) ----
   let tempoOcioso = null;
   function mostrarControles(){
@@ -294,12 +556,18 @@
   $('btnProximo').addEventListener('click', () => avancar(1));
   $('btnPausa').addEventListener('click', alternarPausa);
   $('btnTelaCheia').addEventListener('click', alternarTelaCheia);
-  document.addEventListener('dblclick', alternarTelaCheia);
+  // duplo clique/teclas dentro do painel 🎵 ou do aviso não podem acionar tela cheia, pausa, som etc.
+  const dentroDoPainelSom = (e) => !!(e.target && e.target.closest && e.target.closest('#painelSom, #avisoMusica'));
+  document.addEventListener('dblclick', (e) => { if(dentroDoPainelSom(e)) return; alternarTelaCheia(); });
   document.addEventListener('keydown', (e) => {
+    if(dentroDoPainelSom(e)){ if(e.key === 'Escape') fecharPainelSom(); return; }
+    if($('painelSom').classList.contains('show')){ if(e.key === 'Escape') fecharPainelSom(); return; }
+    if(e.key === 'l' || e.key === 'L'){ abrirPainelSom(); return; }
     if(e.key === 'ArrowRight') avancar(1);
     else if(e.key === 'ArrowLeft') avancar(-1);
     else if(e.key === ' '){ e.preventDefault(); alternarPausa(); }
     else if(e.key === 'f' || e.key === 'F') alternarTelaCheia();
+    else if(e.key === 'm' || e.key === 'M') alternarSom();
   });
 
   // mantém a tela da TV acordada (quando o navegador permite)
@@ -314,6 +582,7 @@
     if(r.erro){ mostrarMensagem('📡', 'Sem conexão', 'Tentando de novo em instantes…'); setTimeout(iniciar, 15000); return; }
     dados = r.dados; ultimaCarga = Date.now();
     aplicarUnidade(dados.unidade);
+    configurarMusica(dados.config);
     pedirWakeLock();
     if(!(await novaRodada())) return;
     mostrarSlide(0);

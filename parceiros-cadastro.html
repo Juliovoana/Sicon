@@ -44,6 +44,15 @@
   .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   @media (max-width:480px){ .field-row{ grid-template-columns:1fr; } }
 
+  /* campo de ramo por busca (qualquer parte do nome) */
+  .combo{ position:relative; }
+  .combo-lista{ position:absolute; left:0; right:0; top:100%; margin-top:4px; z-index:20; background:var(--surface); border:1.5px solid var(--border); border-radius:10px; max-height:240px; overflow-y:auto; box-shadow:var(--shadow-lg); display:none; }
+  .combo-lista.aberta{ display:block; }
+  .combo-item{ padding:11px 14px; font-size:.92rem; cursor:pointer; }
+  .combo-item:hover, .combo-item.ativo{ background:var(--brand-soft); }
+  .combo-vazio{ padding:11px 14px; font-size:.85rem; color:var(--muted); }
+  .combo-outro{ border-top:1px solid var(--border); font-weight:600; color:var(--brand); }
+
   .foto-box{ display:flex; align-items:center; gap:14px; }
   .foto-preview{ width:96px; height:64px; border-radius:10px; overflow:hidden; flex-shrink:0; background:var(--bg); border:1.5px dashed var(--border); display:flex; align-items:center; justify-content:center; color:var(--muted-2); font-size:1.4rem; }
   .foto-preview img{ width:100%; height:100%; object-fit:cover; }
@@ -161,7 +170,12 @@
       </div>
       <div class="secao-titulo" style="margin-top:22px;">Seu trabalho</div>
       <div class="field-group"><label>Ramo de atividade *</label>
-        <select id="f_ramo"><option value="">— selecione —</option>${ramos.map(r => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.nome)}</option>`).join('')}</select></div>
+        <div class="combo">
+          <input type="text" id="f_ramo_busca" placeholder="Digite parte do nome ou toque pra listar" autocomplete="off">
+          <input type="hidden" id="f_ramo">
+          <div class="combo-lista" id="f_ramo_lista"></div>
+        </div>
+        ${info.ramo_livre ? '<span class="dica">Não achou o seu? Digite o nome do seu ramo de atividade.</span>' : ''}</div>
       <div class="field-group"><label>O que você faz? <span class="dica">(especialidades)</span></label><input type="text" id="f_especialidades" maxlength="300" placeholder="Ex: reforma de banheiro, assentamento de piso"></div>
       <div class="field-group"><label>Conte um pouco sobre seu trabalho</label><textarea id="f_descricao" maxlength="600"></textarea></div>
       <div class="field-group"><label>Foto do seu cartão de visita <span class="dica">(opcional)</span></label>
@@ -180,6 +194,7 @@
       <div class="form-erro" id="formErro"></div>
       <p class="rodape-lgpd">Seu cadastro será analisado pela equipe da loja. Você pode pedir a exclusão dos seus dados a qualquer momento falando com a loja.</p>`;
     document.getElementById('f_whatsapp').addEventListener('input', e => { e.target.value = formatarFoneInput(e.target.value); });
+    ligarCampoRamo(ramos, !!info.ramo_livre);
     document.getElementById('btnFoto').addEventListener('click', () => document.getElementById('inputFoto').click());
     document.getElementById('inputFoto').addEventListener('change', async (e) => {
       const arquivo = e.target.files[0];
@@ -192,6 +207,51 @@
       } catch(erro){ fotoBlob = null; mostrarErro(erro.message); }
     });
     document.getElementById('btnEnviar').addEventListener('click', enviarCadastro);
+  }
+
+  // ---- ramo de atividade por BUSCA (qualquer parte do nome, sem acento/maiúscula) ----
+  // O id do ramo escolhido fica em #f_ramo (hidden); o texto em #f_ramo_busca.
+  // Se a loja aceita ramo digitado (info.ramo_livre), um texto sem escolha da lista
+  // é enviado como "ramo_informado"; senão, texto solto é apagado ao sair do campo.
+  const normalizar = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  function ligarCampoRamo(ramos, livre){
+    const input = document.getElementById('f_ramo_busca'), hidden = document.getElementById('f_ramo'), lista = document.getElementById('f_ramo_lista');
+    const MAX = 40;
+    const fechar = () => lista.classList.remove('aberta');
+    const escolher = (r) => { hidden.value = r.id; input.value = r.nome; fechar(); };
+    const exato = (txt) => ramos.find(r => normalizar(r.nome) === normalizar(txt));
+    function renderizar(){
+      const termo = normalizar(input.value);
+      const achados = (termo ? ramos.filter(r => normalizar(r.nome).includes(termo)) : ramos).slice(0, MAX);
+      let html = achados.map((r, i) => `<div class="combo-item" data-i="${i}">${escapeHtml(r.nome)}</div>`).join('');
+      if(!achados.length) html = `<div class="combo-vazio">${livre ? 'Nenhum ramo da lista com esse nome.' : 'Nenhum ramo encontrado.'}</div>`;
+      const txt = input.value.trim();
+      if(livre && txt.length >= 3 && !exato(txt)) html += `<div class="combo-item combo-outro" data-outro="1">Usar “${escapeHtml(txt)}”</div>`;
+      lista.innerHTML = html;
+      lista.classList.add('aberta');
+      lista._achados = achados;
+    }
+    // pointerdown + preventDefault: seleciona antes do campo perder o foco (funciona no toque e no mouse)
+    lista.addEventListener('pointerdown', (e) => {
+      const el = e.target.closest('.combo-item'); if(!el) return;
+      e.preventDefault();
+      if(el.dataset.outro){ hidden.value = ''; fechar(); return; }
+      const r = (lista._achados || [])[Number(el.dataset.i)]; if(r) escolher(r);
+    });
+    input.addEventListener('input', () => { hidden.value = ''; renderizar(); });
+    input.addEventListener('focus', renderizar);
+    input.addEventListener('click', renderizar);
+    input.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter'){ e.preventDefault(); const r = (lista._achados || [])[0]; if(r && lista.classList.contains('aberta')) escolher(r); else fechar(); }
+      else if(e.key === 'Escape') fechar();
+    });
+    input.addEventListener('blur', () => setTimeout(() => {
+      fechar();
+      if(hidden.value) return;
+      const r = exato(input.value);          // digitou o nome certinho de um ramo da lista: usa ele
+      if(r){ escolher(r); return; }
+      if(!livre) input.value = '';            // sem digitação livre: texto solto é descartado
+    }, 150));
   }
 
   function comprimirImagem(arquivo, maxDimensao = 1400, qualidade = 0.82){
@@ -223,12 +283,19 @@
   async function enviarCadastro(){
     document.getElementById('formErro').classList.remove('show');
     const v = (id) => document.getElementById(id).value.trim();
-    const nome = v('f_nome'), whatsapp = v('f_whatsapp').replace(/\D/g, ''), cidade = v('f_cidade'), ramoId = v('f_ramo');
+    const nome = v('f_nome'), whatsapp = v('f_whatsapp').replace(/\D/g, ''), cidade = v('f_cidade');
+    let ramoId = v('f_ramo');
+    // texto só vale como "ramo informado" se a loja aceita digitação livre e nada foi escolhido da lista
+    const ramoDigitado = (!ramoId && info.ramo_livre) ? v('f_ramo_busca').replace(/\s+/g, ' ') : '';
+    if(!ramoId && ramoDigitado){
+      const igual = (info.ramos || []).find(r => normalizar(r.nome) === normalizar(ramoDigitado));
+      if(igual) ramoId = igual.id;
+    }
     const documento = v('f_documento').replace(/\D/g, '');
     if(!nome){ mostrarErro('Informe seu nome.'); return; }
     if(whatsapp.length < 10){ mostrarErro('Informe seu WhatsApp com DDD.'); return; }
     if(!cidade){ mostrarErro('Informe sua cidade.'); return; }
-    if(!ramoId){ mostrarErro('Escolha seu ramo de atividade.'); return; }
+    if(!ramoId && ramoDigitado.length < 3){ mostrarErro(info.ramo_livre ? 'Escolha seu ramo na lista ou digite o nome dele (mínimo 3 letras).' : 'Escolha seu ramo de atividade na lista.'); return; }
     if(documento && documento.length !== 11 && documento.length !== 14){ mostrarErro('CPF deve ter 11 números e CNPJ 14 (ou deixe em branco).'); return; }
     if(!document.getElementById('f_autoriza').checked){ mostrarErro('Marque a autorização pra poder enviar o cadastro.'); return; }
 
@@ -246,7 +313,7 @@
       const { data: resultado, error } = await sb.rpc('parceiros_autocadastro', {
         p_unidade_id: unidadeId,
         p_dados: {
-          nome, empresa: v('f_empresa'), whatsapp, cidade, ramo_id: ramoId, especialidades: v('f_especialidades'),
+          nome, empresa: v('f_empresa'), whatsapp, cidade, ramo_id: ramoId, ramo_informado: ramoId ? '' : ramoDigitado, especialidades: v('f_especialidades'),
           descricao: v('f_descricao'), email: v('f_email'), documento: v('f_documento'), cartao_path: cartaoPath,
           autorizou_divulgacao: true,
         },

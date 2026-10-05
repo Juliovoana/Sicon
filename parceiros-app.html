@@ -527,6 +527,17 @@
                 <div class="campo"><label>1 propaganda a cada quantos parceiros?</label><input type="number" min="0" max="20" id="vtIntercalar"><span class="dica">0 = só parceiros, sem propaganda.</span></div>
                 <div class="campo"><label>Ordem dos parceiros</label><select id="vtOrdem"><option value="aleatoria">Aleatória a cada rodada</option><option value="alfabetica">Alfabética</option></select></div>
             </div>
+            <div class="bloco-cartao" id="blocoMusica" style="margin-top:6px;">
+                <div class="bloco-cartao-titulo">🎵 Música de fundo (YouTube)</div>
+                <label class="campo-check" style="margin-bottom:10px;"><input type="checkbox" id="vtMusicaAtiva"> Tocar música do YouTube enquanto os slides passam</label>
+                <div class="campo" style="margin-bottom:8px;">
+                    <label>Link do YouTube</label>
+                    <input type="text" id="vtMusicaUrl" placeholder="Playlist, vídeo/ao vivo ou canal (youtube.com/channel/UC…)" autocomplete="off">
+                    <span class="dica" id="vtMusicaDica"></span>
+                </div>
+                <div style="display:flex; gap:10px; align-items:center;"><label style="font-size:.82rem; font-weight:600;">Volume</label><input type="range" id="vtMusicaVolume" min="0" max="100" step="5" style="flex:1;"><span id="vtMusicaVolumeTxt" style="font-size:.82rem; min-width:38px; text-align:right;">40%</span></div>
+                <span class="dica" id="vtMusicaAviso" style="display:block; margin-top:8px;">O player do YouTube aparece num cantinho da TV (o YouTube exige que fique visível). O navegador só libera o som depois do primeiro clique ou tecla — apertar <strong>F</strong> pra tela cheia já conta. Vale o aviso de direitos autorais: música tocada em loja pode exigir licença (ECAD); prefira playlists de uso liberado.</span>
+            </div>
             <button class="btn btn-principal btn-inline" id="btnSalvarVitrine">Salvar</button>
             <div class="status-msg" id="statusVitrine"></div>
             <div class="campo" style="margin-top:14px;"><label>Link da vitrine</label>
@@ -565,6 +576,7 @@
             <h2>Autocadastro por link / QR Code</h2>
             <p class="desc">O próprio parceiro preenche o cadastro (e envia a foto do cartão de visita) pelo celular. O cadastro entra como <strong>"aguardando aprovação"</strong> — só vira parceiro depois que alguém da loja aprovar na aba Parceiros.</p>
             <label class="campo-check"><input type="checkbox" id="cfgAutocadastro"> Aceitar autocadastro pelo link/QR</label>
+            <label class="campo-check"><input type="checkbox" id="cfgRamoLivre"> Aceitar ramo de atividade digitado livremente <span class="dica">(quando o parceiro não achar o ramo na lista; você mapeia ou cria o ramo ao aprovar)</span></label>
             <div class="campo"><label>Mensagem de boas-vindas (aparece no formulário)</label><textarea id="cfgMensagem" rows="2" placeholder="Ex: Cadastre-se e receba indicações de clientes que precisam do seu serviço."></textarea></div>
             <button class="btn btn-principal btn-inline" id="btnSalvarCfgAutocadastro">Salvar</button>
             <div class="status-msg" id="statusCfgAutocadastro"></div>
@@ -624,6 +636,7 @@
                 </div>
                 <button type="button" class="btn btn-cinza btn-sm" id="btnNovoRamoRapido" title="Criar um ramo novo">+</button>
             </div>
+            <span class="dica hidden" id="pf_ramo_informado" style="display:block; margin-top:6px;"></span>
         </div>
         <div class="grade">
             <div class="campo"><label>WhatsApp *</label><input type="text" id="pf_whatsapp" placeholder="(00) 00000-0000"></div>
@@ -1176,6 +1189,8 @@ async function carregarContas() {
 // ---------------------------------------------------------------
 const parceiroPorId = (id) => parceiros.find(p => p.id === id);
 const ramoNome = (id) => (ramos.find(r => r.id === id) || {}).nome || '';
+// ramo mostrado: o da lista, ou o que o parceiro digitou no autocadastro (quando a loja aceita ramo livre)
+const ramoTexto = (p) => ramoNome(p.ramo_id) || (p.ramo_informado ? p.ramo_informado + ' (informado)' : '');
 const saldoDe = (id) => saldos[id] || 0;
 const percentualEfetivo = (p) => (p && p.percentual_recompensa != null) ? Number(p.percentual_recompensa) : Number(config?.percentual_padrao || 0);
 function avaliacaoDe(parceiroId) {
@@ -1343,7 +1358,7 @@ function parceirosFiltrados() {
     const st = $('parcFiltroStatus').value;
     return parceiros.filter(p =>
         (!st || p.status === st) && (!ramo || p.ramo_id === ramo) &&
-        (!t || normalizar([p.nome, p.empresa, p.codigo, p.whatsapp, p.telefone, p.cidade, p.especialidades, ramoNome(p.ramo_id)].join(' ')).includes(t))
+        (!t || normalizar([p.nome, p.empresa, p.codigo, p.whatsapp, p.telefone, p.cidade, p.especialidades, ramoTexto(p)].join(' ')).includes(t))
     ).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 }
 
@@ -1356,7 +1371,7 @@ function cardParceiro(p) {
         <div class="parc-avatar">${foto}</div>
         <div class="parc-info">
             <div class="parc-nome">${escapeHtml(p.nome)}</div>
-            <div class="parc-meta">${escapeHtml([p.empresa, ramoNome(p.ramo_id)].filter(Boolean).join(' · ') || '—')}</div>
+            <div class="parc-meta">${escapeHtml([p.empresa, ramoTexto(p)].filter(Boolean).join(' · ') || '—')}</div>
             <div class="parc-meta">#${p.codigo ?? '—'}${p.cidade ? ' · ' + escapeHtml(p.cidade) : ''}</div>
             <div class="parc-rodape">
                 <span class="pill pill-${p.status}">${STATUS_PARCEIRO[p.status] || p.status}</span>
@@ -1424,6 +1439,11 @@ function abrirFormParceiro(id) {
     $('pf_nome').value = p?.nome || '';
     $('pf_empresa').value = p?.empresa || '';
     camposRamo.pf_ramo.definir(p?.ramo_id || '');   // ramo já desativado continua aparecendo ao editar
+    // autocadastro com ramo digitado livremente: mostra o que o parceiro escreveu pra a loja mapear/criar o ramo
+    ramoInformadoAtual = (p && !p.ramo_id && p.ramo_informado) ? p.ramo_informado : '';
+    const dicaRamo = $('pf_ramo_informado');
+    dicaRamo.textContent = ramoInformadoAtual ? `O parceiro digitou o ramo: “${ramoInformadoAtual}”. Escolha um da lista ou use o + pra criar esse.` : '';
+    dicaRamo.classList.toggle('hidden', !ramoInformadoAtual);
     $('pf_whatsapp').value = p?.whatsapp ? formatarFone(p.whatsapp) : '';
     $('pf_telefone').value = p?.telefone || '';
     $('pf_email').value = p?.email || '';
@@ -1477,8 +1497,9 @@ async function criarRamo(nome) {
     ramos.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
     return data;
 }
+let ramoInformadoAtual = '';   // texto digitado pelo parceiro (autocadastro) do parceiro aberto no formulário
 $('btnNovoRamoRapido').addEventListener('click', async () => {
-    const nome = prompt('Nome do novo ramo de atividade:');
+    const nome = prompt('Nome do novo ramo de atividade:', ramoInformadoAtual);
     const r = await criarRamo(nome);
     if (!r) return;
     camposRamo.pf_ramo.definir(r.id);
@@ -1529,6 +1550,8 @@ $('btnSalvarParceiro').addEventListener('click', async () => {
             autorizou_divulgacao: autorizou,
             autorizou_em: autorizou ? (atual?.autorizou_em || new Date().toISOString()) : null,
         };
+        // ramo escolhido: o texto digitado no autocadastro deixa de valer (coluna só existe após parceiros-ramo-livre.sql)
+        if (atual && 'ramo_informado' in atual) payload.ramo_informado = null;
         // colunas da vitrine só existem depois de rodar parceiros-vitrine.sql
         if (vitrineDisponivel()) { payload.exibir_vitrine = $('pf_vitrine').checked; payload.vitrine_segundos = segVitrine; }
         let salvoId;
@@ -1579,7 +1602,7 @@ function abrirDetalhe(id) {
             <div class="parc-avatar">${foto ? `<img src="${escapeHtml(foto)}" alt="">` : escapeHtml(iniciais(p.nome))}</div>
             <div style="min-width:0;">
                 <h3 style="margin:0;">${escapeHtml(p.nome)}</h3>
-                <div class="parc-meta" style="white-space:normal;">${escapeHtml([p.empresa, ramoNome(p.ramo_id)].filter(Boolean).join(' · ') || '—')}</div>
+                <div class="parc-meta" style="white-space:normal;">${escapeHtml([p.empresa, ramoTexto(p)].filter(Boolean).join(' · ') || '—')}</div>
                 <div class="parc-rodape">
                     <span class="pill pill-${p.status}">${STATUS_PARCEIRO[p.status]}</span>
                     <span class="pill pill-${p.tipo_recompensa}">${TIPO_RECOMPENSA[p.tipo_recompensa]} ${percentualEfetivo(p)}%</span>
@@ -2214,7 +2237,11 @@ async function salvarConfig(campos, statusId) {
     const statusEl = $(statusId);
     const novo = { ...config, ...campos, unidade_negocio_id: meuPerfil.unidadeId, atualizado_em: new Date().toISOString() };
     const { error } = await sb.from('parceiros_config').upsert(novo, { onConflict: 'unidade_negocio_id' });
-    if (error) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Erro: ' + error.message; return false; }
+    if (error) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Erro: ' + error.message + (/ramo_livre/.test(error.message) ? ' — rode o parceiros-ramo-livre.sql no Supabase.' : '');
+        return false;
+    }
     config = novo;
     statusEl.className = 'status-msg sucesso'; statusEl.textContent = 'Salvo.';
     return true;
@@ -2229,8 +2256,12 @@ $('btnSalvarCfgRecompensa').addEventListener('click', async () => {
 });
 $('btnSalvarCfgAutocadastro').addEventListener('click', async () => {
     const ativo = $('cfgAutocadastro').checked;
-    if (await salvarConfig({ autocadastro_ativo: ativo, mensagem_boas_vindas: $('cfgMensagem').value.trim() || null }, 'statusCfgAutocadastro')) {
-        await registrarSentinela('parceiros_config', `Autocadastro por link/QR ${ativo ? 'LIGADO' : 'desligado'}`);
+    const ramoLivre = $('cfgRamoLivre').checked;
+    const campos = { autocadastro_ativo: ativo, mensagem_boas_vindas: $('cfgMensagem').value.trim() || null };
+    // a coluna só existe depois de rodar parceiros-ramo-livre.sql: não manda se está desligado e a coluna ainda não existe
+    if (ramoLivre || 'autocadastro_ramo_livre' in config) campos.autocadastro_ramo_livre = ramoLivre;
+    if (await salvarConfig(campos, 'statusCfgAutocadastro')) {
+        await registrarSentinela('parceiros_config', `Autocadastro por link/QR ${ativo ? 'LIGADO' : 'desligado'}; ramo digitado livremente ${ramoLivre ? 'ACEITO' : 'não aceito'}`);
         renderizarParametros();
     }
 });
@@ -2359,6 +2390,7 @@ function renderizarParametros() {
     $('cfgTipoPadrao').value = config.tipo_recompensa_padrao;
     $('cfgPercentualPadrao').value = config.percentual_padrao;
     $('cfgAutocadastro').checked = !!config.autocadastro_ativo;
+    $('cfgRamoLivre').checked = !!config.autocadastro_ramo_livre;
     $('cfgMensagem').value = config.mensagem_boas_vindas || '';
     $('linkCadastro').value = linkCadastroPublico();
     $('avisoLinkCadastro').textContent = config.autocadastro_ativo ? '' : 'O autocadastro está desligado — quem abrir o link vai ver "cadastro indisponível" até você ligar e salvar.';
@@ -2400,6 +2432,36 @@ function renderizarSemCartao() {
     el.querySelectorAll('[data-cartao-arquivo]').forEach(b => b.addEventListener('click', () => escolherCartao(b.dataset.cartaoArquivo, false)));
 }
 
+// reconhece o link do YouTube (mesma regra da página da TV): playlist, vídeo/ao vivo ou canal /channel/UC...
+function parseYoutube(url) {
+    url = String(url || '').trim();
+    if (!url) return null;
+    let u;
+    try { u = new URL(/^https?:\/\//i.test(url) ? url : 'https://' + url); } catch (e) { return null; }
+    const host = u.hostname.replace(/^(www|m|music)\./, '');
+    if (!/^(youtube\.com|youtu\.be|youtube-nocookie\.com)$/.test(host)) return null;
+    const list = u.searchParams.get('list');
+    if (list && /^[A-Za-z0-9_-]{10,}$/.test(list)) return { tipo: 'playlist', id: list };
+    const canal = u.pathname.match(/^\/channel\/(UC[A-Za-z0-9_-]{20,})/);
+    if (canal) return { tipo: 'canal', id: 'UU' + canal[1].slice(2) };
+    let v = u.searchParams.get('v');
+    if (!v && host === 'youtu.be') v = u.pathname.slice(1).split('/')[0];
+    if (!v) { const m = u.pathname.match(/^\/(?:embed|live|shorts|v)\/([A-Za-z0-9_-]{11})/); if (m) v = m[1]; }
+    return v && /^[A-Za-z0-9_-]{11}$/.test(v) ? { tipo: 'video', id: v } : null;
+}
+function atualizarDicaMusica() {
+    const el = $('vtMusicaDica');
+    const txt = $('vtMusicaUrl').value.trim();
+    if (!txt) { el.textContent = ''; return; }
+    const r = parseYoutube(txt);
+    el.style.color = r ? 'var(--brand-2)' : 'var(--danger)';
+    el.textContent = r
+        ? { playlist: '✓ Playlist reconhecida (toca embaralhado, em loop).', canal: '✓ Canal reconhecido — toca os vídeos enviados pelo canal.', video: '✓ Vídeo/ao vivo reconhecido (repete sem parar).' }[r.tipo]
+        : '✗ Link não reconhecido. Links no formato @canal não funcionam: use o link de uma playlist (…list=…), de um vídeo/ao vivo, ou do canal em youtube.com/channel/UC….';
+}
+$('vtMusicaUrl').addEventListener('input', atualizarDicaMusica);
+$('vtMusicaVolume').addEventListener('input', () => { $('vtMusicaVolumeTxt').textContent = $('vtMusicaVolume').value + '%'; });
+
 function renderizarVitrine() {
     renderizarSemCartao();
     const ok = vitrineDisponivel();
@@ -2410,6 +2472,14 @@ function renderizarVitrine() {
     $('vtSegundos').value = config.vitrine_segundos_padrao;
     $('vtIntercalar').value = config.vitrine_intercalar;
     $('vtOrdem').value = config.vitrine_aleatoria ? 'aleatoria' : 'alfabetica';
+    const musicaOk = config.vitrine_musica_ativa !== undefined;   // colunas da música (parceiros-vitrine.sql atualizado)
+    ['vtMusicaAtiva', 'vtMusicaUrl', 'vtMusicaVolume'].forEach(id => { $(id).disabled = !musicaOk; });
+    $('vtMusicaAtiva').checked = !!config.vitrine_musica_ativa;
+    $('vtMusicaUrl').value = config.vitrine_musica_url || '';
+    $('vtMusicaVolume').value = config.vitrine_musica_volume ?? 40;
+    $('vtMusicaVolumeTxt').textContent = $('vtMusicaVolume').value + '%';
+    if (musicaOk) atualizarDicaMusica();
+    else { $('vtMusicaDica').style.color = 'var(--danger)'; $('vtMusicaDica').textContent = 'Rode de novo o parceiros-vitrine.sql (versão com música) pra liberar este recurso.'; }
     $('vtLink').value = linkVitrine();
     $('btnAbrirVt').href = linkVitrine();
 
@@ -2456,8 +2526,13 @@ $('btnSalvarVitrine').addEventListener('click', async () => {
     if (isNaN(seg) || seg < 3 || seg > 120) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Segundos por slide: use de 3 a 120.'; return; }
     if (isNaN(inter) || inter < 0 || inter > 20) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Propaganda a cada quantos parceiros: use de 0 a 20.'; return; }
     const campos = { vitrine_ativa: $('vtAtiva').checked, vitrine_segundos_padrao: seg, vitrine_intercalar: inter, vitrine_aleatoria: $('vtOrdem').value === 'aleatoria' };
+    if (config.vitrine_musica_ativa !== undefined) {
+        const urlMusica = $('vtMusicaUrl').value.trim();
+        if ($('vtMusicaAtiva').checked && !parseYoutube(urlMusica)) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Cole um link do YouTube válido (playlist, vídeo/ao vivo ou canal) pra ligar a música.'; return; }
+        Object.assign(campos, { vitrine_musica_ativa: $('vtMusicaAtiva').checked, vitrine_musica_url: urlMusica || null, vitrine_musica_volume: parseInt($('vtMusicaVolume').value, 10) });
+    }
     if (await salvarConfig(campos, 'statusVitrine')) {
-        await registrarSentinela('vitrine_config', `Vitrine ${campos.vitrine_ativa ? 'LIGADA' : 'desligada'}: ${seg}s por slide, 1 propaganda a cada ${inter} parceiro(s), ordem ${campos.vitrine_aleatoria ? 'aleatória' : 'alfabética'}`);
+        await registrarSentinela('vitrine_config', `Vitrine ${campos.vitrine_ativa ? 'LIGADA' : 'desligada'}: ${seg}s por slide, 1 propaganda a cada ${inter} parceiro(s), ordem ${campos.vitrine_aleatoria ? 'aleatória' : 'alfabética'}${campos.vitrine_musica_ativa ? ', música do YouTube ligada' : ''}`);
         renderizarVitrine();
     }
 });
@@ -2585,7 +2660,7 @@ async function excluirPropaganda(id) {
 // ---------------------------------------------------------------
 const AJUDA_PARCEIROS = {
     titulo: 'Parceiros Comerciais',
-    ultimaRevisao: '04/10/2026',
+    ultimaRevisao: '06/10/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>Módulo pra lojas (de material de construção, por exemplo) que recebem profissionais
@@ -2632,6 +2707,12 @@ const AJUDA_PARCEIROS = {
                 O cartão é o que aparece em destaque no slide da TV.</li>
                 <li>Aprovar um autocadastro oferece enviar, pelo WhatsApp, o link pessoal do parceiro.
                 <strong>Inativar</strong> não apaga o saldo e desliga o link pessoal.</li>
+                <li><strong>Ramo digitado pelo parceiro</strong>: no formulário de autocadastro o ramo é um campo de
+                busca (qualquer parte do nome). Se a opção <em>"Aceitar ramo de atividade digitado livremente"</em>
+                estiver ligada em Parâmetros, o parceiro pode digitar um ramo que não está na lista — ele entra
+                <em>aguardando aprovação</em> com o texto marcado como <em>(informado)</em>. Ao abrir o cadastro, escolha um
+                ramo da lista ou use o <strong>+</strong> (já vem com o texto digitado) pra criar o ramo antes de aprovar.
+                Nenhum ramo é criado sozinho por quem se cadastra.</li>
             </ul>
         ` },
         { id: 'servicos', titulo: 'Indicar serviço', corpo: `
@@ -2694,6 +2775,19 @@ const AJUDA_PARCEIROS = {
                 <li><strong>Propagandas</strong>: imagem (ideal 1920×1080) e/ou texto, com prazo opcional
                 (exibir de/até) e a opção de pausar. Entram "1 a cada N parceiros" (você define o N; 0 =
                 só parceiros). Sem parceiros elegíveis, a vitrine roda só as propagandas.</li>
+                <li><strong>Música de fundo</strong>: cole o link de uma <em>playlist</em>, de um vídeo/ao
+                vivo ou de um canal (<code>youtube.com/channel/UC…</code>) e defina o volume. O player do
+                YouTube aparece num canto da TV (o YouTube exige que fique visível). O navegador só libera
+                o som depois do primeiro clique ou tecla — apertar <strong>F</strong> pra tela cheia já
+                conta; <strong>M</strong> liga/desliga o som. Atenção a direitos autorais: música em loja
+                pode exigir licença (ECAD).</li>
+                <li><strong>Música que não toca</strong>: se o YouTube recusar o link, a vitrine mostra um aviso
+                vermelho no canto da TV explicando o motivo (e continua sem música). O erro mais comum é o
+                vídeo <em>não permitir tocar fora do YouTube</em> — típico de clipes oficiais; prefira playlists de
+                música ou vídeos que permitem incorporar. Quem estiver na frente da TV pode apertar <strong>L</strong>
+                (ou clicar no botão 🎵) pra <strong>trocar o link e o volume ali mesmo</strong>, ou desligar a música;
+                essa escolha vale só naquele aparelho/navegador, por cima do link da loja, e "Usar o link da loja"
+                desfaz. Pra mudar em todas as TVs, edite o link nesta aba.</li>
                 <li>A vitrine vem <strong>desligada</strong>; marque "Vitrine ligada" e salve. A TV busca dados
                 novos sozinha no começo de cada rodada (a cada ~5 minutos), sem precisar recarregar.</li>
             </ul>
