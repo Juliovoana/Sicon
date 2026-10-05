@@ -361,7 +361,10 @@
     const host = u.hostname.replace(/^(www|m|music)\./, '');
     if(!/^(youtube\.com|youtu\.be|youtube-nocookie\.com)$/.test(host)) return null;
     const list = u.searchParams.get('list');
-    if(list && /^[A-Za-z0-9_-]{10,}$/.test(list)) return { tipo: 'playlist', id: list };
+    const vParam = u.searchParams.get('v');
+    // "Mix"/rádio do YouTube (list=RD…) é gerado na hora e não toca no player incorporado: usa só o vídeo do link
+    const ehMix = !!list && /^RD/.test(list);
+    if(list && !(ehMix && /^[A-Za-z0-9_-]{11}$/.test(vParam || '')) && /^[A-Za-z0-9_-]{10,}$/.test(list)) return { tipo: 'playlist', id: list };
     const canal = u.pathname.match(/^\/channel\/(UC[A-Za-z0-9_-]{20,})/);
     if(canal) return { tipo: 'playlist', id: 'UU' + canal[1].slice(2) };
     let v = u.searchParams.get('v');
@@ -421,8 +424,17 @@
 
   // ---- link/volume escolhidos nesta vitrine (só neste aparelho; vale por cima do que a loja configurou) ----
   const CHAVE_SOM = 'vitrine_musica_' + (token || '');
-  function lerSomLocal(){ try{ const v = JSON.parse(localStorage.getItem(CHAVE_SOM) || 'null'); return v && typeof v === 'object' ? v : null; } catch(e){ return null; } }
-  function gravarSomLocal(o){ try{ if(o) localStorage.setItem(CHAVE_SOM, JSON.stringify(o)); else localStorage.removeItem(CHAVE_SOM); } catch(e){ /* navegador bloqueando armazenamento: vale só até recarregar */ } }
+  const urlDaLoja = () => (ultimaCfg && ultimaCfg.musica && ultimaCfg.musica.url) || '';
+  // a escolha feita aqui guarda qual era o link da loja naquele momento: se a loja trocar o link no app, a escolha antiga perde a validade
+  // (senão ela ficaria "por cima" pra sempre e a música nova nunca tocaria)
+  function lerSomLocal(){
+    let v = null;
+    try{ v = JSON.parse(localStorage.getItem(CHAVE_SOM) || 'null'); } catch(e){ return null; }
+    if(!v || typeof v !== 'object') return null;
+    if(ultimaCfg && (v.lojaUrl || '') !== urlDaLoja()){ gravarSomLocal(null); return null; }
+    return v;
+  }
+  function gravarSomLocal(o){ try{ if(o) localStorage.setItem(CHAVE_SOM, JSON.stringify(Object.assign({}, o, { lojaUrl: urlDaLoja() }))); else localStorage.removeItem(CHAVE_SOM); } catch(e){ /* navegador bloqueando armazenamento: vale só até recarregar */ } }
   // música que vale agora: a escolhida neste aparelho (ou desligada aqui), senão a da loja
   function musicaEfetiva(cfg){
     const loja = cfg && cfg.musica && cfg.musica.url ? { url: cfg.musica.url, volume: cfg.musica.volume } : null;
