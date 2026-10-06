@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>Extratos das contas</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='4' width='56' height='56' rx='14' fill='%231f6f4a'/%3E%3Cpath d='M18 22h28M18 32h28M18 42h18' fill='none' stroke='%23fff' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#f4f6f5; --card:#ffffff; --ink:#18241f; --muted:#5d6b64; --line:#dfe5e2;
+    --brand:#1f6f4a; --brand-soft:#e3f1ea; --pos:#1f7a4d; --neg:#b3261e;
+    --warn:#9a6200; --warn-bg:#fff0cf; --bad-bg:#fde4e1; --radius:12px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#121715; --card:#1b2420; --ink:#e8efeb; --muted:#9fb0a7; --line:#2b3832; --brand:#58c28d; --brand-soft:#1d3329;
+      --pos:#6fd6a1; --neg:#ff8f86; --warn:#f0be5d; --warn-bg:#3a2d10; --bad-bg:#401c19; }
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; line-height:1.4; -webkit-text-size-adjust:100%; }
+  .pagina{ max-width:1100px; margin:0 auto; padding:16px; }
+  a{ color:var(--brand); }
+  .topo{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .topo h1{ margin:0; font-size:1.3rem; }
+  .sub{ color:var(--muted); font-size:.9rem; margin-top:2px; }
+  .acoes{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .btn-ic{ width:42px; height:42px; border-radius:50%; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; text-decoration:none; }
+  .btn-ic:hover{ border-color:var(--brand); }
+  .btn-ic.girando span{ display:inline-block; animation:gira .8s linear infinite; }
+  @keyframes gira{ to{ transform:rotate(360deg); } }
+  #arquivosCsv{ display:none; }
+  .btn{ border:none; border-radius:8px; padding:9px 14px; font-size:.9rem; font-weight:700; cursor:pointer; background:var(--brand); color:#fff; }
+  @media (prefers-color-scheme: dark){ .btn{ color:#0c1a13; } }
+  .btn.sec{ background:var(--card); color:var(--ink); border:1px solid var(--line); }
+  .aviso{ border-radius:var(--radius); padding:10px 14px; margin-bottom:12px; font-size:.92rem; border:1px solid var(--line); background:var(--brand-soft); }
+  .aviso.alerta{ background:var(--warn-bg); color:var(--warn); border-color:var(--warn); }
+  .aviso.erro{ background:var(--bad-bg); color:var(--neg); border-color:var(--neg); }
+  .aviso[hidden]{ display:none; }
+  .nav{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-bottom:12px; font-size:.9rem; color:var(--muted); }
+  .nav button{ background:none; border:none; color:var(--brand); cursor:pointer; font:inherit; padding:2px 0; font-weight:700; }
+  .nav .atual{ color:var(--ink); font-weight:700; }
+
+  /* cards de conta */
+  .grupo h2{ font-size:1rem; margin:16px 0 8px; }
+  .grade{ display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:12px; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:14px; text-align:left; color:inherit; font:inherit; cursor:pointer; }
+  .card:hover{ border-color:var(--brand); }
+  .card .nome{ font-weight:700; display:flex; justify-content:space-between; gap:8px; }
+  .card .nome small{ color:var(--muted); font-weight:500; }
+  .card .saldo{ font-size:1.4rem; font-weight:800; margin:8px 0 2px; }
+  .card .meta{ color:var(--muted); font-size:.82rem; }
+
+  /* resumo */
+  .kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; }
+  .kpi{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:10px 12px; }
+  .kpi span{ display:block; color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; }
+  .kpi b{ font-size:1.15rem; }
+  .pos{ color:var(--pos); } .neg{ color:var(--neg); }
+
+  /* tabelas */
+  .tabela-box{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; margin-bottom:14px; }
+  table{ border-collapse:collapse; width:100%; font-size:.92rem; }
+  th, td{ padding:9px 12px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th:first-child, td:first-child{ text-align:left; }
+  td.hist{ text-align:left; white-space:normal; overflow-wrap:anywhere; min-width:200px; }
+  th{ background:var(--brand-soft); font-size:.74rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); position:sticky; top:0; }
+  tbody tr.clicavel{ cursor:pointer; }
+  tbody tr.clicavel:hover{ background:var(--brand-soft); }
+  tfoot td{ font-weight:800; background:var(--brand-soft); }
+  .rolagem{ overflow-x:auto; }
+  .abas{ display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; }
+  .aba{ border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:999px; padding:7px 16px; font-weight:700; cursor:pointer; font-size:.9rem; }
+  .aba.ativo{ background:var(--brand); border-color:var(--brand); color:#fff; }
+  @media (prefers-color-scheme: dark){ .aba.ativo{ color:#0c1a13; } }
+  .barra{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+  .barra input[type=search]{ flex:1; min-width:150px; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:10px; padding:9px 12px; font-size:.92rem; }
+  .chip-dia{ background:var(--brand-soft); border-radius:999px; padding:5px 12px; font-size:.85rem; font-weight:700; }
+  .chip-dia button{ border:none; background:none; cursor:pointer; color:inherit; font-size:1rem; }
+  .vazio{ text-align:center; color:var(--muted); padding:36px 16px; background:var(--card); border:1px dashed var(--line); border-radius:var(--radius); }
+  .mais{ text-align:center; margin:10px 0; }
+  .rodape{ color:var(--muted); font-size:.8rem; text-align:center; margin:18px 0 6px; }
+
+  /* popup do PDF */
+  .fundo{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:center; justify-content:center; padding:16px; z-index:50; }
+  .fundo[hidden]{ display:none; }
+  .caixa{ background:var(--card); border-radius:var(--radius); padding:18px; max-width:380px; width:100%; }
+  .caixa h3{ margin:0 0 6px; } .caixa p{ margin:0 0 12px; color:var(--muted); font-size:.9rem; overflow-wrap:anywhere; }
+  .caixa .btns{ display:flex; gap:8px; flex-wrap:wrap; }
+  @media (max-width:640px){
+    .pagina{ padding:12px; }
+    th, td{ padding:8px 8px; font-size:.85rem; }
+    .oculta-cel{ display:none; }
+  }
+</style>
+</head>
+<body>
+<div class="pagina">
+  <div class="topo">
+    <div>
+      <h1>Extratos das contas</h1>
+      <div class="sub" id="subtitulo">Saldo mês a mês, dia a dia e lançamentos</div>
+    </div>
+    <div class="acoes">
+      <a class="btn-ic" href="fechamento-caixas.html" title="Fechamento de caixas" aria-label="Fechamento de caixas">✔</a>
+      <label class="btn-ic" for="arquivosCsv" title="Abrir arquivos CSV deste computador (caixa_bancos, caixas_fechados, saldos_iniciais)" aria-label="Importar CSV">📂</label>
+      <input type="file" id="arquivosCsv" accept=".csv,text/csv" multiple>
+      <button class="btn-ic" id="btnAtualizar" title="Atualizar" aria-label="Atualizar"><span>⟳</span></button>
+    </div>
+  </div>
+
+  <div class="aviso" id="aviso" hidden></div>
+  <div class="nav" id="nav"></div>
+  <div id="conteudo"></div>
+  <div class="rodape" id="rodape"></div>
+</div>
+
+<div class="fundo" id="popupPdf" hidden>
+  <div class="caixa">
+    <h3>PDF pronto</h3>
+    <p id="popupPdfNome"></p>
+    <div class="btns">
+      <button class="btn" id="pdfVer">Visualizar</button>
+      <button class="btn sec" id="pdfBaixar">Baixar</button>
+      <button class="btn sec" id="pdfCompartilhar">Compartilhar</button>
+      <button class="btn sec" id="pdfFechar">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  function el(tag, cls, texto){ const e = document.createElement(tag); if(cls) e.className = cls; if(texto !== undefined && texto !== null) e.textContent = texto; return e; }
+  const semAcento = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const URL_SCRIPT_OK = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
+
+  // ===================== dinheiro / datas =====================
+  const arred = (n) => { const r = Math.round((n + Number.EPSILON) * 100) / 100; return r === 0 ? 0 : r; };
+  const fmt = (n) => arred(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const spanValor = (n, cls) => { const s = el('span', (cls || '') + (arred(n) < 0 ? ' neg' : ''), fmt(n)); return s; };
+  const fmtDia = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
+  const nomeMes = (ym) => { const [a, m] = ym.split('-'); return new Date(+a, +m - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }); };
+  const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const nomeMesCurto = (ym) => { const [a, m] = ym.split('-'); return MESES_CURTOS[+m - 1] + '/' + a; };
+  const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+  // aceita AAAA-MM-DD (com ou sem hora) e DD/MM/AAAA (quando a consulta entrega a data como texto)
+  const isoData = (s) => { s = String(s || '').trim(); let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return m[1] + '-' + m[2] + '-' + m[3]; m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/); return m ? m[3] + '-' + m[2] + '-' + m[1] : s.slice(0, 10); };
+  const num = (s) => { s = String(s || '').trim(); if(!s) return 0; const n = parseFloat(s.replace(',', '.')); return isNaN(n) ? 0 : n; };
+
+  // ===================== CSV =====================
+  function lerCsv(texto){
+    texto = String(texto || '').replace(/^﻿/, '');
+    const primeira = texto.split(/\r?\n/, 1)[0] || '';
+    const cont = (c) => (primeira.match(new RegExp('\\' + c, 'g')) || []).length;
+    const sep = [';', ',', '\t'].sort((a, b) => cont(b) - cont(a))[0];
+    const linhas = []; let campo = '', linha = [], aspas = false;
+    for(let i = 0; i < texto.length; i++){
+      const c = texto[i];
+      if(aspas){ if(c === '"'){ if(texto[i + 1] === '"'){ campo += '"'; i++; } else aspas = false; } else campo += c; }
+      else if(c === '"') aspas = true;
+      else if(c === sep){ linha.push(campo); campo = ''; }
+      else if(c === '\n' || c === '\r'){
+        if(c === '\r' && texto[i + 1] === '\n') i++;
+        linha.push(campo); campo = '';
+        if(linha.length > 1 || linha[0].trim() !== '') linhas.push(linha);
+        linha = [];
+      } else campo += c;
+    }
+    linha.push(campo); if(linha.length > 1 || linha[0].trim() !== '') linhas.push(linha);
+    if(!linhas.length) return { cab: [], linhas: [] };
+    return { cab: linhas[0].map(h => semAcento(h).replace(/\s+/g, '_')), linhas: linhas.slice(1) };
+  }
+
+  // ===================== configuração (compartilhada com o painel de fechamentos) =====================
+  const CHAVE = 'fechamento_caixas_config_v1';
+  const ARQ = { lanc: 'caixa_bancos.csv', contas: 'caixas_fechados.csv', saldos: 'saldos_iniciais.csv', status: '_status.json' };
+  let cfg = { url: '', token: '' };
+  try { Object.assign(cfg, JSON.parse(localStorage.getItem(CHAVE) || '{}')); } catch(e){}
+  const salvarCfg = () => { try { const atual = JSON.parse(localStorage.getItem(CHAVE) || '{}'); localStorage.setItem(CHAVE, JSON.stringify(Object.assign(atual, { url: cfg.url, token: cfg.token }))); } catch(e){} };
+
+  // hash: acesso (#u=..&t=..) e navegação (#c=EMPRESA:CAIXA&m=AAAA-MM&v=det|dia&d=AAAA-MM-DD)
+  (function lerAcesso(){
+    const p = new URLSearchParams(location.hash.replace(/^#/, ''));
+    if(p.get('u') && p.get('t') && URL_SCRIPT_OK.test(p.get('u'))){ cfg.url = p.get('u'); cfg.token = p.get('t'); salvarCfg(); }
+    if(p.has('u') || p.has('t')){ p.delete('u'); p.delete('t'); p.delete('a'); try { history.replaceState(null, '', location.pathname + location.search + (p.toString() ? '#' + p.toString() : '')); } catch(e){} }
+  })();
+  if(cfg.url && !URL_SCRIPT_OK.test(cfg.url)) cfg.url = '';
+
+  // ===================== cache no aparelho (IndexedDB): não baixa de novo o que não mudou =====================
+  let bd = null;
+  function abrirBd(){
+    return new Promise((res) => {
+      try {
+        const rq = indexedDB.open('extratos_contas_v1', 1);
+        rq.onupgradeneeded = () => rq.result.createObjectStore('arquivos');
+        rq.onsuccess = () => res(rq.result); rq.onerror = () => res(null);
+      } catch(e){ res(null); }
+    });
+  }
+  const cacheGet = (nome) => new Promise((res) => { if(!bd) return res(null); try { const r = bd.transaction('arquivos').objectStore('arquivos').get(nome); r.onsuccess = () => res(r.result || null); r.onerror = () => res(null); } catch(e){ res(null); } });
+  const cachePut = (nome, v) => new Promise((res) => { if(!bd) return res(); try { const t = bd.transaction('arquivos', 'readwrite'); t.objectStore('arquivos').put(v, nome); t.oncomplete = () => res(); t.onerror = () => res(); } catch(e){ res(); } });
+
+  // ===================== Google (JSONP) =====================
+  function jsonp(url){
+    return new Promise((resolve, reject) => {
+      const cb = 'ext_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+      const s = document.createElement('script'); let fim = false;
+      const limpar = () => { delete window[cb]; s.remove(); clearTimeout(t); };
+      const t = setTimeout(() => { if(!fim){ fim = true; limpar(); reject(new Error('Tempo esgotado ao falar com o script do Google.')); } }, 60000);
+      window[cb] = (d) => { if(fim) return; fim = true; limpar(); resolve(d); };
+      s.onerror = () => { if(fim) return; fim = true; limpar(); reject(new Error('Não consegui falar com o script do Google.')); };
+      s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb; document.body.appendChild(s);
+    });
+  }
+  const chamar = (q) => jsonp(cfg.url + '?token=' + encodeURIComponent(cfg.token) + q).then(r => { if(!r || !r.ok) throw new Error((r && r.erro) || 'resposta inesperada do script'); return r; });
+
+  // ===================== dados =====================
+  let contas = new Map();        // 'EMPRESA:CAIXA' -> {emp, cx, nome, rows, calc}
+  let saldosIni = new Map();     // 'EMPRESA:CAIXA' -> número (arquivo)
+  let statusColeta = null, origemInfo = '', linhasInvalidas = 0;
+  let manuais = {}; try { manuais = JSON.parse(localStorage.getItem('extratos_saldos_manuais_v1') || '{}'); } catch(e){}
+  const salvarManuais = () => { try { localStorage.setItem('extratos_saldos_manuais_v1', JSON.stringify(manuais)); } catch(e){} };
+  const chaveConta = (emp, cx) => String(emp).toUpperCase().trim() + ':' + String(cx).trim();
+
+  function montar(textos){
+    // nomes das contas (caixas_fechados): EMPRESA + CAI_COD -> conta
+    const nomes = new Map();
+    if(textos[ARQ.contas]){
+      const t = lerCsv(textos[ARQ.contas]); const iE = t.cab.indexOf('empresa'), iC = t.cab.indexOf('cai_cod'), iN = t.cab.indexOf('conta');
+      if(iE >= 0 && iC >= 0 && iN >= 0) t.linhas.forEach(l => nomes.set(chaveConta(l[iE], l[iC]), (l[iN] || '').trim()));
+    }
+    saldosIni = new Map();
+    if(textos[ARQ.saldos]){
+      const t = lerCsv(textos[ARQ.saldos]); const iE = t.cab.indexOf('empresa'), iC = t.cab.indexOf('caixa'), iS = t.cab.findIndex(h => h === 'saldo' || h === 'saldo_inicial');
+      if(iE >= 0 && iC >= 0 && iS >= 0) t.linhas.forEach(l => saldosIni.set(chaveConta(l[iE], l[iC]), num(l[iS])));
+    }
+    const t = lerCsv(textos[ARQ.lanc]);
+    const ix = (n) => t.cab.indexOf(n);
+    const iCx = ix('caixa'), iD = ix('data'), iH = ix('historico'), iE = ix('entrada'), iS = ix('saida'), iQ = ix('sequencia'), iEmp = ix('empresa');
+    if([iCx, iD, iE, iS, iQ, iEmp].some(i => i < 0)) throw new Error('O arquivo de lançamentos precisa ter as colunas CAIXA, DATA, ENTRADA, SAIDA, SEQUENCIA e EMPRESA.');
+    const novo = new Map(); let invalidas = 0;
+    for(const l of t.linhas){
+      const k = chaveConta(l[iEmp], l[iCx]);
+      let c = novo.get(k);
+      if(!c){ c = { key: k, emp: String(l[iEmp]).toUpperCase().trim(), cx: String(l[iCx]).trim(), nome: nomes.get(k) || ('Caixa ' + String(l[iCx]).trim()), rows: [], calc: null }; novo.set(k, c); }
+      const dia = isoData(l[iD]), hist = iH >= 0 ? l[iH] : '';
+      if(!/^\d{4}-\d{2}-\d{2}$/.test(dia)){ invalidas++; continue; }      // linha com colunas deslocadas/data ilegível: não entra no saldo (e é avisada)
+      // linha de abertura (ex.: 31/12/2024, HISTORICO "SALDO ANTERIOR"/"SALDO INICIAL"): vira o saldo inicial da conta, não um lançamento
+      if(/^\s*saldo\s+(anterior|inicial)\b/i.test(semAcento(hist))){ const v = num(l[iE]) - num(l[iS]); c.abertura = { v: (c.abertura ? c.abertura.v : 0) + v, d: dia }; continue; }
+      c.rows.push({ d: dia, h: hist, e: num(l[iE]), s: num(l[iS]), q: parseInt(l[iQ], 10) || 0 });
+    }
+    contas = novo; linhasInvalidas = invalidas;
+    // ordem cronológica: por data e, dentro do mesmo dia, pela sequência (assim um lançamento retroativo, que no banco
+    // recebe número alto, cai no dia certo e os meses/saldos não se misturam)
+    contas.forEach(c => { c.rows.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : a.q - b.q)); });
+  }
+
+  function saldoInicialDe(c){
+    if(Object.prototype.hasOwnProperty.call(manuais, c.key)) return { v: manuais[c.key], fonte: 'informado neste aparelho' };
+    if(c.abertura) return { v: c.abertura.v, fonte: 'linha “SALDO ANTERIOR” do arquivo de lançamentos, de ' + fmtDia(c.abertura.d) };
+    if(saldosIni.has(c.key)) return { v: saldosIni.get(c.key), fonte: 'arquivo saldos_iniciais.csv' };
+    return { v: 0, fonte: null };
+  }
+
+  // calcula meses, dias e saldo corrente de cada lançamento (uma passada)
+  function calcular(c){
+    if(c.calc) return c.calc;
+    const ini = saldoInicialDe(c);
+    let saldo = ini.v; const saldos = new Float64Array(c.rows.length);
+    const meses = []; let mes = null, dia = null;
+    c.rows.forEach((r, i) => {
+      const ym = r.d.slice(0, 7);
+      if(!mes || mes.ym !== ym){ mes = { ym, ant: saldo, ent: 0, sai: 0, atu: saldo, n: 0, i0: i, i1: i, dias: [] }; meses.push(mes); dia = null; }
+      if(!dia || dia.d !== r.d){ dia = { d: r.d, ant: saldo, ent: 0, sai: 0, atu: saldo, n: 0, i0: i, i1: i }; mes.dias.push(dia); }
+      saldo += r.e - r.s; saldos[i] = saldo;
+      mes.ent += r.e; mes.sai += r.s; mes.atu = saldo; mes.n++; mes.i1 = i;
+      dia.ent += r.e; dia.sai += r.s; dia.atu = saldo; dia.n++; dia.i1 = i;
+    });
+    c.calc = { ini, saldos, meses, saldoAtual: saldo, ultima: c.rows.length ? c.rows[c.rows.length - 1].d : null };
+    return c.calc;
+  }
+
+  // ===================== carga =====================
+  function aviso(tipo, texto){ const a = $('aviso'); if(!texto){ a.hidden = true; return; } a.className = 'aviso ' + (tipo || ''); a.textContent = texto; a.hidden = false; }
+
+  async function carregar(manual){
+    if(!cfg.url || !cfg.token){
+      if(!contas.size){ mostrarInicio(); }
+      return;
+    }
+    const btn = $('btnAtualizar'); btn.classList.add('girando'); btn.disabled = true;
+    try {
+      if(!bd) bd = await abrirBd();
+      if(!contas.size) $('conteudo').replaceChildren(el('div', 'vazio', 'Carregando…'));
+      const lista = await chamar('&acao=listar');
+      const quando = {}; lista.arquivos.forEach(a => { quando[a.arquivo] = a.atualizado; });
+      if(!quando[ARQ.lanc]) throw new Error('O arquivo ' + ARQ.lanc + ' não está na pasta do Drive.');
+      const nomes = [ARQ.lanc, ARQ.contas, ARQ.saldos, ARQ.status].filter(n => quando[n]);
+      const textos = {}, baixar = [];
+      for(const n of nomes){ const c = await cacheGet(n); if(c && c.atualizado === quando[n]) textos[n] = c.texto; else baixar.push(n); }
+      if(baixar.length){
+        $('rodape').textContent = 'Baixando ' + baixar.join(', ') + '…';
+        const r = await chamar('&acao=ler&arquivos=' + encodeURIComponent(baixar.join(',')));
+        for(const n of baixar){ const f = r.arquivos[n]; if(f && f.texto != null){ textos[n] = f.texto; await cachePut(n, { atualizado: quando[n], texto: f.texto }); } }
+      }
+      if(!textos[ARQ.lanc]) throw new Error('Não consegui ler ' + ARQ.lanc + '.');
+      aplicar(textos, 'Dados do Drive — lançamentos atualizados em ' + new Date(quando[ARQ.lanc]).toLocaleString('pt-BR'));
+      avisoColeta(textos[ARQ.status], quando[ARQ.lanc]);
+    } catch(err){
+      console.error(err);
+      aviso('erro', (contas.size ? 'Não consegui atualizar agora (mostrando os últimos dados): ' : '') + err.message);
+      if(!contas.size) $('conteudo').replaceChildren();
+    } finally { btn.classList.remove('girando'); btn.disabled = false; }
+  }
+
+  function aplicar(textos, origem){
+    montar(textos); origemInfo = origem; statusColeta = textos[ARQ.status] || null; render();
+    if(!linhasInvalidas) aviso('', '');
+    else aviso('erro', linhasInvalidas + ' linha(s) do arquivo de lançamentos têm data inválida e foram ignoradas — confira a ordem das colunas na consulta (CAIXA, DATA, HISTORICO, ENTRADA, SAIDA, EMPRESA, SEQUENCIA). Os saldos podem estar incompletos.');
+  }
+
+  function avisoColeta(statusTexto, arquivoAtualizado){
+    let msg = '', tipo = 'alerta';
+    try {
+      if(statusTexto){
+        const s = JSON.parse(statusTexto), q = new Date(s.executado_em), h = (Date.now() - q.getTime()) / 3600000;
+        if(s.ok === false){ msg = 'A última coleta (' + q.toLocaleString('pt-BR') + ') teve erro em algum arquivo — os dados podem estar desatualizados.'; tipo = 'erro'; }
+        else if(h > 3) msg = 'A coleta no computador da empresa não roda desde ' + q.toLocaleString('pt-BR') + ' — os dados podem estar desatualizados.';
+      }
+    } catch(e){}
+    if(linhasInvalidas && !msg) return;      // mantém o aviso de linhas inválidas
+    aviso(tipo, msg);
+  }
+
+  function mostrarInicio(){
+    const v = el('div', 'vazio');
+    v.appendChild(el('div', '', 'Nenhum dado carregado.'));
+    const p = el('div', ''); p.appendChild(document.createTextNode('Configure o endereço do script e o token no '));
+    const a = el('a', '', 'painel de fechamentos (⚙)'); a.href = 'fechamento-caixas.html'; p.appendChild(a);
+    p.appendChild(document.createTextNode(' — vale aqui também — ou abra os CSVs (📂).')); v.appendChild(p);
+    $('conteudo').replaceChildren(v); $('nav').replaceChildren();
+  }
+
+  // ===================== navegação =====================
+  const rota = () => { const p = new URLSearchParams(location.hash.replace(/^#/, '')); return { c: p.get('c') || '', m: p.get('m') || '', v: p.get('v') === 'det' ? 'det' : 'dia', d: p.get('d') || '' }; };
+  const ir = (o) => { const p = new URLSearchParams(); if(o.c) p.set('c', o.c); if(o.m) p.set('m', o.m); if(o.m && o.v) p.set('v', o.v); if(o.d) p.set('d', o.d); location.hash = p.toString(); };
+  window.addEventListener('hashchange', render);
+
+  let ordemDesc = true, limiteLinhas = 300, termoBusca = '';
+
+  function renderNav(r, c, mes){
+    const n = $('nav'); n.replaceChildren();
+    const b = (txt, fn) => { const x = el('button', '', txt); x.type = 'button'; x.addEventListener('click', fn); return x; };
+    n.appendChild(b('Contas', () => ir({})));
+    if(c){ n.appendChild(el('span', '', '›')); n.appendChild(r.m ? b(c.emp + ' · ' + c.nome, () => ir({ c: c.key })) : el('span', 'atual', c.emp + ' · ' + c.nome)); }
+    if(mes){ n.appendChild(el('span', '', '›')); n.appendChild(el('span', 'atual', cap(nomeMes(mes.ym)))); }
+  }
+
+  function render(){
+    if(!contas.size){ if(!(cfg.url && cfg.token)) mostrarInicio(); return; }
+    const r = rota(); const c = contas.get(r.c);
+    $('rodape').textContent = origemInfo;
+    if(!c){ renderContas(); return; }
+    const calc = calcular(c); const mes = r.m ? calc.meses.find(m => m.ym === r.m) : null;
+    renderNav(r, c, mes);
+    if(mes) renderMes(c, calc, mes, r); else renderConta(c, calc);
+    window.scrollTo(0, 0);
+  }
+
+  // ---- 1) lista de contas ----
+  function renderContas(){
+    renderNav({}, null, null);
+    const box = el('div', ''); const porEmp = new Map();
+    [...contas.values()].forEach(c => { if(!porEmp.has(c.emp)) porEmp.set(c.emp, []); porEmp.get(c.emp).push(c); });
+    [...porEmp.keys()].sort().forEach(emp => {
+      const g = el('section', 'grupo'); g.appendChild(el('h2', '', emp));
+      const grade = el('div', 'grade');
+      porEmp.get(emp).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR')).forEach(c => {
+        const calc = calcular(c);
+        const card = el('button', 'card'); card.type = 'button';
+        const nm = el('div', 'nome', c.nome); nm.appendChild(el('small', '', 'Caixa #' + c.cx)); card.appendChild(nm);
+        card.appendChild(spanValor(calc.saldoAtual, 'saldo')); card.lastChild.style.display = 'block';
+        card.appendChild(el('div', 'meta', c.rows.length.toLocaleString('pt-BR') + ' lançamentos · último em ' + (calc.ultima ? fmtDia(calc.ultima) : '—')));
+        if(!calc.ini.fonte) card.appendChild(el('div', 'meta', '⚠ saldo inicial não informado'));
+        card.addEventListener('click', () => ir({ c: c.key }));
+        grade.appendChild(card);
+      });
+      g.appendChild(grade); box.appendChild(g);
+    });
+    $('conteudo').replaceChildren(box);
+  }
+
+  function kpis(lista){
+    const k = el('div', 'kpis');
+    lista.forEach(([rot, val, cor]) => { const d = el('div', 'kpi'); d.appendChild(el('span', '', rot)); const b = el('b', cor || ''); if(typeof val === 'number'){ b.textContent = fmt(val); if(arred(val) < 0) b.classList.add('neg'); } else b.textContent = val; d.appendChild(b); k.appendChild(d); });
+    return k;
+  }
+
+  // ---- 2) conta: mês a mês ----
+  function renderConta(c, calc){
+    const box = el('div', '');
+    const topo = el('div', 'barra');
+    const t = el('div', ''); t.style.flex = '1'; const h = el('h2', '', c.nome); h.style.margin = '0'; t.appendChild(h);
+    t.appendChild(el('div', 'sub', c.emp + ' · Caixa #' + c.cx + ' · ' + c.rows.length.toLocaleString('pt-BR') + ' lançamentos')); topo.appendChild(t);
+    const bi = el('button', 'btn sec', '⇅ Ordem'); bi.addEventListener('click', () => { ordemDesc = !ordemDesc; render(); }); topo.appendChild(bi);
+    const bp = el('button', 'btn', '📄 PDF do resumo mensal'); bp.addEventListener('click', () => gerarPdf('mensal', c, calc)); topo.appendChild(bp);
+    box.appendChild(topo);
+    box.appendChild(kpis([['Saldo atual', calc.saldoAtual], ['Saldo inicial', calc.ini.v], ['Último lançamento', calc.ultima ? fmtDia(calc.ultima) : '—']]));
+
+    const ini = el('div', 'aviso ' + (calc.ini.fonte ? '' : 'alerta'));
+    ini.appendChild(document.createTextNode(calc.ini.fonte
+      ? 'Saldo inicial: ' + fmt(calc.ini.v) + ' — ' + calc.ini.fonte + '. '
+      : 'Saldo inicial não informado: o arquivo não tem a linha “SALDO ANTERIOR” desta conta, então os saldos abaixo consideram só os lançamentos e podem divergir do extrato oficial. '));
+    const bs = el('button', 'btn sec', calc.ini.fonte ? 'Alterar' : 'Informar saldo inicial'); bs.style.marginLeft = '6px';
+    bs.addEventListener('click', () => {
+      const v = window.prompt('Saldo da conta ANTES do primeiro lançamento do arquivo (ex.: 4598,43):', String(calc.ini.v).replace('.', ','));
+      if(v === null) return; const n = parseFloat(v.replace(/\./g, '').replace(',', '.')); if(isNaN(n)){ alert('Valor inválido.'); return; }
+      manuais[c.key] = n; salvarManuais(); contas.forEach(x => { x.calc = null; }); render();
+    }); ini.appendChild(bs);
+    if(Object.prototype.hasOwnProperty.call(manuais, c.key)){ const br = el('button', 'btn sec', 'Remover o informado'); br.style.marginLeft = '6px'; br.addEventListener('click', () => { delete manuais[c.key]; salvarManuais(); contas.forEach(x => { x.calc = null; }); render(); }); ini.appendChild(br); }
+    box.appendChild(ini);
+
+    const meses = ordemDesc ? [...calc.meses].reverse() : calc.meses;
+    const caixa = el('div', 'tabela-box rolagem'); const tb = el('table');
+    const th = el('thead'), trh = el('tr'); ['Mês', 'Saldo anterior', 'Entradas', 'Saídas', 'Saldo atual', 'Lanç.'].forEach(x => trh.appendChild(el('th', '', x))); th.appendChild(trh); tb.appendChild(th);
+    const body = el('tbody');
+    meses.forEach(m => {
+      const tr = el('tr', 'clicavel'); tr.appendChild(el('td', '', cap(nomeMesCurto(m.ym))));
+      [m.ant, m.ent, m.sai, m.atu].forEach(v => { const td = el('td'); td.appendChild(spanValor(v)); tr.appendChild(td); });
+      tr.appendChild(el('td', '', m.n.toLocaleString('pt-BR')));
+      tr.addEventListener('click', () => ir({ c: c.key, m: m.ym, v: 'dia' })); body.appendChild(tr);
+    });
+    tb.appendChild(body); caixa.appendChild(tb); box.appendChild(caixa);
+    $('conteudo').replaceChildren(box);
+  }
+
+  // ---- 3) mês: dia a dia / detalhado ----
+  function renderMes(c, calc, mes, r){
+    const box = el('div', '');
+    const topo = el('div', 'barra'); const t = el('div', ''); t.style.flex = '1';
+    const h = el('h2', '', cap(nomeMes(mes.ym))); h.style.margin = '0'; t.appendChild(h); t.appendChild(el('div', 'sub', c.emp + ' · ' + c.nome)); topo.appendChild(t);
+    const ant = calc.meses[calc.meses.indexOf(mes) - 1], prox = calc.meses[calc.meses.indexOf(mes) + 1];
+    const bA = el('button', 'btn sec', '‹'); bA.disabled = !ant; bA.title = 'Mês anterior'; bA.addEventListener('click', () => ir({ c: c.key, m: ant.ym, v: r.v }));
+    const bP = el('button', 'btn sec', '›'); bP.disabled = !prox; bP.title = 'Próximo mês'; bP.addEventListener('click', () => ir({ c: c.key, m: prox.ym, v: r.v }));
+    topo.appendChild(bA); topo.appendChild(bP);
+    const bpdf = el('button', 'btn', '📄 PDF ' + (r.v === 'det' ? 'detalhado' : 'dia a dia')); bpdf.addEventListener('click', () => gerarPdf(r.v === 'det' ? 'detalhado' : 'dias', c, calc, mes)); topo.appendChild(bpdf);
+    box.appendChild(topo);
+    box.appendChild(kpis([['Saldo anterior', mes.ant], ['Entradas', mes.ent, 'pos'], ['Saídas', mes.sai], ['Saldo atual', mes.atu], ['Lançamentos', mes.n.toLocaleString('pt-BR')]]));
+
+    const abas = el('div', 'abas');
+    [['dia', 'Dia a dia'], ['det', 'Detalhado']].forEach(([k, rot]) => { const b = el('button', 'aba' + (r.v === k ? ' ativo' : ''), rot); b.addEventListener('click', () => { limiteLinhas = 300; ir({ c: c.key, m: mes.ym, v: k }); }); abas.appendChild(b); });
+    box.appendChild(abas);
+
+    if(r.v === 'dia'){
+      const caixa = el('div', 'tabela-box rolagem'), tb = el('table'), th = el('thead'), trh = el('tr');
+      ['Data', 'Saldo anterior', 'Entradas', 'Saídas', 'Saldo atual', 'Lanç.'].forEach(x => trh.appendChild(el('th', '', x))); th.appendChild(trh); tb.appendChild(th);
+      const body = el('tbody');
+      mes.dias.forEach(d => {
+        const tr = el('tr', 'clicavel'); tr.appendChild(el('td', '', fmtDia(d.d)));
+        [d.ant, d.ent, d.sai, d.atu].forEach(v => { const td = el('td'); td.appendChild(spanValor(v)); tr.appendChild(td); });
+        tr.appendChild(el('td', '', String(d.n)));
+        tr.addEventListener('click', () => { limiteLinhas = 300; termoBusca = ''; ir({ c: c.key, m: mes.ym, v: 'det', d: d.d }); }); body.appendChild(tr);
+      });
+      tb.appendChild(body);
+      const tf = el('tfoot'), trf = el('tr'); trf.appendChild(el('td', '', 'Mês'));
+      [mes.ant, mes.ent, mes.sai, mes.atu].forEach(v => { const td = el('td'); td.appendChild(spanValor(v)); trf.appendChild(td); }); trf.appendChild(el('td', '', String(mes.n))); tf.appendChild(trf); tb.appendChild(tf);
+      caixa.appendChild(tb); box.appendChild(caixa);
+      box.appendChild(el('p', 'sub', 'Toque num dia para ver os lançamentos dele.'));
+    } else {
+      const barra = el('div', 'barra');
+      const busca = el('input'); busca.type = 'search'; busca.placeholder = 'Buscar no histórico ou valor…'; busca.value = termoBusca;
+      busca.addEventListener('input', () => { termoBusca = busca.value; limiteLinhas = 300; desenharDetalhe(); }); barra.appendChild(busca);
+      if(r.d){ const chip = el('span', 'chip-dia', 'Dia ' + fmtDia(r.d) + ' '); const x = el('button', '', '✕'); x.title = 'Ver o mês todo'; x.addEventListener('click', () => ir({ c: c.key, m: mes.ym, v: 'det' })); chip.appendChild(x); barra.appendChild(chip); }
+      box.appendChild(barra);
+      const area = el('div', ''); area.id = 'areaDetalhe'; box.appendChild(area);
+      $('conteudo').replaceChildren(box);
+      desenharDetalhe(); return;
+
+      function desenharDetalhe(){
+        const t = semAcento(termoBusca); const out = [];
+        for(let i = mes.i0; i <= mes.i1; i++){
+          const L = c.rows[i]; if(r.d && L.d !== r.d) continue;
+          if(t && !(semAcento(L.h).includes(t) || fmt(L.e).includes(t) || fmt(L.s).includes(t))) continue;
+          out.push(i);
+        }
+        const caixa = el('div', 'tabela-box rolagem'), tb = el('table'), th = el('thead'), trh = el('tr');
+        ['Data', 'Histórico', 'Entrada', 'Saída', 'Saldo'].forEach(x => trh.appendChild(el('th', '', x))); th.appendChild(trh); tb.appendChild(th);
+        const body = el('tbody');
+        out.slice(0, limiteLinhas).forEach(i => {
+          const L = c.rows[i], tr = el('tr'); tr.appendChild(el('td', '', fmtDia(L.d))); tr.appendChild(el('td', 'hist', L.h));
+          const te = el('td'); if(arred(L.e) !== 0) te.appendChild(spanValor(L.e, 'pos')); tr.appendChild(te);
+          const ts = el('td'); if(arred(L.s) !== 0) ts.appendChild(spanValor(L.s)); tr.appendChild(ts);
+          const tsa = el('td'); tsa.appendChild(spanValor(calc.saldos[i])); tr.appendChild(tsa); body.appendChild(tr);
+        });
+        tb.appendChild(body);
+        if(t || r.d){ const tf = el('tfoot'), trf = el('tr'); trf.appendChild(el('td', '', 'Filtro')); trf.appendChild(el('td', '', out.length + ' lançamento(s)'));
+          const te = out.reduce((a, i) => a + c.rows[i].e, 0), ts = out.reduce((a, i) => a + c.rows[i].s, 0);
+          const a = el('td'); a.appendChild(spanValor(te)); trf.appendChild(a); const b = el('td'); b.appendChild(spanValor(ts)); trf.appendChild(b); trf.appendChild(el('td')); tf.appendChild(trf); tb.appendChild(tf); }
+        caixa.appendChild(tb);
+        const area = $('areaDetalhe'); area.replaceChildren(caixa);
+        if(!out.length) area.appendChild(el('div', 'vazio', 'Nenhum lançamento com esse filtro.'));
+        if(out.length > limiteLinhas){ const m = el('div', 'mais'); const b = el('button', 'btn sec', 'Mostrar mais ' + Math.min(300, out.length - limiteLinhas) + ' (de ' + (out.length - limiteLinhas) + ' restantes)'); b.addEventListener('click', () => { limiteLinhas += 300; desenharDetalhe(); }); m.appendChild(b); area.appendChild(m); }
+      }
+    }
+    $('conteudo').replaceChildren(box);
+  }
+
+  // ===================== PDF =====================
+  function carregarScript(src){ return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('Não consegui carregar a biblioteca de PDF (internet?).')); document.head.appendChild(s); }); }
+  let libsPdf = null;
+  const prepararPdf = () => libsPdf || (libsPdf = (async () => {
+    if(!window.jspdf) await carregarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    if(!(window.jspdf && window.jspdf.jsPDF.API.autoTable)) await carregarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+  })().catch(e => { libsPdf = null; throw e; }));
+
+  let pdfAtual = null;
+  async function gerarPdf(tipo, c, calc, mes){
+    try {
+      aviso('', ''); await prepararPdf();
+      const { jsPDF } = window.jspdf; const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      const W = doc.internal.pageSize.getWidth(), M = 12;
+      let titulo = 'Caixa CC  ' + c.nome, sub, nomeArq;
+      if(tipo === 'mensal'){ sub = 'Resumo mensal — ' + c.emp; nomeArq = 'resumo-mensal-' + c.nome; }
+      else { sub = cap(nomeMes(mes.ym)) + ' — ' + c.emp + (tipo === 'dias' ? ' — saldos dia a dia' : ' — lançamentos'); nomeArq = c.nome + '-' + mes.ym + (tipo === 'dias' ? '-dias' : ''); }
+      nomeArq = nomeArq.replace(/[^\w.-]+/g, '_') + '.pdf';
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text(titulo, M, 16);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90); doc.text(sub, M, 22);
+      let y0 = 28;
+      if(tipo !== 'mensal'){ doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text('SALDO ANTERIOR  ' + fmt(mes.ant), W - M, 16, { align: 'right' }); doc.setFont('helvetica', 'normal'); doc.setTextColor(90); doc.text(mes.n + ' lançamento(s)', W - M, 22, { align: 'right' }); }
+      doc.setTextColor(0);
+      const R = { halign: 'right' };
+      let head, body, foot, colStyles;
+      if(tipo === 'detalhado'){
+        head = [['CAIXA', 'DATA', 'HISTÓRICO', 'ENTRADA', 'SAÍDA', 'SALDO']];
+        body = []; for(let i = mes.i0; i <= mes.i1; i++){ const L = c.rows[i]; body.push([c.cx, fmtDia(L.d), L.h, arred(L.e) ? fmt(L.e) : '', arred(L.s) ? fmt(L.s) : '', fmt(calc.saldos[i])]); }
+        foot = [['', '', 'TOTAL DO MÊS', fmt(mes.ent), fmt(mes.sai), fmt(mes.atu)]];
+        colStyles = { 0: { cellWidth: 12 }, 1: { cellWidth: 22 }, 3: { ...R, cellWidth: 24 }, 4: { ...R, cellWidth: 22 }, 5: { ...R, cellWidth: 26 } };
+      } else {
+        const linhas = tipo === 'dias' ? mes.dias.map(d => [fmtDia(d.d), fmt(d.ant), fmt(d.ent), fmt(d.sai), fmt(d.atu), String(d.n)]) : [...calc.meses].reverse().map(m => [cap(nomeMesCurto(m.ym)), fmt(m.ant), fmt(m.ent), fmt(m.sai), fmt(m.atu), String(m.n)]);
+        head = [[tipo === 'dias' ? 'DATA' : 'MÊS', 'SALDO ANTERIOR', 'ENTRADAS', 'SAÍDAS', 'SALDO ATUAL', 'LANÇ.']]; body = linhas;
+        foot = tipo === 'dias' ? [['MÊS', fmt(mes.ant), fmt(mes.ent), fmt(mes.sai), fmt(mes.atu), String(mes.n)]] : null;
+        colStyles = { 1: R, 2: R, 3: R, 4: R, 5: R };
+      }
+      doc.autoTable({ head, body, foot: foot || undefined, startY: y0, margin: { left: M, right: M, top: 14, bottom: 14 }, theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 1.4, lineColor: [210, 215, 212], lineWidth: 0.1, overflow: 'linebreak' },
+        headStyles: { fillColor: [31, 111, 74], textColor: 255, halign: 'left' }, footStyles: { fillColor: [227, 241, 234], textColor: 0, fontStyle: 'bold' },
+        columnStyles: colStyles, showFoot: 'lastPage',
+        didParseCell: (d) => { if(d.section !== 'head' && d.column.index >= (tipo === 'detalhado' ? 3 : 1) && String(d.cell.raw).startsWith('-')) d.cell.styles.textColor = [179, 38, 30]; if(d.section === 'head' && d.column.index >= (tipo === 'detalhado' ? 3 : 1)) d.cell.styles.halign = 'right'; if(d.section === 'foot' && d.column.index >= (tipo === 'detalhado' ? 3 : 1)) d.cell.styles.halign = 'right'; } });
+      const n = doc.getNumberOfPages(), gerado = 'Gerado em ' + new Date().toLocaleString('pt-BR'), H = doc.internal.pageSize.getHeight();
+      for(let p = 1; p <= n; p++){ doc.setPage(p); doc.setFontSize(8); doc.setTextColor(120); doc.text(gerado, M, H - 7); doc.text('Página ' + p + ' de ' + n, W - M, H - 7, { align: 'right' }); }
+      pdfAtual = { blob: doc.output('blob'), nome: nomeArq };
+      $('popupPdfNome').textContent = nomeArq; $('popupPdf').hidden = false;
+    } catch(err){ console.error(err); aviso('erro', 'Não consegui gerar o PDF: ' + err.message); }
+  }
+  $('pdfFechar').addEventListener('click', () => { $('popupPdf').hidden = true; });
+  $('pdfVer').addEventListener('click', () => { if(!pdfAtual) return; const u = URL.createObjectURL(pdfAtual.blob); window.open(u, '_blank'); setTimeout(() => URL.revokeObjectURL(u), 60000); });
+  $('pdfBaixar').addEventListener('click', () => { if(!pdfAtual) return; const a = document.createElement('a'); a.href = URL.createObjectURL(pdfAtual.blob); a.download = pdfAtual.nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); });
+  $('pdfCompartilhar').addEventListener('click', async () => {
+    if(!pdfAtual) return; const f = new File([pdfAtual.blob], pdfAtual.nome, { type: 'application/pdf' });
+    try { if(navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: pdfAtual.nome }); else $('pdfBaixar').click(); } catch(e){ /* cancelado */ }
+  });
+
+  // ===================== eventos =====================
+  $('btnAtualizar').addEventListener('click', () => carregar(true));
+  $('arquivosCsv').addEventListener('change', async (e) => {
+    const arqs = [...e.target.files]; e.target.value = ''; if(!arqs.length) return;
+    const textos = {};
+    for(const f of arqs){ const n = f.name.toLowerCase(); const t = await f.text(); if(n.includes('caixa_bancos')) textos[ARQ.lanc] = t; else if(n.includes('caixas_fechados')) textos[ARQ.contas] = t; else if(n.includes('saldos_iniciais')) textos[ARQ.saldos] = t; }
+    if(!textos[ARQ.lanc]){ aviso('erro', 'Inclua o arquivo caixa_bancos.csv (os lançamentos).'); return; }
+    try { aplicar(textos, 'Dados dos arquivos abertos neste aparelho (não atualizam sozinhos)'); aviso('', ''); } catch(err){ aviso('erro', err.message); }
+  });
+  document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible' && cfg.url && contas.size) carregar(false); });
+
+  // gancho de teste/uso: só funções, nunca o token
+  window.extratos = { aplicar, calcular: (k) => calcular(contas.get(k)), contas: () => contas, gerarPdf: (t, k, ym) => { const c = contas.get(k), calc = calcular(c); return gerarPdf(t, c, calc, ym ? calc.meses.find(m => m.ym === ym) : null); } };
+
+  if(cfg.url && cfg.token) carregar(false); else mostrarInicio();
+})();
+</script>
+</body>
+</html>

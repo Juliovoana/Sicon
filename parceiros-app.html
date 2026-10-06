@@ -660,6 +660,13 @@
         <div class="grade hidden" id="blocoVitrineForm">
             <label class="campo-check" style="align-self:end;"><input type="checkbox" id="pf_vitrine" checked> Exibir na vitrine da TV</label>
             <div class="campo"><label>Segundos na vitrine</label><input type="number" min="3" max="120" id="pf_vitrine_segundos"><span class="dica">Em branco = padrão da vitrine. Só aparece com a autorização de divulgação marcada.</span></div>
+            <div class="campo"><label>⭐ Exibição na vitrine</label>
+                <select id="pf_vitrine_layout">
+                    <option value="padrao">Padrão — cartão + nome, ramo, especialidades e WhatsApp</option>
+                    <option value="destaque">Plus — cartão maior, texto menor (parceiro que enviou só o cartão)</option>
+                    <option value="tela_cheia">Plus — arte completa em tela inteira (parceiro que enviou a arte pronta)</option>
+                </select>
+                <span class="dica">Os modos Plus usam a imagem enviada em "Cartão de visita"; sem imagem, a vitrine usa o padrão.</span></div>
         </div>
         <div class="campo"><label>📇 Cartão de visita (foto)</label>
             <div class="foto-form">
@@ -1460,6 +1467,7 @@ function abrirFormParceiro(id) {
     $('blocoVitrineForm').classList.toggle('hidden', !vitrineDisponivel());
     $('pf_vitrine').checked = p ? p.exibir_vitrine !== false : true;
     $('pf_vitrine_segundos').value = p?.vitrine_segundos ?? '';
+    $('pf_vitrine_layout').value = p?.vitrine_layout || 'padrao';
     atualizarPreviewFoto(p?.cartao_path ? urlCartao(p.cartao_path) : '');
     $('statusParceiro').textContent = '';
     $('modal-parceiro').classList.add('aberto');
@@ -1553,7 +1561,12 @@ $('btnSalvarParceiro').addEventListener('click', async () => {
         // ramo escolhido: o texto digitado no autocadastro deixa de valer (coluna só existe após parceiros-ramo-livre.sql)
         if (atual && 'ramo_informado' in atual) payload.ramo_informado = null;
         // colunas da vitrine só existem depois de rodar parceiros-vitrine.sql
-        if (vitrineDisponivel()) { payload.exibir_vitrine = $('pf_vitrine').checked; payload.vitrine_segundos = segVitrine; }
+        if (vitrineDisponivel()) {
+            payload.exibir_vitrine = $('pf_vitrine').checked; payload.vitrine_segundos = segVitrine;
+            // coluna do modo "plus" só existe após rodar de novo o parceiros-vitrine.sql: só envia se mudou algo ou se a coluna já veio
+            const layout = $('pf_vitrine_layout').value;
+            if (layout !== 'padrao' || (atual && 'vitrine_layout' in atual)) payload.vitrine_layout = layout;
+        }
         let salvoId;
         if (atual) {
             const { error } = await sb.from('parceiros_parceiros').update(payload).eq('id', atual.id);
@@ -1573,7 +1586,8 @@ $('btnSalvarParceiro').addEventListener('click', async () => {
         abrirDetalhe(salvoId);
     } catch (e) {
         if (pathNovoEnviado) { try { await sb.storage.from(BUCKET_CARTOES).remove([pathNovoEnviado]); } catch (e2) { /* ignora */ } }
-        erro('Erro ao salvar: ' + (e.message || e));
+        const dicaLayout = /vitrine_layout/.test(e.message || '') ? ' — rode de novo o parceiros-vitrine.sql no Supabase (coluna do modo Plus).' : '';
+        erro('Erro ao salvar: ' + (e.message || e) + dicaLayout);
     } finally { btn.disabled = false; }
 });
 
@@ -1633,7 +1647,7 @@ function abrirDetalhe(id) {
             ${linha('Apresentação', escapeHtml(p.descricao || ''), true)}
             ${linha('Observação interna', escapeHtml(p.observacao || ''), true)}
             ${linha('Divulgação de contato', p.autorizou_divulgacao ? `✅ Autorizada${p.autorizou_em ? ' em ' + formatarDataSemFuso(p.autorizou_em) : ''}` : '⚠️ Sem autorização registrada')}
-            ${vitrineDisponivel() ? linha('Vitrine da TV', escapeHtml(motivoForaDaVitrine(p) || `Aparece${p.vitrine_segundos ? ' por ' + p.vitrine_segundos + 's' : ' (tempo padrão)'}`)) : ''}
+            ${vitrineDisponivel() ? linha('Vitrine da TV', escapeHtml(motivoForaDaVitrine(p) || `Aparece${p.vitrine_segundos ? ' por ' + p.vitrine_segundos + 's' : ' (tempo padrão)'}${p.vitrine_layout === 'destaque' ? ' · ⭐ Plus: cartão maior' : p.vitrine_layout === 'tela_cheia' ? ' · ⭐ Plus: arte em tela inteira' : ''}`)) : ''}
             ${linha('Cadastrado em', formatarDataHora(p.criado_em))}
         </dl>
         <div class="preview-recompensa">
@@ -2772,6 +2786,11 @@ const AJUDA_PARCEIROS = {
                 aparecem e-mail, documento nem endereço.</li>
                 <li><strong>Tempo de cada slide</strong>: há um padrão (em segundos) e cada parceiro e cada
                 propaganda pode ter o seu (mínimo 3 s). Parceiro com mais destaque = mais segundos.</li>
+                <li><strong>Exibição Plus</strong>: no cadastro do parceiro, "⭐ Exibição na vitrine" escolhe como o
+                slide dele aparece. <em>Padrão</em>: cartão + nome, ramo, especialidades e WhatsApp.
+                <em>Plus — cartão maior</em>: cartão grande e texto menor (pra quem mandou só o cartão de visita).
+                <em>Plus — arte em tela inteira</em>: a imagem ocupa a tela toda, sem texto (pra quem mandou a arte
+                pronta). Os dois Plus usam a imagem de "Cartão de visita"; sem imagem, vale o padrão.</li>
                 <li><strong>Propagandas</strong>: imagem (ideal 1920×1080) e/ou texto, com prazo opcional
                 (exibir de/até) e a opção de pausar. Entram "1 a cada N parceiros" (você define o N; 0 =
                 só parceiros). Sem parceiros elegíveis, a vitrine roda só as propagandas.</li>
