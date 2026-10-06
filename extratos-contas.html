@@ -472,6 +472,9 @@
       const barra = el('div', 'barra');
       const busca = el('input'); busca.type = 'search'; busca.placeholder = 'Buscar no histórico ou valor…'; busca.value = termoBusca;
       busca.addEventListener('input', () => { termoBusca = busca.value; limiteLinhas = 300; desenharDetalhe(); }); barra.appendChild(busca);
+      // exportação: leva o que está filtrado na tela (todas as linhas do filtro, não só as 300 exibidas)
+      const bx = el('button', 'btn sec', '⬇ Excel'); bx.title = 'Baixar planilha Excel (.xlsx) do que está na tela'; bx.addEventListener('click', () => exportarDetalhe('xlsx', c, calc, mes, r)); barra.appendChild(bx);
+      const bc = el('button', 'btn sec', '⬇ CSV'); bc.title = 'Baixar CSV (abre direto no Excel)'; bc.addEventListener('click', () => exportarDetalhe('csv', c, calc, mes, r)); barra.appendChild(bc);
       if(r.d){ const chip = el('span', 'chip-dia', 'Dia ' + fmtDia(r.d) + ' '); const x = el('button', '', '✕'); x.title = 'Ver o mês todo'; x.addEventListener('click', () => ir({ c: c.key, m: mes.ym, v: 'det' })); chip.appendChild(x); barra.appendChild(chip); }
       box.appendChild(barra);
       const area = el('div', ''); area.id = 'areaDetalhe'; box.appendChild(area);
@@ -505,6 +508,70 @@
       }
     }
     $('conteudo').replaceChildren(box);
+  }
+
+  // ===================== exportar (Excel / CSV) =====================
+  function baixarBlob(blob, nome){ const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
+  const serialExcel = (iso) => { const [y, m, d] = iso.split('-').map(Number); return (Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 86400000; };
+  let libXlsx = null;
+  const prepararXlsx = () => libXlsx || (libXlsx = (window.XLSX ? Promise.resolve() : carregarScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js')).catch(e => { libXlsx = null; throw new Error('Não consegui carregar a biblioteca do Excel (internet?). Use o CSV.'); }));
+
+  // linhas do detalhado conforme o filtro atual (dia e/ou busca): [{d, h, e, s, saldo}]
+  function linhasDoDetalhe(c, calc, mes, r){
+    const t = semAcento(termoBusca), out = [];
+    for(let i = mes.i0; i <= mes.i1; i++){
+      const L = c.rows[i]; if(r.d && L.d !== r.d) continue;
+      if(t && !(semAcento(L.h).includes(t) || fmt(L.e).includes(t) || fmt(L.s).includes(t))) continue;
+      out.push({ d: L.d, h: L.h, e: arred(L.e), s: arred(L.s), saldo: arred(calc.saldos[i]) });
+    }
+    return out;
+  }
+
+  async function exportarDetalhe(formato, c, calc, mes, r){
+    try {
+      aviso('', '');
+      const linhas = linhasDoDetalhe(c, calc, mes, r);
+      const filtrado = !!(r.d || termoBusca.trim());
+      const base = (c.emp + '-' + c.nome + '-' + mes.ym + (r.d ? '-dia' + r.d.slice(8) : '') + (termoBusca.trim() ? '-filtrado' : '')).replace(/[^\w.-]+/g, '_');
+      // empresa e conta/banco vão como COLUNAS em todas as linhas (facilita filtrar/somar e juntar vários extratos)
+      const cab = ['EMPRESA', 'CONTA', 'CAIXA', 'DATA', 'HISTORICO', 'ENTRADA', 'SAIDA', 'SALDO'];
+      // com o mês inteiro (sem filtro) a 1ª linha é o saldo anterior, pra fechar com o PDF/extrato
+      const abertura = filtrado ? null : { d: mes.ym + '-01', h: 'SALDO ANTERIOR', e: null, s: null, saldo: arred(mes.ant) };
+
+      if(formato === 'csv'){
+        const q = (v) => { v = String(v == null ? '' : v); return /[;"\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+        const n = (v) => v === null || v === 0 ? '' : v.toFixed(2).replace('.', ',');
+        const todas = abertura ? [abertura, ...linhas] : linhas;
+        const txt = [cab.join(';')].concat(todas.map(l => [c.emp, c.nome, c.cx, fmtDia(l.d), l.h, n(l.e), n(l.s), l.saldo.toFixed(2).replace('.', ',')].map(q).join(';'))).join('\r\n') + '\r\n';
+        baixarBlob(new Blob(['﻿', txt], { type: 'text/csv;charset=utf-8' }), base + '.csv');
+        aviso('', ''); return;
+      }
+
+      await prepararXlsx();
+      const X = window.XLSX;
+      const todas = abertura ? [abertura, ...linhas] : linhas;
+      const aoa = [cab, ...todas.map(l => [c.emp, c.nome, Number(c.cx) || c.cx, l.d, l.h, l.e || null, l.s || null, l.saldo])];
+      const ws = X.utils.aoa_to_sheet(aoa);       // cabeçalho na linha 1; dados a partir da 2
+      for(let i = 0; i < todas.length; i++){
+        const linha = i + 2;
+        const cd = ws['D' + linha]; if(cd){ cd.t = 'n'; cd.v = serialExcel(todas[i].d); cd.z = 'dd/mm/yyyy'; }
+        ['F', 'G', 'H'].forEach(col => { const cc = ws[col + linha]; if(cc && cc.t === 'n') cc.z = '#,##0.00;[Red]-#,##0.00'; });
+      }
+      ws['!cols'] = [{ wch: 14 }, { wch: 24 }, { wch: 7 }, { wch: 12 }, { wch: 52 }, { wch: 15 }, { wch: 15 }, { wch: 16 }];
+      ws['!autofilter'] = { ref: 'A1:H' + aoa.length };
+      const resumo = [
+        ['Empresa', c.emp], ['Conta', c.nome], ['Caixa', c.cx], ['Mês', cap(nomeMes(mes.ym))], [],
+        ['Saldo anterior', arred(mes.ant)], ['Entradas do mês', arred(mes.ent)], ['Saídas do mês', arred(mes.sai)], ['Saldo atual', arred(mes.atu)], ['Lançamentos no mês', mes.n], [],
+        ['Filtro aplicado', filtrado ? ((r.d ? 'Dia ' + fmtDia(r.d) : '') + (termoBusca.trim() ? ' Busca: “' + termoBusca.trim() + '”' : '')).trim() : 'nenhum (mês inteiro)'],
+        ['Linhas exportadas', linhas.length], ['Gerado em', new Date().toLocaleString('pt-BR')],
+        ['Obs.', 'Valores arredondados a 2 casas; o saldo é o acumulado lançamento a lançamento.'],
+      ];
+      const wr = X.utils.aoa_to_sheet(resumo); wr['!cols'] = [{ wch: 22 }, { wch: 46 }];
+      [5, 6, 7, 8].forEach(i => { const cc = wr['B' + (i + 1)]; if(cc) cc.z = '#,##0.00;[Red]-#,##0.00'; });
+      const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, ws, 'Lançamentos'); X.utils.book_append_sheet(wb, wr, 'Resumo');
+      const buf = X.write(wb, { bookType: 'xlsx', type: 'array' });
+      baixarBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), base + '.xlsx');
+    } catch(err){ console.error(err); aviso('erro', 'Não consegui exportar: ' + err.message); }
   }
 
   // ===================== PDF =====================
