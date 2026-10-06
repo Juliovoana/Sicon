@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>Fechamento de caixas</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='4' width='56' height='56' rx='14' fill='%231f6f4a'/%3E%3Cpath d='M18 33l9 9 19-20' fill='none' stroke='%23fff' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#f4f6f5; --card:#ffffff; --ink:#18241f; --muted:#5d6b64; --line:#dfe5e2;
+    --brand:#1f6f4a; --brand-soft:#e3f1ea;
+    --ok:#1f7a4d; --ok-bg:#e1f3e9;
+    --warn:#9a6200; --warn-bg:#fff0cf;
+    --bad:#b3261e; --bad-bg:#fde4e1;
+    --radius:12px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-tema="claro"]){
+      --bg:#121715; --card:#1b2420; --ink:#e8efeb; --muted:#9fb0a7; --line:#2b3832;
+      --brand:#58c28d; --brand-soft:#1d3329;
+      --ok:#6fd6a1; --ok-bg:#183326;
+      --warn:#f0be5d; --warn-bg:#3a2d10;
+      --bad:#ff8f86; --bad-bg:#401c19;
+    }
+  }
+  *{ box-sizing:border-box; }
+  html{ -webkit-text-size-adjust:100%; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; line-height:1.4; }
+  .pagina{ max-width:1100px; margin:0 auto; padding:16px; }
+
+  /* topo */
+  .topo{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  .topo h1{ margin:0; font-size:1.35rem; }
+  .topo .sub{ color:var(--muted); font-size:.9rem; margin-top:2px; }
+  .acoes{ display:flex; gap:8px; }
+  .btn-ic{ width:42px; height:42px; border-radius:50%; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; }
+  .btn-ic:hover{ border-color:var(--brand); }
+  .btn-ic.girando span{ display:inline-block; animation:gira .8s linear infinite; }
+  @keyframes gira{ to{ transform:rotate(360deg); } }
+  #arquivoCsv{ display:none; }
+
+  /* avisos */
+  .aviso{ border-radius:var(--radius); padding:10px 14px; margin-bottom:12px; font-size:.92rem; border:1px solid transparent; }
+  .aviso.info{ background:var(--brand-soft); color:var(--ink); border-color:var(--line); }
+  .aviso.alerta{ background:var(--warn-bg); color:var(--warn); border-color:var(--warn); }
+  .aviso.erro{ background:var(--bad-bg); color:var(--bad); border-color:var(--bad); }
+  .aviso[hidden]{ display:none; }
+
+  /* resumo por empresa */
+  .resumo{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; margin-bottom:14px; }
+  .card-emp{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:14px; text-align:left; cursor:pointer; color:inherit; font:inherit; }
+  .card-emp:hover{ border-color:var(--brand); }
+  .card-emp.ativo{ outline:2px solid var(--brand); }
+  .card-emp .nome{ font-weight:700; font-size:1.05rem; display:flex; justify-content:space-between; align-items:baseline; }
+  .card-emp .nome small{ color:var(--muted); font-weight:500; font-size:.8rem; }
+  .card-emp .numeros{ display:flex; gap:14px; margin-top:10px; }
+  .num b{ display:block; font-size:1.5rem; line-height:1.1; }
+  .num span{ font-size:.75rem; color:var(--muted); }
+  .num.bad b{ color:var(--bad); } .num.warn b{ color:var(--warn); } .num.ok b{ color:var(--ok); }
+  .card-emp .velho{ margin-top:10px; font-size:.82rem; color:var(--muted); }
+
+  /* filtros */
+  .filtros{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:12px; }
+  .grupo-chips{ display:flex; gap:6px; flex-wrap:wrap; }
+  .chip{ border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:999px; padding:7px 14px; font-size:.88rem; cursor:pointer; font-weight:600; }
+  .chip.ativo{ background:var(--brand); border-color:var(--brand); color:#fff; }
+  @media (prefers-color-scheme: dark){ :root:not([data-tema="claro"]) .chip.ativo{ color:#0c1a13; } }
+  .filtros input[type=search], .filtros select{ border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:10px; padding:9px 12px; font-size:.92rem; }
+  .filtros input[type=search]{ flex:1; min-width:150px; }
+  .contagem{ color:var(--muted); font-size:.85rem; margin:0 0 8px; }
+
+  /* lista */
+  .grupo{ margin-bottom:18px; }
+  .grupo h2{ font-size:1rem; margin:0 0 8px; display:flex; align-items:center; gap:8px; }
+  .grupo h2 .qtd{ color:var(--muted); font-weight:500; font-size:.85rem; }
+  .linha{ display:grid; grid-template-columns:minmax(150px,2fr) 70px 150px 90px 130px; gap:10px; align-items:center; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:12px 14px; margin-bottom:8px; border-left:5px solid var(--line); }
+  .linha.ok{ border-left-color:var(--ok); } .linha.warn{ border-left-color:var(--warn); } .linha.bad{ border-left-color:var(--bad); }
+  .linha .conta{ font-weight:700; overflow-wrap:anywhere; }
+  .linha .rot{ display:none; color:var(--muted); font-size:.75rem; }
+  .linha .cx{ color:var(--muted); }
+  .linha .data small{ display:block; color:var(--muted); font-size:.78rem; }
+  .linha .dias{ font-weight:700; }
+  .selo{ display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:4px 10px; font-size:.8rem; font-weight:700; white-space:nowrap; }
+  .selo.ok{ background:var(--ok-bg); color:var(--ok); } .selo.warn{ background:var(--warn-bg); color:var(--warn); } .selo.bad{ background:var(--bad-bg); color:var(--bad); }
+  .cab-linha{ display:grid; grid-template-columns:minmax(150px,2fr) 70px 150px 90px 130px; gap:10px; padding:0 14px 6px; color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; }
+  @media (max-width:720px){
+    .pagina{ padding:12px; }
+    .cab-linha{ display:none; }
+    .linha{ grid-template-columns:1fr auto; row-gap:6px; }
+    .linha .conta{ grid-column:1; font-size:1.02rem; }
+    .linha .estado{ grid-column:2; grid-row:1; justify-self:end; }
+    .linha .cx, .linha .data, .linha .dias{ grid-column:1 / -1; display:flex; gap:6px; align-items:baseline; font-size:.9rem; }
+    .linha .rot{ display:inline; }
+    .linha .data small{ display:inline; }
+  }
+
+  .vazio{ text-align:center; color:var(--muted); padding:40px 16px; background:var(--card); border:1px dashed var(--line); border-radius:var(--radius); }
+  .vazio button{ margin-top:10px; }
+  .rodape{ color:var(--muted); font-size:.8rem; text-align:center; margin:20px 0 6px; }
+
+  /* configurações */
+  .painel{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:14px; margin-bottom:14px; }
+  .painel[hidden]{ display:none; }
+  .painel h3{ margin:0 0 10px; font-size:1rem; }
+  .campo{ margin-bottom:10px; }
+  .campo label{ display:block; font-size:.82rem; font-weight:700; margin-bottom:4px; }
+  .campo input, .campo select{ width:100%; border:1px solid var(--line); background:var(--bg); color:var(--ink); border-radius:8px; padding:9px 10px; font-size:.92rem; }
+  .campo small{ color:var(--muted); display:block; margin-top:3px; }
+  .duas{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .btn{ border:none; border-radius:8px; padding:9px 16px; font-size:.9rem; font-weight:700; cursor:pointer; background:var(--brand); color:#fff; }
+  @media (prefers-color-scheme: dark){ :root:not([data-tema="claro"]) .btn{ color:#0c1a13; } }
+  .btn.sec{ background:var(--card); color:var(--ink); border:1px solid var(--line); }
+  .btn-linha{ display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+  #msgConfig{ font-size:.85rem; margin-top:8px; min-height:1.2em; }
+</style>
+</head>
+<body>
+<div class="pagina">
+
+  <div class="topo">
+    <div>
+      <h1>Fechamento de caixas</h1>
+      <div class="sub" id="subtitulo">Último fechamento de cada conta, por empresa</div>
+    </div>
+    <div class="acoes">
+      <label class="btn-ic" for="arquivoCsv" title="Abrir um arquivo CSV deste computador" aria-label="Importar CSV">📂</label>
+      <input type="file" id="arquivoCsv" accept=".csv,text/csv">
+      <button class="btn-ic" id="btnAtualizar" title="Atualizar agora" aria-label="Atualizar"><span>⟳</span></button>
+      <button class="btn-ic" id="btnConfig" title="Configurações" aria-label="Configurações">⚙</button>
+    </div>
+  </div>
+
+  <div class="aviso" id="aviso" hidden></div>
+
+  <!-- configurações -->
+  <div class="painel" id="painelConfig" hidden>
+    <h3>Configurações</h3>
+    <div class="campo">
+      <label for="cfgUrl">Endereço do Apps Script (termina em /exec)</label>
+      <input type="url" id="cfgUrl" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+    </div>
+    <div class="duas">
+      <div class="campo">
+        <label for="cfgToken">Token</label>
+        <input type="password" id="cfgToken" autocomplete="off">
+      </div>
+      <div class="campo">
+        <label for="cfgArquivo">Arquivo dos fechamentos</label>
+        <input type="text" id="cfgArquivo" value="caixas_fechados.csv" autocomplete="off">
+      </div>
+    </div>
+    <div class="duas">
+      <div class="campo">
+        <label for="cfgEmDia">“Em dia” até (dias desde o fechamento)</label>
+        <input type="number" id="cfgEmDia" min="0" max="60" value="2">
+      </div>
+      <div class="campo">
+        <label for="cfgAtencao">“Atenção” até (acima disso: atrasado)</label>
+        <input type="number" id="cfgAtencao" min="1" max="120" value="7">
+      </div>
+    </div>
+    <div class="campo">
+      <label for="cfgIntervalo">Atualizar sozinho a cada</label>
+      <select id="cfgIntervalo">
+        <option value="0">Só quando eu pedir</option>
+        <option value="5">5 minutos</option>
+        <option value="15" selected>15 minutos</option>
+        <option value="30">30 minutos</option>
+        <option value="60">1 hora</option>
+      </select>
+    </div>
+    <div class="btn-linha">
+      <button class="btn" id="btnSalvarConfig">Salvar e atualizar</button>
+      <button class="btn sec" id="btnCopiarLink">Copiar link de acesso (celular)</button>
+      <button class="btn sec" id="btnEsquecer">Esquecer neste aparelho</button>
+    </div>
+    <div id="msgConfig"></div>
+  </div>
+
+  <div class="resumo" id="resumo"></div>
+
+  <div class="filtros">
+    <div class="grupo-chips" id="chipsSituacao" role="group" aria-label="Situação">
+      <button class="chip ativo" data-sit="todas">Todas</button>
+      <button class="chip" data-sit="bad">Atrasadas</button>
+      <button class="chip" data-sit="warn">Atenção</button>
+      <button class="chip" data-sit="ok">Em dia</button>
+    </div>
+    <input type="search" id="busca" placeholder="Buscar conta…" aria-label="Buscar conta">
+    <select id="ordem" aria-label="Ordenar">
+      <option value="atraso">Mais atrasadas primeiro</option>
+      <option value="conta">Conta (A–Z)</option>
+      <option value="recentes">Fechadas há menos tempo</option>
+    </select>
+  </div>
+  <p class="contagem" id="contagem"></p>
+
+  <div id="lista"></div>
+
+  <div class="rodape" id="rodape"></div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ===================== utilidades =====================
+  const $ = (id) => document.getElementById(id);
+  function el(tag, cls, texto){
+    const e = document.createElement(tag);
+    if(cls) e.className = cls;
+    if(texto !== undefined && texto !== null) e.textContent = texto;     // sempre textContent: nada do CSV vira HTML
+    return e;
+  }
+  const semAcento = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+  // leitor de CSV próprio (aspas, vírgula/ponto e vírgula/tab detectados sozinhos) -- não depende de biblioteca externa
+  function lerCsv(texto){
+    texto = String(texto || '').replace(/^﻿/, '');
+    const primeira = texto.split(/\r?\n/, 1)[0] || '';
+    const cont = (c) => (primeira.match(new RegExp('\\' + c, 'g')) || []).length;
+    const sep = [';', ',', '\t'].sort((a, b) => cont(b) - cont(a))[0];
+    const linhas = []; let campo = '', linha = [], aspas = false;
+    for(let i = 0; i < texto.length; i++){
+      const c = texto[i];
+      if(aspas){
+        if(c === '"'){ if(texto[i + 1] === '"'){ campo += '"'; i++; } else aspas = false; }
+        else campo += c;
+      } else if(c === '"') aspas = true;
+      else if(c === sep){ linha.push(campo); campo = ''; }
+      else if(c === '\n' || c === '\r'){
+        if(c === '\r' && texto[i + 1] === '\n') i++;
+        linha.push(campo); campo = '';
+        if(linha.some(v => v.trim() !== '')) linhas.push(linha);
+        linha = [];
+      } else campo += c;
+    }
+    linha.push(campo);
+    if(linha.some(v => v.trim() !== '')) linhas.push(linha);
+    if(!linhas.length) return [];
+    const cab = linhas[0].map(h => semAcento(h).replace(/\s+/g, '_'));
+    return linhas.slice(1).map(l => { const o = {}; cab.forEach((h, i) => { o[h] = (l[i] || '').trim(); }); return o; });
+  }
+
+  // "2026-09-30" ou "30/09/2026" -> Date local à meia-noite (sem pegadinha de fuso)
+  function lerData(s){
+    s = String(s || '').trim();
+    let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(m) return new Date(+m[1], +m[2] - 1, +m[3]);
+    m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+    if(m) return new Date(+m[3], +m[2] - 1, +m[1]);
+    return null;
+  }
+  const hoje0 = () => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); };
+  const diasEntre = (a, b) => Math.round((b - a) / 86400000);
+  const fmtData = (d) => d.toLocaleDateString('pt-BR');
+  const fmtDiaSemana = (d) => d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
+  const fmtDataHora = (d) => d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  // JSONP executa o que o endereço devolver como código da página: por isso SÓ aceitamos o formato do app da web do Google
+  // (vale pro campo de configuração e pro link de acesso -- um link montado por terceiros não pode apontar pra outro lugar).
+  const URL_SCRIPT_OK = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
+
+  // ===================== configuração (neste aparelho) =====================
+  const CHAVE = 'fechamento_caixas_config_v1';
+  const PADRAO = { url: '', token: '', arquivo: 'caixas_fechados.csv', emDia: 2, atencao: 7, intervalo: 15 };
+  let cfg = Object.assign({}, PADRAO);
+  try { Object.assign(cfg, JSON.parse(localStorage.getItem(CHAVE) || '{}')); } catch(e){ /* sem armazenamento: vale só nesta visita */ }
+  const salvarCfg = () => { try { localStorage.setItem(CHAVE, JSON.stringify(cfg)); } catch(e){} };
+
+  // Link de acesso: ...fechamento-caixas.html#u=<endereço do script>&t=<token>
+  // O que vem depois do # NÃO é enviado a nenhum servidor; a página guarda no aparelho e limpa o endereço.
+  (function lerLinkDeAcesso(){
+    const h = location.hash.replace(/^#/, '');
+    if(!h) return;
+    const p = new URLSearchParams(h);
+    if(p.get('u') && p.get('t') && URL_SCRIPT_OK.test(p.get('u'))){
+      cfg.url = p.get('u'); cfg.token = p.get('t');
+      if(p.get('a') && /^[A-Za-z0-9_.-]{1,80}\.csv$/.test(p.get('a'))) cfg.arquivo = p.get('a');
+      salvarCfg();
+    }
+    try { history.replaceState(null, '', location.pathname + location.search); } catch(e){}
+  })();
+  // configuração antiga/adulterada no armazenamento do aparelho também não pode apontar pra fora
+  if(cfg.url && !URL_SCRIPT_OK.test(cfg.url)) cfg.url = '';
+
+  // ===================== estado =====================
+  let registros = [];          // [{empresa, conta, caixa, data(Date|null), dias(number|null), situacao}]
+  let origemInfo = '';         // texto do rodapé (de onde vieram os dados)
+  let filtroEmpresa = 'todas', filtroSit = 'todas', termo = '', ordem = 'atraso';
+  let timer = null;
+
+  function situacaoDe(dias){
+    if(dias === null) return 'bad';
+    if(dias <= cfg.emDia) return 'ok';
+    if(dias <= cfg.atencao) return 'warn';
+    return 'bad';
+  }
+  const ROTULO = { ok: '● Em dia', warn: '▲ Atenção', bad: '✖ Atrasado' };
+
+  function montarRegistros(linhas){
+    const h = hoje0();
+    return linhas.map(l => {
+      const data = lerData(l.ultimo_fechamento || l.fechamento || l.data);
+      const dias = data ? Math.max(0, diasEntre(data, h)) : null;
+      return {
+        empresa: (l.empresa || '—').toUpperCase(), conta: l.conta || '—', caixa: l.cai_cod || l.caixa || '',
+        data, dias, situacao: situacaoDe(dias),
+      };
+    }).filter(r => r.conta !== '—' || r.data);
+  }
+
+  // ===================== desenho =====================
+  function aviso(tipo, texto){
+    const a = $('aviso');
+    if(!texto){ a.hidden = true; return; }
+    a.className = 'aviso ' + tipo; a.textContent = texto; a.hidden = false;
+  }
+
+  function empresas(){ return [...new Set(registros.map(r => r.empresa))].sort(); }
+
+  function desenharResumo(){
+    const box = $('resumo'); box.textContent = '';
+    empresas().forEach(emp => {
+      const rs = registros.filter(r => r.empresa === emp);
+      const bad = rs.filter(r => r.situacao === 'bad').length, warn = rs.filter(r => r.situacao === 'warn').length, ok = rs.filter(r => r.situacao === 'ok').length;
+      const comData = rs.filter(r => r.data);
+      const velho = comData.length ? comData.reduce((a, b) => (a.data < b.data ? a : b)) : null;
+      const c = el('button', 'card-emp' + (filtroEmpresa === emp ? ' ativo' : ''));
+      c.type = 'button';
+      const nome = el('div', 'nome', emp); nome.appendChild(el('small', '', rs.length + (rs.length === 1 ? ' conta' : ' contas')));
+      c.appendChild(nome);
+      const nums = el('div', 'numeros');
+      [['bad', bad, 'atrasadas'], ['warn', warn, 'atenção'], ['ok', ok, 'em dia']].forEach(([cl, n, rot]) => {
+        const d = el('div', 'num ' + cl); d.appendChild(el('b', '', String(n))); d.appendChild(el('span', '', rot)); nums.appendChild(d);
+      });
+      c.appendChild(nums);
+      if(velho) c.appendChild(el('div', 'velho', 'Mais antigo: ' + velho.conta + ' — ' + fmtData(velho.data) + ' (há ' + velho.dias + (velho.dias === 1 ? ' dia)' : ' dias)')));
+      c.addEventListener('click', () => { filtroEmpresa = (filtroEmpresa === emp ? 'todas' : emp); desenhar(); });
+      box.appendChild(c);
+    });
+  }
+
+  function ordenar(lista){
+    const l = [...lista];
+    if(ordem === 'conta') l.sort((a, b) => a.conta.localeCompare(b.conta, 'pt-BR', { sensitivity: 'base' }));
+    else if(ordem === 'recentes') l.sort((a, b) => (a.dias === null) - (b.dias === null) || a.dias - b.dias || a.conta.localeCompare(b.conta, 'pt-BR'));
+    else l.sort((a, b) => (b.dias === null) - (a.dias === null) || (b.dias || 0) - (a.dias || 0) || a.conta.localeCompare(b.conta, 'pt-BR'));
+    return l;
+  }
+
+  function desenharLista(){
+    const box = $('lista'); box.textContent = '';
+    if(!registros.length){
+      const v = el('div', 'vazio');
+      v.appendChild(el('div', '', 'Nenhum dado carregado ainda.'));
+      v.appendChild(el('div', '', cfg.url ? 'Toque em ⟳ para buscar os fechamentos.' : 'Configure o endereço do script (⚙) ou abra um CSV (📂).'));
+      box.appendChild(v); $('contagem').textContent = ''; return;
+    }
+    const t = semAcento(termo);
+    const visiveis = registros.filter(r =>
+      (filtroEmpresa === 'todas' || r.empresa === filtroEmpresa) &&
+      (filtroSit === 'todas' || r.situacao === filtroSit) &&
+      (!t || semAcento(r.conta + ' ' + r.empresa + ' ' + r.caixa).includes(t)));
+    $('contagem').textContent = visiveis.length === registros.length ? 'Exibindo todas as ' + registros.length + ' contas' : 'Exibindo ' + visiveis.length + ' de ' + registros.length + ' contas';
+    if(!visiveis.length){ box.appendChild(el('div', 'vazio', 'Nenhuma conta com esses filtros.')); return; }
+
+    empresas().forEach(emp => {
+      const doGrupo = ordenar(visiveis.filter(r => r.empresa === emp));
+      if(!doGrupo.length) return;
+      const g = el('section', 'grupo');
+      const h2 = el('h2', '', emp); h2.appendChild(el('span', 'qtd', doGrupo.length + (doGrupo.length === 1 ? ' conta' : ' contas')));
+      g.appendChild(h2);
+      const cab = el('div', 'cab-linha');
+      ['Conta', 'Caixa', 'Último fechamento', 'Há', 'Situação'].forEach(x => cab.appendChild(el('span', '', x)));
+      g.appendChild(cab);
+      doGrupo.forEach(r => {
+        const li = el('div', 'linha ' + r.situacao);
+        li.appendChild(el('div', 'conta', r.conta));
+        const cx = el('div', 'cx'); cx.appendChild(el('span', 'rot', 'Caixa ')); cx.appendChild(el('span', '', r.caixa ? '#' + r.caixa : '—')); li.appendChild(cx);
+        const dt = el('div', 'data');
+        if(r.data){ dt.appendChild(el('span', '', fmtData(r.data))); dt.appendChild(el('small', '', fmtDiaSemana(r.data))); } else dt.appendChild(el('span', '', 'sem fechamento'));
+        li.appendChild(dt);
+        const dd = el('div', 'dias');
+        dd.appendChild(el('span', 'rot', 'Há '));
+        dd.appendChild(el('span', '', r.dias === null ? '—' : (r.dias === 0 ? 'hoje' : r.dias + (r.dias === 1 ? ' dia' : ' dias'))));
+        li.appendChild(dd);
+        const es = el('div', 'estado'); es.appendChild(el('span', 'selo ' + r.situacao, ROTULO[r.situacao])); li.appendChild(es);
+        g.appendChild(li);
+      });
+      box.appendChild(g);
+    });
+  }
+
+  function desenhar(){
+    desenharResumo(); desenharLista();
+    $('rodape').textContent = origemInfo;
+    document.querySelectorAll('#chipsSituacao .chip').forEach(c => c.classList.toggle('ativo', c.dataset.sit === filtroSit));
+  }
+
+  // ===================== carga de dados =====================
+  function receber(texto, origem){
+    const linhas = lerCsv(texto);
+    if(!linhas.length || !('ultimo_fechamento' in linhas[0] || 'fechamento' in linhas[0] || 'data' in linhas[0])){
+      aviso('erro', 'O arquivo não tem a coluna ULTIMO_FECHAMENTO. Confira se é o CSV de caixas fechados.');
+      return false;
+    }
+    registros = montarRegistros(linhas);
+    if(filtroEmpresa !== 'todas' && !registros.some(r => r.empresa === filtroEmpresa)) filtroEmpresa = 'todas';
+    origemInfo = origem;
+    desenhar();
+    return true;
+  }
+
+  // JSONP: o Apps Script devolve  nome({...})  -- contorna o bloqueio de CORS do Google (mesma técnica da lista de produtos)
+  function jsonp(url){
+    return new Promise((resolve, reject) => {
+      const cb = 'fcx_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+      const s = document.createElement('script');
+      let fim = false;
+      const limpar = () => { delete window[cb]; s.remove(); clearTimeout(t); };
+      const t = setTimeout(() => { if(!fim){ fim = true; limpar(); reject(new Error('Tempo esgotado: confira o endereço do script e se a publicação está como “Qualquer pessoa”.')); } }, 20000);
+      window[cb] = (d) => { if(fim) return; fim = true; limpar(); resolve(d); };
+      s.onerror = () => { if(fim) return; fim = true; limpar(); reject(new Error('Não consegui falar com o script do Google.')); };
+      s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb;
+      document.body.appendChild(s);
+    });
+  }
+
+  async function atualizar(manual){
+    if(!cfg.url || !cfg.token){
+      if(manual){ aviso('alerta', 'Configure o endereço do script e o token (⚙) ou abra um CSV (📂).'); $('painelConfig').hidden = false; }
+      return;
+    }
+    const btn = $('btnAtualizar'); btn.classList.add('girando'); btn.disabled = true;
+    try {
+      const q = '?token=' + encodeURIComponent(cfg.token) + '&acao=ler&arquivos=' + encodeURIComponent(cfg.arquivo + ',_status.json');
+      const r = await jsonp(cfg.url + q);
+      if(!r || !r.ok) throw new Error((r && r.erro) || 'resposta inesperada do script');
+      const f = r.arquivos[cfg.arquivo];
+      if(!f || f.erro) throw new Error('Arquivo “' + cfg.arquivo + '” não encontrado na pasta do Drive' + (f && f.erro ? ' (' + f.erro + ')' : '') + '.');
+      if(!receber(f.texto, 'Dados do Drive — arquivo atualizado em ' + fmtDataHora(new Date(f.atualizado)) + ' · conferido às ' + new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }))) return;
+      avisoDaColeta(r.arquivos['_status.json'], new Date(f.atualizado));
+    } catch(err){
+      console.error(err);
+      aviso('erro', (registros.length ? 'Não consegui atualizar agora (mostrando os últimos dados): ' : '') + err.message);
+    } finally { btn.classList.remove('girando'); btn.disabled = false; }
+  }
+
+  // avisa se a coleta no computador do cliente falhou ou parou (dados velhos parecem em dia e não estão)
+  function avisoDaColeta(st, arquivoAtualizado){
+    let msg = '', tipo = 'alerta';
+    try {
+      if(st && st.texto){
+        const s = JSON.parse(st.texto), quando = new Date(s.executado_em);
+        const horas = (Date.now() - quando.getTime()) / 3600000;
+        if(s.ok === false){ msg = 'A última coleta (' + fmtDataHora(quando) + ') teve erro em algum arquivo — os dados abaixo podem estar desatualizados.'; tipo = 'erro'; }
+        else if(horas > 3){ msg = 'A coleta no computador da empresa não roda desde ' + fmtDataHora(quando) + ' — os dados podem estar desatualizados.'; }
+      } else if(arquivoAtualizado && (Date.now() - arquivoAtualizado.getTime()) / 3600000 > 26){
+        msg = 'O arquivo de fechamentos não é atualizado desde ' + fmtDataHora(arquivoAtualizado) + '.';
+      }
+    } catch(e){ /* status ilegível: ignora */ }
+    aviso(tipo, msg);
+  }
+
+  function agendar(){
+    clearInterval(timer);
+    if(cfg.url && cfg.intervalo > 0) timer = setInterval(() => atualizar(false), cfg.intervalo * 60000);
+  }
+
+  // ===================== eventos =====================
+  $('btnAtualizar').addEventListener('click', () => atualizar(true));
+  $('btnConfig').addEventListener('click', () => { $('painelConfig').hidden = !$('painelConfig').hidden; });
+  $('arquivoCsv').addEventListener('change', (e) => {
+    const f = e.target.files[0]; if(!f) return;
+    const rd = new FileReader();
+    rd.onload = () => { if(receber(String(rd.result), 'Dados do arquivo “' + f.name + '” (aberto neste aparelho)')) aviso('info', 'Mostrando o arquivo aberto manualmente — não é atualizado sozinho.'); };
+    rd.onerror = () => aviso('erro', 'Não consegui ler o arquivo.');
+    rd.readAsText(f, 'UTF-8');
+    e.target.value = '';
+  });
+  $('busca').addEventListener('input', (e) => { termo = e.target.value; desenharLista(); });
+  $('ordem').addEventListener('change', (e) => { ordem = e.target.value; desenharLista(); });
+  $('chipsSituacao').addEventListener('click', (e) => { const b = e.target.closest('.chip'); if(!b) return; filtroSit = b.dataset.sit; desenhar(); });
+
+  function preencherCfg(){
+    $('cfgUrl').value = cfg.url; $('cfgToken').value = cfg.token; $('cfgArquivo').value = cfg.arquivo;
+    $('cfgEmDia').value = cfg.emDia; $('cfgAtencao').value = cfg.atencao; $('cfgIntervalo').value = String(cfg.intervalo);
+  }
+  $('btnSalvarConfig').addEventListener('click', () => {
+    const url = $('cfgUrl').value.trim();
+    if(url && !URL_SCRIPT_OK.test(url)){ $('msgConfig').textContent = 'O endereço precisa ser o do app da web do Apps Script (https://script.google.com/macros/s/…/exec).'; return; }
+    const emDia = Math.max(0, parseInt($('cfgEmDia').value, 10) || 0), atencao = Math.max(emDia + 1, parseInt($('cfgAtencao').value, 10) || 7);
+    cfg = Object.assign(cfg, { url, token: $('cfgToken').value.trim(), arquivo: $('cfgArquivo').value.trim() || PADRAO.arquivo, emDia, atencao, intervalo: parseInt($('cfgIntervalo').value, 10) || 0 });
+    salvarCfg(); preencherCfg(); agendar();
+    registros.forEach(r => { r.situacao = situacaoDe(r.dias); });
+    desenhar();
+    $('msgConfig').textContent = 'Salvo neste aparelho.';
+    atualizar(true);
+  });
+  $('btnCopiarLink').addEventListener('click', async () => {
+    if(!cfg.url || !cfg.token){ $('msgConfig').textContent = 'Salve o endereço e o token antes.'; return; }
+    const link = location.origin + location.pathname + '#u=' + encodeURIComponent(cfg.url) + '&t=' + encodeURIComponent(cfg.token) + (cfg.arquivo !== PADRAO.arquivo ? '&a=' + encodeURIComponent(cfg.arquivo) : '');
+    try { await navigator.clipboard.writeText(link); $('msgConfig').textContent = 'Link copiado. Quem abrir já entra configurado — trate-o como senha.'; }
+    catch(e){ window.prompt('Copie o link (trate como senha):', link); }
+  });
+  $('btnEsquecer').addEventListener('click', () => {
+    if(!confirm('Apagar o endereço e o token deste aparelho?')) return;
+    cfg = Object.assign({}, PADRAO); try { localStorage.removeItem(CHAVE); } catch(e){}
+    registros = []; origemInfo = ''; clearInterval(timer); preencherCfg(); desenhar(); aviso('', ''); $('msgConfig').textContent = 'Configuração apagada.';
+  });
+  // voltou pra aba/app depois de um tempo: busca de novo
+  document.addEventListener('visibilitychange', () => { if(document.visibilityState === 'visible' && cfg.url) atualizar(false); });
+
+  // ===================== início =====================
+  preencherCfg(); desenhar(); agendar();
+  if(cfg.url && cfg.token) atualizar(false);
+  // gancho pra testes/uso futuro (extrato por conta): expõe só funções, nunca o token
+  window.fechamentoCaixas = { receber, desenhar };
+})();
+</script>
+</body>
+</html>
