@@ -1340,6 +1340,12 @@
             </div>
         </div>
         <div class="campo" style="margin-top:8px; position:relative;">
+            <label>Subsetor (opcional)</label>
+            <input type="text" id="baixaDiretaSubsetorBusca" placeholder="Buscar subsetor (filtra pelo setor escolhido)..." autocomplete="off">
+            <div id="baixaDiretaSubsetorResultados" class="dropdown-busca-evento"></div>
+            <p class="subtitulo" id="baixaDiretaSubsetorSelecionado" style="margin-top:4px;"></p>
+        </div>
+        <div class="campo" style="margin-top:8px; position:relative;">
             <label>Almoxarifado</label>
             <input type="text" id="baixaDiretaAlmoxarifadoBusca" placeholder="Buscar almoxarifado..." autocomplete="off">
             <div id="baixaDiretaAlmoxarifadoResultados" class="dropdown-busca-evento"></div>
@@ -3298,7 +3304,9 @@ const AJUDA_ESTOQUE = {
                 <strong>Estoque Atual</strong> (inicial + entradas − saídas até agora).</li>
             </ul>
             <p><strong>⬇️ Baixa direta (sem projeto)</strong> tira uma quantidade do estoque sem passar
-            por projeto nem requisição — use só pra ajuste pontual, não pro consumo normal de obra.</p>
+            por projeto nem requisição — use só pra ajuste pontual, não pro consumo normal de obra. Dá pra
+            informar o <strong>Setor</strong> e, dentro dele, o <strong>Subsetor</strong> (opcional — a lista de
+            subsetores mostra só os do setor escolhido; trocar o setor limpa o subsetor).</p>
             <p>No cadastro de produto (novo ou edição), o campo <strong>Grupo</strong> é obrigatório —
             o botão <strong>"+"</strong> ao lado abre um cadastro rápido pra criar um grupo novo na hora,
             sem precisar sair da tela.</p>
@@ -4288,6 +4296,9 @@ document.getElementById('btnBaixaDireta').addEventListener('click', async () => 
     document.getElementById('baixaDiretaSetorBusca').value = '';
     setorSelecionadoBaixaDireta = null;
     buscaBaixaDiretaSetor.selecionar(null);
+    document.getElementById('baixaDiretaSubsetorBusca').value = '';
+    subsetorSelecionadoBaixaDireta = null;
+    buscaBaixaDiretaSubsetor.selecionar(null);
     document.getElementById('baixaDiretaAlmoxarifadoBusca').value = '';
     almoxarifadoSelecionadoBaixaDireta = almoxarifadoTrabalho
         ? (catalogosBaixa.almoxarifados || []).find(a => String(a.id) === String(almoxarifadoTrabalho)) || null
@@ -4362,6 +4373,7 @@ document.getElementById('btnConfirmarBaixaDireta').addEventListener('click', asy
                 tipo: 'saida',
                 tag: document.getElementById('baixaTag').value.trim(),
                 setorId: setorSelecionadoBaixaDireta ? setorSelecionadoBaixaDireta.id : null,
+                subsetorId: subsetorSelecionadoBaixaDireta ? subsetorSelecionadoBaixaDireta.id : null,
                 almoxarifadoId: almoxarifadoSelecionadoBaixaDireta ? Number(almoxarifadoSelecionadoBaixaDireta.id) : null,
                 evento: eventoSelecionadoBaixaDireta ? eventoSelecionadoBaixaDireta.codigo : '',
                 observacao: document.getElementById('baixaObservacao').value.trim(),
@@ -6437,11 +6449,25 @@ configurarBuscaEvento('baixaDiretaEventoBusca', 'baixaDiretaEventoResultados', '
     eventoSelecionadoBaixaDireta = ev;
 });
 let setorSelecionadoBaixaDireta = null;
+let subsetorSelecionadoBaixaDireta = null;
 let almoxarifadoSelecionadoBaixaDireta = null;
 const buscaBaixaDiretaSetor = configurarBuscaListaGenerica(
     'baixaDiretaSetorBusca', 'baixaDiretaSetorResultados', 'baixaDiretaSetorSelecionado',
     () => catalogosBaixa.setores || [],
-    (item) => { setorSelecionadoBaixaDireta = item; }
+    (item) => {
+        setorSelecionadoBaixaDireta = item;
+        // trocou o setor: o subsetor escolhido antes pode não pertencer ao novo
+        subsetorSelecionadoBaixaDireta = null;
+        document.getElementById('baixaDiretaSubsetorBusca').value = '';
+        buscaBaixaDiretaSubsetor.selecionar(null);
+    }
+);
+const buscaBaixaDiretaSubsetor = configurarBuscaListaGenerica(
+    'baixaDiretaSubsetorBusca', 'baixaDiretaSubsetorResultados', 'baixaDiretaSubsetorSelecionado',
+    () => setorSelecionadoBaixaDireta
+        ? (catalogosBaixa.subsetores || []).filter(s => String(s.setor_id) === String(setorSelecionadoBaixaDireta.id))
+        : (catalogosBaixa.subsetores || []),
+    (item) => { subsetorSelecionadoBaixaDireta = item; }
 );
 const buscaBaixaDiretaAlmoxarifado = configurarBuscaListaGenerica(
     'baixaDiretaAlmoxarifadoBusca', 'baixaDiretaAlmoxarifadoResultados', 'baixaDiretaAlmoxarifadoSelecionado',
