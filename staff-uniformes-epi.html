@@ -416,6 +416,41 @@
     </div>
 </div>
 
+<!-- ==================== MODAL: BAIXA IMEDIATA DO CATÁLOGO (setor, ou setor + profissional) ==================== -->
+<div id="modal-baixa-setor" class="modal-overlay">
+    <div class="modal-caixa" style="max-width:540px;">
+        <h3>Baixa / Entrega imediata</h3>
+        <p class="subtitulo" id="baixaSetorItemTexto" style="margin-bottom:6px;"></p>
+        <p class="subtitulo" style="margin:0 0 14px 0;">Tira o item do estoque na hora. Informe o <strong>setor</strong> que vai consumir (obrigatório). Se a peça for pra um <strong>profissional</strong> específico, escolha ele também — aí vira uma entrega normal (com recibo, devolução e renovação) e o setor fica registrado no movimento. Sem profissional, é só a baixa pro setor.</p>
+
+        <div class="grade">
+            <div class="campo"><label>Setor</label><select id="campoSetorBaixaSetor"></select></div>
+            <div class="campo"><label>Subsetor (opcional)</label><select id="campoSubsetorBaixaSetor"></select></div>
+        </div>
+
+        <div class="campo linha-busca">
+            <label>Profissional (opcional)</label>
+            <input type="text" id="campoBuscaProfissionalBaixaSetor" placeholder="Deixe vazio pra dar baixa só pro setor..." autocomplete="off">
+            <div id="resultadosBuscaProfissionalBaixaSetor" class="resultados-busca"></div>
+            <p class="selecionado-texto" id="profissionalBaixaSetorTexto"></p>
+        </div>
+
+        <div class="grade">
+            <div class="campo"><label>Quantidade</label><input type="number" min="1" step="1" id="campoQtdBaixaSetor" value="1"></div>
+            <div class="campo"><label>Valor unitário (R$)</label><input type="number" min="0" step="0.01" id="campoValorBaixaSetor"></div>
+            <div class="campo"><label>Data</label><input type="date" id="campoDataBaixaSetor"></div>
+            <div class="campo" id="blocoDataPrevistaBaixaSetor"><label>Data prevista p/ nova aquisição (só com profissional)</label><input type="date" id="campoDataPrevistaBaixaSetor"></div>
+        </div>
+        <div class="campo"><label>Observação (opcional)</label><input type="text" id="campoObservacaoBaixaSetor" placeholder="Ex: reposição da equipe da obra X"></div>
+
+        <div style="display:flex; gap:8px; margin-top:6px;">
+            <button type="button" class="btn btn-cinza" id="btnCancelarBaixaSetor" style="flex:1;">Cancelar</button>
+            <button type="button" class="btn btn-principal" id="btnConfirmarBaixaSetor" style="flex:1;">Confirmar baixa</button>
+        </div>
+        <p class="status-msg" id="statusBaixaSetor"></p>
+    </div>
+</div>
+
 <!-- ==================== MODAL: REGISTRAR ENTRADA DE ESTOQUE ==================== -->
 <div id="modal-entrada-estoque" class="modal-overlay">
     <div class="modal-caixa" style="max-width:560px;">
@@ -560,6 +595,16 @@ const AJUDA_UNIFORMES_EPI = {
                 (a tela do Estoque pede o Tipo — Uniforme ou EPI — e, opcionalmente, tamanho, CA e vida útil).
                 Se quem cadastrou no Estoque não for Administrador do Staff nem Principal, o produto fica só no
                 estoque e a tela avisa — aí o item precisa ser cadastrado aqui, no catálogo.</li>
+                <li><strong>📤 Baixa / Entrega</strong> (botão em cada item do catálogo): tira o item do estoque
+                <strong>na hora</strong>, escolhendo o <strong>Setor</strong> (obrigatório), o
+                <strong>Subsetor</strong> daquele setor (opcional) e, se quiser, um
+                <strong>Profissional</strong>. <em>Só setor</em>: é consumo do setor — baixa direta no estoque (com o setor
+                gravado no movimento), sem recibo e sem controle de devolução/renovação. <em>Setor + profissional</em>: vira uma
+                <strong>entrega normal</strong> ao profissional (com recibo em PDF, devolução e renovação), e o setor que
+                arca com o custo fica registrado no movimento do estoque. Os setores são os cadastrados no Estoque
+                (Cadastros → Setores). Se a quantidade passar do saldo, o sistema avisa antes de deixar o estoque
+                negativo. A baixa só pra setor aparece no <strong>📊 Movimento</strong> do item (com o nome do setor);
+                pra corrigir um engano, ajuste/exclua o movimento no módulo Estoque.</li>
                 <li>Cada item cadastrado aqui cria também um produto real no Estoque, ligado a
                 esse almoxarifado -- é lá que fica o saldo/preço médio. O campo
                 <strong>estoque inicial</strong> pode ser editado a qualquer momento (útil pra
@@ -1237,8 +1282,12 @@ document.getElementById('btnSalvarNovaEntrega').addEventListener('click', async 
 // estoque_movimentacoes/fabrica_ajustar_estoque já usado pelo
 // estoque-requisicao-rapida.html (não existe RPC dedicada de estoque
 // pra isso, é o padrão da plataforma)
-async function registrarNovaEntrega({ profissionalId, catalogoId, descricaoAvulsa, tamanho, quantidade, valorUnit, dataEntrega, dataPrevista, observacao, numeroRecibo }) {
-    const nomeProfissional = profissionalSelecionado.nome_completo;
+// "profissional" (objeto) e "setor" ({id, nome}) são opcionais: a "Baixa / Entrega" do catálogo passa os dois (entrega ao
+// profissional já com o setor que vai arcar com o custo); o fluxo normal da ficha do profissional segue sem setor.
+async function registrarNovaEntrega({ profissionalId, catalogoId, descricaoAvulsa, tamanho, quantidade, valorUnit, dataEntrega, dataPrevista, observacao, numeroRecibo, profissional, setor, subsetor }) {
+    const nomeProfissional = (profissional || profissionalSelecionado).nome_completo;
+    const sufixoSetor = setor ? ' — Setor: ' + setor.nome + (subsetor ? ' / ' + subsetor.nome : '') : '';
+    const camposSetorMov = setor ? { setor_id: setor.id, ...(subsetor ? { subsetor_id: subsetor.id } : {}) } : {};
     const loteId = crypto.randomUUID();
     let movimentacaoId = null;
     let almoxarifadoId = almoxarifadoDedicado()?.id || null;
@@ -1253,9 +1302,10 @@ async function registrarNovaEntrega({ profissionalId, catalogoId, descricaoAvuls
         const { data: mov, error: eMov } = await sb.from('estoque_movimentacoes').insert({
             data: dataEntrega, produto_id: produtoId, tipo: 'saida',
             qtd: quantidade, valor_unit: valorUnit, almoxarifado: 1, almoxarifado_id: almoxarifadoId,
-            dt_proxima_troca: dataPrevista, observacao: 'Entrega uniforme/EPI — ' + nomeProfissional + (observacao ? ' — ' + observacao : ''),
+            dt_proxima_troca: dataPrevista, observacao: 'Entrega uniforme/EPI — ' + nomeProfissional + sufixoSetor + (observacao ? ' — ' + observacao : ''),
             responsavel: meuPerfil.nomeOperador, fornecedor_nome: 'Uniformes/EPI',
             afeta_preco_medio: false,
+            ...camposSetorMov,
             unidade_negocio_id: meuPerfil.unidadeId
         }).select().single();
         if (eMov) throw eMov;
@@ -1269,8 +1319,9 @@ async function registrarNovaEntrega({ profissionalId, catalogoId, descricaoAvuls
         const { data: mov, error: eMov } = await sb.from('estoque_movimentacoes').insert({
             data: dataEntrega, produto_id: null, descricao_avulsa: descricaoAvulsa, tipo: 'saida',
             qtd: quantidade, valor_unit: valorUnit, almoxarifado: 1, almoxarifado_id: almoxarifadoId,
-            dt_proxima_troca: dataPrevista, observacao: 'Entrega uniforme/EPI (avulso) — ' + nomeProfissional + (observacao ? ' — ' + observacao : ''),
+            dt_proxima_troca: dataPrevista, observacao: 'Entrega uniforme/EPI (avulso) — ' + nomeProfissional + sufixoSetor + (observacao ? ' — ' + observacao : ''),
             responsavel: meuPerfil.nomeOperador, fornecedor_nome: 'Uniformes/EPI',
+            ...camposSetorMov,
             unidade_negocio_id: meuPerfil.unidadeId
         }).select().single();
         if (eMov) throw eMov;
@@ -1291,8 +1342,158 @@ async function registrarNovaEntrega({ profissionalId, catalogoId, descricaoAvuls
     const { error: eEnt } = await sb.from('staff_uniformes_epi_entregas').insert(linhas);
     if (eEnt) throw eEnt;
 
-    await registrarSentinela('entrega_uniforme_epi', `${quantidade}x ${catalogoId ? (catalogo.find(c=>c.id===catalogoId)?.nome||'') : descricaoAvulsa} para ${nomeProfissional}`);
+    await registrarSentinela('entrega_uniforme_epi', `${quantidade}x ${catalogoId ? (catalogo.find(c=>c.id===catalogoId)?.nome||'') : descricaoAvulsa} para ${nomeProfissional}${setor ? ' (setor ' + setor.nome + (subsetor ? ' / ' + subsetor.nome : '') + ')' : ''}`);
 }
+
+// ---------------------------------------------------------------
+// BAIXA / ENTREGA IMEDIATA DO CATÁLOGO -- clicar no item do catálogo e dar baixa pra um SETOR (obrigatório),
+// opcionalmente a um profissional.
+//   - só setor: tira do estoque na hora (movimento de saída com setor_id + ajuste de saldo), sem recibo nem
+//     controle de devolução/renovação (é consumo do setor);
+//   - setor + profissional: entrega normal (registrarNovaEntrega -> linhas em entregas, recibo, devolução,
+//     renovação) com o setor gravado no movimento de estoque.
+// ---------------------------------------------------------------
+let setoresUnidade = [];
+let subsetoresUnidade = [];
+let itemBaixaSetor = null;
+let profissionalBaixaSetor = null;
+
+async function carregarSetoresUnidade() {
+    const [rs, rss] = await Promise.all([
+        sb.from('unidade_setores').select('id, nome, ativo').eq('unidade_negocio_id', meuPerfil.unidadeId).order('nome'),
+        sb.from('unidade_subsetores').select('id, nome, setor_id, ativo').eq('unidade_negocio_id', meuPerfil.unidadeId).order('nome')
+    ]);
+    setoresUnidade = rs.error ? [] : (rs.data || []).filter(s => s.ativo !== false);
+    subsetoresUnidade = rss.error ? [] : (rss.data || []).filter(s => s.ativo !== false);
+}
+
+// subsetor é opcional e depende do setor escolhido (só lista os subsetores daquele setor)
+function popularSubsetoresBaixaSetor() {
+    const setorId = document.getElementById('campoSetorBaixaSetor').value;
+    const lista = subsetoresUnidade.filter(s => String(s.setor_id) === String(setorId));
+    const sel = document.getElementById('campoSubsetorBaixaSetor');
+    sel.innerHTML = '<option value="">' + (setorId ? (lista.length ? 'Sem subsetor' : 'Este setor não tem subsetores') : 'Escolha o setor primeiro') + '</option>'
+        + lista.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+    sel.disabled = !lista.length;
+}
+document.getElementById('campoSetorBaixaSetor').addEventListener('change', popularSubsetoresBaixaSetor);
+
+function definirProfissionalBaixaSetor(p) {
+    profissionalBaixaSetor = p;
+    document.getElementById('campoBuscaProfissionalBaixaSetor').value = p ? p.nome_completo : '';
+    document.getElementById('profissionalBaixaSetorTexto').innerHTML = p
+        ? `Entrega a <strong>${escapeHtml(p.nome_completo)}</strong> (com recibo) <a href="#" id="linkLimparProfissionalBaixaSetor" style="color:#b00020; font-size:.85em;">(remover)</a>`
+        : 'Sem profissional: baixa só pro setor.';
+    document.getElementById('blocoDataPrevistaBaixaSetor').style.display = p ? '' : 'none';
+    const link = document.getElementById('linkLimparProfissionalBaixaSetor');
+    if (link) link.addEventListener('click', (e) => { e.preventDefault(); definirProfissionalBaixaSetor(null); });
+}
+
+async function abrirModalBaixaSetor(catalogoId) {
+    const item = catalogo.find(c => c.id === catalogoId);
+    if (!item) return;
+    if (!item.estoque_produtos?.id) { alert('Item de catálogo sem produto de estoque vinculado.'); return; }
+    itemBaixaSetor = item;
+    if (!setoresUnidade.length) await carregarSetoresUnidade();
+    if (!setoresUnidade.length) { alert('Nenhum setor cadastrado nesta unidade. Cadastre os setores no Estoque (Cadastros → Setores) antes de dar baixa por setor.'); return; }
+    document.getElementById('baixaSetorItemTexto').textContent = item.nome + (item.tamanho ? ' — ' + item.tamanho : '') + ' · Saldo atual: ' + (item.estoque_produtos?.estoque ?? 0);
+    document.getElementById('campoSetorBaixaSetor').innerHTML = '<option value="">Escolha o setor...</option>' + setoresUnidade.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+    popularSubsetoresBaixaSetor();
+    document.getElementById('campoQtdBaixaSetor').value = 1;
+    document.getElementById('campoValorBaixaSetor').value = item.estoque_produtos?.valor || '';
+    document.getElementById('campoDataBaixaSetor').value = hojeISO();
+    document.getElementById('campoDataPrevistaBaixaSetor').value = '';
+    document.getElementById('campoObservacaoBaixaSetor').value = '';
+    document.getElementById('statusBaixaSetor').textContent = '';
+    definirProfissionalBaixaSetor(null);
+    document.getElementById('modal-baixa-setor').classList.add('aberto');
+}
+document.getElementById('btnCancelarBaixaSetor').addEventListener('click', () => document.getElementById('modal-baixa-setor').classList.remove('aberto'));
+
+// busca de profissional (mesmo autocomplete local da ficha, em campo próprio do modal)
+const campoBuscaProfBaixaSetor = document.getElementById('campoBuscaProfissionalBaixaSetor');
+const resultadosProfBaixaSetor = document.getElementById('resultadosBuscaProfissionalBaixaSetor');
+campoBuscaProfBaixaSetor.addEventListener('input', () => {
+    if (profissionalBaixaSetor) definirProfissionalBaixaSetor(null);       // digitou de novo: desfaz a escolha anterior
+    const termo = campoBuscaProfBaixaSetor.value.trim().toLowerCase();
+    if (!termo) { resultadosProfBaixaSetor.classList.remove('aberto'); return; }
+    const achados = profissionais.filter(p => p.nome_completo.toLowerCase().includes(termo)).slice(0, 8);
+    resultadosProfBaixaSetor.innerHTML = achados.length
+        ? achados.map(p => `<div class="resultado-item" data-id="${p.id}">${escapeHtml(p.nome_completo)}<div class="sub">${escapeHtml(p.staff_funcoes?.nome || '')}</div></div>`).join('')
+        : '<div class="resultado-item">Nenhum profissional encontrado</div>';
+    resultadosProfBaixaSetor.classList.add('aberto');
+});
+resultadosProfBaixaSetor.addEventListener('mousedown', (e) => {
+    const it = e.target.closest('.resultado-item[data-id]');
+    if (!it) return;
+    e.preventDefault();
+    definirProfissionalBaixaSetor(profissionais.find(p => p.id === it.dataset.id) || null);
+    resultadosProfBaixaSetor.classList.remove('aberto');
+});
+campoBuscaProfBaixaSetor.addEventListener('blur', () => setTimeout(() => resultadosProfBaixaSetor.classList.remove('aberto'), 200));
+
+// baixa só pro setor: movimento de saída (com setor) + ajuste de saldo. Mesmo padrão de escrita direta de registrarNovaEntrega.
+async function registrarBaixaSoSetor({ item, setor, subsetor, quantidade, valorUnit, data, observacao }) {
+    const produtoId = item.estoque_produtos.id;
+    const almoxarifadoId = item.estoque_produtos.almoxarifado_padrao_id || almoxarifadoDedicado()?.id || null;
+    const { error: eMov } = await sb.from('estoque_movimentacoes').insert({
+        data, produto_id: produtoId, tipo: 'saida',
+        qtd: quantidade, valor_unit: valorUnit, almoxarifado: 1, almoxarifado_id: almoxarifadoId,
+        setor_id: setor.id, ...(subsetor ? { subsetor_id: subsetor.id } : {}),
+        observacao: 'Baixa uniforme/EPI para o setor ' + setor.nome + (subsetor ? ' / ' + subsetor.nome : '') + (observacao ? ' — ' + observacao : ''),
+        responsavel: meuPerfil.nomeOperador, fornecedor_nome: 'Uniformes/EPI',
+        afeta_preco_medio: false,
+        unidade_negocio_id: meuPerfil.unidadeId
+    });
+    if (eMov) throw eMov;
+    const { error: eAjuste } = await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: produtoId, p_delta: -quantidade, p_almoxarifado_id: almoxarifadoId });
+    if (eAjuste) throw eAjuste;
+    await registrarSentinela('baixa_uniforme_epi_setor', `${quantidade}x ${item.nome}${item.tamanho ? ' — ' + item.tamanho : ''} para o setor ${setor.nome}${subsetor ? ' / ' + subsetor.nome : ''}`);
+}
+
+document.getElementById('btnConfirmarBaixaSetor').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusBaixaSetor');
+    statusEl.textContent = '';
+    const item = itemBaixaSetor;
+    if (!item) return;
+    const setor = setoresUnidade.find(s => String(s.id) === document.getElementById('campoSetorBaixaSetor').value);
+    if (!setor) { statusEl.textContent = 'Escolha o setor.'; return; }
+    const subsetor = subsetoresUnidade.find(s => String(s.id) === document.getElementById('campoSubsetorBaixaSetor').value && String(s.setor_id) === String(setor.id)) || null;
+    const quantidade = Math.floor(Number(document.getElementById('campoQtdBaixaSetor').value) || 0);
+    if (quantidade < 1) { statusEl.textContent = 'Quantidade precisa ser pelo menos 1.'; return; }
+    const valorUnit = Number(document.getElementById('campoValorBaixaSetor').value) || 0;
+    const data = document.getElementById('campoDataBaixaSetor').value || hojeISO();
+    const observacao = document.getElementById('campoObservacaoBaixaSetor').value.trim();
+    const saldo = Number(item.estoque_produtos?.estoque ?? 0);
+    if (quantidade > saldo && !confirm(`O saldo atual é ${saldo} e você está dando baixa em ${quantidade} — o estoque ficará negativo. Continuar?`)) return;
+
+    const btn = document.getElementById('btnConfirmarBaixaSetor');
+    btn.disabled = true; btn.textContent = 'Registrando...';
+    try {
+        if (profissionalBaixaSetor) {
+            // entrega normal ao profissional (recibo, devolução, renovação), com o setor no movimento de estoque
+            const prof = profissionalBaixaSetor;
+            const numeroRecibo = await proximoNumeroRecibo('numero_recibo_entrega');
+            await registrarNovaEntrega({
+                profissionalId: prof.id, catalogoId: item.id, descricaoAvulsa: null, tamanho: item.tamanho,
+                quantidade, valorUnit, dataEntrega: data, dataPrevista: document.getElementById('campoDataPrevistaBaixaSetor').value || null,
+                observacao, numeroRecibo, profissional: prof, setor, subsetor
+            });
+            document.getElementById('modal-baixa-setor').classList.remove('aberto');
+            if (profissionalSelecionado && profissionalSelecionado.id === prof.id) await carregarItensAbertos(prof.id);
+            await carregarCatalogo(); renderizarCatalogoAdmin(); await carregarRenovacoes();
+            await gerarEAbrirReciboEntrega(numeroRecibo, prof.id, prof);
+        } else {
+            await registrarBaixaSoSetor({ item, setor, subsetor, quantidade, valorUnit, data, observacao });
+            document.getElementById('modal-baixa-setor').classList.remove('aberto');
+            await carregarCatalogo(); renderizarCatalogoAdmin();
+        }
+    } catch (e) {
+        statusEl.textContent = 'Erro ao registrar: ' + (e.message || e);
+    } finally {
+        btn.disabled = false; btn.textContent = 'Confirmar baixa';
+    }
+});
 
 // ---------------------------------------------------------------
 // DEVOLVER / DESCARTAR
@@ -1530,6 +1731,7 @@ function renderizarCatalogoAdmin() {
                 <div class="meta">Saldo: ${c.estoque_produtos?.estoque ?? 0}${c.numero_ca ? ' · CA ' + escapeHtml(c.numero_ca) : ''}${c.validade_ca ? ' · Validade CA: ' + formatarDataSemFuso(c.validade_ca) : ''}${c.vida_util_dias ? ' · Vida útil: ' + c.vida_util_dias + ' dias' : ''}</div>
             </div>
             <div class="acoes">
+                <button type="button" class="btn btn-principal" data-baixa-setor-catalogo="${c.id}" title="Baixa imediata do item pra um setor (e, se quiser, a um profissional)" ${c.ativo ? '' : 'disabled'}>📤 Baixa / Entrega</button>
                 <button type="button" class="btn btn-cinza" data-entrada-catalogo="${c.id}">+ Entrada</button>
                 <button type="button" class="btn btn-cinza" data-movimento-catalogo="${c.id}">📊 Movimento</button>
                 <button type="button" class="btn btn-cinza" data-editar-catalogo="${c.id}">Editar</button>
@@ -1538,6 +1740,8 @@ function renderizarCatalogoAdmin() {
     `).join('');
 }
 document.getElementById('listaCatalogo').addEventListener('click', (e) => {
+    const btnBaixaSetor = e.target.closest('[data-baixa-setor-catalogo]');
+    if (btnBaixaSetor) { abrirModalBaixaSetor(btnBaixaSetor.dataset.baixaSetorCatalogo); return; }
     const btnEntrada = e.target.closest('[data-entrada-catalogo]');
     if (btnEntrada) { abrirModalEntradaEstoque(btnEntrada.dataset.entradaCatalogo); return; }
     const btnMovimento = e.target.closest('[data-movimento-catalogo]');
@@ -1993,7 +2197,7 @@ function agruparItensParaRecibo(itens) {
     return [...mapa.entries()].map(([nome, qtd]) => ({ nome, qtd }));
 }
 
-async function gerarEAbrirReciboEntrega(numeroRecibo, profissionalId) {
+async function gerarEAbrirReciboEntrega(numeroRecibo, profissionalId, profissionalObj) {
     try {
         const { data, error } = await sb.from('staff_uniformes_epi_entregas')
             .select('*, staff_uniformes_epi_catalogo(nome, tamanho)')
@@ -2008,7 +2212,7 @@ async function gerarEAbrirReciboEntrega(numeroRecibo, profissionalId) {
             titulo: 'RECIBO DE ENTREGA DE UNIFORME E EQUIPAMENTOS DE SEGURANÇA',
             tituloPopup: 'Recibo de entrega gerado',
             numero: numeroRecibo,
-            profissionalNome: (profissionalSelecionado?.nome_completo || '').toUpperCase(),
+            profissionalNome: ((profissionalObj || profissionalSelecionado)?.nome_completo || '').toUpperCase(),
             frase: `declaro e confirmo que recebi de ${empresa}, nesta data, o uniforme e ou equipamentos para uso exclusivo em serviço,`,
             paragrafo: 'Declaro ainda que serei responsável pelo ressarcimento de um no caso de seu extravio antes do tempo determinado para substituição. Estou ainda ciente de que terei de devolver em caso de desligamento da empresa.',
             data: itens[0].data_entrega,
