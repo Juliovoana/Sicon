@@ -568,6 +568,19 @@
                 <p class="subtitulo" id="npAlmoxSelecionado" style="margin-top:4px;"></p>
             </div>
         </div>
+        <!-- só aparece quando o almoxarifado escolhido é o dedicado "Uniformes / EPI": o item também vai pro catálogo do Staff -->
+        <div id="npBlocoCatalogoUniforme" style="display:none; margin-top:10px; background:#EFF6FF; border:1px solid #BFD7FF; border-radius:8px; padding:10px 14px;">
+            <p class="subtitulo" style="margin:0 0 8px 0;"><strong>👕 Catálogo de Uniformes/EPI</strong> — este é o almoxarifado dedicado a Uniformes/EPI: o produto também será gravado no <strong>catálogo</strong> do Controle de Uniformes/EPI (Staff). Cada tamanho de cada peça é um item próprio.</p>
+            <div class="grade col4">
+                <div class="campo"><label>Tipo</label>
+                    <select id="npCatTipo"><option value="">Escolha...</option><option value="uniforme">Uniforme</option><option value="epi">EPI</option></select>
+                </div>
+                <div class="campo"><label>Tamanho (opcional)</label><input type="text" id="npCatTamanho" placeholder="ex: M, 42"></div>
+                <div class="campo" id="npCatCaBox" style="display:none;"><label>Nº do CA (EPI)</label><input type="text" id="npCatCa"></div>
+                <div class="campo" id="npCatValidadeBox" style="display:none;"><label>Validade do CA (EPI)</label><input type="date" id="npCatValidade"></div>
+                <div class="campo"><label>Vida útil (dias, opcional)</label><input type="number" min="0" step="1" id="npCatVida"></div>
+            </div>
+        </div>
         <div style="margin-top:10px;">
             <button class="btn btn-verde" id="btnSalvarProduto">Salvar produto</button>
             <button class="btn btn-cinza" id="btnCancelarProduto">Sair</button>
@@ -3254,7 +3267,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
    ============================================================ */
 const AJUDA_ESTOQUE = {
     titulo: 'Estoque — Controle de Estoque & Projetos',
-    ultimaRevisao: '09/10/2026',
+    ultimaRevisao: '10/10/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>O Estoque controla o material físico da unidade (contêiner/esquadria): o que entra
@@ -3289,6 +3302,16 @@ const AJUDA_ESTOQUE = {
             <p>No cadastro de produto (novo ou edição), o campo <strong>Grupo</strong> é obrigatório —
             o botão <strong>"+"</strong> ao lado abre um cadastro rápido pra criar um grupo novo na hora,
             sem precisar sair da tela.</p>
+            <p><strong>👕 Produto novo no almoxarifado "Uniformes / EPI":</strong> ao cadastrar um produto novo
+            escolhendo o almoxarifado dedicado <strong>Uniformes / EPI</strong> (o mesmo que o Controle de Uniformes/EPI
+            do Staff usa), aparece um bloco pedindo o <strong>Tipo</strong> (Uniforme ou EPI — obrigatório) e, se quiser,
+            Tamanho, Vida útil (dias) e, só pra EPI, Nº do CA e Validade do CA. O produto é salvo no estoque <strong>e
+            também gravado no catálogo</strong> de Uniformes/EPI, já pronto pra ser entregue aos profissionais. Cada
+            tamanho de cada peça é um produto/item próprio. Só <strong>Principal ou Administrador do Staff</strong> pode
+            criar item de catálogo: se outro perfil cadastrar, o produto entra no estoque mas a tela avisa que
+            <strong>não foi pro catálogo</strong> (peça pra cadastrar no Staff → Uniformes/EPI → Catálogo). Vale só
+            pra produto novo cadastrado aqui — produto que já existia no almoxarifado segue sem catálogo até ser
+            cadastrado lá.</p>
             <p><strong>📄 Importar NF-e (XML)</strong> lê o arquivo da nota fiscal do fornecedor e já
             cria a nota de entrada com itens e valores preenchidos automaticamente, sem digitar um por
             um.</p>
@@ -5348,6 +5371,23 @@ document.getElementById('buscaEstoque').addEventListener('input', () => {
 let grupoSelecionadoNovoProduto = null;
 let almoxarifadoSelecionadoNovoProduto = null;
 
+// Almoxarifado dedicado a Uniformes/EPI (mesmo nome que o módulo Staff -> Controle de Uniformes/EPI procura/cria):
+// produto novo cadastrado nele também entra no catálogo daquele módulo (staff_uniformes_epi_catalogo)
+const NOME_ALMOXARIFADO_UNIFORMES_EPI = 'Uniformes / EPI';
+const ehAlmoxarifadoUniformesEpi = (a) => !!a && String(a.nome || '').trim().toLowerCase() === NOME_ALMOXARIFADO_UNIFORMES_EPI.toLowerCase();
+
+function atualizarBlocoCatalogoUniformeNP() {
+    document.getElementById('npBlocoCatalogoUniforme').style.display = ehAlmoxarifadoUniformesEpi(almoxarifadoSelecionadoNovoProduto) ? '' : 'none';
+    const epi = document.getElementById('npCatTipo').value === 'epi';      // CA só existe pra EPI
+    document.getElementById('npCatCaBox').style.display = epi ? '' : 'none';
+    document.getElementById('npCatValidadeBox').style.display = epi ? '' : 'none';
+}
+function limparBlocoCatalogoUniformeNP() {
+    ['npCatTipo', 'npCatTamanho', 'npCatCa', 'npCatValidade', 'npCatVida'].forEach(id => { document.getElementById(id).value = ''; });
+    atualizarBlocoCatalogoUniformeNP();
+}
+document.getElementById('npCatTipo').addEventListener('change', atualizarBlocoCatalogoUniformeNP);
+
 document.getElementById('btnNovoProduto').addEventListener('click', async () => {
     if (!catalogosBaixa.grupos || !catalogosBaixa.grupos.length || !catalogosBaixa.almoxarifados || !catalogosBaixa.almoxarifados.length) {
         catalogosBaixa = await chamarGet('listarCatalogosBaixa');
@@ -5364,6 +5404,7 @@ document.getElementById('btnNovoProduto').addEventListener('click', async () => 
         : null;
     document.getElementById('npAlmoxBusca').value = '';
     document.getElementById('npAlmoxSelecionado').textContent = almoxarifadoSelecionadoNovoProduto ? `Selecionado: ${almoxarifadoSelecionadoNovoProduto.nome}` : '';
+    limparBlocoCatalogoUniformeNP();
     document.getElementById('painelNovoProduto').style.display = 'block';
 });
 document.getElementById('btnCancelarProduto').addEventListener('click', () => {
@@ -5377,6 +5418,7 @@ configurarBuscaCatalogoSimples('npGrupoBusca', 'npGrupoResultados', () => catalo
 configurarBuscaCatalogoSimples('npAlmoxBusca', 'npAlmoxResultados', () => catalogosBaixa.almoxarifados || [], (item) => {
     almoxarifadoSelecionadoNovoProduto = item;
     document.getElementById('npAlmoxSelecionado').textContent = `Selecionado: ${item.nome}`;
+    atualizarBlocoCatalogoUniformeNP();
 });
 
 document.getElementById('btnSalvarProduto').addEventListener('click', async () => {
@@ -5395,6 +5437,15 @@ document.getElementById('btnSalvarProduto').addEventListener('click', async () =
     if (!almoxarifadoSelecionadoNovoProduto) {
         statusEl.className = 'status-msg erro';
         statusEl.textContent = 'Escolha o almoxarifado.';
+        return;
+    }
+    // almoxarifado dedicado a Uniformes/EPI: o produto também vai pro catálogo do Staff, que exige o tipo
+    const vaiParaCatalogoUniforme = ehAlmoxarifadoUniformesEpi(almoxarifadoSelecionadoNovoProduto);
+    const tipoCatalogo = document.getElementById('npCatTipo').value;
+    if (vaiParaCatalogoUniforme && !tipoCatalogo) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Escolha o tipo do item no catálogo de Uniformes/EPI (Uniforme ou EPI).';
+        document.getElementById('npCatTipo').focus();
         return;
     }
     const codigo = document.getElementById('npCodigo').value.trim();
@@ -5424,15 +5475,41 @@ document.getElementById('btnSalvarProduto').addEventListener('click', async () =
     statusEl.className = '';
     statusEl.textContent = 'Salvando...';
     try {
-        await chamarPost('salvarProduto', { produto: novo });
+        const produtoSalvo = await chamarPost('salvarProduto', { produto: novo });
+
+        // almoxarifado "Uniformes / EPI": grava também no catálogo do Staff (cada tamanho é um item próprio). Se isso falhar
+        // (sem permissão -- só Principal/Administrador do Staff cria item de catálogo -- ou SQL do módulo não rodado), o
+        // produto JÁ está no estoque: avisa claramente em vez de desfazer.
+        let avisoCatalogo = null;
+        if (vaiParaCatalogoUniforme) {
+            const epi = tipoCatalogo === 'epi';
+            const { error: eCat } = await sb.from('staff_uniformes_epi_catalogo').insert({
+                unidade_negocio_id: meuPerfil.unidadeId, produto_id: produtoSalvo.id, tipo: tipoCatalogo, nome: novo.nome,
+                tamanho: document.getElementById('npCatTamanho').value.trim() || null,
+                numero_ca: epi ? (document.getElementById('npCatCa').value.trim() || null) : null,
+                validade_ca: epi ? (document.getElementById('npCatValidade').value || null) : null,
+                vida_util_dias: Number(document.getElementById('npCatVida').value) || null,
+                ativo: true
+            });
+            if (eCat) avisoCatalogo = eCat.message || String(eCat);
+            else await registrarSentinela('catalogo_uniforme_epi_criado_pelo_estoque', `Produto "${novo.nome}" (#${produtoSalvo.id}) cadastrado no almoxarifado Uniformes/EPI e gravado no catálogo (${tipoCatalogo}${document.getElementById('npCatTamanho').value.trim() ? ', tam. ' + document.getElementById('npCatTamanho').value.trim() : ''})`);
+        }
+
         await carregarProdutos();
         atualizarTagContagem();
-        statusEl.className = 'status-msg sucesso';
-        statusEl.textContent = '✅ Produto salvo.';
         ['npCodigo', 'npCodigoExterno', 'npNome', 'npValor'].forEach(id2 => document.getElementById(id2).value = '');
         document.getElementById('npEstoque').value = 0;
+        limparBlocoCatalogoUniformeNP();
         renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
-        setTimeout(() => { document.getElementById('painelNovoProduto').style.display = 'none'; statusEl.textContent = ''; }, 1200);
+        if (avisoCatalogo) {
+            // mantém o painel aberto pra mensagem ser lida
+            statusEl.className = 'status-msg erro';
+            statusEl.textContent = `⚠️ Produto salvo no estoque, mas NÃO foi gravado no catálogo de Uniformes/EPI (${avisoCatalogo}). Só Principal ou Administrador do Staff cria item de catálogo — peça pra cadastrar no módulo Staff → Uniformes/EPI → Catálogo, apontando pra este produto.`;
+        } else {
+            statusEl.className = 'status-msg sucesso';
+            statusEl.textContent = vaiParaCatalogoUniforme ? '✅ Produto salvo e gravado no catálogo de Uniformes/EPI.' : '✅ Produto salvo.';
+            setTimeout(() => { document.getElementById('painelNovoProduto').style.display = 'none'; statusEl.textContent = ''; }, 1200);
+        }
     } catch (err) {
         console.error(err);
         statusEl.className = 'status-msg erro';
