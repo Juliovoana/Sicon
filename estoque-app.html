@@ -789,7 +789,7 @@
     <div style="max-height:65vh; overflow:auto;">
         <table class="tabela" id="tabelaNotasEntrada">
             <thead>
-                <tr><th>Data</th><th>Tipo</th><th>NF nº</th><th>Fornecedor</th><th>Origem</th><th class="num">Itens</th><th class="num">Títulos</th><th class="num">Valor total</th><th>Ações</th></tr>
+                <tr><th>Data</th><th>Tipo</th><th>NF nº</th><th>Fornecedor</th><th>Origem</th><th class="num">Itens</th><th class="num">Títulos</th><th class="num">Valor total</th><th class="center">Protocolo</th><th>Ações</th></tr>
             </thead>
             <tbody id="corpoTabelaNotasEntrada"></tbody>
         </table>
@@ -1128,12 +1128,27 @@
 <div class="modal-overlay" id="modalVincularNotasParciais" style="z-index:1200;">
     <div class="modal-caixa" style="max-width:560px;">
         <h3>Vincular a notas já lançadas</h3>
-        <p style="font-size:0.85em; color:var(--muted); margin:6px 0 12px;">Notas de entrada lançadas manualmente (sem XML) desse mesmo produto, que ainda não estão ligadas a nenhuma NF-e. Marque as que correspondem ao recebimento parcial já feito — a quantidade delas continua contando pro estoque normalmente (não duplica), e o <strong>preço dessas unidades é corrigido pro preço oficial da NF-e</strong> (o preço provisório usado antes deixa de valer, já que a NF-e é o documento definitivo).</p>
+        <p style="font-size:0.85em; color:var(--muted); margin:6px 0 12px;">Notas de entrada lançadas manualmente (sem XML) desse mesmo produto, que ainda não estão ligadas a nenhuma nota definitiva. Marque as que correspondem ao recebimento parcial já feito — a quantidade delas continua contando pro estoque normalmente (não duplica), e o <strong>preço dessas unidades é corrigido pro preço oficial da nota definitiva</strong> (NF-e ou nota manual; o preço provisório usado antes deixa de valer).</p>
         <div id="listaNotasParciaisDisponiveis" style="max-height:45vh; overflow:auto;"></div>
         <p id="statusVincularNotasParciais" style="font-size:0.85em; margin-top:10px;"></p>
         <div style="text-align:right; margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
             <button class="btn btn-cinza" id="btnFecharModalVincularNotasParciais">Fechar</button>
             <button class="btn btn-verde" id="btnConfirmarVincularNotasParciais">Confirmar vínculo</button>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== MODAL / POPUP: Agregar nota(s) de pedido INTEIRA(S) ===================== -->
+<div class="modal-overlay" id="modalAgregarPedido" style="z-index:1200;">
+    <div class="modal-caixa" style="max-width:640px;">
+        <h3>📦 Agregar nota(s) de pedido inteira(s)</h3>
+        <p style="font-size:0.85em; color:var(--muted); margin:6px 0 10px;">Escolha as notas de entrada manuais (notinhas de pedido/recebimento) que pertencem a esta nota definitiva. As notas escolhidas ficam <strong>agregadas</strong> a ela, todas de uma vez, <strong>sem ir item a item</strong>: os produtos delas já entraram no estoque, então os produtos da nota definitiva são <strong>ignorados</strong> (não entram em dobro) e os das notas de pedido passam a constar como <strong>"agregados à nota"</strong>. O preço lançado nas notas de pedido não é alterado.</p>
+        <input type="text" id="agregarPedidoBusca" placeholder="Filtrar por nº da nota ou fornecedor..." style="width:100%; margin-bottom:8px;">
+        <div id="listaAgregarPedido" style="max-height:42vh; overflow:auto; border:1px solid #eee; border-radius:6px;"></div>
+        <p id="statusAgregarPedido" style="font-size:0.85em; margin-top:10px;"></p>
+        <div style="text-align:right; margin-top:14px; display:flex; gap:8px; justify-content:flex-end;">
+            <button class="btn btn-cinza" id="btnFecharAgregarPedido">Fechar</button>
+            <button class="btn btn-verde" id="btnConfirmarAgregarPedido">Confirmar</button>
         </div>
     </div>
 </div>
@@ -1203,6 +1218,32 @@
                     <p class="subtitulo" id="nfePlanoContasSelecionado" style="margin-top:4px;"></p>
                 </div>
             </div>
+            <label style="display:flex; align-items:center; gap:6px; font-size:0.88em; cursor:pointer; margin-top:10px;">
+                <input type="checkbox" id="nfeSaidaMesmaClass" style="width:auto;"> Na <strong>Baixa Direta</strong>, usar o mesmo Evento, Setor e Plano de Contas da entrada
+            </label>
+            <div id="nfeBlocoClassSaida" style="margin-top:6px;">
+                <p class="subtitulo" style="margin:0 0 4px 0;"><strong>Classificação da SAÍDA</strong> (só vale ao escolher "Registrar como Baixa Direta"; a entrada e a nota continuam com a classificação acima):</p>
+                <div class="grade col4">
+                    <div class="campo" style="position:relative;">
+                        <label>Setor (saída)</label>
+                        <input type="text" id="nfeSaidaSetorBusca" placeholder="Buscar setor..." autocomplete="off">
+                        <div id="nfeSaidaSetorResultados" class="dropdown-busca-evento"></div>
+                        <p class="subtitulo" id="nfeSaidaSetorSelecionado" style="margin-top:4px;"></p>
+                    </div>
+                    <div class="campo" style="position:relative;">
+                        <label>Evento (saída)</label>
+                        <input type="text" id="nfeSaidaEventoBusca" placeholder="Buscar evento..." autocomplete="off">
+                        <div id="nfeSaidaEventoResultados" class="dropdown-busca-evento"></div>
+                        <p class="subtitulo" id="nfeSaidaEventoSelecionado" style="margin-top:4px;"></p>
+                    </div>
+                    <div class="campo" style="position:relative; grid-column:span 2;">
+                        <label>Plano de Contas (saída)</label>
+                        <input type="text" id="nfeSaidaPlanoContasBusca" placeholder="Buscar código ou descrição..." autocomplete="off">
+                        <div id="nfeSaidaPlanoContasResultados" class="dropdown-busca-evento"></div>
+                        <p class="subtitulo" id="nfeSaidaPlanoContasSelecionado" style="margin-top:4px;"></p>
+                    </div>
+                </div>
+            </div>
             <div class="grade col4" style="margin-top:8px;">
                 <div class="campo"><label>KM na baixa</label><input type="number" step="1" id="nfeKm"></div>
                 <div class="campo"><label>KM próxima troca</label><input type="number" step="1" id="nfeKmProximaTroca"></div>
@@ -1217,8 +1258,17 @@
                 </div>
             </div>
 
+            <!-- agregar nota(s) de pedido INTEIRA(S): os itens desta NF-e passam a ser ignorados -->
+            <div id="nfeBlocoPedidoAgregado" style="background:#EFF6FF; border:1px solid #BFD7FF; border-radius:8px; padding:10px 14px; margin-top:14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <span class="subtitulo" style="margin:0;">Esta NF-e consolida notas de pedido já lançadas? Agregue elas <strong>inteiras</strong>, sem ir item a item — os itens desta NF-e serão ignorados.</span>
+                    <button class="btn btn-azul btn-pequeno" id="btnNfeAgregarPedido" type="button">📦 Agregar nota(s) de pedido inteira(s)</button>
+                </div>
+                <div id="nfePedidosAgregados" style="margin-top:8px;"></div>
+            </div>
+
             <div style="max-height:40vh; overflow:auto; margin-top:14px;">
-                <table class="tabela">
+                <table class="tabela" id="tabelaItensNFe">
                     <thead>
                         <tr><th>Cód. NF</th><th>Descrição na NF</th><th>Un</th><th class="num">Qtd</th><th class="num">Valor Unit.</th><th>Almoxarifado</th><th>Produto no sistema</th><th class="center">Ações</th></tr>
                     </thead>
@@ -1530,6 +1580,11 @@
             </div>
         </div>
         <p class="subtitulo" id="origemNotaEntrada" style="margin-bottom:12px;"></p>
+        <!-- esta nota foi agregada a outra (nota definitiva) -->
+        <div id="avisoNotaAgregada" style="display:none; background:#FFF8E1; border:1px solid #F2A93B; border-radius:8px; padding:10px 14px; margin-bottom:12px; font-size:0.9em;">
+            <span id="avisoNotaAgregadaTexto"></span>
+            <button class="btn btn-cinza btn-pequeno" id="btnDesfazerAgregacaoEstaNota" type="button" style="margin-left:8px;">↩️ Desfazer agregação</button>
+        </div>
 
         <!-- cabeçalho -->
         <div class="grade col4">
@@ -1581,6 +1636,16 @@
         <!-- itens e títulos, só aparecem depois do cabeçalho salvo (precisa do id da nota) -->
         <div id="blocoItensTitulosNota" style="display:none; margin-top:18px;">
 
+            <!-- notas de pedido agregadas a esta nota (inteiras ou item a item) -->
+            <div id="blocoPedidosAgregados" style="background:#EFF6FF; border:1px solid #BFD7FF; border-radius:8px; padding:12px 14px; margin-bottom:16px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <h4 style="margin:0;">📦 Notas de pedido agregadas</h4>
+                    <button class="btn btn-azul btn-pequeno" id="btnAgregarPedidoNota" type="button">📦 Agregar nota(s) de pedido inteira(s)</button>
+                </div>
+                <p class="subtitulo" style="margin:6px 0 0 0;">Notas de pedido/recebimento (notinhas) que pertencem a esta nota. Os produtos delas <strong>já entraram no estoque</strong> pelas próprias notas — aqui ficam só informados como agregados a esta nota. Pra agregar produto a produto (corrigindo o preço), use o botão <strong>🔗 Notas parciais</strong> ao adicionar o item.</p>
+                <div id="listaPedidosAgregados" style="margin-top:10px;"></div>
+            </div>
+
             <h4 style="margin-bottom:8px;">Itens</h4>
             <div id="blocoAdicionarItemNota">
                 <div class="grade col4" style="align-items:flex-end;">
@@ -1625,9 +1690,13 @@
                     <div class="campo"><label>Tag (opcional)</label><input type="text" id="notaItemTag" placeholder="ex: 112"></div>
                 </div>
                 <p class="subtitulo" style="margin-top:4px;">Almoxarifado, Setor, Evento e Plano de Contas são obrigatórios — ficam gravados em cada movimento de entrada, usados no rateio financeiro. A Tag é opcional.</p>
-                <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
+                <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
                     <span class="subtitulo" id="notaItemProdutoSelecionado"></span>
-                    <button class="btn btn-azul btn-pequeno" id="btnAdicionarItemNota">+ Adicionar item</button>
+                    <span style="display:flex; gap:8px; align-items:center;">
+                        <span class="subtitulo" id="notaItemParciaisResumo" style="color:#1565c0;"></span>
+                        <button class="btn btn-cinza btn-pequeno" id="btnNotaItemParciais" type="button" title="Vincular a notas de entrada já lançadas manualmente pra esse produto (preço passa a ser o oficial desta nota)">🔗 Notas parciais</button>
+                        <button class="btn btn-azul btn-pequeno" id="btnAdicionarItemNota">+ Adicionar item</button>
+                    </span>
                 </div>
             </div>
 
@@ -1639,7 +1708,33 @@
 
             <div style="background:#EFF6FF; border:1px solid #BFD7FF; border-radius:8px; padding:12px 14px; margin-top:16px;">
                 <h4 style="margin:0 0 4px 0;">⬇️ Baixa Direta (opcional)</h4>
-                <p class="subtitulo" style="margin:0 0 10px 0;">Usa o Setor/Evento/Plano de Contas já preenchidos acima (em "Adicionar item") e registra a saída de TODOS os itens desta nota de uma vez só — pro material que já foi direto pra consumo (produção, obra etc.), sem precisar abrir "Baixar itens dessa nota" e repetir a classificação item por item. Mesmo princípio do botão "Registrar como Baixa Direta" da importação de XML.</p>
+                <p class="subtitulo" style="margin:0 0 10px 0;">Registra a saída de TODOS os itens desta nota de uma vez só — pro material que já foi direto pra consumo (produção, obra etc.), sem precisar abrir "Baixar itens dessa nota" e repetir a classificação item por item. Informe abaixo o Setor/Evento/Plano de Contas da <strong>saída</strong> (costumam ser diferentes dos da entrada, preenchidos acima em "Adicionar item"); se forem os mesmos da entrada, marque "usar a mesma classificação". Mesmo princípio do botão "Registrar como Baixa Direta" da importação de XML.</p>
+                <label style="display:flex; align-items:center; gap:6px; font-size:0.9em; cursor:pointer; margin-bottom:8px;">
+                    <input type="checkbox" id="notaBaixaDiretaMesmaClass" style="width:auto;"> Usar a mesma classificação (Setor, Evento e Plano de Contas) da entrada
+                </label>
+                <div id="blocoClassSaidaNota" style="margin-bottom:10px;">
+                    <p class="subtitulo" style="margin:0 0 6px 0;"><strong>Classificação da SAÍDA</strong> — vale só pra baixa direta; a entrada continua com a classificação do bloco "Adicionar item".</p>
+                    <div class="grade col4">
+                        <div class="campo" style="position:relative;">
+                            <label>Setor (saída)</label>
+                            <input type="text" id="notaSaidaSetorBusca" placeholder="Buscar setor..." autocomplete="off">
+                            <div id="notaSaidaSetorResultados" class="dropdown-busca-evento"></div>
+                            <p class="subtitulo" id="notaSaidaSetorSelecionado" style="margin-top:4px;"></p>
+                        </div>
+                        <div class="campo" style="position:relative;">
+                            <label>Evento (saída)</label>
+                            <input type="text" id="notaSaidaEventoBusca" placeholder="Buscar evento..." autocomplete="off">
+                            <div id="notaSaidaEventoResultados" class="dropdown-busca-evento"></div>
+                            <p class="subtitulo" id="notaSaidaEventoSelecionado" style="margin-top:4px;"></p>
+                        </div>
+                        <div class="campo" style="position:relative; grid-column:span 2;">
+                            <label>Plano de Contas (saída)</label>
+                            <input type="text" id="notaSaidaPlanoContasBusca" placeholder="Buscar código ou descrição..." autocomplete="off">
+                            <div id="notaSaidaPlanoContasResultados" class="dropdown-busca-evento"></div>
+                            <p class="subtitulo" id="notaSaidaPlanoContasSelecionado" style="margin-top:4px;"></p>
+                        </div>
+                    </div>
+                </div>
                 <div class="grade col4">
                     <div class="campo" style="position:relative;">
                         <label>Subsetor (opcional)</label>
@@ -2477,6 +2572,17 @@ async function chamarGet(acao, filtros) {
     throw new Error('ação GET desconhecida: ' + acao);
 }
 
+// ids das notas que JÁ recebem outras notas agregadas (notas "definitivas"):
+// elas não podem ser agregadas a uma terceira nota (evita corrente de vínculos)
+async function idsNotasDefinitivas() {
+    const { data, error } = await sb.from('estoque_notas')
+        .select('nota_definitiva_id')
+        .eq('unidade_negocio_id', meuPerfil.unidadeId)
+        .not('nota_definitiva_id', 'is', null);
+    if (error) throw error;
+    return new Set((data || []).map(r => r.nota_definitiva_id));
+}
+
 async function chamarPost(acao, d) {
     if (acao === 'gerarProtocolo') {
         const { data, error } = await sb.rpc('fn_gerar_protocolo_notas', {
@@ -2691,12 +2797,15 @@ async function chamarPost(acao, d) {
         const notaIds = [...new Set((movs || []).map(m => m.estoque_nota_id))];
         if (!notaIds.length) return [];
 
-        const { data: notas, error: eNotas } = await sb.from('estoque_notas')
+        const { data: notas0, error: eNotas } = await sb.from('estoque_notas')
             .select('id, numero_nf, nome_fornecedor, data_entrada, xml_original, nota_definitiva_id')
             .in('id', notaIds)
             .is('xml_original', null)
             .is('nota_definitiva_id', null);
         if (eNotas) throw eNotas;
+        // não oferece a própria nota em edição (entrada manual) nem notas que já são definitivas de outras
+        const definitivas = await idsNotasDefinitivas();
+        const notas = (notas0 || []).filter(n => n.id !== d.excluirNotaId && !definitivas.has(n.id));
 
         return notas.map(n => ({
             id: n.id,
@@ -2705,6 +2814,74 @@ async function chamarPost(acao, d) {
             dataEntrada: n.data_entrada,
             qtdDesseProduto: movs.filter(m => m.estoque_nota_id === n.id).reduce((acc, m) => acc + Number(m.qtd), 0)
         }));
+    }
+    // ---- agregar uma nota de pedido INTEIRA a uma nota definitiva (sem ir item a item) ----
+    // lista as notas que podem ser agregadas: entrada manual (sem XML), ainda não ligada a nenhuma
+    // nota definitiva, que não seja ela mesma definitiva de outras, nem a própria nota em edição
+    if (acao === 'buscarNotasPedidoDisponiveis') {
+        const { data: notas0, error: e1 } = await sb.from('estoque_notas')
+            .select('id, numero_nf, nome_fornecedor, data_entrada, xml_original, nota_definitiva_id, tipo')
+            .eq('unidade_negocio_id', meuPerfil.unidadeId)
+            .eq('tipo', 'entrada')
+            .is('xml_original', null)
+            .is('nota_definitiva_id', null)
+            .order('data_entrada', { ascending: false }).order('id', { ascending: false })
+            .limit(1000);
+        if (e1) throw e1;
+        const definitivas = await idsNotasDefinitivas();
+        const notas = (notas0 || []).filter(n => n.id !== d.excluirNotaId && !definitivas.has(n.id));
+        if (!notas.length) return [];
+        const resumo = {};
+        for (let i = 0; i < notas.length; i += 150) {
+            const lote = notas.slice(i, i + 150).map(n => n.id);
+            const { data: movs, error: e2 } = await sb.from('estoque_movimentacoes')
+                .select('estoque_nota_id, qtd, valor_unit, tipo').in('estoque_nota_id', lote).eq('tipo', 'entrada');
+            if (e2) throw e2;
+            (movs || []).forEach(m => {
+                const r = resumo[m.estoque_nota_id] || (resumo[m.estoque_nota_id] = { itens: 0, valor: 0 });
+                r.itens++; r.valor += Number(m.qtd) * Number(m.valor_unit);
+            });
+        }
+        return notas.map(n => ({
+            id: n.id, numeroNf: n.numero_nf, nomeFornecedor: n.nome_fornecedor, dataEntrada: n.data_entrada,
+            qtdItens: (resumo[n.id] || {}).itens || 0, valorTotal: (resumo[n.id] || {}).valor || 0
+        }));
+    }
+    if (acao === 'agregarNotasPedido') {
+        if (!d.notaDefinitivaId || !(d.notasIds || []).length) throw new Error('Nenhuma nota selecionada.');
+        if ((d.notasIds || []).includes(d.notaDefinitivaId)) throw new Error('Uma nota não pode ser agregada a ela mesma.');
+        // revalida no banco (a lista na tela pode estar velha): só entrada manual, ainda sem vínculo, da mesma unidade
+        const { data: validas, error: e1 } = await sb.from('estoque_notas')
+            .select('id').in('id', d.notasIds).eq('unidade_negocio_id', meuPerfil.unidadeId)
+            .eq('tipo', 'entrada').is('xml_original', null).is('nota_definitiva_id', null);
+        if (e1) throw e1;
+        const idsValidos = (validas || []).map(n => n.id);
+        if (idsValidos.length !== d.notasIds.length) throw new Error('Alguma das notas já foi agregada a outra nota ou não pode mais ser agregada. Atualize a lista e tente de novo.');
+        const definitivas = await idsNotasDefinitivas();
+        if (d.notasIds.some(id => definitivas.has(id))) throw new Error('Uma das notas já recebe outras notas agregadas — não pode ser agregada a uma terceira.');
+        const { error: e2 } = await sb.from('estoque_notas').update({ nota_definitiva_id: d.notaDefinitivaId }).in('id', idsValidos);
+        if (e2) throw e2;
+        return;
+    }
+    if (acao === 'desagregarNotaPedido') {
+        // só desliga o vínculo; NÃO desfaz correção de preço feita antes (vínculo item a item) nem mexe em estoque
+        const { error } = await sb.from('estoque_notas').update({ nota_definitiva_id: null }).eq('id', d.notaId).eq('unidade_negocio_id', meuPerfil.unidadeId);
+        if (error) throw error;
+        return;
+    }
+    // notas agregadas a uma nota definitiva, com os itens de cada uma (pra mostrar na tela da nota principal)
+    if (acao === 'listarNotasAgregadas') {
+        const { data: notas, error: e1 } = await sb.from('estoque_notas')
+            .select('id, numero_nf, nome_fornecedor, data_entrada, valor_total')
+            .eq('unidade_negocio_id', meuPerfil.unidadeId).eq('nota_definitiva_id', d.notaDefinitivaId)
+            .order('data_entrada', { ascending: true }).order('id', { ascending: true });
+        if (e1) throw e1;
+        if (!(notas || []).length) return [];
+        const { data: movs, error: e2 } = await sb.from('estoque_movimentacoes')
+            .select('id, estoque_nota_id, produto_id, descricao_avulsa, qtd, valor_unit, tipo')
+            .in('estoque_nota_id', notas.map(n => n.id)).eq('tipo', 'entrada').order('id', { ascending: true });
+        if (e2) throw e2;
+        return notas.map(n => ({ ...n, itens: (movs || []).filter(m => m.estoque_nota_id === n.id) }));
     }
     if (acao === 'vincularNotasParciaisNfe') {
         const { error: eLink } = await sb.from('estoque_notas')
@@ -2805,6 +2982,9 @@ async function chamarPost(acao, d) {
         return;
     }
     if (acao === 'removerNota') {
+        // notas agregadas a esta (nota_definitiva_id) deixam de estar agregadas -- continuam existindo
+        const { error: e0 } = await sb.from('estoque_notas').update({ nota_definitiva_id: null }).eq('nota_definitiva_id', d.estoqueNotaId);
+        if (e0) throw e0;
         // ordem importa: primeiro os filhos (títulos e movimentações), depois a nota
         const { error: e1 } = await sb.from('estoque_titulos_notas').delete().eq('estoque_nota_id', d.estoqueNotaId);
         if (e1) throw e1;
@@ -3074,7 +3254,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
    ============================================================ */
 const AJUDA_ESTOQUE = {
     titulo: 'Estoque — Controle de Estoque & Projetos',
-    ultimaRevisao: '18/09/2026',
+    ultimaRevisao: '09/10/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>O Estoque controla o material físico da unidade (contêiner/esquadria): o que entra
@@ -3196,6 +3376,51 @@ const AJUDA_ESTOQUE = {
                 <li><strong>+ Nova requisição</strong>: saída avulsa de estoque <strong>sem</strong>
                 vínculo com projeto (ex.: manutenção de veículo/equipamento) — permite registrar
                 KM/horímetro pra próxima troca.</li>
+                <li><strong>🔗 Notas parciais (produto a produto — importação de XML e entrada manual)</strong>:
+                serve pra quando a compra grande vem numa nota só, mas a entrada real foi lançada aos
+                poucos, por <strong>notinhas manuais</strong> de recebimento (ex.: madeira com romaneio).
+                Passo a passo: 1) lance as notinhas em <strong>+ Nova entrada direta</strong> conforme o
+                material chega; 2) quando a nota definitiva chegar, importe o XML <em>ou</em> lance ela
+                também em <strong>+ Nova entrada direta</strong>; 3) em cada item (na importação: item
+                já <strong>vinculado a um produto do sistema</strong>; na entrada manual: depois de
+                selecionar o produto, ao lado de "+ Adicionar item"), clique em
+                <strong>🔗 Notas parciais</strong> e marque as notinhas desse produto que correspondem
+                àquele recebimento; 4) confirme (importação) ou clique em "+ Adicionar item" (manual). O
+                que acontece: a quantidade das notinhas <strong>continua valendo</strong> (não duplica o
+                estoque), o <strong>preço dessas unidades é corrigido pro preço oficial da nota
+                definitiva</strong> (o preço provisório deixa de valer e o preço médio é recalculado) e
+                entra só a <strong>diferença</strong> de quantidade (ex.: nota de 100 com 80 já recebidos
+                nas notinhas → entram 20). O botão não aparece em item marcado <strong>Avulso</strong>
+                ou ainda não vinculado a um produto, e só considera notinhas <strong>manuais</strong> (sem XML)
+                que ainda não foram ligadas a outra nota.</li>
+                <li><strong>📦 Agregar nota(s) de pedido inteira(s)</strong>: quando a nota definitiva só
+                consolida notas de pedido já lançadas e você <strong>não quer ir item a item</strong>. Fica na
+                importação de XML (acima da tabela de itens) e, na entrada manual, no bloco
+                <strong>"Notas de pedido agregadas"</strong> (depois de salvar o cabeçalho). Escolha as notas de pedido
+                (entradas manuais ainda não agregadas a outra nota) e confirme. O que acontece: as notas ficam
+                <strong>agregadas</strong> à nota definitiva; os <strong>itens da nota definitiva são ignorados</strong>
+                (na importação de XML nenhum produto é criado nem entra no estoque — só a nota e os títulos/vencimentos
+                são gravados), porque o estoque <strong>já entrou</strong> pelas notas de pedido; e os produtos das notas de
+                pedido passam a constar como <strong>"agregados à nota X"</strong> (na tela da nota definitiva aparecem os itens
+                de cada pedido; na lista de Notas aparece <strong>📦 agregada à NF X</strong> na nota de pedido e
+                <strong>📦 N pedido(s) agregado(s)</strong> na definitiva). Nada de estoque nem de preço é alterado.
+                Dá pra <strong>↩️ Desfazer</strong> a agregação (na própria nota definitiva ou na nota de pedido); desfazer
+                só desliga o vínculo — não mexe no estoque. Removendo a nota definitiva, as notas de pedido <strong>não são
+                removidas</strong>, só deixam de estar agregadas. Uma nota que já recebe outras notas não pode ser
+                agregada a uma terceira, e a nota principal não pode agregar a si mesma.</li>
+                <li><strong>Baixa Direta (saída imediata) com classificação própria</strong>: na nota manual
+                (bloco "Baixa Direta") e na importação de XML ("Registrar como Baixa Direta"), a
+                <strong>entrada</strong> e a <strong>saída</strong> podem ter <strong>Setor, Evento e Plano de
+                Contas diferentes</strong> (o setor da entrada dificilmente é o mesmo da saída). Por isso, ao
+                registrar uma Baixa Direta, os campos <strong>Setor / Evento / Plano de Contas (saída)</strong> aparecem
+                <strong>vazios e são obrigatórios</strong> — a opção <strong>"usar a mesma classificação da entrada"</strong>
+                vem <strong>desmarcada</strong>; só marque se, naquela baixa, a saída for mesmo igual à entrada (aí os campos
+                da saída somem e ela repete a da entrada). A entrada e a nota continuam com a classificação original;
+                só os movimentos de <strong>saída</strong> usam a da saída. Isso só vale pra Baixa Direta: em "Entrada em
+                Estoque" não há saída, então os campos da saída são ignorados.</li>
+                <li><strong>Coluna Protocolo</strong>: mostra o número do protocolo
+                (<strong>nº 57</strong>, por exemplo) da nota, ou <strong>-</strong> se ela ainda não
+                foi protocolada. O protocolo é gerado na aba Protocolo.</li>
                 <li><strong>Baixar itens da nota</strong>: pega os itens de uma nota de entrada já
                 salva e gera as saídas pra setor/veículo/evento/plano de contas — dá pra dividir a
                 quantidade de um mesmo item entre destinos diferentes, e pra baixar aos poucos, em
@@ -4266,6 +4491,9 @@ document.getElementById('btnImportarNFe').addEventListener('click', () => {
     eventoSelecionadoNfe = null;
     document.getElementById('nfeObservacao').value = '';
     nfeItensParseados = [];
+    nfePedidosAgregados = [];
+    renderizarPedidosAgregadosNFe();
+    classSaidaNfe.reset();       // saída imediata: campos próprios da saída, vazios (opção "mesma da entrada" desmarcada)
     document.getElementById('modalImportarNFe').classList.add('aberto');
 });
 
@@ -4375,6 +4603,8 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
             document.getElementById('nfePlanoContasSelecionado').innerHTML = '';
         }
 
+        nfePedidosAgregados = [];     // outro XML carregado: a escolha de notas de pedido anterior não vale mais
+        renderizarPedidosAgregadosNFe();
         nfeItensParseados = nfe.itens.map(it => {
             const produtoIdMapeado = mapaCodigoParaProdutoId.get(it.cProd);
             const match = produtoIdMapeado ? produtos.find(p => p.id === produtoIdMapeado) : encontrarProdutoCorrespondenteNFe(it);
@@ -4553,26 +4783,27 @@ function renderizarTabelaNFe() {
     });
 }
 
-let nfeIndiceVincularNotasAtual = null;
+// Escolha das notas parciais (notinhas) de UM produto -- serve tanto pra importação de XML
+// quanto pra entrada manual: quem chama passa o produto, o que já estava marcado e o que
+// fazer ao confirmar (aoConfirmar(ids, qtdCoberta)).
+let vinculoParciaisCtx = null;
 
-async function abrirModalVincularNotasParciais(idx) {
-    const item = nfeItensParseados[idx];
-    if (!item.produtoVinculadoId) { alert('Vincule esse item a um produto do sistema primeiro.'); return; }
-    nfeIndiceVincularNotasAtual = idx;
+async function abrirModalNotasParciaisGenerico(ctx) {
+    vinculoParciaisCtx = ctx;
     const lista = document.getElementById('listaNotasParciaisDisponiveis');
     lista.innerHTML = '<p class="subtitulo">Carregando...</p>';
     document.getElementById('statusVincularNotasParciais').textContent = '';
     document.getElementById('modalVincularNotasParciais').classList.add('aberto');
 
     try {
-        const notas = await chamarPost('buscarNotasParciaisDoProduto', { produtoId: item.produtoVinculadoId });
+        const notas = await chamarPost('buscarNotasParciaisDoProduto', { produtoId: ctx.produtoId, excluirNotaId: ctx.excluirNotaId || null });
         if (!notas.length) {
             lista.innerHTML = '<p class="subtitulo">Nenhuma nota manual (sem XML) desse produto disponível pra vincular.</p>';
             return;
         }
         lista.innerHTML = notas.map(n => `
             <label style="display:flex; align-items:flex-start; gap:8px; padding:8px; border-bottom:1px solid #eee; cursor:pointer;">
-                <input type="checkbox" data-nota-parcial-id="${n.id}" ${item.notasParciaisVinculadas.includes(n.id) ? 'checked' : ''} style="margin-top:3px;">
+                <input type="checkbox" data-nota-parcial-id="${n.id}" ${(ctx.marcadas || []).includes(n.id) ? 'checked' : ''} style="margin-top:3px;">
                 <span>
                     <strong>${n.numeroNf ? 'Nota nº ' + escapeHtml(n.numeroNf) : 'Sem número'}</strong> — ${escapeHtml(n.nomeFornecedor || 'Fornecedor não informado')}<br>
                     <span class="subtitulo">Data: ${n.dataEntrada ? formatarData(n.dataEntrada) : '-'} · Qtd desse produto nessa nota: ${n.qtdDesseProduto}</span>
@@ -4584,23 +4815,148 @@ async function abrirModalVincularNotasParciais(idx) {
     }
 }
 
+async function abrirModalVincularNotasParciais(idx) {
+    const item = nfeItensParseados[idx];
+    if (!item.produtoVinculadoId) { alert('Vincule esse item a um produto do sistema primeiro.'); return; }
+    await abrirModalNotasParciaisGenerico({
+        produtoId: item.produtoVinculadoId,
+        marcadas: item.notasParciaisVinculadas,
+        aoConfirmar: (ids, qtdCoberta) => {
+            item.notasParciaisVinculadas = ids;
+            item.qtdJaCoberta = qtdCoberta;
+            renderizarTabelaNFe();
+        }
+    });
+}
+
 document.getElementById('btnFecharModalVincularNotasParciais').addEventListener('click', () => {
     document.getElementById('modalVincularNotasParciais').classList.remove('aberto');
 });
 
 document.getElementById('btnConfirmarVincularNotasParciais').addEventListener('click', () => {
-    const item = nfeItensParseados[nfeIndiceVincularNotasAtual];
+    if (!vinculoParciaisCtx) return;
     const marcadas = Array.from(document.querySelectorAll('#listaNotasParciaisDisponiveis [data-nota-parcial-id]:checked'));
-    item.notasParciaisVinculadas = marcadas.map(chk => Number(chk.dataset.notaParcialId));
+    const ids = marcadas.map(chk => Number(chk.dataset.notaParcialId));
     // soma a quantidade das notas marcadas, lendo do texto que já está
     // na tela (evita precisar buscar tudo de novo no banco)
-    item.qtdJaCoberta = marcadas.reduce((acc, chk) => {
+    const qtdCoberta = marcadas.reduce((acc, chk) => {
         const textoQtd = chk.closest('label').querySelector('.subtitulo').textContent;
         const match = textoQtd.match(/Qtd desse produto nessa nota: ([\d.,]+)/);
         return acc + (match ? Number(match[1].replace(',', '.')) : 0);
     }, 0);
     document.getElementById('modalVincularNotasParciais').classList.remove('aberto');
-    renderizarTabelaNFe();
+    const ctx = vinculoParciaisCtx; vinculoParciaisCtx = null;
+    ctx.aoConfirmar(ids, qtdCoberta);
+});
+
+/* ---------------------------------------------------------------
+   AGREGAR NOTA(S) DE PEDIDO INTEIRA(S) (sem ir item a item)
+   Modal único, usado na importação de XML (a escolha só é gravada ao
+   registrar) e na entrada manual (grava na hora). Não mexe em estoque
+   nem em preço: só liga as notas à nota definitiva (nota_definitiva_id).
+   --------------------------------------------------------------- */
+let agregarPedidoCtx = null;     // { excluirNotaId, marcadas:[ids], aoConfirmar(notasEscolhidas) }
+let agregarPedidoNotas = [];
+let agregarPedidoSel = new Set();   // ids marcados (sobrevive ao filtrar a lista)
+
+function renderizarListaAgregarPedido() {
+    const lista = document.getElementById('listaAgregarPedido');
+    const termo = semAcentoBusca(document.getElementById('agregarPedidoBusca').value);
+    const marcadasAgora = agregarPedidoSel;
+    const visiveis = agregarPedidoNotas.filter(n => !termo || semAcentoBusca((n.numeroNf || '') + ' ' + (n.nomeFornecedor || '')).includes(termo));
+    if (!visiveis.length) {
+        lista.innerHTML = '<p class="subtitulo" style="padding:12px;">' + (agregarPedidoNotas.length ? 'Nenhuma nota com esse filtro.' : 'Nenhuma nota de pedido disponível: precisa ser uma entrada manual (sem XML), ainda não agregada a outra nota.') + '</p>';
+        return;
+    }
+    lista.innerHTML = visiveis.map(n => `
+        <label style="display:flex; align-items:flex-start; gap:8px; padding:8px 10px; border-bottom:1px solid #eee; cursor:pointer;">
+            <input type="checkbox" data-pedido-id="${n.id}" ${marcadasAgora.has(n.id) ? 'checked' : ''} style="margin-top:3px;">
+            <span style="flex:1;">
+                <strong>${n.numeroNf ? 'Nota nº ' + escapeHtml(n.numeroNf) : 'Sem número (#' + n.id + ')'}</strong> — ${escapeHtml(n.nomeFornecedor || 'Fornecedor não informado')}<br>
+                <span class="subtitulo">Data: ${n.dataEntrada ? formatarData(n.dataEntrada) : '-'} · ${n.qtdItens} item(ns) · ${formatarMoeda(n.valorTotal)}</span>
+            </span>
+        </label>
+    `).join('');
+}
+
+function semAcentoBusca(s) {
+    return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+}
+
+async function abrirModalAgregarPedido(ctx) {
+    agregarPedidoCtx = ctx;
+    agregarPedidoSel = new Set(ctx.marcadas || []);
+    agregarPedidoNotas = [];
+    document.getElementById('agregarPedidoBusca').value = '';
+    document.getElementById('statusAgregarPedido').textContent = '';
+    document.getElementById('listaAgregarPedido').innerHTML = '<p class="subtitulo" style="padding:12px;">Carregando...</p>';
+    document.getElementById('modalAgregarPedido').classList.add('aberto');
+    try {
+        agregarPedidoNotas = await chamarPost('buscarNotasPedidoDisponiveis', { excluirNotaId: ctx.excluirNotaId || null });
+        renderizarListaAgregarPedido();
+    } catch (err) {
+        document.getElementById('listaAgregarPedido').innerHTML = `<p class="status-msg erro" style="padding:12px;">Erro ao buscar: ${escapeHtml(err.message)}</p>`;
+    }
+}
+
+document.getElementById('agregarPedidoBusca').addEventListener('input', () => { if (agregarPedidoCtx) renderizarListaAgregarPedido(); });
+document.getElementById('listaAgregarPedido').addEventListener('change', (e) => {
+    const chk = e.target.closest('[data-pedido-id]'); if (!chk) return;
+    const id = Number(chk.dataset.pedidoId);
+    if (chk.checked) agregarPedidoSel.add(id); else agregarPedidoSel.delete(id);
+});
+document.getElementById('btnFecharAgregarPedido').addEventListener('click', () => {
+    document.getElementById('modalAgregarPedido').classList.remove('aberto');
+    agregarPedidoCtx = null;
+});
+document.getElementById('btnConfirmarAgregarPedido').addEventListener('click', async () => {
+    if (!agregarPedidoCtx) return;
+    const ids = [...agregarPedidoSel].filter(id => agregarPedidoNotas.some(n => n.id === id));
+    if (!ids.length) { document.getElementById('statusAgregarPedido').textContent = 'Marque pelo menos uma nota.'; return; }
+    const escolhidas = agregarPedidoNotas.filter(n => ids.includes(n.id));
+    const btn = document.getElementById('btnConfirmarAgregarPedido');
+    btn.disabled = true;
+    try {
+        await agregarPedidoCtx.aoConfirmar(escolhidas);
+        document.getElementById('modalAgregarPedido').classList.remove('aberto');
+        agregarPedidoCtx = null;
+    } catch (err) {
+        document.getElementById('statusAgregarPedido').textContent = '⚠️ ' + err.message;
+    } finally {
+        btn.disabled = false;
+    }
+});
+
+// ---- na importação de NF-e: notas de pedido escolhidas (gravadas só ao registrar) ----
+let nfePedidosAgregados = [];     // [{id, numeroNf, nomeFornecedor, dataEntrada, qtdItens, valorTotal}]
+
+function renderizarPedidosAgregadosNFe() {
+    const box = document.getElementById('nfePedidosAgregados');
+    const tem = nfePedidosAgregados.length > 0;
+    box.innerHTML = tem ? `
+        <div style="font-size:0.86em; margin-bottom:6px; color:#1565c0;"><strong>${nfePedidosAgregados.length} nota(s) de pedido agregada(s)</strong> — os itens desta NF-e serão <strong>ignorados</strong> (não entram no estoque nem criam produtos):</div>
+        ${nfePedidosAgregados.map(n => `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:4px 0; border-top:1px solid #d5e4ff; font-size:0.88em;">
+                <span><strong>${n.numeroNf ? 'Nota nº ' + escapeHtml(n.numeroNf) : '#' + n.id}</strong> — ${escapeHtml(n.nomeFornecedor || '')} · ${n.qtdItens} item(ns) · ${formatarMoeda(n.valorTotal)}</span>
+                <button class="btn btn-cinza btn-pequeno" type="button" data-remover-pedido-nfe="${n.id}">✕</button>
+            </div>`).join('')}` : '';
+    box.querySelectorAll('[data-remover-pedido-nfe]').forEach(b => b.addEventListener('click', () => {
+        nfePedidosAgregados = nfePedidosAgregados.filter(n => n.id !== Number(b.dataset.removerPedidoNfe));
+        renderizarPedidosAgregadosNFe();
+    }));
+    // itens do XML ficam "riscados" e a baixa direta não faz sentido (não há item entrando)
+    const tabela = document.getElementById('tabelaItensNFe');
+    if (tabela) { tabela.style.opacity = tem ? '0.45' : ''; tabela.style.textDecoration = tem ? 'line-through' : ''; }
+    document.getElementById('btnNfeBaixa').style.display = tem ? 'none' : '';
+    document.getElementById('btnNfeEntrada').textContent = tem ? '📥 Registrar nota e agregar pedido(s)' : '📥 Registrar como Entrada em Estoque';
+}
+
+document.getElementById('btnNfeAgregarPedido').addEventListener('click', () => {
+    abrirModalAgregarPedido({
+        excluirNotaId: null,
+        marcadas: nfePedidosAgregados.map(n => n.id),
+        aoConfirmar: (escolhidas) => { nfePedidosAgregados = escolhidas; renderizarPedidosAgregadosNFe(); }
+    });
 });
 
 function abrirVinculoProdutoNFe(idx) {
@@ -4687,8 +5043,19 @@ async function processarImportacaoNFe(tipo) {
     }
     const planoContasId = planoContasSelecionadoNfe.id;
 
+    // Baixa Direta (saída imediata): Setor/Evento/Plano de Contas da SAÍDA podem ser diferentes dos da entrada/nota.
+    // Por padrão ("mesma classificação" marcado) usa os mesmos; senão usa os campos próprios da saída.
+    let setorSaidaId = setorId, planoSaidaId = planoContasId, eventoSaida = evento;
+    if (tipo === 'saida' && !classSaidaNfe.usarMesma()) {
+        const cs = classSaidaNfe.est;
+        if (!cs.setor) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o setor da saída.'; document.getElementById('nfeSaidaSetorBusca').focus(); return; }
+        if (!cs.evento) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o evento da saída.'; document.getElementById('nfeSaidaEventoBusca').focus(); return; }
+        if (!cs.plano) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o plano de contas da saída.'; document.getElementById('nfeSaidaPlanoContasBusca').focus(); return; }
+        setorSaidaId = cs.setor.id; planoSaidaId = cs.plano.id; eventoSaida = cs.evento.codigo;
+    }
+
     const destinacao = {
-        setorId, planoContasId,
+        setorId: setorSaidaId, planoContasId: planoSaidaId,
         ...(tipo === 'saida' ? {
             subsetorId: subsetorSelecionadoNfe ? subsetorSelecionadoNfe.id : null,
             veiculoId: veiculoSelecionadoNfe ? veiculoSelecionadoNfe.id : null,
@@ -4711,6 +5078,16 @@ async function processarImportacaoNFe(tipo) {
     document.getElementById('btnFecharModalImportarNFeTopo').disabled = true;
 
     try {
+        // notas de pedido escolhidas pra agregar inteiras: confere ANTES de gravar qualquer coisa que
+        // elas continuam disponíveis (a lista na tela pode ter ficado velha)
+        const agregarInteiras = tipo === 'entrada' && nfePedidosAgregados.length > 0;
+        if (agregarInteiras) {
+            if (!nfeDadosNota) throw new Error('Sem os dados da NF-e não dá pra agregar notas de pedido.');
+            const disponiveis = await chamarPost('buscarNotasPedidoDisponiveis', { excluirNotaId: null });
+            const faltando = nfePedidosAgregados.filter(n => !disponiveis.some(d => d.id === n.id));
+            if (faltando.length) throw new Error('Esta(s) nota(s) de pedido já foi/foram agregada(s) a outra nota (ou saiu da lista): ' + faltando.map(n => n.numeroNf || ('#' + n.id)).join(', ') + '. Refaça a escolha em "Agregar nota(s) de pedido".');
+        }
+
         // 1) grava a nota primeiro — todo o resto se liga a ela pelo id
         let estoqueNotaId = null;
         if (nfeDadosNota) {
@@ -4747,7 +5124,9 @@ async function processarImportacaoNFe(tipo) {
         }
 
         // 2) itens: cria produto se precisar, e a movimentação já ligada à nota
-        for (let idx = 0; idx < nfeItensParseados.length; idx++) {
+        //    (com nota(s) de pedido agregada(s) inteira(s), os itens da NF-e são IGNORADOS: o estoque já entrou pelas notas de pedido)
+        const totalItensAProcessar = agregarInteiras ? 0 : nfeItensParseados.length;
+        for (let idx = 0; idx < totalItensAProcessar; idx++) {
             const item = nfeItensParseados[idx];
             statusEl.textContent = `Processando item ${idx + 1} de ${nfeItensParseados.length}... Não feche esta janela.`;
 
@@ -4789,7 +5168,7 @@ async function processarImportacaoNFe(tipo) {
                         movimentacao: {
                             data, descricaoAvulsa: descricaoItemAvulso, qtd: item.qtd, valorUnit: item.valorUnit,
                             tipo: 'saida',
-                            tag, evento,
+                            tag, evento: eventoSaida,
                             almoxarifadoId: item.almoxarifadoId,
                             movimentacaoOrigemId: entradaGerada.id,
                             observacao: observacaoBase || 'Baixa direta (item avulso, sem cadastro)',
@@ -4878,7 +5257,7 @@ async function processarImportacaoNFe(tipo) {
                         movimentacao: {
                             data, produtoId, qtd: qtdALancar, valorUnit: item.valorUnit,
                             tipo: 'saida',
-                            tag, evento,
+                            tag, evento: eventoSaida,
                             almoxarifadoId: item.almoxarifadoId,
                             movimentacaoOrigemId: entradaGerada.id,
                             observacao: observacaoBase || 'Baixa direta da NF-e',
@@ -4889,6 +5268,18 @@ async function processarImportacaoNFe(tipo) {
                     });
                 }
             }
+        }
+
+        // 2b) agrega as notas de pedido inteiras à nota recém-gravada (só liga; não mexe em estoque nem preço)
+        if (agregarInteiras) {
+            try {
+                await chamarPost('agregarNotasPedido', { notaDefinitivaId: estoqueNotaId, notasIds: nfePedidosAgregados.map(n => n.id) });
+            } catch (eAg) {
+                throw new Error('A nota foi registrada, mas não consegui agregar as notas de pedido (' + eAg.message + '). Abra a nota em "Notas" e use "Agregar nota(s) de pedido inteira(s)".');
+            }
+            await registrarSentinela('agregacao_nota_pedido',
+                `Agregou ${nfePedidosAgregados.length} nota(s) de pedido inteira(s) à NF ${nfeDadosNota.nNF || '#' + estoqueNotaId} (importação XML): ` +
+                nfePedidosAgregados.map(n => n.numeroNf || ('#' + n.id)).join(', '));
         }
 
         // 3) títulos de pagamento (duplicatas), só se o XML tinha (senão fica
@@ -4909,7 +5300,9 @@ async function processarImportacaoNFe(tipo) {
         await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
         atualizarTagContagem();
         statusEl.className = 'status-msg sucesso';
-        statusEl.textContent = `✅ ${nfeItensParseados.length} item(ns) registrado(s) como ${tipo === 'entrada' ? 'entrada em estoque' : 'baixa direta'}.`;
+        statusEl.textContent = agregarInteiras
+            ? `✅ Nota registrada e ${nfePedidosAgregados.length} nota(s) de pedido agregada(s) — itens da NF-e ignorados (o estoque já entrou pelas notas de pedido).`
+            : `✅ ${nfeItensParseados.length} item(ns) registrado(s) como ${tipo === 'entrada' ? 'entrada em estoque' : 'baixa direta'}.`;
         renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
 
         // limpa os dados importados JÁ, na hora — não espera o modal
@@ -4917,6 +5310,8 @@ async function processarImportacaoNFe(tipo) {
         // se alguém clicar outra vez em "Registrar" nesse meio-tempo
         nfeItensParseados = [];
         nfeDadosNota = null;
+        nfePedidosAgregados = [];
+        renderizarPedidosAgregadosNFe();
         document.getElementById('nfeArquivo').value = '';
         document.getElementById('nfeInfo').innerHTML = '';
         document.getElementById('nfeBlocoItens').style.display = 'none';
@@ -6121,6 +6516,43 @@ const buscaNfeAlmoxarifadoPadrao = configurarBuscaListaGenerica(
 configurarBuscaPlanoContas('notaItemPlanoContasBusca', 'notaItemPlanoContasResultados', 'notaItemPlanoContasSelecionado', (p) => {
     planoContasSelecionadoNotaItem = p;
 });
+
+// Classificação PRÓPRIA da SAÍDA imediata (Baixa Direta): Setor + Evento + Plano de Contas da saída costumam ser
+// diferentes dos da entrada. Por padrão a opção "usar a mesma da entrada" fica DESMARCADA (pedido do usuário: o setor
+// da entrada muito dificilmente é o mesmo da saída) e os 3 campos da saída aparecem VAZIOS e obrigatórios; marcando
+// a opção, a saída repete a classificação da entrada e os campos somem.
+// Usado na nota manual (prefixo 'notaSaida') e na importação de XML (prefixo 'nfeSaida').
+function criarClassSaida(prefixo, idCheck, idBloco, getEntrada) {
+    const est = { setor: null, evento: null, plano: null };
+    const buscaSetor = configurarBuscaListaGenerica(
+        prefixo + 'SetorBusca', prefixo + 'SetorResultados', prefixo + 'SetorSelecionado',
+        () => catalogosBaixa.setores || [], (item) => { est.setor = item; }
+    );
+    configurarBuscaEvento(prefixo + 'EventoBusca', prefixo + 'EventoResultados', prefixo + 'EventoSelecionado', (ev) => { est.evento = ev; });
+    configurarBuscaPlanoContas(prefixo + 'PlanoContasBusca', prefixo + 'PlanoContasResultados', prefixo + 'PlanoContasSelecionado', (p) => { est.plano = p; });
+    const chk = document.getElementById(idCheck), bloco = document.getElementById(idBloco);
+
+    function limparUI() {
+        ['Setor', 'Evento', 'PlanoContas'].forEach(n => {
+            document.getElementById(prefixo + n + 'Busca').value = '';
+            document.getElementById(prefixo + n + 'Selecionado').innerHTML = '';
+        });
+        est.setor = est.evento = est.plano = null;
+    }
+    chk.addEventListener('change', () => { bloco.style.display = chk.checked ? 'none' : ''; });
+    return {
+        est,
+        usarMesma: () => chk.checked,
+        // estado inicial: desmarcado, campos da saída visíveis e vazios (a classificação da saída é obrigatória)
+        reset() { chk.checked = false; bloco.style.display = ''; limparUI(); },
+        // classificação que vale pra saída: a da entrada (marcado) ou a própria da saída
+        efetiva() { return chk.checked ? getEntrada() : est; }
+    };
+}
+const classSaidaNota = criarClassSaida('notaSaida', 'notaBaixaDiretaMesmaClass', 'blocoClassSaidaNota',
+    () => ({ setor: setorSelecionadoNotaItem, evento: eventoSelecionadoNotaItem, plano: planoContasSelecionadoNotaItem }));
+const classSaidaNfe = criarClassSaida('nfeSaida', 'nfeSaidaMesmaClass', 'nfeBlocoClassSaida',
+    () => ({ setor: setorSelecionadoNfe, evento: eventoSelecionadoNfe, plano: planoContasSelecionadoNfe }));
 configurarBuscaEvento('destAvulsoEventoBusca', 'destAvulsoEventoResultados', 'destAvulsoEventoSelecionado', (ev) => {
     eventoSelecionadoDestAvulso = ev;
 });
@@ -8983,7 +9415,7 @@ async function acaoPdfProtocolo(nrProtocolo, tipoAcao) {
 async function carregarListaNotasEntrada() {
     const corpo = document.getElementById('corpoTabelaNotasEntrada');
     const vazio = document.getElementById('vazioNotasEntrada');
-    corpo.innerHTML = '<tr><td colspan="9" class="vazio">Carregando...</td></tr>';
+    corpo.innerHTML = '<tr><td colspan="10" class="vazio">Carregando...</td></tr>';
     vazio.style.display = 'none';
 
     const filtros = {
@@ -9017,17 +9449,27 @@ async function carregarListaNotasEntrada() {
         corpo.innerHTML = '';
         if (!notas || notas.length === 0) { vazio.style.display = 'block'; return; }
 
+        // marcas de agregação: nota de pedido -> "agregada à NF X"; nota definitiva -> "N pedido(s) agregado(s)"
+        const notaPorId = {}, agregadasPorNota = {};
+        (notas || []).forEach(n => { notaPorId[n.id] = n; });
+        (notas || []).forEach(n => { if (n.nota_definitiva_id) agregadasPorNota[n.nota_definitiva_id] = (agregadasPorNota[n.nota_definitiva_id] || 0) + 1; });
+
         notas.forEach(n => {
             const tr = document.createElement('tr');
+            const def = n.nota_definitiva_id ? notaPorId[n.nota_definitiva_id] : null;
+            const marcaAgregacao =
+                (n.nota_definitiva_id ? `<br><span class="tag-status" title="Os produtos desta nota constam como agregados à nota definitiva">📦 agregada à ${def ? (def.numero_nf ? 'NF ' + escapeHtml(def.numero_nf) : '#' + def.id) : '#' + n.nota_definitiva_id}</span>` : '') +
+                (agregadasPorNota[n.id] ? `<br><span class="tag-status" title="Notas de pedido agregadas a esta nota">📦 ${agregadasPorNota[n.id]} pedido(s) agregado(s)</span>` : '');
             tr.innerHTML = `
                 <td>${formatarData(n.data_entrada)}</td>
                 <td><span class="pill ${n.tipo === 'saida' ? 'pill-saida' : 'pill-entrada'}">${n.tipo === 'saida' ? 'Saída' : 'Entrada'}</span></td>
-                <td>${escapeHtml(n.numero_nf) || '-'}</td>
+                <td>${escapeHtml(n.numero_nf) || '-'}${marcaAgregacao}</td>
                 <td>${escapeHtml(n.nome_fornecedor) || '-'}</td>
                 <td><span class="pill ${n.xml_original ? 'pill-entrada' : 'pill-saida'}">${n.xml_original ? 'XML' : 'Manual'}</span></td>
                 <td class="num">${itensPorNota[n.id] || 0}</td>
                 <td class="num">${titulosPorNota[n.id] || 0}</td>
                 <td class="num">${formatarMoeda(valorPorNota[n.id] || n.valor_total)}</td>
+                <td class="center">${n.nr_protocolo > 0 ? `<span class="tag-status">nº ${n.nr_protocolo}</span>` : '-'}</td>
                 <td class="center"><button class="btn btn-cinza btn-pequeno" data-abrir-nota="${n.id}">✏️ Abrir</button></td>
             `;
             corpo.appendChild(tr);
@@ -9111,7 +9553,10 @@ document.getElementById('btnFinalizarAlteracoesNota').addEventListener('click', 
 
 document.getElementById('btnRemoverNotaEntrada').addEventListener('click', async () => {
     if (!notaEmEdicaoId) return;
-    if (!confirm('Isso vai remover a nota, todos os itens (movimentações) e todos os títulos/vencimentos lançados por ela, e recalcular o estoque e os preços dos produtos afetados. Não tem como desfazer. Continuar?')) return;
+    const avisoAgregadas = (pedidosAgregadosAtual || []).length
+        ? `\n\n📦 ${pedidosAgregadosAtual.length} nota(s) de pedido estão agregadas a esta nota: elas NÃO serão removidas, só deixam de estar agregadas (e preços já corrigidos por vínculo item a item continuam como estão).`
+        : '';
+    if (!confirm('Isso vai remover a nota, todos os itens (movimentações) e todos os títulos/vencimentos lançados por ela, e recalcular o estoque e os preços dos produtos afetados. Não tem como desfazer. Continuar?' + avisoAgregadas)) return;
 
     const btn = document.getElementById('btnRemoverNotaEntrada');
     btn.disabled = true;
@@ -9152,6 +9597,7 @@ async function prepararCamposClassificacaoItemNota() {
         : null;
     buscaNotaItemAlmoxarifado.selecionar(almoxarifadoSelecionadoNotaItem);
 
+    classSaidaNota.reset();      // saída imediata: campos próprios da saída, vazios (opção "mesma da entrada" desmarcada)
     document.getElementById('notaBaixaDiretaSubsetorBusca').value = '';
     subsetorSelecionadoNotaItem = null;
     buscaNotaBaixaDiretaSubsetor.selecionar(null);
@@ -9210,6 +9656,11 @@ async function abrirNovaNotaEntrada() {
     titulosNotaAtual = [];
     await limparFormularioNota();
     document.getElementById('tituloNotaEntrada').textContent = 'Nova entrada direta';
+    pedidosAgregadosAtual = [];
+    notaItemParciais = { ids: [], qtdCoberta: 0 };
+    atualizarResumoParciaisItemNota();
+    document.getElementById('avisoNotaAgregada').style.display = 'none';
+    document.getElementById('btnNotaItemParciais').style.display = '';
     document.getElementById('origemNotaEntrada').textContent = 'Preencha o cabeçalho e clique em "Salvar cabeçalho" pra liberar o lançamento de itens e títulos.';
     document.getElementById('blocoItensTitulosNota').style.display = 'none';
     document.getElementById('btnRemoverNotaEntrada').style.display = 'none';
@@ -9217,6 +9668,57 @@ async function abrirNovaNotaEntrada() {
     document.getElementById('blocoAdicionarItemNota').style.display = '';
     document.getElementById('modalNotaEntrada').classList.add('aberto');
 }
+
+// aviso no topo da nota quando ELA mesma foi agregada a outra nota (nota definitiva)
+async function mostrarAvisoNotaAgregada(nota) {
+    const aviso = document.getElementById('avisoNotaAgregada');
+    if (!nota.nota_definitiva_id) { aviso.style.display = 'none'; return; }
+    let rotulo = '#' + nota.nota_definitiva_id;
+    try {
+        const { data: def } = await sb.from('estoque_notas').select('id, numero_nf, nome_fornecedor, data_entrada').eq('id', nota.nota_definitiva_id).maybeSingle();
+        if (def) rotulo = `${def.numero_nf ? 'NF ' + def.numero_nf : '#' + def.id}${def.nome_fornecedor ? ' — ' + def.nome_fornecedor : ''}`;
+    } catch (e) { /* mostra só o id */ }
+    document.getElementById('avisoNotaAgregadaTexto').textContent = `📦 Esta nota de pedido foi agregada à nota ${rotulo}. Os produtos dela já constam como agregados lá.`;
+    aviso.style.display = '';
+}
+
+document.getElementById('btnDesfazerAgregacaoEstaNota').addEventListener('click', async () => {
+    if (!notaEmEdicaoId || !confirm('Desfazer a agregação desta nota? Ela volta a ser uma nota solta (o estoque não muda).')) return;
+    try {
+        await chamarPost('desagregarNotaPedido', { notaId: notaEmEdicaoId });
+        await registrarSentinela('desagregacao_nota_pedido', `Desfez a agregação da nota ${document.getElementById('notaNumeroNf').value || '#' + notaEmEdicaoId} (pela própria nota)`);
+        await abrirNotaEntradaExistente(notaEmEdicaoId);
+    } catch (err) { alert('Erro ao desfazer: ' + err.message); }
+});
+
+document.getElementById('btnAgregarPedidoNota').addEventListener('click', () => {
+    if (!notaEmEdicaoId) { alert('Salve o cabeçalho da nota primeiro.'); return; }
+    abrirModalAgregarPedido({
+        excluirNotaId: notaEmEdicaoId,
+        marcadas: [],
+        aoConfirmar: async (escolhidas) => {
+            if (itensNotaAtual.length && !confirm(`Esta nota já tem ${itensNotaAtual.length} item(ns) lançado(s) com estoque. Se esses produtos também estão nas notas de pedido que você está agregando, o estoque ficará em DOBRO. Remova esses itens antes (ou use o vínculo item a item). Agregar mesmo assim?`)) {
+                throw new Error('Operação cancelada.');
+            }
+            await chamarPost('agregarNotasPedido', { notaDefinitivaId: notaEmEdicaoId, notasIds: escolhidas.map(n => n.id) });
+            await registrarSentinela('agregacao_nota_pedido',
+                `Agregou ${escolhidas.length} nota(s) de pedido inteira(s) à nota ${document.getElementById('notaNumeroNf').value || '#' + notaEmEdicaoId}: ` + escolhidas.map(n => n.numeroNf || ('#' + n.id)).join(', '));
+            await carregarItensETitulosDaNota(notaEmEdicaoId);
+        }
+    });
+});
+
+document.getElementById('btnNotaItemParciais').addEventListener('click', async () => {
+    if (!notaEmEdicaoId) { alert('Salve o cabeçalho da nota primeiro.'); return; }
+    if (notaTipoEmEdicao !== 'entrada') return;
+    if (!produtoSelecionadoItemNota) { alert('Busque e selecione um produto do sistema primeiro (não vale pra produto novo).'); return; }
+    await abrirModalNotasParciaisGenerico({
+        produtoId: produtoSelecionadoItemNota.id,
+        marcadas: notaItemParciais.ids,
+        excluirNotaId: notaEmEdicaoId,
+        aoConfirmar: (ids, qtdCoberta) => { notaItemParciais = { ids, qtdCoberta }; atualizarResumoParciaisItemNota(); }
+    });
+});
 
 async function abrirNotaEntradaExistente(notaId) {
     try {
@@ -9243,6 +9745,10 @@ async function abrirNotaEntradaExistente(notaId) {
         document.getElementById('notaChaveAcesso').value = nota.chave_acesso || '';
         document.getElementById('notaObservacoes').value = nota.observacoes || '';
         document.getElementById('statusNotaEntrada').textContent = '';
+        notaItemParciais = { ids: [], qtdCoberta: 0 };
+        atualizarResumoParciaisItemNota();
+        document.getElementById('btnNotaItemParciais').style.display = nota.tipo === 'saida' ? 'none' : '';
+        await mostrarAvisoNotaAgregada(nota);
         await prepararCamposClassificacaoItemNota();
 
         document.getElementById('blocoItensTitulosNota').style.display = 'block';
@@ -9346,11 +9852,76 @@ let debounceRateioNotaManual = null;
     });
 });
 
+// notas de pedido já agregadas à nota em edição (inteiras ou item a item), com os itens de cada uma
+let pedidosAgregadosAtual = [];
+// notas parciais escolhidas pro item que está sendo digitado (entrada manual, botão "🔗 Notas parciais")
+let notaItemParciais = { ids: [], qtdCoberta: 0 };
+
+function atualizarResumoParciaisItemNota() {
+    const el = document.getElementById('notaItemParciaisResumo');
+    el.textContent = notaItemParciais.ids.length
+        ? `🔗 ${notaItemParciais.ids.length} nota(s) parcial(is) · ${notaItemParciais.qtdCoberta.toLocaleString('pt-BR')} já coberto(s) — entra só a diferença`
+        : '';
+}
+
+function renderizarPedidosAgregados() {
+    const bloco = document.getElementById('blocoPedidosAgregados');
+    const box = document.getElementById('listaPedidosAgregados');
+    bloco.style.display = notaTipoEmEdicao === 'saida' ? 'none' : '';
+    box.innerHTML = '';
+    if (!pedidosAgregadosAtual.length) {
+        box.innerHTML = '<p class="subtitulo" style="margin:0;">Nenhuma nota de pedido agregada a esta nota ainda.</p>';
+        return;
+    }
+    const totalGeral = pedidosAgregadosAtual.reduce((acc, n) => acc + n.itens.reduce((s, m) => s + Number(m.qtd) * Number(m.valor_unit), 0), 0);
+    pedidosAgregadosAtual.forEach(n => {
+        const totalNota = n.itens.reduce((s, m) => s + Number(m.qtd) * Number(m.valor_unit), 0);
+        const div = document.createElement('div');
+        div.style.cssText = 'background:#fff; border:1px solid #d5e4ff; border-radius:6px; padding:8px 10px; margin-bottom:8px;';
+        div.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span><strong>${n.numero_nf ? 'Nota nº ' + escapeHtml(n.numero_nf) : 'Nota #' + n.id}</strong> — ${escapeHtml(n.nome_fornecedor || '')} · ${n.data_entrada ? formatarData(n.data_entrada) : '-'} · ${n.itens.length} item(ns) · ${formatarMoeda(totalNota)}
+                    <span class="tag-status" style="margin-left:6px;">agregada a esta nota</span></span>
+                <span>
+                    <button class="btn btn-cinza btn-pequeno" type="button" data-abrir-pedido="${n.id}">✏️ Abrir</button>
+                    <button class="btn btn-cinza btn-pequeno" type="button" data-desagregar-pedido="${n.id}">↩️ Desfazer</button>
+                </span>
+            </div>
+            <table class="tabela" style="margin-top:6px; font-size:0.85em;">
+                <thead><tr><th>Produto agregado</th><th class="num">Qtd</th><th class="num">Vlr unit.</th><th class="num">Subtotal</th></tr></thead>
+                <tbody>${n.itens.length ? n.itens.map(m => {
+                    const prod = produtos.find(p => p.id === m.produto_id);
+                    return `<tr><td>${prod ? escapeHtml(prod.nome) : (m.descricao_avulsa ? escapeHtml(m.descricao_avulsa) + ' (avulso)' : '#' + m.produto_id)}</td>
+                        <td class="num">${Number(m.qtd).toLocaleString('pt-BR')}</td><td class="num">${formatarMoeda(m.valor_unit)}</td><td class="num">${formatarMoeda(Number(m.qtd) * Number(m.valor_unit))}</td></tr>`;
+                }).join('') : '<tr><td colspan="4" class="vazio">Sem itens.</td></tr>'}</tbody>
+            </table>`;
+        box.appendChild(div);
+    });
+    const tot = document.createElement('div');
+    tot.style.cssText = 'text-align:right; font-weight:600;';
+    tot.textContent = `Total agregado: ${formatarMoeda(totalGeral)}`;
+    box.appendChild(tot);
+
+    box.querySelectorAll('[data-abrir-pedido]').forEach(b => b.addEventListener('click', () => abrirNotaEntradaExistente(Number(b.dataset.abrirPedido))));
+    box.querySelectorAll('[data-desagregar-pedido]').forEach(b => b.addEventListener('click', async () => {
+        const nota = pedidosAgregadosAtual.find(n => n.id === Number(b.dataset.desagregarPedido));
+        if (!nota || !confirm(`Desfazer a agregação da nota ${nota.numero_nf ? 'nº ' + nota.numero_nf : '#' + nota.id}? Ela volta a ser uma nota solta. O estoque não muda — e se o preço dela foi corrigido pelo vínculo item a item, a correção continua valendo.`)) return;
+        try {
+            await chamarPost('desagregarNotaPedido', { notaId: nota.id });
+            await registrarSentinela('desagregacao_nota_pedido', `Desfez a agregação da nota ${nota.numero_nf || '#' + nota.id} à nota ${document.getElementById('notaNumeroNf').value || '#' + notaEmEdicaoId}`);
+            await carregarItensETitulosDaNota(notaEmEdicaoId);
+        } catch (err) { alert('Erro ao desfazer: ' + err.message); }
+    }));
+}
+
 async function carregarItensETitulosDaNota(notaId) {
-    const [itens, titulos] = await Promise.all([
+    const [itens, titulos, agregados] = await Promise.all([
         chamarGet('listarItensNota', { notaId }),
-        chamarGet('listarTitulosNota', { notaId })
+        chamarGet('listarTitulosNota', { notaId }),
+        notaTipoEmEdicao === 'saida' ? Promise.resolve([]) : chamarPost('listarNotasAgregadas', { notaDefinitivaId: notaId })
     ]);
+    pedidosAgregadosAtual = agregados || [];
+    renderizarPedidosAgregados();
     // uma nota de entrada pode ter item avulso que já foi destinado
     // (Baixa Direta) -- a saída gerada fica ligada ao MESMO
     // estoque_nota_id da entrada, mas não é "item da nota" no sentido
@@ -9549,6 +10120,8 @@ document.getElementById('btnSalvarCabecalhoNota').addEventListener('click', asyn
 document.getElementById('notaItemProdutoBusca').addEventListener('input', () => {
     const termo = document.getElementById('notaItemProdutoBusca').value;
     produtoSelecionadoItemNota = null;
+    notaItemParciais = { ids: [], qtdCoberta: 0 };      // as notas parciais escolhidas eram de outro produto
+    atualizarResumoParciaisItemNota();
     document.getElementById('notaItemProdutoSelecionado').textContent = '';
     if (!termo.trim()) { document.getElementById('notaItemProdutoResultados').classList.remove('aberto'); return; }
     renderizarResultadosBusca('notaItemProdutoResultados', termo, (p) => {
@@ -9592,9 +10165,30 @@ document.getElementById('btnAdicionarItemNota').addEventListener('click', async 
             produtoId = criado.id;
         }
 
+        // notas parciais (notinhas) escolhidas pra esse produto: liga elas a esta nota, corrige o preço do
+        // que já foi lançado pro preço DESTA nota (o oficial) e só lança a diferença de quantidade -- não duplica estoque
+        let qtdALancar = qtd;
+        const usaParciais = notaTipoEmEdicao === 'entrada' && notaItemParciais.ids.length > 0 && produtoSelecionadoItemNota;
+        if (usaParciais) {
+            if (notaItemParciais.qtdCoberta > qtd && !confirm(`As notas parciais já cobrem ${notaItemParciais.qtdCoberta.toLocaleString('pt-BR')}, mais do que a quantidade desta nota (${qtd.toLocaleString('pt-BR')}). Nenhuma quantidade nova entrará. Continuar?`)) {
+                btn.disabled = false; return;
+            }
+            await chamarPost('vincularNotasParciaisNfe', {
+                notaDefinitivaId: notaEmEdicaoId,
+                notasParciaisIds: notaItemParciais.ids,
+                produtoId,
+                valorUnitDefinitivo: valorUnit,
+                almoxarifadoId: Number(almoxarifadoId)
+            });
+            qtdALancar = Math.max(0, qtd - notaItemParciais.qtdCoberta);
+            await registrarSentinela('agregacao_nota_pedido',
+                `Vinculou ${notaItemParciais.ids.length} nota(s) parcial(is) do produto #${produtoId} à nota ${document.getElementById('notaNumeroNf').value || '#' + notaEmEdicaoId} (item a item, preço corrigido pro oficial)`);
+        }
+
+        if (qtdALancar > 0) {
         await chamarPost('registrarMovimentacao', {
             movimentacao: {
-                data: document.getElementById('notaDataEntrada').value, produtoId, qtd, valorUnit, tipo: notaTipoEmEdicao,
+                data: document.getElementById('notaDataEntrada').value, produtoId, qtd: qtdALancar, valorUnit, tipo: notaTipoEmEdicao,
                 almoxarifadoId: Number(almoxarifadoId),
                 setorId: Number(setorId), evento: eventoSelecionadoNotaItem.codigo, planoContasId: planoContasSelecionadoNotaItem.id,
                 tag: document.getElementById('notaItemTag').value.trim(),
@@ -9605,7 +10199,17 @@ document.getElementById('btnAdicionarItemNota').addEventListener('click', async 
                 estoqueNotaId: notaEmEdicaoId
             }
         });
+        }
         salvarUltimaClassificacaoEntrada(setorId, eventoSelecionadoNotaItem.codigo, planoContasSelecionadoNotaItem.id);
+        if (usaParciais) {
+            const st = document.getElementById('statusNotaEntrada');
+            st.className = 'status-msg sucesso';
+            st.textContent = qtdALancar > 0
+                ? `🔗 Notas parciais vinculadas (preço corrigido) — entraram só ${qtdALancar.toLocaleString('pt-BR')} (a diferença).`
+                : '🔗 Notas parciais vinculadas (preço corrigido) — o item já estava totalmente coberto, nenhuma quantidade nova entrou.';
+            notaItemParciais = { ids: [], qtdCoberta: 0 };
+            atualizarResumoParciaisItemNota();
+        }
 
         document.getElementById('notaItemProdutoBusca').value = '';
         document.getElementById('notaItemProdutoSelecionado').textContent = '';
@@ -9641,10 +10245,15 @@ document.getElementById('btnRegistrarBaixaDiretaNota').addEventListener('click',
     const statusEl = document.getElementById('statusBaixaDiretaNota');
     if (!notaEmEdicaoId) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Salve o cabeçalho da nota primeiro.'; return; }
 
-    const setorId = setorSelecionadoNotaItem ? setorSelecionadoNotaItem.id : null;
-    if (!setorId) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o Setor (bloco "Adicionar item" acima).'; document.getElementById('notaItemSetorBusca').focus(); return; }
-    if (!eventoSelecionadoNotaItem) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o Evento (bloco "Adicionar item" acima).'; document.getElementById('notaItemEventoBusca').focus(); return; }
-    if (!planoContasSelecionadoNotaItem) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o Plano de Contas (bloco "Adicionar item" acima).'; document.getElementById('notaItemPlanoContasBusca').focus(); return; }
+    // classificação da SAÍDA: a mesma da entrada (padrão) ou a própria da saída imediata
+    const usarMesmaClass = classSaidaNota.usarMesma();
+    const classSaida = classSaidaNota.efetiva();
+    const ondeInformar = usarMesmaClass ? ' (bloco "Adicionar item" acima).' : ' da saída.';
+    const prefixoCampo = usarMesmaClass ? 'notaItem' : 'notaSaida';
+    const setorId = classSaida.setor ? classSaida.setor.id : null;
+    if (!setorId) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o Setor' + ondeInformar; document.getElementById(prefixoCampo + 'SetorBusca').focus(); return; }
+    if (!classSaida.evento) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o Evento' + ondeInformar; document.getElementById(prefixoCampo + 'EventoBusca').focus(); return; }
+    if (!classSaida.plano) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o Plano de Contas' + ondeInformar; document.getElementById(prefixoCampo + 'PlanoContasBusca').focus(); return; }
     const responsavel = document.getElementById('notaResponsavel').value.trim().toUpperCase();
     if (!responsavel) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o Responsável (cabeçalho da nota).'; document.getElementById('notaResponsavel').focus(); return; }
 
@@ -9660,8 +10269,8 @@ document.getElementById('btnRegistrarBaixaDiretaNota').addEventListener('click',
     const km = document.getElementById('notaBaixaDiretaKm').value || null;
     const kmProximaTroca = document.getElementById('notaBaixaDiretaKmProximaTroca').value || null;
     const dtProximaTroca = document.getElementById('notaBaixaDiretaDataProximaTroca').value || null;
-    const planoContasId = planoContasSelecionadoNotaItem.id;
-    const evento = eventoSelecionadoNotaItem.codigo;
+    const planoContasId = classSaida.plano.id;
+    const evento = classSaida.evento.codigo;
     const data = document.getElementById('notaDataEntrada').value || hojeISO();
 
     const btn = document.getElementById('btnRegistrarBaixaDiretaNota');
