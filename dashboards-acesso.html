@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>Acesso aos dashboards</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='4' width='56' height='56' rx='14' fill='%231f6f4a'/%3E%3Cpath d='M32 16a8 8 0 0 1 8 8v6H24v-6a8 8 0 0 1 8-8zM20 30h24v18H20z' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+  :root{ --bg:#f4f6f5; --card:#ffffff; --ink:#18241f; --muted:#5d6b64; --line:#dfe5e2; --brand:#1f6f4a; --brand-soft:#e3f1ea; --pos:#1f7a4d; --neg:#b3261e; --warn:#9a6200; --warn-bg:#fff0cf; --bad-bg:#fde4e1; --radius:12px; }
+  @media (prefers-color-scheme: dark){ :root{ --bg:#121715; --card:#1b2420; --ink:#e8efeb; --muted:#9fb0a7; --line:#2b3832; --brand:#58c28d; --brand-soft:#1d3329; --pos:#6fd6a1; --neg:#ff8f86; --warn:#f0be5d; --warn-bg:#3a2d10; --bad-bg:#401c19; } }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; line-height:1.4; -webkit-text-size-adjust:100%; }
+  .pagina{ max-width:860px; margin:0 auto; padding:16px; }
+  a{ color:var(--brand); }
+  h1{ margin:0; font-size:1.3rem; } .sub{ color:var(--muted); font-size:.9rem; margin-top:2px; }
+  .topo{ display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; align-items:flex-start; margin-bottom:14px; }
+  .cartao{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:14px 16px; margin-bottom:14px; }
+  .cartao h2{ margin:0 0 4px; font-size:1.05rem; } .cartao p{ margin:0 0 10px; color:var(--muted); font-size:.9rem; }
+  label{ display:block; font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin:10px 0 4px; }
+  input[type=url], input[type=password], input[type=text]{ width:100%; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; padding:9px 11px; font-size:.95rem; }
+  .linha{ display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; align-items:center; }
+  .btn{ border:none; border-radius:8px; padding:9px 14px; font-size:.9rem; font-weight:700; cursor:pointer; background:var(--brand); color:#fff; }
+  @media (prefers-color-scheme: dark){ .btn{ color:#0c1a13; } }
+  .btn.sec{ background:var(--card); color:var(--ink); border:1px solid var(--line); }
+  .btn[disabled]{ opacity:.6; cursor:default; }
+  .msg{ margin-top:10px; font-size:.9rem; min-height:1.2em; overflow-wrap:anywhere; } .msg.ok{ color:var(--pos); } .msg.erro{ color:var(--neg); }
+  .aviso{ border-radius:var(--radius); padding:10px 14px; margin-bottom:14px; font-size:.9rem; border:1px solid var(--warn); background:var(--warn-bg); color:var(--warn); }
+  table{ border-collapse:collapse; width:100%; font-size:.92rem; }
+  th, td{ padding:9px 10px; border-bottom:1px solid var(--line); text-align:center; }
+  th:first-child, td:first-child{ text-align:left; }
+  th{ background:var(--brand-soft); font-size:.74rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  td input[type=checkbox]{ width:20px; height:20px; accent-color:var(--brand); }
+  .tag{ display:inline-block; border-radius:999px; padding:1px 8px; font-size:.7rem; font-weight:700; background:var(--brand-soft); color:var(--brand); margin-left:6px; }
+  .rolagem{ overflow-x:auto; }
+  .links a{ margin-right:12px; font-size:.9rem; }
+</style>
+</head>
+<body>
+<div class="pagina" id="pagina" hidden>
+  <div class="topo">
+    <div>
+      <h1>Acesso aos dashboards financeiros</h1>
+      <div class="sub" id="subtitulo"></div>
+    </div>
+    <div class="links" id="links"></div>
+  </div>
+
+  <div class="cartao">
+    <h2>1. Credenciais do Google desta unidade</h2>
+    <p>Endereço e token do script do Google (Apps Script) que lê a pasta do Drive onde o coletor grava os CSV <b>desta unidade</b>. Ficam guardados no Servir; os dashboards os recebem depois do login, sem aparecer em link nem ficar no aparelho.</p>
+    <label for="cUrl">Endereço do Apps Script (termina em /exec)</label>
+    <input type="url" id="cUrl" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+    <label for="cToken">Token</label>
+    <input type="password" id="cToken" autocomplete="new-password">
+    <div class="sub" id="infoCred"></div>
+    <div class="linha">
+      <button class="btn sec" id="btnTestar" type="button">Testar conexão</button>
+      <button class="btn" id="btnSalvarCred" type="button">Salvar credenciais</button>
+    </div>
+    <div class="msg" id="msgCred" role="status"></div>
+  </div>
+
+  <div class="cartao">
+    <h2>2. Quem pode ver cada painel</h2>
+    <p>Padrão fechado: <b>sem marcação, sem acesso</b>. O principal da unidade sempre tem acesso a todos. A trava é feita no servidor — sem a marcação a pessoa nem recebe as credenciais.</p>
+    <div class="rolagem"><table id="tabPessoas"><thead><tr><th>Pessoa</th></tr></thead><tbody></tbody></table></div>
+    <div class="msg" id="msgPessoas" role="status"></div>
+  </div>
+</div>
+
+<script src="servir-acesso.js"></script>
+<script>
+(async function(){
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if(cls) e.className = cls; if(txt != null) e.textContent = txt; return e; };
+  const MODS = ServirAcesso.MODULOS, PAGS = ServirAcesso.PAGINAS;
+  const msg = (id, tipo, t) => { const m = $(id); m.className = 'msg ' + (tipo || ''); m.textContent = t || ''; };
+  const fmtData = (iso) => { try { return new Date(iso).toLocaleString('pt-BR'); } catch(e){ return ''; } };
+
+  const ctx = await ServirAcesso.entrar({ titulo: 'Acesso aos dashboards' });
+  if(!ctx.unidade.ehPrincipal){
+    ServirAcesso.mensagem('Só o principal da unidade', 'Apenas o principal de “' + ctx.unidade.nome + '” cadastra credenciais e libera os painéis.',
+      [['Voltar', null, false, 'fechamento-caixas.html'], ['Sair', ctx.sair, true]]);
+    return;
+  }
+  const sb = ctx.sb, uid = ctx.unidade.id;
+  ServirAcesso.barra(ctx, null);
+  $('pagina').hidden = false; $('subtitulo').textContent = 'Unidade: ' + ctx.unidade.nome;
+  Object.keys(MODS).forEach(m => { const a = el('a', '', MODS[m]); a.href = PAGS[m]; $('links').appendChild(a); });
+
+  // ---------- credenciais ----------
+  let tinhaToken = false;
+  async function carregarCred(){
+    const { data, error } = await sb.from('servir_unidade_integracoes').select('url, atualizado_em').eq('unidade_negocio_id', uid).eq('tipo', 'coletor_drive').maybeSingle();
+    if(error){ msg('msgCred', 'erro', /servir_unidade_integracoes|schema cache/i.test(error.message) ? 'Falta rodar o servir-dashboards-acesso.sql no Supabase.' : error.message); return; }
+    tinhaToken = !!data;
+    $('cUrl').value = data ? data.url : ''; $('cToken').value = '';
+    $('cToken').placeholder = data ? '•••••••• (cadastrado — deixe em branco para manter)' : '';
+    $('infoCred').textContent = data ? 'Cadastrado — última alteração em ' + fmtData(data.atualizado_em) + '.' : 'Ainda não cadastrado para esta unidade.';
+  }
+  function jsonp(url){
+    return new Promise((resolve, reject) => {
+      const cb = 'acc_' + Date.now() + '_' + Math.floor(Math.random() * 1e6); const s = document.createElement('script'); let fim = false;
+      const limpar = () => { delete window[cb]; s.remove(); clearTimeout(t); };
+      const t = setTimeout(() => { if(!fim){ fim = true; limpar(); reject(new Error('Tempo esgotado ao falar com o script do Google.')); } }, 30000);
+      window[cb] = (d) => { if(fim) return; fim = true; limpar(); resolve(d); };
+      s.onerror = () => { if(fim) return; fim = true; limpar(); reject(new Error('Não consegui falar com o script do Google (endereço errado ou sem acesso público?).')); };
+      s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb; document.body.appendChild(s);
+    });
+  }
+  async function tokenParaTeste(){
+    const t = $('cToken').value.trim(); if(t) return t;
+    if(!tinhaToken) return '';
+    const { data } = await sb.from('servir_unidade_integracoes').select('token').eq('unidade_negocio_id', uid).eq('tipo', 'coletor_drive').maybeSingle();
+    return data ? data.token : '';
+  }
+  $('btnTestar').addEventListener('click', async () => {
+    const url = $('cUrl').value.trim(); const token = await tokenParaTeste();
+    if(!ServirAcesso.URL_SCRIPT_OK.test(url)){ msg('msgCred', 'erro', 'O endereço precisa ser o do app da web do Apps Script (https://script.google.com/macros/s/…/exec).'); return; }
+    if(!token){ msg('msgCred', 'erro', 'Informe o token.'); return; }
+    msg('msgCred', '', 'Testando…'); $('btnTestar').disabled = true;
+    try {
+      const r = await jsonp(url + '?token=' + encodeURIComponent(token) + '&acao=listar');
+      if(!r || !r.ok) throw new Error((r && r.erro) || 'resposta inesperada do script');
+      const nomes = r.arquivos.map(a => a.arquivo);
+      const esperados = ['caixa_bancos.csv', 'caixas_fechados.csv', 'dados_mov_caixa.csv'];
+      const faltam = esperados.filter(n => !nomes.includes(n));
+      msg('msgCred', faltam.length ? 'ok' : 'ok', 'Conexão ok — ' + nomes.length + ' arquivo(s) na pasta.' + (faltam.length ? ' Ainda não encontrei: ' + faltam.join(', ') + ' (normal se esse painel ainda não é usado).' : ''));
+    } catch(e){ msg('msgCred', 'erro', e.message); }
+    finally { $('btnTestar').disabled = false; }
+  });
+  $('btnSalvarCred').addEventListener('click', async () => {
+    const url = $('cUrl').value.trim(); let token = $('cToken').value.trim();
+    if(!ServirAcesso.URL_SCRIPT_OK.test(url)){ msg('msgCred', 'erro', 'O endereço precisa ser o do app da web do Apps Script (https://script.google.com/macros/s/…/exec).'); return; }
+    if(!token) token = await tokenParaTeste();
+    if(!token){ msg('msgCred', 'erro', 'Informe o token.'); return; }
+    $('btnSalvarCred').disabled = true; msg('msgCred', '', 'Salvando…');
+    const { error } = await sb.from('servir_unidade_integracoes').upsert({ unidade_negocio_id: uid, tipo: 'coletor_drive', url, token, ativo: true, atualizado_em: new Date().toISOString() }, { onConflict: 'unidade_negocio_id,tipo' });
+    $('btnSalvarCred').disabled = false;
+    if(error){ msg('msgCred', 'erro', 'Não consegui salvar: ' + error.message); return; }
+    msg('msgCred', 'ok', 'Credenciais salvas para “' + ctx.unidade.nome + '”.'); await carregarCred();
+  });
+
+  // ---------- pessoas x painéis ----------
+  const MOD_IDS = Object.keys(MODS);
+  async function carregarPessoas(){
+    const thead = $('tabPessoas').querySelector('thead tr'); thead.replaceChildren(el('th', '', 'Pessoa')); MOD_IDS.forEach(m => thead.appendChild(el('th', '', MODS[m])));
+    const tb = $('tabPessoas').querySelector('tbody'); tb.replaceChildren();
+    const { data: vs, error } = await sb.from('servir_unidade_usuarios').select('user_id, eh_principal').eq('unidade_negocio_id', uid);
+    if(error){ msg('msgPessoas', 'erro', error.message); return; }
+    const { data: papeis } = await sb.from('servir_papeis_usuario').select('user_id, modulo, papel').eq('unidade_negocio_id', uid).in('modulo', MOD_IDS);
+    const tem = new Set((papeis || []).filter(p => p.papel === 'visualizador').map(p => p.user_id + '|' + p.modulo));
+    const pessoas = await Promise.all((vs || []).map(async v => { const { data: email } = await sb.rpc('fn_obter_email_usuario', { p_user_id: v.user_id }); return { id: v.user_id, email: email || 'E-mail indisponível', principal: !!v.eh_principal }; }));
+    pessoas.sort((a, b) => (b.principal - a.principal) || a.email.localeCompare(b.email));
+    pessoas.forEach(p => {
+      const tr = el('tr'); const td = el('td', '', p.email); if(p.principal) td.appendChild(el('span', 'tag', 'Principal')); tr.appendChild(td);
+      MOD_IDS.forEach(m => {
+        const c = el('td'); const i = el('input'); i.type = 'checkbox'; i.setAttribute('aria-label', p.email + ' — ' + MODS[m]);
+        if(p.principal){ i.checked = true; i.disabled = true; i.title = 'O principal sempre tem acesso'; }
+        else {
+          i.checked = tem.has(p.id + '|' + m);
+          i.addEventListener('change', async () => {
+            i.disabled = true; msg('msgPessoas', '', 'Salvando…');
+            const q = i.checked
+              ? await sb.from('servir_papeis_usuario').upsert({ unidade_negocio_id: uid, user_id: p.id, modulo: m, papel: 'visualizador' }, { onConflict: 'unidade_negocio_id,user_id,modulo' })
+              : await sb.from('servir_papeis_usuario').delete().eq('unidade_negocio_id', uid).eq('user_id', p.id).eq('modulo', m);
+            i.disabled = false;
+            if(q.error){ i.checked = !i.checked; msg('msgPessoas', 'erro', 'Não consegui salvar: ' + q.error.message); }
+            else msg('msgPessoas', 'ok', (i.checked ? 'Liberado' : 'Removido') + ': ' + p.email + ' — ' + MODS[m] + '.');
+          });
+        }
+        c.appendChild(i); tr.appendChild(c);
+      });
+      tb.appendChild(tr);
+    });
+    if(!pessoas.length) msg('msgPessoas', '', 'Nenhuma pessoa vinculada a esta unidade.');
+  }
+
+  await carregarCred(); await carregarPessoas();
+})();
+</script>
+</body>
+</html>

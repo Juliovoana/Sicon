@@ -1,0 +1,1051 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>Painel financeiro</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='4' width='56' height='56' rx='14' fill='%231f6f4a'/%3E%3Cpath d='M16 46V30M28 46V18M40 46V26M52 46V12' fill='none' stroke='%23fff' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#f4f6f5; --card:#ffffff; --ink:#18241f; --muted:#5d6b64; --line:#dfe5e2;
+    --brand:#1f6f4a; --brand-soft:#e3f1ea; --pos:#1f7a4d; --neg:#b3261e; --info:#2b6cb0;
+    --warn:#9a6200; --warn-bg:#fff0cf; --bad-bg:#fde4e1; --radius:12px;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#121715; --card:#1b2420; --ink:#e8efeb; --muted:#9fb0a7; --line:#2b3832; --brand:#58c28d; --brand-soft:#1d3329;
+      --pos:#6fd6a1; --neg:#ff8f86; --info:#7db4f0; --warn:#f0be5d; --warn-bg:#3a2d10; --bad-bg:#401c19; }
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; line-height:1.4; -webkit-text-size-adjust:100%; }
+  .pagina{ max-width:1200px; margin:0 auto; padding:16px; }
+  a{ color:var(--brand); }
+  .topo{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .topo h1{ margin:0; font-size:1.3rem; }
+  .sub{ color:var(--muted); font-size:.9rem; margin-top:2px; }
+  .acoes{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .btn-ic{ width:42px; height:42px; border-radius:50%; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; text-decoration:none; }
+  .btn-ic:hover{ border-color:var(--brand); }
+  .btn-ic.girando span{ display:inline-block; animation:gira .8s linear infinite; }
+  @keyframes gira{ to{ transform:rotate(360deg); } }
+  #arquivosCsv{ display:none; }
+  .btn{ border:none; border-radius:8px; padding:8px 13px; font-size:.88rem; font-weight:700; cursor:pointer; background:var(--brand); color:#fff; }
+  @media (prefers-color-scheme: dark){ .btn{ color:#0c1a13; } }
+  .btn.sec{ background:var(--card); color:var(--ink); border:1px solid var(--line); }
+  .btn.mini{ padding:4px 9px; font-size:.78rem; }
+  .aviso{ border-radius:var(--radius); padding:10px 14px; margin-bottom:12px; font-size:.92rem; border:1px solid var(--line); background:var(--brand-soft); }
+  .aviso.alerta{ background:var(--warn-bg); color:var(--warn); border-color:var(--warn); }
+  .aviso.erro{ background:var(--bad-bg); color:var(--neg); border-color:var(--neg); }
+  .aviso[hidden]{ display:none; }
+
+  /* filtros */
+  .filtros{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:12px; margin-bottom:12px; }
+  .linha-filtros{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+  .campo label{ display:block; font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:3px; }
+  .campo input[type=date], .campo select, .busca{ border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; padding:7px 9px; font-size:.9rem; }
+  .busca{ width:100%; }
+  .painel{ border:1px solid var(--line); border-radius:10px; background:var(--card); }
+  .painel > summary{ list-style:none; cursor:pointer; padding:8px 12px; font-size:.9rem; font-weight:700; display:flex; gap:8px; align-items:center; }
+  .painel > summary::-webkit-details-marker{ display:none; }
+  .painel > summary::before{ content:'▸'; color:var(--muted); }
+  .painel[open] > summary::before{ content:'▾'; }
+  .painel .conta-resumo{ color:var(--muted); font-weight:500; font-size:.82rem; }
+  .painel .corpo{ padding:8px 12px 12px; border-top:1px solid var(--line); max-height:380px; overflow:auto; }
+  .paineis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:10px; margin-top:10px; align-items:start; }
+  .lista-chk label{ display:flex; gap:8px; align-items:center; padding:3px 0; font-size:.88rem; cursor:pointer; }
+  .lista-chk .n{ margin-left:auto; color:var(--muted); font-size:.78rem; white-space:nowrap; }
+  .chip{ display:inline-block; border-radius:999px; padding:1px 8px; font-size:.7rem; font-weight:700; background:var(--warn-bg); color:var(--warn); }
+  .ferramentas{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  .arvore details{ margin-left:14px; }
+  .arvore summary{ cursor:pointer; padding:2px 0; font-size:.88rem; list-style:none; display:flex; gap:6px; align-items:center; }
+  .arvore summary::-webkit-details-marker{ display:none; }
+  .arvore summary::before{ content:'▸'; color:var(--muted); width:10px; }
+  .arvore details[open] > summary::before{ content:'▾'; }
+  .arvore .folha{ margin-left:30px; display:flex; gap:6px; align-items:center; font-size:.85rem; padding:1px 0; }
+  .arvore label{ display:flex; gap:6px; align-items:center; cursor:pointer; }
+  .opcao-t{ display:flex; gap:8px; align-items:flex-start; padding:8px 12px; border:1px solid var(--line); border-radius:10px; margin-top:10px; font-size:.88rem; cursor:pointer; background:var(--card); }
+  .opcao-t small{ color:var(--muted); display:block; }
+
+  /* abas */
+  .abas{ display:flex; gap:6px; margin:4px 0 12px; flex-wrap:wrap; }
+  .aba{ border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:999px; padding:7px 16px; font-weight:700; cursor:pointer; font-size:.9rem; }
+  .aba.ativo{ background:var(--brand); border-color:var(--brand); color:#fff; }
+  @media (prefers-color-scheme: dark){ .aba.ativo{ color:#0c1a13; } }
+
+  .ver{ margin-left:auto; display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+  .ver button{ border:1px solid var(--line); background:var(--card); color:var(--muted); border-radius:999px; padding:6px 13px; font-weight:700; cursor:pointer; font-size:.85rem; text-decoration:line-through; }
+  .ver button.ativo{ background:var(--brand-soft); color:var(--ink); border-color:var(--brand); text-decoration:none; }
+  /* conteúdo */
+  .kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; }
+  .kpi{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:10px 12px; }
+  .kpi span{ display:block; color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; }
+  .kpi b{ font-size:1.15rem; }
+  .pos{ color:var(--pos); } .neg{ color:var(--neg); }
+  .grade2{ display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:12px; margin-bottom:14px; }
+  .graf{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:12px; min-width:0; }
+  .graf h3{ margin:0 0 8px; font-size:.95rem; }
+  .graf .area{ position:relative; height:300px; }
+  .graf.alto .area{ height:420px; }
+  .tabela-box{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; margin-bottom:14px; }
+  .rolagem{ overflow-x:auto; }
+  table{ border-collapse:collapse; width:100%; font-size:.9rem; }
+  th, td{ padding:8px 10px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap; }
+  th:first-child, td:first-child{ text-align:left; }
+  td.txt, th.txt{ text-align:left; }
+  td.hist{ text-align:left; white-space:normal; overflow-wrap:anywhere; min-width:200px; }
+  th{ background:var(--brand-soft); font-size:.74rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); position:sticky; top:0; }
+  tfoot td{ font-weight:800; background:var(--brand-soft); }
+  tr.clicavel{ cursor:pointer; } tr.clicavel:hover{ background:var(--brand-soft); }
+  tr.n1 td{ font-weight:800; } tr.n2 td:first-child{ padding-left:26px; } tr.n3 td:first-child{ padding-left:48px; }
+  tr.n2 td, tr.n3 td{ font-weight:500; }
+  .seta{ display:inline-block; width:14px; color:var(--muted); }
+  .barra-v{ display:inline-block; height:8px; border-radius:4px; background:var(--brand); vertical-align:middle; }
+  .barra-v.d{ background:var(--neg); }
+  .acao{ border:none; background:none; cursor:pointer; font-size:.95rem; padding:0 3px; }
+  .toolbar{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:10px; }
+  .toolbar .busca{ flex:1; min-width:160px; width:auto; }
+  .seg{ display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; }
+  .seg button{ border:none; background:var(--card); color:var(--ink); padding:6px 14px; font-weight:700; cursor:pointer; font-size:.85rem; }
+  .seg button.ativo{ background:var(--brand); color:#fff; }
+  @media (prefers-color-scheme: dark){ .seg button.ativo{ color:#0c1a13; } }
+  .chip-f{ background:var(--brand-soft); border-radius:999px; padding:4px 10px; font-size:.82rem; font-weight:700; display:inline-flex; gap:6px; align-items:center; }
+  .chip-f button{ border:none; background:none; cursor:pointer; color:inherit; font-size:1rem; padding:0; }
+  .vazio{ text-align:center; color:var(--muted); padding:36px 16px; background:var(--card); border:1px dashed var(--line); border-radius:var(--radius); }
+  .mais{ text-align:center; margin:10px 0; }
+  .rodape{ color:var(--muted); font-size:.8rem; text-align:center; margin:18px 0 6px; }
+  details.dados{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:10px 14px; margin-top:14px; font-size:.88rem; }
+  details.dados summary{ cursor:pointer; font-weight:700; }
+  details.dados ul{ margin:8px 0 0; padding-left:18px; color:var(--muted); }
+  /* resumo da barra (popup) */
+  .fundo{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:flex-start; justify-content:center; padding:16px; z-index:50; overflow:auto; }
+  .fundo[hidden]{ display:none; }
+  .caixa{ background:var(--card); border-radius:var(--radius); padding:16px 18px; max-width:760px; width:100%; margin:auto; }
+  .caixa h3{ margin:0 0 4px; font-size:1.05rem; }
+  .caixa .fecha{ float:right; border:none; background:none; color:var(--muted); font-size:1.6rem; cursor:pointer; line-height:1; }
+  .caixa h4{ margin:14px 0 6px; font-size:.82rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .caixa table{ font-size:.86rem; }
+  .caixa th, .caixa td{ padding:6px 8px; }
+  .caixa .nome{ white-space:normal; overflow-wrap:anywhere; }
+  .caixa .btns{ display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
+  .resumo-kpis{ display:flex; gap:14px; flex-wrap:wrap; font-size:.9rem; color:var(--muted); margin:4px 0 0; }
+  .resumo-kpis b{ color:var(--ink); }
+  .dica-clique{ color:var(--muted); font-size:.78rem; margin:-6px 0 8px; }
+  @media (max-width:640px){
+    .pagina{ padding:12px; }
+    th, td{ padding:7px 7px; font-size:.82rem; }
+    .grade2{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="pagina">
+  <div class="topo">
+    <div>
+      <h1>Painel financeiro</h1>
+      <div class="sub" id="subtitulo">Receitas e despesas por plano de contas, conta e empresa</div>
+    </div>
+    <div class="acoes">
+      <a class="btn-ic" href="fechamento-caixas.html" title="Fechamento de caixas" aria-label="Fechamento de caixas">✔</a>
+      <a class="btn-ic" href="extratos-contas.html" title="Extratos das contas" aria-label="Extratos das contas">☰</a>
+      <label class="btn-ic" for="arquivosCsv" title="Abrir CSV deste computador (dados_mov_caixa.csv e, se quiser, plano_contas.csv)" aria-label="Importar CSV">📂</label>
+      <input type="file" id="arquivosCsv" accept=".csv,text/csv" multiple>
+      <button class="btn-ic" id="btnAtualizar" title="Atualizar" aria-label="Atualizar"><span>⟳</span></button>
+    </div>
+  </div>
+
+  <div class="aviso" id="aviso" hidden></div>
+
+  <div id="app" hidden>
+    <div class="filtros">
+      <div class="linha-filtros">
+        <div class="campo"><label for="fPeriodo">Período</label>
+          <select id="fPeriodo">
+            <option value="tudo">Tudo</option><option value="mes">Mês atual</option><option value="mesant">Mês anterior</option>
+            <option value="3m">Últimos 3 meses</option><option value="12m">Últimos 12 meses</option><option value="ano">Este ano</option>
+            <option value="anoant">Ano anterior</option><option value="custom">Personalizado…</option>
+          </select></div>
+        <div class="campo"><label for="fDe">De</label><input type="date" id="fDe"></div>
+        <div class="campo"><label for="fAte">Até</label><input type="date" id="fAte"></div>
+        <div class="campo" style="margin-left:auto"><button class="btn sec mini" id="btnLimpar" type="button" title="Volta os filtros para o padrão (contas de passagem desmarcadas)">Restaurar padrão</button></div>
+      </div>
+      <div class="paineis">
+        <details class="painel" id="pEmp"><summary>Empresas <span class="conta-resumo" id="rEmp"></span></summary><div class="corpo"><div class="ferramentas"><button class="btn sec mini" data-f="emp-todas" type="button">Marcar todas</button><button class="btn sec mini" data-f="emp-nenhuma" type="button">Limpar</button></div><div class="lista-chk" id="listaEmp"></div></div></details>
+        <details class="painel" id="pCta"><summary>Contas <span class="conta-resumo" id="rCta"></span></summary><div class="corpo"><div class="ferramentas"><button class="btn sec mini" data-f="cta-padrao" type="button">Padrão (sem passagem)</button><button class="btn sec mini" data-f="cta-todas" type="button">Marcar todas</button><button class="btn sec mini" data-f="cta-nenhuma" type="button">Limpar</button></div><div class="lista-chk" id="listaCta"></div></div></details>
+        <details class="painel" id="pPla"><summary>Plano de contas <span class="conta-resumo" id="rPla"></span></summary><div class="corpo"><input type="search" class="busca" id="buscaPlano" placeholder="Buscar conta ou grupo…" style="margin-bottom:8px"><div class="ferramentas"><button class="btn sec mini" data-f="pla-todas" type="button">Marcar todas</button><button class="btn sec mini" data-f="pla-nenhuma" type="button">Limpar</button></div><div class="arvore" id="arvorePlano"></div></div></details>
+      </div>
+      <label class="opcao-t"><input type="checkbox" id="fOcultarT" checked>
+        <span><b>Ocultar transferências entre contas marcadas</b>
+        <small id="infoOcultarT">Uma transferência aparece como receita numa conta e despesa na outra. Quando as duas pontas estão marcadas, as duas são ocultadas — senão o valor conta em dobro.</small></span></label>
+    </div>
+
+    <div class="abas" id="abas">
+      <button class="aba ativo" data-aba="geral" type="button">Visão geral</button>
+      <button class="aba" data-aba="plano" type="button">Plano de contas</button>
+      <button class="aba" data-aba="contas" type="button">Contas</button>
+      <button class="aba" data-aba="empresas" type="button">Empresas</button>
+      <button class="aba" data-aba="lanc" type="button">Lançamentos</button>
+      <div class="ver" id="ver" title="Vale para todos os gráficos e indicadores (também dá para clicar na legenda de um gráfico)">
+        <span class="sub">Mostrar:</span>
+        <button type="button" class="ativo" data-ver="r">Receitas</button>
+        <button type="button" class="ativo" data-ver="s">Despesas</button>
+        <button type="button" class="ativo" data-ver="res">Resultado</button>
+      </div>
+    </div>
+    <div id="conteudo"></div>
+    <details class="dados" id="dadosInfo"><summary>Sobre os dados</summary><ul id="dadosLista"></ul></details>
+  </div>
+  <div id="inicio"></div>
+  <div class="rodape" id="rodape"></div>
+</div>
+
+<div class="fundo" id="popupResumo" hidden>
+  <div class="caixa" role="dialog" aria-modal="true" aria-labelledby="resumoTitulo">
+    <button class="fecha" id="resumoFechar" type="button" aria-label="Fechar">×</button>
+    <h3 id="resumoTitulo"></h3>
+    <div class="resumo-kpis" id="resumoKpis"></div>
+    <div id="resumoCorpo"></div>
+    <div class="btns">
+      <button class="btn" id="resumoVer" type="button">Ver todos os lançamentos</button>
+      <button class="btn sec" id="resumoSair" type="button">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script src="servir-acesso.js"></script>
+<script>
+(function(){
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  function el(tag, cls, texto){ const e = document.createElement(tag); if(cls) e.className = cls; if(texto !== undefined && texto !== null) e.textContent = texto; return e; }
+  const semAcento = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const URL_SCRIPT_OK = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
+
+  // ===================== formatação =====================
+  const arred = (n) => { const r = Math.round((n + Number.EPSILON) * 100) / 100; return r === 0 ? 0 : r; };
+  const fmt = (n) => arred(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtR = (n) => (n < 0 ? '-' : '') + 'R$ ' + Math.round(Math.abs(n)).toLocaleString('pt-BR');
+  const fmtPct = (n) => (isFinite(n) ? n.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : '0') + '%';
+  const fmtDia = (iso) => iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4);
+  const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const nomeMes = (ym) => MESES[+ym.slice(5, 7) - 1] + '/' + ym.slice(2, 4);
+  const isoData = (s) => { s = String(s || '').trim(); let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/); if(m) return m[1] + '-' + m[2] + '-' + m[3]; m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/); return m ? m[3] + '-' + m[2] + '-' + m[1] : ''; };
+  const num = (s) => { s = String(s || '').trim(); if(!s) return 0; const n = parseFloat(s.replace(',', '.')); return isNaN(n) ? 0 : n; };
+  const hoje = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+  const somaDias = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+
+  // ===================== CSV =====================
+  function lerCsv(texto){
+    texto = String(texto || '').replace(/^﻿/, '');
+    const primeira = texto.split(/\r?\n/, 1)[0] || '';
+    const cont = (c) => (primeira.match(new RegExp('\\' + c, 'g')) || []).length;
+    const sep = [';', ',', '\t'].sort((a, b) => cont(b) - cont(a))[0];
+    const linhas = []; let campo = '', linha = [], aspas = false;
+    for(let i = 0; i < texto.length; i++){
+      const c = texto[i];
+      if(aspas){ if(c === '"'){ if(texto[i + 1] === '"'){ campo += '"'; i++; } else aspas = false; } else campo += c; }
+      else if(c === '"') aspas = true;
+      else if(c === sep){ linha.push(campo); campo = ''; }
+      else if(c === '\n' || c === '\r'){
+        if(c === '\r' && texto[i + 1] === '\n') i++;
+        linha.push(campo); campo = '';
+        if(linha.length > 1 || linha[0].trim() !== '') linhas.push(linha);
+        linha = [];
+      } else campo += c;
+    }
+    linha.push(campo); if(linha.length > 1 || linha[0].trim() !== '') linhas.push(linha);
+    if(!linhas.length) return { cab: [], linhas: [] };
+    return { cab: linhas[0].map(h => semAcento(h).replace(/\s+/g, '_')), linhas: linhas.slice(1) };
+  }
+
+  // ===================== configuração (compartilhada com fechamento-caixas / extratos-contas) =====================
+  const CHAVE = 'fechamento_caixas_config_v1';
+  const ARQ = { mov: 'dados_mov_caixa.csv', plano: 'plano_contas.csv', status: '_status.json' };
+  let cfg = { url: '', token: '' };
+  try { Object.assign(cfg, JSON.parse(localStorage.getItem(CHAVE) || '{}')); } catch(e){}
+  const salvarCfg = () => { try { const atual = JSON.parse(localStorage.getItem(CHAVE) || '{}'); localStorage.setItem(CHAVE, JSON.stringify(Object.assign(atual, { url: cfg.url, token: cfg.token }))); } catch(e){} };
+  (function lerAcesso(){
+    const p = new URLSearchParams(location.hash.replace(/^#/, ''));
+    if(p.get('u') && p.get('t') && URL_SCRIPT_OK.test(p.get('u'))){ cfg.url = p.get('u'); cfg.token = p.get('t'); salvarCfg(); }
+    if(p.has('u') || p.has('t')){ p.delete('u'); p.delete('t'); try { history.replaceState(null, '', location.pathname + location.search + (p.toString() ? '#' + p.toString() : '')); } catch(e){} }
+  })();
+  if(cfg.url && !URL_SCRIPT_OK.test(cfg.url)) cfg.url = '';
+
+  // ===================== preferências do aparelho =====================
+  const lerLS = (k, padrao) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : padrao; } catch(e){ return padrao; } };
+  const gravarLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
+  const K_FILTROS = 'pf_filtros_v1', K_NOMES = 'pf_nomes_grupos_v1';
+  let nomesLocais = lerLS(K_NOMES, {});
+
+  // ===================== cache (IndexedDB) =====================
+  let bd = null;
+  function abrirBd(){ return new Promise((res) => { try { const rq = indexedDB.open('painel_financeiro_v1', 1); rq.onupgradeneeded = () => rq.result.createObjectStore('arquivos'); rq.onsuccess = () => res(rq.result); rq.onerror = () => res(null); } catch(e){ res(null); } }); }
+  const cacheGet = (n) => new Promise((res) => { if(!bd) return res(null); try { const r = bd.transaction('arquivos').objectStore('arquivos').get(n); r.onsuccess = () => res(r.result || null); r.onerror = () => res(null); } catch(e){ res(null); } });
+  const cachePut = (n, v) => new Promise((res) => { if(!bd) return res(); try { const t = bd.transaction('arquivos', 'readwrite'); t.objectStore('arquivos').put(v, n); t.oncomplete = () => res(); t.onerror = () => res(); } catch(e){ res(); } });
+
+  // ===================== Google (JSONP) =====================
+  function jsonp(url){
+    return new Promise((resolve, reject) => {
+      const cb = 'pf_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+      const s = document.createElement('script'); let fim = false;
+      const limpar = () => { delete window[cb]; s.remove(); clearTimeout(t); };
+      const t = setTimeout(() => { if(!fim){ fim = true; limpar(); reject(new Error('Tempo esgotado ao falar com o script do Google.')); } }, 120000);
+      window[cb] = (d) => { if(fim) return; fim = true; limpar(); resolve(d); };
+      s.onerror = () => { if(fim) return; fim = true; limpar(); reject(new Error('Não consegui falar com o script do Google.')); };
+      s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb; document.body.appendChild(s);
+    });
+  }
+  const chamar = (q) => jsonp(cfg.url + '?token=' + encodeURIComponent(cfg.token) + q).then(r => { if(!r || !r.ok) throw new Error((r && r.erro) || 'resposta inesperada do script'); return r; });
+
+  // ===================== modelo =====================
+  const PASSAGEM_RE = /^(pix|pis|cartoes? credito|cartao credito|cartoes de credito)$/;
+  const ehPassagem = (nome) => PASSAGEM_RE.test(semAcento(nome));
+  const N1_PADRAO = { '00': 'Sem plano de contas', '01': 'Receitas', '02': 'Despesas', '03': 'Investimentos' };
+  const STOP_EMP = new Set(['RECEPTIVO', 'TURISMO', 'AGENCIA', 'VIAGENS', 'EVENTOS', 'TRANSPORTE', 'LTDA', 'EIRELI', 'ME', 'EPP']);
+
+  let linhas = [];                 // lançamentos (já normalizados)
+  let contasInfo = new Map();      // nome -> {nome, cod, n, rec, desp}
+  let contaPorCod = new Map();     // cod -> nome
+  let empresas = new Map();        // cod -> {cod, razao, nome, n, rec, desp}
+  let planos = new Map();          // cod3 -> {cod, n1, n2, nomeDados, n}
+  let nomesArquivo = new Map();    // nomes vindos do plano_contas.csv (qualquer nível)
+  let qualidade = {};
+  let statusColeta = null, origemInfo = '';
+  let F = null;                    // resultado do filtro atual
+
+  const normPlano = (c) => {
+    c = String(c || '').trim().replace(/\.+$/, '');
+    if(!c) return '00.00.00';
+    const p = c.split('.'); while(p.length < 3) p.push('00');
+    return p.slice(0, 3).map(x => x.padStart(2, '0')).join('.');
+  };
+  function apelidoEmpresa(cod, razao){
+    if(!razao) return cod && cod !== '0' ? 'Empresa ' + cod : 'Sem empresa';
+    const toks = razao.replace(/\s+/g, ' ').trim().split(' '); const out = [];
+    for(const t of toks){ if(out.length && (STOP_EMP.has(t.toUpperCase()) || out.length >= 3)) break; out.push(t); }
+    const s = out.join(' ') || razao;
+    return s.toLowerCase().replace(/(^|\s)([a-zà-ú])/g, (m, a, b) => a + b.toUpperCase());
+  }
+
+  function montar(textos){
+    const t = lerCsv(textos[ARQ.mov]);
+    const ix = (n) => t.cab.indexOf(n);
+    const I = { tipo: ix('tipo'), data: ix('data'), cod: ix('cod_conta'), conta: ix('nome_conta_caixa'), contra: ix('cod_cta_transferencia'),
+      rec: ix('receita'), desp: ix('despesa'), hist: ix('historico'), plano: ix('codcta'), nplano: ix('nomecta'), cli: ix('cliente'),
+      emp: ix('empresa'), razao: ix('empresaa_razao_social') >= 0 ? ix('empresaa_razao_social') : ix('empresa_razao_social') };
+    const falta = ['tipo', 'data', 'conta', 'rec', 'desp', 'plano', 'emp'].filter(k => I[k] < 0);
+    if(falta.length) throw new Error('O arquivo de movimentação precisa ter as colunas TIPO, DATA, NOME_CONTA_CAIXA, RECEITA, DESPESA, CODCTA e EMPRESA (faltando: ' + falta.join(', ') + ').');
+
+    const L = [], ci = new Map(), cpc = new Map(), em = new Map(), pl = new Map();
+    const q = { total: t.linhas.length, dataInvalida: 0, dataFutura: 0, semPlano: 0, semEmpresa: 0, semConta: 0, ate: '', de: '' };
+    const limite = somaDias(hoje(), 90);
+    for(const l of t.linhas){
+      const d = isoData(l[I.data]);
+      if(!d){ q.dataInvalida++; continue; }
+      if(d > limite){ q.dataFutura++; continue; }                 // data absurda (ex.: 2029): fora da análise, só avisada
+      const tp = String(l[I.tipo] || '').trim().toUpperCase();
+      let conta = String(l[I.conta] || '').trim(); const cc = String(l[I.cod] || '').trim();
+      if(!conta){ conta = '(sem conta)'; q.semConta++; }
+      const pc = normPlano(l[I.plano]); if(pc === '00.00.00') q.semPlano++;
+      let ecod = String(l[I.emp] || '').trim(); const razao = I.razao >= 0 ? String(l[I.razao] || '').trim() : '';
+      if(!ecod || ecod === '0'){ ecod = '0'; q.semEmpresa++; }
+      const r = num(l[I.rec]), s = num(l[I.desp]);
+      const row = { d, ym: d.slice(0, 7), tp, ct: conta, cx: I.contra >= 0 ? String(l[I.contra] || '').trim() : '', r, s,
+        h: I.hist >= 0 ? l[I.hist] : '', pc, emp: ecod, cl: I.cli >= 0 ? String(l[I.cli] || '').trim() : '' };
+      L.push(row);
+      if(!q.de || d < q.de) q.de = d; if(!q.ate || d > q.ate) q.ate = d;
+      let c = ci.get(conta); if(!c){ c = { nome: conta, cod: cc, n: 0, rec: 0, desp: 0 }; ci.set(conta, c); }
+      c.n++; c.rec += r; c.desp += s; if(cc && cc !== '0' && conta !== '(sem conta)') cpc.set(cc, conta);
+      let e = em.get(ecod); if(!e){ e = { cod: ecod, razao, nome: '', n: 0, rec: 0, desp: 0 }; em.set(ecod, e); }
+      if(razao && !e.razao) e.razao = razao; e.n++; e.rec += r; e.desp += s;
+      let p = pl.get(pc);
+      if(!p){ p = { cod: pc, n1: pc.slice(0, 2), n2: pc.slice(0, 5), nomeDados: '', nomes: new Map(), n: 0 }; pl.set(pc, p); }
+      p.n++; const nn = String(l[I.nplano] || '').trim(); if(nn) p.nomes.set(nn, (p.nomes.get(nn) || 0) + 1);
+    }
+    // o nome da conta varia no banco (cortado, com data digitada...): vale o mais usado; em empate, o mais completo
+    pl.forEach(p => { let melhor = '', n = 0; p.nomes.forEach((q, nome) => { if(q > n || (q === n && nome.length > melhor.length)){ melhor = nome; n = q; } }); p.nomeDados = melhor; });
+    em.forEach(e => { e.nome = apelidoEmpresa(e.cod, e.razao); });
+    // nomes opcionais de grupos (níveis 1 e 2) e contas: plano_contas.csv (CODIGO;NOME)
+    nomesArquivo = new Map();
+    if(textos[ARQ.plano]){
+      const tp = lerCsv(textos[ARQ.plano]);
+      const iC = tp.cab.findIndex(h => ['codigo', 'cod', 'codcta', 'conta'].includes(h));
+      const iN = tp.cab.findIndex(h => ['nome', 'descricao', 'nomecta', 'nome_conta'].includes(h));
+      if(iC >= 0 && iN >= 0) tp.linhas.forEach(l => { const c = String(l[iC] || '').trim().replace(/\.+$/, ''); if(c) nomesArquivo.set(c, String(l[iN] || '').trim()); });
+    }
+    linhas = L; contasInfo = ci; contaPorCod = cpc; empresas = em; planos = pl; qualidade = q;
+  }
+
+  // nome de um nó do plano (nível 1 = 'NN', nível 2 = 'NN.NN', nível 3 = 'NN.NN.NN')
+  function nomeNo(cod){
+    if(nomesLocais[cod]) return nomesLocais[cod];
+    if(nomesArquivo.has(cod)) return nomesArquivo.get(cod);
+    if(cod.length === 2) return N1_PADRAO[cod] || '';
+    if(cod.length === 8){ const p = planos.get(cod); return p ? p.nomeDados : ''; }
+    return '';
+  }
+  const rotuloNo = (cod) => { const n = nomeNo(cod); return n ? cod + ' · ' + n : cod; };
+
+  // ===================== filtros =====================
+  const FIL = { periodo: 'tudo', de: '', ate: '', empOff: new Set(), ctaOff: new Set(), plaOff: new Set(), ocultarT: true };
+  function filtrosPadrao(){
+    FIL.periodo = 'tudo'; FIL.de = ''; FIL.ate = ''; FIL.empOff = new Set(); FIL.ocultarT = true; FIL.plaOff = new Set();
+    FIL.ctaOff = new Set([...contasInfo.keys()].filter(ehPassagem));
+  }
+  function carregarFiltrosSalvos(){
+    filtrosPadrao();
+    const s = lerLS(K_FILTROS, null);
+    if(!s) return;
+    // contas: o que o usuário já viu mantém a escolha dele; conta nova só entra desmarcada se parecer de passagem
+    const conhecidas = new Set(s.conhecidas || []), off = new Set(s.ctaOff || []);
+    FIL.ctaOff = new Set([...contasInfo.keys()].filter(n => conhecidas.has(n) ? off.has(n) : ehPassagem(n)));
+    FIL.plaOff = new Set((s.plaOff || []).filter(c => planos.has(c)));
+    if(typeof s.ocultarT === 'boolean') FIL.ocultarT = s.ocultarT;
+  }
+  function salvarFiltros(){ gravarLS(K_FILTROS, { ctaOff: [...FIL.ctaOff], conhecidas: [...contasInfo.keys()], plaOff: [...FIL.plaOff], ocultarT: FIL.ocultarT }); }
+
+  function intervalo(){
+    const h = hoje(), a = +h.slice(0, 4), m = +h.slice(5, 7);
+    const p2 = (n) => String(n).padStart(2, '0');
+    const ultimoDia = (ano, mes) => new Date(ano, mes, 0).getDate();
+    switch(FIL.periodo){
+      case 'mes': return [a + '-' + p2(m) + '-01', h];
+      case 'mesant': { const d = new Date(a, m - 2, 1); const ya = d.getFullYear(), ma = d.getMonth() + 1; return [ya + '-' + p2(ma) + '-01', ya + '-' + p2(ma) + '-' + p2(ultimoDia(ya, ma))]; }
+      case '3m': { const d = new Date(a, m - 3, 1); return [d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-01', h]; }
+      case '12m': { const d = new Date(a, m - 12, 1); return [d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-01', h]; }
+      case 'ano': return [a + '-01-01', h];
+      case 'anoant': return [(a - 1) + '-01-01', (a - 1) + '-12-31'];
+      case 'custom': return [FIL.de || '', FIL.ate || ''];
+      default: return ['', ''];
+    }
+  }
+
+  function filtrar(){
+    const [de, ate] = intervalo();
+    const out = []; const oculta = { n: 0, r: 0, s: 0 };
+    for(const x of linhas){
+      if(de && x.d < de) continue; if(ate && x.d > ate) continue;
+      if(FIL.empOff.has(x.emp)) continue;
+      if(FIL.ctaOff.has(x.ct)) continue;
+      if(FIL.plaOff.has(x.pc)) continue;
+      if(FIL.ocultarT && x.tp === 'T' && x.cx && x.cx !== '0'){
+        const nomeContra = contaPorCod.get(x.cx);
+        if(nomeContra && !FIL.ctaOff.has(nomeContra)){ oculta.n++; oculta.r += x.r; oculta.s += x.s; continue; }   // as duas pontas estão marcadas
+      }
+      out.push(x);
+    }
+    return { rows: out, oculta, de, ate };
+  }
+
+  // ===================== painéis de filtro =====================
+  function construirFiltros(){
+    // empresas
+    const le = $('listaEmp'); le.replaceChildren();
+    [...empresas.values()].sort((a, b) => (b.rec + b.desp) - (a.rec + a.desp)).forEach(e => {
+      const lb = el('label'); const c = el('input'); c.type = 'checkbox'; c.checked = !FIL.empOff.has(e.cod); c.dataset.emp = e.cod;
+      lb.appendChild(c); lb.appendChild(document.createTextNode(e.nome)); const n = el('span', 'n', e.n.toLocaleString('pt-BR') + ' lanç.'); n.title = e.razao; lb.appendChild(n); le.appendChild(lb);
+    });
+    // contas
+    const lc = $('listaCta'); lc.replaceChildren();
+    [...contasInfo.values()].sort((a, b) => (b.rec + b.desp) - (a.rec + a.desp)).forEach(cn => {
+      const lb = el('label'); const c = el('input'); c.type = 'checkbox'; c.checked = !FIL.ctaOff.has(cn.nome); c.dataset.cta = cn.nome;
+      lb.appendChild(c); lb.appendChild(document.createTextNode(cn.nome));
+      if(ehPassagem(cn.nome)){ const ch = el('span', 'chip', 'passagem'); lb.appendChild(ch); }
+      lb.appendChild(el('span', 'n', cn.n.toLocaleString('pt-BR') + ' lanç.')); lc.appendChild(lb);
+    });
+    construirArvore();
+    atualizarResumosFiltro();
+  }
+
+  function construirArvore(){
+    const raiz = $('arvorePlano'); raiz.replaceChildren();
+    const termo = semAcento($('buscaPlano').value);
+    const n1 = new Map();
+    [...planos.values()].sort((a, b) => (a.cod < b.cod ? -1 : 1)).forEach(p => {
+      if(termo && !(semAcento(rotuloNo(p.cod)).includes(termo) || semAcento(rotuloNo(p.n2)).includes(termo) || semAcento(rotuloNo(p.n1)).includes(termo))) return;
+      if(!n1.has(p.n1)) n1.set(p.n1, new Map());
+      const m2 = n1.get(p.n1); if(!m2.has(p.n2)) m2.set(p.n2, []); m2.get(p.n2).push(p);
+    });
+    const caixa = (codigos, texto, extra) => {
+      const lb = el('label'); const c = el('input'); c.type = 'checkbox'; c.dataset.plaGrupo = codigos.join('|');
+      const off = codigos.filter(x => FIL.plaOff.has(x)).length; c.checked = off === 0; c.indeterminate = off > 0 && off < codigos.length;
+      lb.appendChild(c); lb.appendChild(document.createTextNode(texto)); if(extra) lb.appendChild(extra); return lb;
+    };
+    n1.forEach((m2, c1) => {
+      const d1 = el('details'); if(termo) d1.open = true; const s1 = el('summary');
+      const todos1 = [].concat(...[...m2.values()].map(a => a.map(p => p.cod)));
+      s1.appendChild(caixa(todos1, rotuloNo(c1))); d1.appendChild(s1);
+      m2.forEach((lista, c2) => {
+        const d2 = el('details'); if(termo) d2.open = true; const s2 = el('summary');
+        s2.appendChild(caixa(lista.map(p => p.cod), rotuloNo(c2))); d2.appendChild(s2);
+        lista.forEach(p => { const f = el('div', 'folha'); f.appendChild(caixa([p.cod], p.cod + (p.nomeDados ? ' · ' + p.nomeDados : ''), el('span', 'n', p.n.toLocaleString('pt-BR')))); d2.appendChild(f); });
+        d1.appendChild(d2);
+      });
+      raiz.appendChild(d1);
+    });
+    if(!n1.size) raiz.appendChild(el('div', 'sub', 'Nada encontrado.'));
+  }
+
+  function atualizarResumosFiltro(){
+    $('rEmp').textContent = (empresas.size - FIL.empOff.size) + ' de ' + empresas.size;
+    const pass = [...FIL.ctaOff].filter(ehPassagem).length;
+    $('rCta').textContent = (contasInfo.size - FIL.ctaOff.size) + ' de ' + contasInfo.size + (pass ? ' · ' + pass + ' de passagem fora' : '');
+    $('rPla').textContent = (planos.size - FIL.plaOff.size) + ' de ' + planos.size;
+    $('fOcultarT').checked = FIL.ocultarT;
+    $('fPeriodo').value = FIL.periodo;
+    const [de, ate] = intervalo(); $('fDe').value = FIL.periodo === 'custom' ? FIL.de : de; $('fAte').value = FIL.periodo === 'custom' ? FIL.ate : ate;
+  }
+
+  // ===================== gráficos =====================
+  let Chart = null, libGraficos = null; const instancias = {};
+  const carregarScript = (src) => new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('falha ao carregar ' + src)); document.head.appendChild(s); });
+  const prepararGraficos = () => libGraficos || (libGraficos = (window.Chart ? Promise.resolve() : carregarScript('https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js')).then(() => { Chart = window.Chart; }));
+  const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const PALETA = ['#2b6cb0', '#d69e2e', '#38a169', '#805ad5', '#dd6b20', '#319795', '#d53f8c', '#718096', '#9f7aea'];
+  // descr(datasetIndex, index) -> { patch, titulo, lado } descreve o que a barra contém; com ele o passar do mouse mostra os
+  // principais pagadores/fornecedores e o clique abre o resumo completo
+  function desenhar(id, cfgGraf, descr){
+    if(instancias[id]){ instancias[id].destroy(); delete instancias[id]; }
+    const cv = $(id); if(!cv || !Chart) return;
+    Chart.defaults.color = cssVar('--muted'); Chart.defaults.borderColor = cssVar('--line'); Chart.defaults.font.family = 'system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif';
+    cfgGraf.options = Object.assign({ responsive: true, maintainAspectRatio: false }, cfgGraf.options || {});
+    if(descr){
+      const o = cfgGraf.options; o.plugins = o.plugins || {}; const tt = o.plugins.tooltip = Object.assign({}, o.plugins.tooltip); const cb = tt.callbacks = Object.assign({}, tt.callbacks);
+      o.onClick = (e, els) => { if(!els.length) return; const d = descr(els[0].datasetIndex, els[0].index); if(d) abrirResumo(d); };
+      o.onHover = (e, els) => { if(e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; };
+      cb.afterBody = (items) => { const it = items[0]; const d = it && descr(it.datasetIndex, it.dataIndex); return d ? linhasTooltip(d) : []; };
+      cb.footer = () => 'Clique para ver o resumo';
+    }
+    instancias[id] = new Chart(cv, cfgGraf);
+  }
+
+  // ===================== quem pagou / para quem se pagou =====================
+  // CLIENTE vem preenchido nos lançamentos diretos (R/D). Nas transferências (T) vale "TRANSFERENCIA": o nome está no histórico
+  // (Pix recebido, TED, cartão...). Esta função tira o melhor nome possível do histórico.
+  const limpaNome = (s) => String(s || '').replace(/\*+[\d.\-*]*/g, ' ').replace(/\d{1,2}\/\d{2}(\/\d{2,4})?\b/g, ' ').replace(/\.{2,}/g, ' ').replace(/\s+-\s*$/, '').replace(/\s+/g, ' ').trim();
+  const BANDEIRAS = { MAST: 'Mastercard', MASTER: 'Mastercard', VISA: 'Visa', ELO: 'Elo', AMEX: 'Amex', HIPE: 'Hipercard' };
+  const cacheNomes = new Map();
+  function nomeDoHistorico(h){
+    h = String(h || ''); if(cacheNomes.has(h)) return cacheNomes.get(h);
+    let s = h.replace(/^\s*:?ORIGEM\s+/i, '').replace(/^\d+-/, '').trim(), m, r = '';
+    if((m = s.match(/REM\.?:\s*(.+?)\s+(?:Transfer[eê]ncia|Recebimento|Pix\b|\d{1,2}\/\d{2}|\*{3})/i)) || (m = s.match(/REM\.?:\s*(.+)$/i))) r = limpaNome(m[1]);
+    else if((m = s.match(/Recebimento Pix\s+(.+?)\s*\*{3}/i)) || (m = s.match(/Transfer[eê]ncia Pix\s+(.+?)\s*\*{3}/i))) r = limpaNome(m[1]);
+    else if((m = s.match(/\b(REDE|CIELO)\b.*?\b(MAST(?:ER)?|VISA|ELO|AMEX|HIPE)\b\s*(?:\w*\s)?(AT|DB|DEBITO|CREDITO)?/i))){
+      const tp = (m[3] || '').toUpperCase(); r = 'Cartão ' + m[1].charAt(0).toUpperCase() + m[1].slice(1).toLowerCase() + ' · ' + (BANDEIRAS[m[2].toUpperCase()] || m[2]) + (tp === 'DB' || tp === 'DEBITO' ? ' · débito' : tp === 'CREDITO' ? ' · crédito' : tp ? ' · ' + tp : '');
+    }
+    else if((m = s.match(/^(RECEBIMENTOS?|SISPAG|PIX TRANSF|PIX RECEBIDO|PIX ENVIADO|TBI\s+[\d.\-]+\s+C\/C)\s+(.*)$/i))){
+      const v = m[1].toLowerCase(), verbo = v.startsWith('tbi') ? 'TBI' : v.charAt(0).toUpperCase() + v.slice(1);
+      r = verbo + ': ' + limpaNome(m[2]);
+    }
+    if(!r) r = limpaNome(s).slice(0, 48);
+    r = r.slice(0, 60); cacheNomes.set(h, r); return r;
+  }
+  function contraparte(x){
+    const c = x.cl && x.cl !== '0' && x.cl.toUpperCase() !== 'TRANSFERENCIA' ? x.cl : '';
+    if(c) return c;
+    return nomeDoHistorico(x.h) || '(não informado)';
+  }
+
+  const cacheResumo = new Map();
+  const filtrarBarra = (patch) => F.rows.filter(x => (!patch.plano || x.pc.startsWith(patch.plano)) && (!patch.conta || x.ct === patch.conta) && (!patch.emp || x.emp === patch.emp) && (!patch.ym || x.ym === patch.ym) && (!patch.lado || (patch.lado === 'r' ? x.r > 0 : x.s > 0)));
+  function resumir(d){
+    const chave = JSON.stringify(d.patch) + '|' + d.lado; if(cacheResumo.has(chave)) return cacheResumo.get(chave);
+    const rows = filtrarBarra(Object.assign({}, d.patch, { lado: d.lado === 'rs' ? '' : d.lado })); const pag = new Map(), forn = new Map(), pl = new Map(); let tr = 0, ts = 0;
+    for(const x of rows){
+      const cp = contraparte(x);
+      if(x.r > 0){ tr += x.r; const o = pag.get(cp) || { nome: cp, v: 0, n: 0 }; o.v += x.r; o.n++; pag.set(cp, o); }
+      if(x.s > 0){ ts += x.s; const o = forn.get(cp) || { nome: cp, v: 0, n: 0 }; o.v += x.s; o.n++; forn.set(cp, o); }
+      const lado = d.lado === 'r' ? x.r : d.lado === 's' ? x.s : x.r + x.s; const p = pl.get(x.pc) || { cod: x.pc, v: 0, n: 0 }; p.v += lado; p.n++; pl.set(x.pc, p);
+    }
+    const ord = (m) => [...m.values()].sort((a, b) => b.v - a.v);
+    const res = { rows, tr, ts, pag: ord(pag), forn: ord(forn), planos: ord(pl) };
+    cacheResumo.set(chave, res); return res;
+  }
+  const usaR = (d) => d.lado !== 's', usaS = (d) => d.lado !== 'r';
+  function linhasTooltip(d){
+    const R = resumir(d); const out = []; const nome = (s) => s.length > 34 ? s.slice(0, 33) + '…' : s;
+    const bloco = (tit, lista, total, n) => { if(!lista.length) return; out.push(tit); lista.slice(0, n).forEach((o, i) => out.push((i + 1) + '. ' + nome(o.nome) + ' — ' + fmtR(o.v) + (total ? ' (' + Math.round(o.v / total * 100) + '%)' : ''))); };
+    const n = d.lado === 'rs' ? 2 : 3;
+    if(usaR(d)) bloco('Principais pagadores:', R.pag, R.tr, n);
+    if(usaS(d)) bloco('Principais fornecedores:', R.forn, R.ts, n);
+    out.push(R.rows.length.toLocaleString('pt-BR') + ' lançamento(s)');
+    return out;
+  }
+
+  let descAberta = null;
+  function abrirResumo(d){
+    descAberta = d; const R = resumir(d);
+    $('resumoTitulo').textContent = d.titulo;
+    const k = $('resumoKpis'); k.replaceChildren();
+    const par = (t, v) => { const s = el('span'); s.appendChild(document.createTextNode(t + ' ')); s.appendChild(el('b', '', v)); k.appendChild(s); };
+    par('Lançamentos:', R.rows.length.toLocaleString('pt-BR')); if(usaR(d)) par('Receitas:', fmtR(R.tr)); if(usaS(d)) par('Despesas:', fmtR(R.ts)); if(d.lado === 'rs') par('Resultado:', fmtR(R.tr - R.ts));
+    const c = $('resumoCorpo'); c.replaceChildren();
+    const tabela = (tit, lista, total, n, cor) => {
+      if(!lista.length) return; c.appendChild(el('h4', '', tit));
+      const t = el('table'); t.innerHTML = '<thead><tr><th class="txt">Nome</th><th>Valor</th><th>%</th><th>Lanç.</th></tr></thead>'; const tb = el('tbody');
+      lista.slice(0, n).forEach(o => { const tr = el('tr'); tr.appendChild(el('td', 'txt nome', o.nome)); tr.appendChild(el('td', cor, fmt(o.v))); tr.appendChild(el('td', '', total ? fmtPct(o.v / total * 100) : '')); tr.appendChild(el('td', '', o.n.toLocaleString('pt-BR'))); tb.appendChild(tr); });
+      const resto = lista.slice(n).reduce((s, o) => s + o.v, 0); if(resto > 0){ const tr = el('tr'); tr.appendChild(el('td', 'txt', 'Outros (' + (lista.length - n) + ')')); tr.appendChild(el('td', cor, fmt(resto))); tr.appendChild(el('td', '', total ? fmtPct(resto / total * 100) : '')); tr.appendChild(el('td')); tb.appendChild(tr); }
+      t.appendChild(tb); const rol = el('div', 'rolagem'); rol.appendChild(t); c.appendChild(rol);
+    };
+    if(usaR(d)) tabela('Quem pagou (pagadores)', R.pag, R.tr, 12, 'pos');
+    if(usaS(d)) tabela('Para quem se pagou (fornecedores)', R.forn, R.ts, 12, 'neg');
+    c.appendChild(el('h4', '', 'Por conta do plano de contas'));
+    const tp = el('table'); tp.innerHTML = '<thead><tr><th class="txt">Conta</th><th>Valor</th><th>Lanç.</th></tr></thead>'; const tbp = el('tbody');
+    R.planos.slice(0, 6).forEach(p => { const tr = el('tr'); tr.appendChild(el('td', 'txt nome', p.cod + (nomeNo(p.cod) ? ' · ' + nomeNo(p.cod) : ''))); tr.appendChild(el('td', '', fmt(p.v))); tr.appendChild(el('td', '', p.n.toLocaleString('pt-BR'))); tbp.appendChild(tr); });
+    tp.appendChild(tbp); const rp = el('div', 'rolagem'); rp.appendChild(tp); c.appendChild(rp);
+    c.appendChild(el('h4', '', 'Maiores lançamentos (para conferir com o Sicon)'));
+    const tl = el('table'); tl.innerHTML = '<thead><tr><th>Data</th><th class="txt">Conta</th><th class="txt">Histórico</th><th>Valor</th></tr></thead>'; const tbl = el('tbody');
+    [...R.rows].sort((a, b) => (d.lado === 's' ? b.s - a.s : d.lado === 'r' ? b.r - a.r : Math.max(b.r, b.s) - Math.max(a.r, a.s))).slice(0, 8).forEach(x => {
+      const tr = el('tr'); tr.appendChild(el('td', '', fmtDia(x.d))); tr.appendChild(el('td', 'txt nome', x.ct)); const hd = el('td', 'hist', x.h); hd.title = contraparte(x); tr.appendChild(hd);
+      tr.appendChild(el('td', x.r ? 'pos' : 'neg', (x.r ? '+' : '-') + fmt(x.r || x.s))); tbl.appendChild(tr); });
+    tl.appendChild(tbl); const rl = el('div', 'rolagem'); rl.appendChild(tl); c.appendChild(rl);
+    $('popupResumo').hidden = false; $('popupResumo').scrollTop = 0; document.body.style.overflow = 'hidden';
+  }
+  function fecharResumo(){ $('popupResumo').hidden = true; document.body.style.overflow = ''; descAberta = null; }
+  const fmtCompacto = (v) => { const a = Math.abs(v), s = v < 0 ? '-' : ''; return a >= 1e6 ? s + 'R$ ' + (a / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' mi' : a >= 1e3 ? s + 'R$ ' + (a / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' mil' : s + 'R$ ' + a; };
+  const eixoR = { ticks: { callback: (v) => fmtCompacto(v), maxRotation: 0 } };
+  const tooltipR = { callbacks: { label: (c) => ' ' + (c.dataset.label ? c.dataset.label + ': ' : '') + fmtR(c.chart.options.indexAxis === 'y' ? c.parsed.x : c.parsed.y) } };
+  const caixaGraf = (titulo, id, alto) => { const d = el('div', 'graf' + (alto ? ' alto' : '')); d.appendChild(el('h3', '', titulo)); const a = el('div', 'area'); const cv = el('canvas'); cv.id = id; a.appendChild(cv); d.appendChild(a); return d; };
+
+  // ===================== agregações =====================
+  function listaMeses(rows){
+    if(!rows.length) return [];
+    let min = rows[0].ym, max = rows[0].ym; rows.forEach(x => { if(x.ym < min) min = x.ym; if(x.ym > max) max = x.ym; });
+    const out = []; let a = +min.slice(0, 4), m = +min.slice(5, 7);
+    while(a + '-' + String(m).padStart(2, '0') <= max){ out.push(a + '-' + String(m).padStart(2, '0')); m++; if(m > 12){ m = 1; a++; } }
+    return out;
+  }
+  function somar(rows, chave){
+    const mp = new Map();
+    rows.forEach(x => { const k = chave(x); let o = mp.get(k); if(!o){ o = { k, r: 0, s: 0, n: 0 }; mp.set(k, o); } o.r += x.r; o.s += x.s; o.n++; });
+    return mp;
+  }
+  const totais = (rows) => { let r = 0, s = 0; rows.forEach(x => { r += x.r; s += x.s; }); return { r, s, res: r - s, n: rows.length }; };
+
+  // ===================== abas =====================
+  let abaAtual = 'geral';
+  const drill = { plano: '', conta: '', emp: '', busca: '', ym: '', lado: '' };
+  const e2nome = (k) => (empresas.get(k) || {}).nome || k;
+  const zerarDrill = () => { drill.plano = drill.conta = drill.emp = drill.busca = drill.ym = drill.lado = ''; };
+  function irLancamentos(p){ zerarDrill(); Object.assign(drill, p); limiteLanc = 300; abaAtual = 'lanc'; render(); window.scrollTo(0, 0); }
+  let modoPlano = 'contas', ladoPlano = 'r', nivelGraf = 3, noSel = '', abertos = new Set(['01', '02']), ladoPivot = 's', limiteLanc = 300;
+
+  function render(){
+    if(!linhas.length) return;
+    F = filtrar(); cacheResumo.clear();
+    atualizarResumosFiltro();
+    const info = $('infoOcultarT');
+    info.textContent = 'Uma transferência aparece como receita numa conta e despesa na outra. Quando as duas pontas estão marcadas, as duas são ocultadas — senão o valor conta em dobro.'
+      + (FIL.ocultarT && F.oculta.n ? ' Agora: ' + F.oculta.n.toLocaleString('pt-BR') + ' lançamentos ocultados (' + fmtR(F.oculta.r) + ' de receita e ' + fmtR(F.oculta.s) + ' de despesa).' : '');
+    document.querySelectorAll('#abas .aba').forEach(b => b.classList.toggle('ativo', b.dataset.aba === abaAtual));
+    atualizarBotoesVer();
+    const c = $('conteudo'); c.replaceChildren();
+    for(const k of Object.keys(instancias)){ instancias[k].destroy(); delete instancias[k]; }
+    if(!F.rows.length){ c.appendChild(el('div', 'vazio', 'Nenhum lançamento com os filtros atuais.')); return; }
+    if(abaAtual !== 'lanc' && !VER.r && !VER.s){ c.appendChild(el('div', 'vazio', 'Receitas e Despesas estão desligadas — ligue pelo menos uma em "Mostrar".')); return; }
+    if(abaAtual !== 'lanc') c.appendChild(el('div', 'dica-clique', '💡 Passe o mouse numa barra para ver os principais pagadores e fornecedores dela; clique para abrir o resumo e conferir os maiores lançamentos.'));
+    ({ geral: renderGeral, plano: renderPlano, contas: renderContas, empresas: renderEmpresas, lanc: renderLanc })[abaAtual](c);
+    prepararGraficos().then(() => { (renderGraficos[abaAtual] || (() => {}))(); }).catch(() => {
+      document.querySelectorAll('.graf .area').forEach(a => { a.replaceChildren(el('div', 'sub', 'Não consegui carregar a biblioteca de gráficos (precisa de internet). As tabelas continuam funcionando.')); });
+    });
+  }
+  const renderGraficos = {};
+
+  const kpi = (rot, val, cls) => { const k = el('div', 'kpi'); k.appendChild(el('span', '', rot)); k.appendChild(el('b', cls || '', val)); return k; };
+  // ---------- "o que mostrar": Receitas / Despesas / Resultado valem para TODOS os gráficos e KPIs ----------
+  // (clicar na legenda de um gráfico, ou nos botões ao lado das abas, liga/desliga em tudo)
+  const VER = { r: true, s: true, res: true };
+  const resVisivel = () => VER.r && VER.s && VER.res;
+  const legendaLados = { onClick: (e, item) => { const k = { 'Receitas': 'r', 'Entradas': 'r', 'Despesas': 's', 'Saídas': 's', 'Resultado': 'res' }[item.text]; if(k){ VER[k] = !VER[k]; render(); } } };
+  // modo de um gráfico que tem UMA série por empresa/mês: resultado (r−s), só receitas, só despesas, ou as duas lado a lado
+  const modoSerie = () => (VER.r && VER.s) ? (VER.res ? 'res' : 'ambos') : (VER.r ? 'r' : 's');
+  const TIT_MODO = { res: 'Resultado', ambos: 'Receitas e despesas', r: 'Receitas', s: 'Despesas' };
+  function atualizarBotoesVer(){
+    document.querySelectorAll('#ver button').forEach(b => { const on = VER[b.dataset.ver]; b.classList.toggle('ativo', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); if(b.dataset.ver === 'res'){ b.style.opacity = VER.r && VER.s ? '' : '.5'; b.title = VER.r && VER.s ? '' : 'O resultado só aparece com Receitas e Despesas ligadas'; } });
+  }
+
+  function blocoKpis(t, rows){
+    const g = el('div', 'kpis');
+    if(VER.r) g.appendChild(kpi('Receitas', fmtR(t.r), 'pos'));
+    if(VER.s) g.appendChild(kpi('Despesas', fmtR(t.s), 'neg'));
+    if(resVisivel()){ g.appendChild(kpi('Resultado', fmtR(t.res), t.res < 0 ? 'neg' : 'pos')); g.appendChild(kpi('Margem', t.r ? fmtPct(t.res / t.r * 100) : '—', t.res < 0 ? 'neg' : '')); }
+    g.appendChild(kpi('Lançamentos', t.n.toLocaleString('pt-BR'))); g.appendChild(kpi('Meses', String(listaMeses(rows).length)));
+    return g;
+  }
+
+  // ---------- visão geral ----------
+  function renderGeral(c){
+    c.appendChild(blocoKpis(totais(F.rows), F.rows));
+    const g = el('div', 'grade2');
+    g.appendChild(caixaGraf('Receitas, despesas e resultado por mês', 'gMensal', true));
+    g.appendChild(caixaGraf(TIT_MODO[modoSerie()] + ' por empresa', 'gEmpRes'));
+    if(VER.r) g.appendChild(caixaGraf('Receitas por conta (nível 3)', 'gDonutR'));
+    if(VER.s) g.appendChild(caixaGraf('Despesas por conta (nível 3)', 'gDonutS'));
+    c.appendChild(g);
+  }
+  function topGrupos(lado, n){   // por conta de nível 3 (código + denominação), não por grupo de nível 2
+    const mp = somar(F.rows, x => x.pc); const arr = [...mp.values()].map(o => ({ k: o.k, v: lado === 'r' ? o.r : o.s })).filter(o => o.v > 0).sort((a, b) => b.v - a.v);
+    const top = arr.slice(0, n), resto = arr.slice(n).reduce((s, o) => s + o.v, 0);
+    if(resto > 0) top.push({ k: 'Outros', v: resto });
+    return top;
+  }
+  renderGraficos.geral = () => {
+    const meses = listaMeses(F.rows), pm = somar(F.rows, x => x.ym);
+    const R = meses.map(m => (pm.get(m) || { r: 0 }).r), S = meses.map(m => (pm.get(m) || { s: 0 }).s);
+    desenhar('gMensal', { type: 'bar', data: { labels: meses.map(nomeMes), datasets: [
+      { label: 'Receitas', data: R, backgroundColor: cssVar('--pos'), hidden: !VER.r }, { label: 'Despesas', data: S, backgroundColor: cssVar('--neg'), hidden: !VER.s },
+      { label: 'Resultado', data: R.map((v, i) => v - S[i]), type: 'line', borderColor: cssVar('--info'), backgroundColor: cssVar('--info'), tension: .25, pointRadius: 3, hidden: !resVisivel() }] },
+      options: { scales: { y: eixoR }, plugins: { tooltip: tooltipR, legend: legendaLados } } },
+      (ds, i) => ({ patch: { ym: meses[i] }, titulo: ['Receitas', 'Despesas', 'Resultado'][ds] + ' — ' + nomeMes(meses[i]), lado: ['r', 's', 'rs'][ds] }));
+    const modo = modoSerie(); const nomeE = (o) => (empresas.get(o.k) || {}).nome || o.k;
+    const pe = [...somar(F.rows, x => x.emp).values()].sort((a, b) => (modo === 'res' ? (b.r - b.s) - (a.r - a.s) : modo === 's' ? b.s - a.s : b.r - a.r));
+    const dsEmp = modo === 'res' ? [{ label: 'Resultado', data: pe.map(o => o.r - o.s), backgroundColor: pe.map(o => o.r - o.s < 0 ? cssVar('--neg') : cssVar('--pos')) }]
+      : modo === 'r' ? [{ label: 'Receitas', data: pe.map(o => o.r), backgroundColor: cssVar('--pos') }]
+      : modo === 's' ? [{ label: 'Despesas', data: pe.map(o => o.s), backgroundColor: cssVar('--neg') }]
+      : [{ label: 'Receitas', data: pe.map(o => o.r), backgroundColor: cssVar('--pos') }, { label: 'Despesas', data: pe.map(o => o.s), backgroundColor: cssVar('--neg') }];
+    desenhar('gEmpRes', { type: 'bar', data: { labels: pe.map(nomeE), datasets: dsEmp },
+      options: { indexAxis: 'y', scales: { x: eixoR }, plugins: { legend: modo === 'ambos' ? legendaLados : { display: false }, tooltip: tooltipR } } },
+      (ds, i) => ({ patch: { emp: pe[i].k }, titulo: (modo === 'ambos' ? (ds === 0 ? 'Receitas' : 'Despesas') : TIT_MODO[modo]) + ' — ' + nomeE(pe[i]), lado: modo === 'res' ? 'rs' : modo === 'ambos' ? (ds === 0 ? 'r' : 's') : modo }));
+    ['R', 'S'].filter(l => VER[l.toLowerCase()]).forEach(l => {
+      const top = topGrupos(l.toLowerCase(), 8);
+      desenhar('gDonut' + l, { type: 'doughnut', data: { labels: top.map(o => o.k === 'Outros' ? 'Outros' : rotuloNo(o.k)), datasets: [{ data: top.map(o => o.v), backgroundColor: PALETA }] },
+        options: { plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 11 } } }, tooltip: { callbacks: { label: (c) => ' ' + c.label + ': ' + fmtR(c.parsed) } } } } },
+        (ds, i) => top[i].k === 'Outros' ? null : ({ patch: { plano: top[i].k }, titulo: (l === 'R' ? 'Receitas' : 'Despesas') + ' — ' + rotuloNo(top[i].k), lado: l.toLowerCase() }));
+    });
+  };
+
+  // ---------- plano de contas ----------
+  function arvorePlano(lado){
+    const n1 = new Map();
+    F.rows.forEach(x => {
+      const v = lado === 'r' ? x.r : x.s; const k1 = x.pc.slice(0, 2), k2 = x.pc.slice(0, 5);
+      if(!v) return;
+      let a = n1.get(k1); if(!a){ a = { cod: k1, v: 0, n: 0, f: new Map() }; n1.set(k1, a); }
+      let b = a.f.get(k2); if(!b){ b = { cod: k2, v: 0, n: 0, f: new Map() }; a.f.set(k2, b); }
+      let c3 = b.f.get(x.pc); if(!c3){ c3 = { cod: x.pc, v: 0, n: 0 }; b.f.set(x.pc, c3); }
+      a.v += v; a.n++; b.v += v; b.n++; c3.v += v; c3.n++;
+    });
+    return n1;
+  }
+  const ordenaV = (m) => [...m.values()].sort((a, b) => b.v - a.v);
+
+  function renderPlano(c){
+    const tb = el('div', 'toolbar');
+    const seg = el('div', 'seg');
+    if(VER.r && !VER.s) ladoPlano = 'r'; else if(!VER.r && VER.s) ladoPlano = 's';       // o filtro Receitas/Despesas global manda
+    [['r', 'Receitas'], ['s', 'Despesas']].filter(([k]) => VER[k]).forEach(([k, t]) => { const b = el('button', ladoPlano === k ? 'ativo' : '', t); b.type = 'button'; b.addEventListener('click', () => { ladoPlano = k; noSel = ''; render(); }); seg.appendChild(b); });
+    tb.appendChild(seg);
+    const sel = el('select'); [[1, 'Gráfico: nível 1'], [2, 'Gráfico: nível 2'], [3, 'Gráfico: nível 3 (conta)']].forEach(([v, t]) => { const o = el('option', '', t); o.value = v; if(v === nivelGraf) o.selected = true; sel.appendChild(o); });
+    sel.style.cssText = 'border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:6px 9px;'; sel.addEventListener('change', () => { nivelGraf = +sel.value; render(); });
+    tb.appendChild(sel);
+    const segM = el('div', 'seg');
+    [['contas', 'Por conta (nível 3)'], ['arvore', 'Hierarquia 1 › 2 › 3']].forEach(([k, t]) => { const b = el('button', modoPlano === k ? 'ativo' : '', t); b.type = 'button'; b.addEventListener('click', () => { modoPlano = k; render(); }); segM.appendChild(b); });
+    tb.appendChild(segM);
+    const dica = el('span', 'sub', modoPlano === 'arvore' ? 'Clique no nome para abrir/fechar · 📈 evolução mensal · 👥 pagadores/fornecedores · 🔎 lançamentos · ✏️ renomear grupo' : '📈 evolução mensal · 👥 pagadores/fornecedores · 🔎 lançamentos'); tb.appendChild(dica);
+    c.appendChild(tb);
+    const g = el('div', 'grade2');
+    g.appendChild(caixaGraf((ladoPlano === 'r' ? 'Receitas' : 'Despesas') + ' — maiores contas do nível ' + nivelGraf, 'gPlanoTop', true));
+    g.appendChild(caixaGraf(noSel ? 'Evolução mensal: ' + rotuloNo(noSel) : 'Evolução mensal (escolha uma linha com 📈)', 'gPlanoMes', true));
+    c.appendChild(g);
+
+    const arv = arvorePlano(ladoPlano); const total = [...arv.values()].reduce((s, a) => s + a.v, 0);
+    const box = el('div', 'tabela-box'); const rol = el('div', 'rolagem'); const tab = el('table');
+    tab.innerHTML = '<thead><tr><th>Plano de contas</th><th>Valor</th><th>% do total</th><th>Lanç.</th><th></th></tr></thead>';
+    const tbody = el('tbody');
+    const linhaNo = (no, nivel, pai) => {
+      const tr = el('tr', 'n' + nivel + ' clicavel'); const td = el('td', 'txt');
+      const temFilhos = nivel < 3; const aberto = abertos.has(no.cod);
+      td.appendChild(el('span', 'seta', temFilhos ? (aberto ? '▾' : '▸') : ''));
+      td.appendChild(document.createTextNode(nivel === 3 ? no.cod + (nomeNo(no.cod) ? ' · ' + nomeNo(no.cod) : '') : rotuloNo(no.cod)));
+      tr.appendChild(td);
+      const tv = el('td'); tv.appendChild(el('span', ladoPlano === 's' ? 'neg' : 'pos', fmt(no.v))); tr.appendChild(tv);
+      const tp = el('td'); const pct = total ? no.v / total * 100 : 0; tp.appendChild(document.createTextNode(fmtPct(pct) + ' ')); const bar = el('span', 'barra-v' + (ladoPlano === 's' ? ' d' : '')); bar.style.width = Math.max(2, Math.min(80, pct * 0.8)) + 'px'; tp.appendChild(bar); tr.appendChild(tp);
+      tr.appendChild(el('td', '', no.n.toLocaleString('pt-BR')));
+      const ta = el('td');
+      const bt = (txt, tit, fn) => { const b = el('button', 'acao', txt); b.type = 'button'; b.title = tit; b.addEventListener('click', (e) => { e.stopPropagation(); fn(); }); return b; };
+      ta.appendChild(bt('📈', 'Evolução mensal', () => { noSel = no.cod; render(); }));
+      ta.appendChild(bt('👥', 'Principais ' + (ladoPlano === 'r' ? 'pagadores' : 'fornecedores') + ' deste grupo', () => abrirResumo({ patch: { plano: no.cod }, titulo: (ladoPlano === 'r' ? 'Receitas' : 'Despesas') + ' — ' + (nivel === 3 ? no.cod + (nomeNo(no.cod) ? ' · ' + nomeNo(no.cod) : '') : rotuloNo(no.cod)), lado: ladoPlano })));
+      ta.appendChild(bt('🔎', 'Ver lançamentos', () => irLancamentos({ plano: no.cod })));
+      if(nivel < 3) ta.appendChild(bt('✏️', 'Renomear este grupo', () => { const nv = prompt('Nome do grupo ' + no.cod + ':', nomeNo(no.cod)); if(nv === null) return; if(nv.trim()) nomesLocais[no.cod] = nv.trim(); else delete nomesLocais[no.cod]; gravarLS(K_NOMES, nomesLocais); construirArvore(); render(); }));
+      tr.appendChild(ta);
+      if(temFilhos) tr.addEventListener('click', () => { if(abertos.has(no.cod)) abertos.delete(no.cod); else abertos.add(no.cod); render(); });
+      tbody.appendChild(tr);
+      if(temFilhos && aberto) ordenaV(no.f).forEach(f => linhaNo(f, nivel + 1, no));
+    };
+    if(modoPlano === 'contas'){
+      // lista plana de contas de nível 3 (código + denominação), da maior para a menor
+      const folhas = []; arv.forEach(a => a.f.forEach(b => b.f.forEach(c3 => folhas.push(c3))));
+      folhas.sort((a, b) => b.v - a.v).forEach(c3 => { linhaNo(c3, 3); tbody.lastChild.firstChild.style.paddingLeft = '10px'; });
+    } else ordenaV(arv).forEach(a => linhaNo(a, 1));
+    tab.appendChild(tbody);
+    const tf = el('tfoot'); const trf = el('tr'); trf.appendChild(el('td', '', 'Total')); const tdv = el('td', '', fmt(total)); trf.appendChild(tdv); trf.appendChild(el('td')); trf.appendChild(el('td')); trf.appendChild(el('td')); tf.appendChild(trf); tab.appendChild(tf);
+    rol.appendChild(tab); box.appendChild(rol); c.appendChild(box);
+  }
+  renderGraficos.plano = () => {
+    const mp = somar(F.rows, x => nivelGraf === 1 ? x.pc.slice(0, 2) : nivelGraf === 2 ? x.pc.slice(0, 5) : x.pc);
+    const arr = [...mp.values()].map(o => ({ k: o.k, v: ladoPlano === 'r' ? o.r : o.s })).filter(o => o.v > 0).sort((a, b) => b.v - a.v).slice(0, 15);
+    desenhar('gPlanoTop', { type: 'bar', data: { labels: arr.map(o => { const t = rotuloNo(o.k); return t.length > 46 ? t.slice(0, 45) + '…' : t; }), datasets: [{ label: ladoPlano === 'r' ? 'Receitas' : 'Despesas', data: arr.map(o => o.v), backgroundColor: ladoPlano === 'r' ? cssVar('--pos') : cssVar('--neg') }] },
+      options: { indexAxis: 'y', scales: { x: eixoR }, plugins: { legend: { display: false }, tooltip: tooltipR } } },
+      (ds, i) => ({ patch: { plano: arr[i].k }, titulo: (ladoPlano === 'r' ? 'Receitas' : 'Despesas') + ' — ' + (nivelGraf === 3 ? arr[i].k + (nomeNo(arr[i].k) ? ' · ' + nomeNo(arr[i].k) : '') : rotuloNo(arr[i].k)), lado: ladoPlano }));
+    if(!noSel){ return; }
+    const sel = F.rows.filter(x => x.pc.startsWith(noSel)); const meses = listaMeses(F.rows), pm = somar(sel, x => x.ym);
+    desenhar('gPlanoMes', { type: 'bar', data: { labels: meses.map(nomeMes), datasets: [{ label: ladoPlano === 'r' ? 'Receitas' : 'Despesas', data: meses.map(m => (pm.get(m) || { r: 0, s: 0 })[ladoPlano]), backgroundColor: ladoPlano === 'r' ? cssVar('--pos') : cssVar('--neg') }] },
+      options: { scales: { y: eixoR }, plugins: { legend: { display: false }, tooltip: tooltipR } } },
+      (ds, i) => ({ patch: { plano: noSel, ym: meses[i] }, titulo: rotuloNo(noSel) + ' — ' + nomeMes(meses[i]), lado: ladoPlano }));
+  };
+
+  // ---------- contas ----------
+  function renderContas(c){
+    const g = el('div', 'grade2'); g.appendChild(caixaGraf('Entradas e saídas por conta', 'gContas', true)); c.appendChild(g);
+    const mp = [...somar(F.rows, x => x.ct).values()].sort((a, b) => (b.r + b.s) - (a.r + a.s));
+    const box = el('div', 'tabela-box'); const rol = el('div', 'rolagem'); const tab = el('table');
+    tab.innerHTML = '<thead><tr><th>Conta</th><th>Entradas</th><th>Saídas</th><th>Líquido</th><th>Lanç.</th><th></th></tr></thead>';
+    const tbody = el('tbody'); let T = { r: 0, s: 0, n: 0 };
+    mp.forEach(o => {
+      const tr = el('tr', 'clicavel'); tr.appendChild(el('td', 'txt', o.k)); tr.appendChild(el('td', 'pos', fmt(o.r))); tr.appendChild(el('td', 'neg', fmt(o.s)));
+      tr.appendChild(el('td', o.r - o.s < 0 ? 'neg' : 'pos', fmt(o.r - o.s))); tr.appendChild(el('td', '', o.n.toLocaleString('pt-BR'))); tr.appendChild(el('td', '', '🔎'));
+      tr.lastChild.textContent = ''; const bq = el('button', 'acao', '👥'); bq.type = 'button'; bq.title = 'Principais pagadores e fornecedores desta conta'; bq.addEventListener('click', (e) => { e.stopPropagation(); abrirResumo({ patch: { conta: o.k }, titulo: o.k, lado: 'rs' }); }); tr.lastChild.appendChild(bq);
+      tr.addEventListener('click', () => irLancamentos({ conta: o.k }));
+      tbody.appendChild(tr); T.r += o.r; T.s += o.s; T.n += o.n;
+    });
+    tab.appendChild(tbody);
+    tab.appendChild(Object.assign(el('tfoot'), {})); const trf = el('tr'); trf.appendChild(el('td', '', 'Total')); trf.appendChild(el('td', '', fmt(T.r))); trf.appendChild(el('td', '', fmt(T.s))); trf.appendChild(el('td', '', fmt(T.r - T.s))); trf.appendChild(el('td', '', T.n.toLocaleString('pt-BR'))); trf.appendChild(el('td')); tab.lastChild.appendChild(trf);
+    rol.appendChild(tab); box.appendChild(rol); c.appendChild(box);
+    c.appendChild(el('div', 'sub', 'Atenção: é a movimentação do período (entradas − saídas), não o saldo da conta. Para saldos, use os Extratos.'));
+  }
+  renderGraficos.contas = () => {
+    const arr = [...somar(F.rows, x => x.ct).values()].sort((a, b) => (b.r + b.s) - (a.r + a.s)).slice(0, 15);
+    desenhar('gContas', { type: 'bar', data: { labels: arr.map(o => o.k), datasets: [{ label: 'Entradas', data: arr.map(o => o.r), backgroundColor: cssVar('--pos'), hidden: !VER.r }, { label: 'Saídas', data: arr.map(o => o.s), backgroundColor: cssVar('--neg'), hidden: !VER.s }] },
+      options: { indexAxis: 'y', scales: { x: eixoR }, plugins: { tooltip: tooltipR, legend: legendaLados } } },
+      (ds, i) => ({ patch: { conta: arr[i].k }, titulo: (ds === 0 ? 'Entradas' : 'Saídas') + ' — ' + arr[i].k, lado: ds === 0 ? 'r' : 's' }));
+  };
+
+  // ---------- empresas ----------
+  function renderEmpresas(c){
+    const g = el('div', 'grade2'); g.appendChild(caixaGraf('Receitas, despesas e resultado por empresa', 'gEmp')); g.appendChild(caixaGraf('Evolução mensal — ' + (modoSerie() === 'r' ? 'receitas' : modoSerie() === 's' ? 'despesas' : 'resultado') + ' por empresa', 'gEmpMes')); c.appendChild(g);
+    const mp = [...somar(F.rows, x => x.emp).values()].sort((a, b) => b.r - a.r);
+    const box = el('div', 'tabela-box'); const rol = el('div', 'rolagem'); const tab = el('table');
+    tab.innerHTML = '<thead><tr><th>Empresa</th><th>Receitas</th><th>Despesas</th><th>Resultado</th><th>Margem</th><th>Lanç.</th><th></th></tr></thead>';
+    const tbody = el('tbody'); const T = { r: 0, s: 0, n: 0 };
+    mp.forEach(o => {
+      const e = empresas.get(o.k) || { nome: o.k, razao: '' }; const tr = el('tr', 'clicavel'); const td = el('td', 'txt', e.nome); td.title = e.razao; tr.appendChild(td);
+      tr.appendChild(el('td', 'pos', fmt(o.r))); tr.appendChild(el('td', 'neg', fmt(o.s))); tr.appendChild(el('td', o.r - o.s < 0 ? 'neg' : 'pos', fmt(o.r - o.s)));
+      tr.appendChild(el('td', '', o.r ? fmtPct((o.r - o.s) / o.r * 100) : '—')); tr.appendChild(el('td', '', o.n.toLocaleString('pt-BR'))); tr.appendChild(el('td', '', '🔎'));
+      tr.lastChild.textContent = ''; const bq = el('button', 'acao', '👥'); bq.type = 'button'; bq.title = 'Principais pagadores e fornecedores desta empresa'; bq.addEventListener('click', (e) => { e.stopPropagation(); abrirResumo({ patch: { emp: o.k }, titulo: e2nome(o.k), lado: 'rs' }); }); tr.lastChild.appendChild(bq);
+      tr.addEventListener('click', () => irLancamentos({ emp: o.k }));
+      tbody.appendChild(tr); T.r += o.r; T.s += o.s; T.n += o.n;
+    });
+    tab.appendChild(tbody); const tf = el('tfoot'); const trf = el('tr'); trf.appendChild(el('td', '', 'Total')); trf.appendChild(el('td', '', fmt(T.r))); trf.appendChild(el('td', '', fmt(T.s))); trf.appendChild(el('td', '', fmt(T.r - T.s))); trf.appendChild(el('td', '', T.r ? fmtPct((T.r - T.s) / T.r * 100) : '—')); trf.appendChild(el('td', '', T.n.toLocaleString('pt-BR'))); trf.appendChild(el('td')); tf.appendChild(trf); tab.appendChild(tf);
+    rol.appendChild(tab); box.appendChild(rol); c.appendChild(box);
+
+    // pivô: conta (nível 3, código + denominação) x empresa — as 30 maiores, o resto em "Outras contas"
+    const tb = el('div', 'toolbar'); tb.appendChild(el('b', '', 'Contas × empresas')); const seg = el('div', 'seg');
+    if(VER.r && !VER.s) ladoPivot = 'r'; else if(!VER.r && VER.s) ladoPivot = 's';
+    [['r', 'Receitas'], ['s', 'Despesas']].filter(([k]) => VER[k]).forEach(([k, t]) => { const b = el('button', ladoPivot === k ? 'ativo' : '', t); b.type = 'button'; b.addEventListener('click', () => { ladoPivot = k; render(); }); seg.appendChild(b); });
+    tb.appendChild(seg); c.appendChild(tb);
+    const cols = mp.map(o => o.k); const grupos = new Map();
+    F.rows.forEach(x => { const v = ladoPivot === 'r' ? x.r : x.s; if(!v) return; const k = x.pc; let g2 = grupos.get(k); if(!g2){ g2 = { k, tot: 0, por: new Map() }; grupos.set(k, g2); } g2.tot += v; g2.por.set(x.emp, (g2.por.get(x.emp) || 0) + v); });
+    const box2 = el('div', 'tabela-box'); const rol2 = el('div', 'rolagem'); const tab2 = el('table');
+    const th = el('thead'); const trh = el('tr'); trh.appendChild(el('th', 'txt', 'Conta')); cols.forEach(k => { const e = empresas.get(k) || { nome: k }; const h = el('th', '', e.nome); h.title = e.razao || ''; trh.appendChild(h); }); trh.appendChild(el('th', '', 'Total')); th.appendChild(trh); tab2.appendChild(th);
+    const tb2 = el('tbody');
+    const ordenados = [...grupos.values()].sort((a, b) => b.tot - a.tot), topo = ordenados.slice(0, 30), resto = ordenados.slice(30);
+    if(resto.length){ const o = { k: '', nome: 'Outras contas (' + resto.length + ')', tot: 0, por: new Map() }; resto.forEach(g2 => { o.tot += g2.tot; g2.por.forEach((v, e) => o.por.set(e, (o.por.get(e) || 0) + v)); }); topo.push(o); }
+    topo.forEach(g2 => { const tr = el('tr'); tr.appendChild(el('td', 'txt', g2.nome || rotuloNo(g2.k))); cols.forEach(k => tr.appendChild(el('td', '', g2.por.get(k) ? fmt(g2.por.get(k)) : '—'))); tr.appendChild(el('td', '', fmt(g2.tot))); tb2.appendChild(tr); });
+    tab2.appendChild(tb2); rol2.appendChild(tab2); box2.appendChild(rol2); c.appendChild(box2);
+  }
+  renderGraficos.empresas = () => {
+    const arr = [...somar(F.rows, x => x.emp).values()].sort((a, b) => b.r - a.r); const nome = (k) => (empresas.get(k) || {}).nome || k;
+    desenhar('gEmp', { type: 'bar', data: { labels: arr.map(o => nome(o.k)), datasets: [{ label: 'Receitas', data: arr.map(o => o.r), backgroundColor: cssVar('--pos'), hidden: !VER.r }, { label: 'Despesas', data: arr.map(o => o.s), backgroundColor: cssVar('--neg'), hidden: !VER.s }, { label: 'Resultado', data: arr.map(o => o.r - o.s), backgroundColor: cssVar('--info'), hidden: !resVisivel() }] },
+      options: { scales: { y: eixoR }, plugins: { tooltip: tooltipR, legend: legendaLados } } },
+      (ds, i) => ({ patch: { emp: arr[i].k }, titulo: ['Receitas', 'Despesas', 'Resultado'][ds] + ' — ' + nome(arr[i].k), lado: ['r', 's', 'rs'][ds] }));
+    const meses = listaMeses(F.rows); const por = new Map();
+    const modo = modoSerie(); const valor = (x) => modo === 'r' ? x.r : modo === 's' ? x.s : x.r - x.s;     // resultado, só receitas ou só despesas
+    F.rows.forEach(x => { let m = por.get(x.emp); if(!m){ m = new Map(); por.set(x.emp, m); } m.set(x.ym, (m.get(x.ym) || 0) + valor(x)); });
+    desenhar('gEmpMes', { type: 'line', data: { labels: meses.map(nomeMes), datasets: arr.map((o, i) => ({ label: nome(o.k), data: meses.map(m => (por.get(o.k) || new Map()).get(m) || 0), borderColor: PALETA[i % PALETA.length], backgroundColor: PALETA[i % PALETA.length], tension: .25, pointRadius: 2 })) },
+      options: { scales: { y: eixoR }, plugins: { tooltip: tooltipR } } },
+      (ds, i) => ({ patch: { emp: arr[ds].k, ym: meses[i] }, titulo: (modo === 'r' ? 'Receitas' : modo === 's' ? 'Despesas' : 'Resultado') + ' — ' + nome(arr[ds].k) + ' — ' + nomeMes(meses[i]), lado: modo === 'r' || modo === 's' ? modo : 'rs' }));
+  };
+
+  // ---------- lançamentos ----------
+  function linhasDrill(){
+    const termo = semAcento(drill.busca);
+    return F.rows.filter(x => (!drill.plano || x.pc.startsWith(drill.plano)) && (!drill.conta || x.ct === drill.conta) && (!drill.emp || x.emp === drill.emp)
+      && (!drill.ym || x.ym === drill.ym) && (!drill.lado || (drill.lado === 'r' ? x.r > 0 : x.s > 0))
+      && (!termo || semAcento(x.h + ' ' + x.cl + ' ' + nomeNo(x.pc) + ' ' + x.pc + ' ' + x.ct).includes(termo))).sort((a, b) => (a.d < b.d ? 1 : a.d > b.d ? -1 : 0));
+  }
+  function renderLanc(c){
+    const tb = el('div', 'toolbar');
+    const busca = el('input', 'busca'); busca.type = 'search'; busca.placeholder = 'Buscar no histórico, cliente, plano ou conta…'; busca.value = drill.busca;
+    let t; busca.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { drill.busca = busca.value; limiteLanc = 300; renderTabelaLanc(); }, 250); }); tb.appendChild(busca);
+    const chip = (txt, limpar) => { const s = el('span', 'chip-f', txt); const b = el('button', '', '×'); b.type = 'button'; b.addEventListener('click', () => { limpar(); render(); }); s.appendChild(b); tb.appendChild(s); };
+    if(drill.plano) chip('Plano: ' + rotuloNo(drill.plano.length === 8 ? drill.plano : drill.plano), () => { drill.plano = ''; });
+    if(drill.conta) chip('Conta: ' + drill.conta, () => { drill.conta = ''; });
+    if(drill.emp) chip('Empresa: ' + ((empresas.get(drill.emp) || {}).nome || drill.emp), () => { drill.emp = ''; });
+    if(drill.ym) chip('Mês: ' + nomeMes(drill.ym), () => { drill.ym = ''; });
+    if(drill.lado) chip(drill.lado === 'r' ? 'Só receitas' : 'Só despesas', () => { drill.lado = ''; });
+    const bc = el('button', 'btn sec', '⬇ CSV'); bc.type = 'button'; bc.addEventListener('click', () => exportar('csv')); tb.appendChild(bc);
+    const bx = el('button', 'btn sec', '⬇ Excel'); bx.type = 'button'; bx.addEventListener('click', () => exportar('xlsx')); tb.appendChild(bx);
+    c.appendChild(tb);
+    const box = el('div', 'tabela-box'); box.id = 'boxLanc'; c.appendChild(box); c.appendChild(Object.assign(el('div', 'mais'), { id: 'maisLanc' }));
+    renderTabelaLanc();
+  }
+  function renderTabelaLanc(){
+    const L = linhasDrill(); const box = $('boxLanc'); if(!box) return; box.replaceChildren();
+    const rol = el('div', 'rolagem'); const tab = el('table');
+    tab.innerHTML = '<thead><tr><th>Data</th><th class="txt">Empresa</th><th class="txt">Conta</th><th class="txt">Plano</th><th class="txt">Histórico</th><th>Receita</th><th>Despesa</th></tr></thead>';
+    const tbody = el('tbody');
+    L.slice(0, limiteLanc).forEach(x => {
+      const tr = el('tr'); tr.appendChild(el('td', '', fmtDia(x.d))); tr.appendChild(el('td', 'txt', (empresas.get(x.emp) || {}).nome || x.emp)); tr.appendChild(el('td', 'txt', x.ct));
+      tr.appendChild(el('td', 'txt', x.pc + (nomeNo(x.pc) ? ' · ' + nomeNo(x.pc) : ''))); tr.appendChild(el('td', 'hist', x.h));
+      tr.appendChild(el('td', 'pos', x.r ? fmt(x.r) : '')); tr.appendChild(el('td', 'neg', x.s ? fmt(x.s) : '')); tbody.appendChild(tr);
+    });
+    tab.appendChild(tbody); const T = totais(L); const tf = el('tfoot'); const trf = el('tr');
+    const t1 = el('td', '', L.length.toLocaleString('pt-BR') + ' lançamento(s)'); t1.colSpan = 5; trf.appendChild(t1); trf.appendChild(el('td', '', fmt(T.r))); trf.appendChild(el('td', '', fmt(T.s))); tf.appendChild(trf); tab.appendChild(tf);
+    rol.appendChild(tab); box.appendChild(rol);
+    const mais = $('maisLanc'); mais.replaceChildren();
+    if(L.length > limiteLanc){ const b = el('button', 'btn sec', 'Mostrar mais (' + Math.min(300, L.length - limiteLanc) + ')'); b.type = 'button'; b.addEventListener('click', () => { limiteLanc += 300; renderTabelaLanc(); }); mais.appendChild(b); }
+  }
+
+  // ===================== exportação =====================
+  const baixarBlob = (blob, nome) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nome; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); };
+  let libXlsx = null; const prepararXlsx = () => libXlsx || (libXlsx = window.XLSX ? Promise.resolve() : carregarScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'));
+  function linhasExport(){
+    return linhasDrill().map(x => { const e = empresas.get(x.emp) || { nome: x.emp }; return { Data: fmtDia(x.d), Empresa: e.nome, Conta: x.ct, Tipo: x.tp, 'Cód. plano': x.pc, 'Nome do plano': nomeNo(x.pc), 'Histórico': x.h, Receita: x.r, Despesa: x.s }; });
+  }
+  async function exportar(formato){
+    const dados = linhasExport(); if(!dados.length){ alert('Não há lançamentos para exportar com os filtros atuais.'); return; }
+    const base = 'movimentacao_' + (F.de || 'inicio') + '_a_' + (F.ate || 'hoje');
+    if(formato === 'csv'){
+      const cab = Object.keys(dados[0]); const esc = (v) => { v = String(v == null ? '' : v); return /[";\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+      const linhasTxt = [cab.join(';')].concat(dados.map(o => cab.map(k => (typeof o[k] === 'number' ? String(o[k]).replace('.', ',') : esc(o[k]))).join(';')));
+      baixarBlob(new Blob(['﻿' + linhasTxt.join('\r\n')], { type: 'text/csv;charset=utf-8' }), base + '.csv');
+    } else {
+      try { await prepararXlsx(); const X = window.XLSX; const wb = X.utils.book_new(); const ws = X.utils.json_to_sheet(dados); ws['!cols'] = [{ wch: 11 }, { wch: 22 }, { wch: 22 }, { wch: 5 }, { wch: 10 }, { wch: 34 }, { wch: 60 }, { wch: 14 }, { wch: 14 }]; X.utils.book_append_sheet(wb, ws, 'Movimentação'); X.writeFile(wb, base + '.xlsx'); }
+      catch(e){ alert('Não consegui gerar o Excel agora (precisa de internet). Use o CSV.'); }
+    }
+  }
+
+  // ===================== carga =====================
+  function aviso(tipo, texto){ const a = $('aviso'); if(!texto){ a.hidden = true; return; } a.className = 'aviso ' + (tipo || ''); a.textContent = texto; a.hidden = false; }
+
+  function aplicar(textos, origem){
+    montar(textos); origemInfo = origem; statusColeta = textos[ARQ.status] || null;
+    carregarFiltrosSalvos(); construirFiltros();
+    $('inicio').replaceChildren(); $('app').hidden = false;
+    $('rodape').textContent = origem; render(); preencherDados();
+  }
+  function preencherDados(){
+    const q = qualidade, ul = $('dadosLista'); ul.replaceChildren();
+    const li = (t) => ul.appendChild(el('li', '', t));
+    li(q.total.toLocaleString('pt-BR') + ' linhas no arquivo, de ' + (q.de ? fmtDia(q.de) : '—') + ' a ' + (q.ate ? fmtDia(q.ate) : '—') + '; ' + linhas.length.toLocaleString('pt-BR') + ' usadas.');
+    if(q.dataFutura) li(q.dataFutura + ' lançamento(s) com data muito à frente (mais de 90 dias) ficaram de fora — provável erro de digitação da data no Sicon.');
+    if(q.dataInvalida) li(q.dataInvalida + ' linha(s) com data ilegível foram ignoradas.');
+    if(q.semPlano) li(q.semPlano + ' lançamento(s) sem plano de contas (aparecem como "Sem plano de contas").');
+    if(q.semEmpresa) li(q.semEmpresa + ' lançamento(s) sem empresa (aparecem como "Sem empresa").');
+    li('Receita e despesa vêm das colunas RECEITA e DESPESA. Contas de passagem (PIX e cartões de crédito) já começam desmarcadas; a escolha fica salva neste aparelho.');
+    li('Nomes dos grupos (níveis 1 e 2) não vêm no arquivo: use o ✏️ na aba Plano de contas ou publique um plano_contas.csv (colunas CODIGO e NOME) na pasta do Drive.');
+  }
+
+  async function carregar(){
+    if(!cfg.url || !cfg.token){ if(!linhas.length) mostrarInicio(); return; }
+    const btn = $('btnAtualizar'); btn.classList.add('girando'); btn.disabled = true;
+    try {
+      if(!bd) bd = await abrirBd();
+      if(!linhas.length) $('inicio').replaceChildren(el('div', 'vazio', 'Carregando…'));
+      const lista = await chamar('&acao=listar');
+      const quando = {}; lista.arquivos.forEach(a => { quando[a.arquivo] = a.atualizado; });
+      if(!quando[ARQ.mov]) throw new Error('O arquivo ' + ARQ.mov + ' não está na pasta do Drive. Confira se o coletor está gerando esse CSV.');
+      const nomes = [ARQ.mov, ARQ.plano, ARQ.status].filter(n => quando[n]);
+      const textos = {}, baixar = [];
+      for(const n of nomes){ const c = await cacheGet(cacheUn + n); if(c && c.atualizado === quando[n]) textos[n] = c.texto; else baixar.push(n); }
+      if(baixar.length){
+        $('rodape').textContent = 'Baixando ' + baixar.join(', ') + '… (o arquivo de movimentação é grande, pode levar alguns segundos)';
+        for(const n of baixar){                                  // um por vez: respostas grandes
+          const r = await chamar('&acao=ler&arquivos=' + encodeURIComponent(n)); const f = r.arquivos[n];
+          if(f && f.texto != null){ textos[n] = f.texto; await cachePut(cacheUn + n, { atualizado: quando[n], texto: f.texto }); }
+        }
+      }
+      if(!textos[ARQ.mov]) throw new Error('Não consegui ler ' + ARQ.mov + '.');
+      aplicar(textos, 'Dados do Drive — movimentação atualizada em ' + new Date(quando[ARQ.mov]).toLocaleString('pt-BR'));
+      avisoColeta(textos[ARQ.status]);
+    } catch(err){
+      console.error(err);
+      aviso('erro', (linhas.length ? 'Não consegui atualizar agora (mostrando os últimos dados): ' : '') + err.message);
+      if(!linhas.length) $('inicio').replaceChildren();
+    } finally { btn.classList.remove('girando'); btn.disabled = false; }
+  }
+  function avisoColeta(statusTexto){
+    let msg = '', tipo = 'alerta';
+    try { if(statusTexto){ const s = JSON.parse(statusTexto), q = new Date(s.executado_em), h = (Date.now() - q.getTime()) / 3600000;
+      if(s.ok === false){ msg = 'A última coleta (' + q.toLocaleString('pt-BR') + ') teve erro em algum arquivo — os dados podem estar desatualizados.'; tipo = 'erro'; }
+      else if(h > 3) msg = 'A coleta no computador da empresa não roda desde ' + q.toLocaleString('pt-BR') + ' — os dados podem estar desatualizados.'; } } catch(e){}
+    aviso(tipo, msg);
+  }
+  function mostrarInicio(){
+    const v = el('div', 'vazio'); v.appendChild(el('div', '', 'Nenhum dado carregado.'));
+    const p = el('div', ''); p.appendChild(document.createTextNode('Configure o endereço do script e o token no ')); const a = el('a', '', 'painel de fechamentos (⚙)'); a.href = 'fechamento-caixas.html'; p.appendChild(a);
+    p.appendChild(document.createTextNode(' — vale aqui também — ou abra o ' + ARQ.mov + ' (📂).')); v.appendChild(p); $('inicio').replaceChildren(v); $('app').hidden = true;
+  }
+
+  $('arquivosCsv').addEventListener('change', async (ev) => {
+    const arqs = [...ev.target.files]; if(!arqs.length) return;
+    const textos = {};
+    for(const f of arqs){ const nome = f.name.toLowerCase(); const texto = await f.text(); if(nome.includes('plano')) textos[ARQ.plano] = texto; else if(nome.includes('status')) textos[ARQ.status] = texto; else textos[ARQ.mov] = texto; }
+    if(!textos[ARQ.mov]){ aviso('erro', 'Escolha também o arquivo ' + ARQ.mov + '.'); ev.target.value = ''; return; }
+    try { aplicar(textos, 'Arquivo aberto neste computador: ' + arqs.map(f => f.name).join(', ')); aviso('', ''); } catch(err){ aviso('erro', err.message); }
+    ev.target.value = '';
+  });
+
+  // ===================== eventos de interface =====================
+  let tRender; const agendar = () => { clearTimeout(tRender); tRender = setTimeout(render, 60); };
+  $('btnAtualizar').addEventListener('click', carregar);
+  $('ver').addEventListener('click', (e) => { const b = e.target.closest('button[data-ver]'); if(!b) return; VER[b.dataset.ver] = !VER[b.dataset.ver]; render(); });
+  $('abas').addEventListener('click', (e) => { const b = e.target.closest('.aba'); if(!b) return; abaAtual = b.dataset.aba; if(abaAtual === 'lanc') limiteLanc = 300; render(); });
+  $('fPeriodo').addEventListener('change', () => { FIL.periodo = $('fPeriodo').value; if(FIL.periodo === 'custom'){ [FIL.de, FIL.ate] = [$('fDe').value, $('fAte').value]; } agendar(); });
+  ['fDe', 'fAte'].forEach(id => $(id).addEventListener('change', () => { FIL.periodo = 'custom'; FIL.de = $('fDe').value; FIL.ate = $('fAte').value; agendar(); }));
+  $('fOcultarT').addEventListener('change', () => { FIL.ocultarT = $('fOcultarT').checked; salvarFiltros(); agendar(); });
+  $('buscaPlano').addEventListener('input', () => construirArvore());
+  $('btnLimpar').addEventListener('click', () => { filtrosPadrao(); salvarFiltros(); construirFiltros(); zerarDrill(); render(); });
+  $('resumoFechar').addEventListener('click', fecharResumo); $('resumoSair').addEventListener('click', fecharResumo);
+  $('popupResumo').addEventListener('click', (e) => { if(e.target === $('popupResumo')) fecharResumo(); });
+  document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && !$('popupResumo').hidden) fecharResumo(); });
+  $('resumoVer').addEventListener('click', () => { const d = descAberta; if(!d) return; fecharResumo(); irLancamentos(Object.assign({}, d.patch, { lado: d.lado === 'rs' ? '' : d.lado })); });
+  document.addEventListener('change', (e) => {
+    const t = e.target; if(!(t instanceof HTMLInputElement)) return;
+    if(t.dataset.emp !== undefined){ if(t.checked) FIL.empOff.delete(t.dataset.emp); else FIL.empOff.add(t.dataset.emp); }
+    else if(t.dataset.cta !== undefined){ if(t.checked) FIL.ctaOff.delete(t.dataset.cta); else FIL.ctaOff.add(t.dataset.cta); salvarFiltros(); }
+    else if(t.dataset.plaGrupo !== undefined){ t.dataset.plaGrupo.split('|').forEach(c => { if(t.checked) FIL.plaOff.delete(c); else FIL.plaOff.add(c); }); salvarFiltros(); construirArvore(); }
+    else return;
+    atualizarResumosFiltro(); agendar();
+  });
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-f]'); if(!b) return; const f = b.dataset.f;
+    if(f === 'emp-todas') FIL.empOff = new Set(); if(f === 'emp-nenhuma') FIL.empOff = new Set(empresas.keys());
+    if(f === 'cta-todas') FIL.ctaOff = new Set(); if(f === 'cta-nenhuma') FIL.ctaOff = new Set(contasInfo.keys());
+    if(f === 'cta-padrao') FIL.ctaOff = new Set([...contasInfo.keys()].filter(ehPassagem));
+    if(f === 'pla-todas') FIL.plaOff = new Set(); if(f === 'pla-nenhuma') FIL.plaOff = new Set(planos.keys());
+    salvarFiltros(); construirFiltros(); agendar();
+  });
+
+  // expõe só para teste/diagnóstico
+  window.__pf = { aplicar, get F(){ return F; }, FIL, render, get linhas(){ return linhas; }, get charts(){ return instancias; }, abrirResumo, resumir, nomeDoHistorico, contraparte };
+
+  // acesso: login do Servir + credenciais da unidade (servir-acesso.js); o link antigo com token segue como modo reserva
+  let cacheUn = '';        // o cache local é separado por unidade (senão trocar de unidade misturaria os arquivos)
+  (async function iniciar(){
+    bd = await abrirBd();
+    ServirAcesso.preparar({
+      modulo: 'painel_financeiro',
+      legado: () => !!(cfg.url && cfg.token),
+      aoLegado: () => carregar(),
+      aoPronto: (cred, ctx) => {
+        cfg.url = cred.url; cfg.token = cred.token; cacheUn = ctx.unidade.id + ':';
+        if(cred.arquivos.mov) ARQ.mov = cred.arquivos.mov; if(cred.arquivos.plano) ARQ.plano = cred.arquivos.plano;
+        carregar();
+      }
+    });
+  })();
+})();
+</script>
+</body>
+</html>

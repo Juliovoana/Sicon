@@ -204,6 +204,7 @@
   <div class="rodape" id="rodape"></div>
 </div>
 
+<script src="servir-acesso.js"></script>
 <script>
 (function(){
   'use strict';
@@ -270,7 +271,8 @@
   const PADRAO = { url: '', token: '', arquivo: 'caixas_fechados.csv', emDia: 2, atencao: 7, intervalo: 15 };
   let cfg = Object.assign({}, PADRAO);
   try { Object.assign(cfg, JSON.parse(localStorage.getItem(CHAVE) || '{}')); } catch(e){ /* sem armazenamento: vale só nesta visita */ }
-  const salvarCfg = () => { try { localStorage.setItem(CHAVE, JSON.stringify(cfg)); } catch(e){} };
+  let modoServir = false;      // true = URL/token vieram do login do Servir (nunca são gravados neste aparelho)
+  const salvarCfg = () => { try { localStorage.setItem(CHAVE, JSON.stringify(modoServir ? Object.assign({}, cfg, { url: '', token: '' }) : cfg)); } catch(e){} };
 
   // Link de acesso: ...fechamento-caixas.html#u=<endereço do script>&t=<token>
   // O que vem depois do # NÃO é enviado a nenhum servidor; a página guarda no aparelho e limpa o endereço.
@@ -523,7 +525,20 @@
 
   // ===================== início =====================
   preencherCfg(); desenhar(); agendar();
-  if(cfg.url && cfg.token) atualizar(false);
+  // acesso: login do Servir + credenciais da unidade (servir-acesso.js); o link antigo com token segue como modo reserva
+  ServirAcesso.preparar({
+    modulo: 'fechamento_caixas',
+    legado: () => !!(cfg.url && cfg.token),
+    aoLegado: () => atualizar(false),
+    aoPronto: (cred) => {
+      modoServir = true; cfg.url = cred.url; cfg.token = cred.token;
+      if(cred.arquivos.fechados) cfg.arquivo = cred.arquivos.fechados;
+      // endereço e token agora são da unidade (tela “Acesso” do principal): somem daqui, junto com o link que carregava o token
+      ['cfgUrl', 'cfgToken'].forEach(id => { const c = $(id).closest('.campo'); if(c) c.hidden = true; });
+      $('btnCopiarLink').hidden = true; $('btnEsquecer').hidden = true;
+      preencherCfg(); agendar(); atualizar(false);
+    }
+  });
   // gancho pra testes/uso futuro (extrato por conta): expõe só funções, nunca o token
   window.fechamentoCaixas = { receber, desenhar };
 })();
