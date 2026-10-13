@@ -171,6 +171,7 @@
       </div>
       <div class="paineis">
         <details class="painel" id="pEmp"><summary>Empresas <span class="conta-resumo" id="rEmp"></span></summary><div class="corpo"><div class="ferramentas"><button class="btn sec mini" data-f="emp-todas" type="button">Marcar todas</button><button class="btn sec mini" data-f="emp-nenhuma" type="button">Limpar</button></div><div class="lista-chk" id="listaEmp"></div></div></details>
+        <details class="painel" id="pSet" hidden><summary>Setores <span class="conta-resumo" id="rSet"></span></summary><div class="corpo"><div class="ferramentas"><button class="btn sec mini" data-f="set-todas" type="button">Marcar todos</button><button class="btn sec mini" data-f="set-nenhuma" type="button">Limpar</button></div><div class="lista-chk" id="listaSet"></div></div></details>
         <details class="painel" id="pCta"><summary>Contas <span class="conta-resumo" id="rCta"></span></summary><div class="corpo"><div class="ferramentas"><button class="btn sec mini" data-f="cta-padrao" type="button">Padrão (sem passagem)</button><button class="btn sec mini" data-f="cta-todas" type="button">Marcar todas</button><button class="btn sec mini" data-f="cta-nenhuma" type="button">Limpar</button></div><div class="lista-chk" id="listaCta"></div></div></details>
         <details class="painel" id="pPla"><summary>Plano de contas <span class="conta-resumo" id="rPla"></span></summary><div class="corpo"><input type="search" class="busca" id="buscaPlano" placeholder="Buscar conta ou grupo…" style="margin-bottom:8px"><div class="ferramentas"><button class="btn sec mini" data-f="pla-todas" type="button">Marcar todas</button><button class="btn sec mini" data-f="pla-nenhuma" type="button">Limpar</button></div><div class="arvore" id="arvorePlano"></div></div></details>
       </div>
@@ -184,6 +185,7 @@
       <button class="aba" data-aba="plano" type="button">Plano de contas</button>
       <button class="aba" data-aba="contas" type="button">Contas</button>
       <button class="aba" data-aba="empresas" type="button">Empresas</button>
+      <button class="aba" data-aba="setores" id="abaSetores" type="button" hidden>Setores</button>
       <button class="aba" data-aba="lanc" type="button">Lançamentos</button>
       <div class="ver" id="ver" title="Vale para todos os gráficos e indicadores (também dá para clicar na legenda de um gráfico)">
         <span class="sub">Mostrar:</span>
@@ -310,6 +312,8 @@
   let planos = new Map();          // cod3 -> {cod, n1, n2, nomeDados, n}
   let nomesArquivo = new Map();    // nomes vindos do plano_contas.csv (qualquer nível)
   let qualidade = {};
+  let setores = new Map();         // cod -> {cod, nome, n, rec, desp}  (coluna SETOR / DESCRICAO_SETOR, opcional)
+  let temSetor = false;
   let statusColeta = null, origemInfo = '';
   let F = null;                    // resultado do filtro atual
 
@@ -332,12 +336,12 @@
     const ix = (n) => t.cab.indexOf(n);
     const I = { tipo: ix('tipo'), data: ix('data'), cod: ix('cod_conta'), conta: ix('nome_conta_caixa'), contra: ix('cod_cta_transferencia'),
       rec: ix('receita'), desp: ix('despesa'), hist: ix('historico'), plano: ix('codcta'), nplano: ix('nomecta'), cli: ix('cliente'),
-      emp: ix('empresa'), razao: ix('empresaa_razao_social') >= 0 ? ix('empresaa_razao_social') : ix('empresa_razao_social') };
+      setor: ix('setor'), dset: ix('descricao_setor'), emp: ix('empresa'), razao: ix('empresaa_razao_social') >= 0 ? ix('empresaa_razao_social') : ix('empresa_razao_social') };
     const falta = ['tipo', 'data', 'conta', 'rec', 'desp', 'plano', 'emp'].filter(k => I[k] < 0);
     if(falta.length) throw new Error('O arquivo de movimentação precisa ter as colunas TIPO, DATA, NOME_CONTA_CAIXA, RECEITA, DESPESA, CODCTA e EMPRESA (faltando: ' + falta.join(', ') + ').');
 
-    const L = [], ci = new Map(), cpc = new Map(), em = new Map(), pl = new Map();
-    const q = { total: t.linhas.length, dataInvalida: 0, dataFutura: 0, semPlano: 0, semEmpresa: 0, semConta: 0, ate: '', de: '' };
+    const L = [], ci = new Map(), cpc = new Map(), em = new Map(), pl = new Map(), sts = new Map(); const comSetor = I.setor >= 0;
+    const q = { total: t.linhas.length, dataInvalida: 0, dataFutura: 0, semPlano: 0, semEmpresa: 0, semConta: 0, semSetor: 0, ate: '', de: '' };
     const limite = somaDias(hoje(), 90);
     for(const l of t.linhas){
       const d = isoData(l[I.data]);
@@ -350,12 +354,14 @@
       let ecod = String(l[I.emp] || '').trim(); const razao = I.razao >= 0 ? String(l[I.razao] || '').trim() : '';
       if(!ecod || ecod === '0'){ ecod = '0'; q.semEmpresa++; }
       const r = num(l[I.rec]), s = num(l[I.desp]);
-      const row = { d, ym: d.slice(0, 7), tp, ct: conta, cx: I.contra >= 0 ? String(l[I.contra] || '').trim() : '', r, s,
+      let scod = comSetor ? String(l[I.setor] || '').trim() : ''; if(comSetor && (!scod || scod === '0')){ scod = '0'; q.semSetor++; }
+      const row = { st: scod, d, ym: d.slice(0, 7), tp, ct: conta, cx: I.contra >= 0 ? String(l[I.contra] || '').trim() : '', r, s,
         h: I.hist >= 0 ? l[I.hist] : '', pc, emp: ecod, cl: I.cli >= 0 ? String(l[I.cli] || '').trim() : '' };
       L.push(row);
       if(!q.de || d < q.de) q.de = d; if(!q.ate || d > q.ate) q.ate = d;
       let c = ci.get(conta); if(!c){ c = { nome: conta, cod: cc, n: 0, rec: 0, desp: 0 }; ci.set(conta, c); }
       c.n++; c.rec += r; c.desp += s; if(cc && cc !== '0' && conta !== '(sem conta)') cpc.set(cc, conta);
+      if(comSetor){ let o = sts.get(scod); if(!o){ o = { cod: scod, nome: '', n: 0, rec: 0, desp: 0 }; sts.set(scod, o); } o.n++; o.rec += r; o.desp += s; const dn = I.dset >= 0 ? String(l[I.dset] || '').trim() : ''; if(dn && !o.nome) o.nome = dn; }
       let e = em.get(ecod); if(!e){ e = { cod: ecod, razao, nome: '', n: 0, rec: 0, desp: 0 }; em.set(ecod, e); }
       if(razao && !e.razao) e.razao = razao; e.n++; e.rec += r; e.desp += s;
       let p = pl.get(pc);
@@ -373,6 +379,8 @@
       const iN = tp.cab.findIndex(h => ['nome', 'descricao', 'nomecta', 'nome_conta'].includes(h));
       if(iC >= 0 && iN >= 0) tp.linhas.forEach(l => { const c = String(l[iC] || '').trim().replace(/\.+$/, ''); if(c) nomesArquivo.set(c, String(l[iN] || '').trim()); });
     }
+    sts.forEach(o => { if(!o.nome) o.nome = o.cod === '0' ? 'Sem setor' : 'Setor ' + o.cod; });
+    setores = sts; temSetor = comSetor;
     linhas = L; contasInfo = ci; contaPorCod = cpc; empresas = em; planos = pl; qualidade = q;
   }
 
@@ -387,9 +395,9 @@
   const rotuloNo = (cod) => { const n = nomeNo(cod); return n ? cod + ' · ' + n : cod; };
 
   // ===================== filtros =====================
-  const FIL = { periodo: 'tudo', de: '', ate: '', empOff: new Set(), ctaOff: new Set(), plaOff: new Set(), ocultarT: true };
+  const FIL = { periodo: '3m', de: '', ate: '', empOff: new Set(), setOff: new Set(), ctaOff: new Set(), plaOff: new Set(), ocultarT: true };
   function filtrosPadrao(){
-    FIL.periodo = 'tudo'; FIL.de = ''; FIL.ate = ''; FIL.empOff = new Set(); FIL.ocultarT = true; FIL.plaOff = new Set();
+    FIL.periodo = '3m'; FIL.de = '';     // padrão: últimos 3 meses (mês atual + 2 anteriores); "Tudo" é só escolher no período FIL.ate = ''; FIL.empOff = new Set(); FIL.setOff = new Set(); FIL.ocultarT = true; FIL.plaOff = new Set();
     FIL.ctaOff = new Set([...contasInfo.keys()].filter(ehPassagem));
   }
   function carregarFiltrosSalvos(){
@@ -426,6 +434,7 @@
     for(const x of linhas){
       if(de && x.d < de) continue; if(ate && x.d > ate) continue;
       if(FIL.empOff.has(x.emp)) continue;
+      if(temSetor && FIL.setOff.has(x.st)) continue;
       if(FIL.ctaOff.has(x.ct)) continue;
       if(FIL.plaOff.has(x.pc)) continue;
       if(FIL.ocultarT && x.tp === 'T' && x.cx && x.cx !== '0'){
@@ -444,6 +453,13 @@
     [...empresas.values()].sort((a, b) => (b.rec + b.desp) - (a.rec + a.desp)).forEach(e => {
       const lb = el('label'); const c = el('input'); c.type = 'checkbox'; c.checked = !FIL.empOff.has(e.cod); c.dataset.emp = e.cod;
       lb.appendChild(c); lb.appendChild(document.createTextNode(e.nome)); const n = el('span', 'n', e.n.toLocaleString('pt-BR') + ' lanç.'); n.title = e.razao; lb.appendChild(n); le.appendChild(lb);
+    });
+    // setores (só quando o arquivo traz SETOR)
+    $('pSet').hidden = !temSetor; $('abaSetores').hidden = !temSetor;
+    const ls = $('listaSet'); ls.replaceChildren();
+    if(temSetor) [...setores.values()].sort((a, b) => (b.rec + b.desp) - (a.rec + a.desp)).forEach(o => {
+      const lb = el('label'); const c = el('input'); c.type = 'checkbox'; c.checked = !FIL.setOff.has(o.cod); c.dataset.set = o.cod;
+      lb.appendChild(c); lb.appendChild(document.createTextNode(o.nome)); lb.appendChild(el('span', 'n', o.n.toLocaleString('pt-BR') + ' lanç.')); ls.appendChild(lb);
     });
     // contas
     const lc = $('listaCta'); lc.replaceChildren();
@@ -488,6 +504,7 @@
 
   function atualizarResumosFiltro(){
     $('rEmp').textContent = (empresas.size - FIL.empOff.size) + ' de ' + empresas.size;
+    if(temSetor) $('rSet').textContent = (setores.size - FIL.setOff.size) + ' de ' + setores.size;
     const pass = [...FIL.ctaOff].filter(ehPassagem).length;
     $('rCta').textContent = (contasInfo.size - FIL.ctaOff.size) + ' de ' + contasInfo.size + (pass ? ' · ' + pass + ' de passagem fora' : '');
     $('rPla').textContent = (planos.size - FIL.plaOff.size) + ' de ' + planos.size;
@@ -547,7 +564,7 @@
   }
 
   const cacheResumo = new Map();
-  const filtrarBarra = (patch) => F.rows.filter(x => (!patch.plano || x.pc.startsWith(patch.plano)) && (!patch.conta || x.ct === patch.conta) && (!patch.emp || x.emp === patch.emp) && (!patch.ym || x.ym === patch.ym) && (!patch.lado || (patch.lado === 'r' ? x.r > 0 : x.s > 0)));
+  const filtrarBarra = (patch) => F.rows.filter(x => (!patch.plano || x.pc.startsWith(patch.plano)) && (!patch.conta || x.ct === patch.conta) && (!patch.emp || x.emp === patch.emp) && (!patch.st || x.st === patch.st) && (!patch.ym || x.ym === patch.ym) && (!patch.lado || (patch.lado === 'r' ? x.r > 0 : x.s > 0)));
   function resumir(d){
     const chave = JSON.stringify(d.patch) + '|' + d.lado; if(cacheResumo.has(chave)) return cacheResumo.get(chave);
     const rows = filtrarBarra(Object.assign({}, d.patch, { lado: d.lado === 'rs' ? '' : d.lado })); const pag = new Map(), forn = new Map(), pl = new Map(); let tr = 0, ts = 0;
@@ -624,9 +641,10 @@
 
   // ===================== abas =====================
   let abaAtual = 'geral';
-  const drill = { plano: '', conta: '', emp: '', busca: '', ym: '', lado: '' };
+  const drill = { plano: '', conta: '', emp: '', st: '', busca: '', ym: '', lado: '' };
+  const nomeSetor = (cod) => (setores.get(cod) || {}).nome || cod;
   const e2nome = (k) => (empresas.get(k) || {}).nome || k;
-  const zerarDrill = () => { drill.plano = drill.conta = drill.emp = drill.busca = drill.ym = drill.lado = ''; };
+  const zerarDrill = () => { drill.plano = drill.conta = drill.emp = drill.st = drill.busca = drill.ym = drill.lado = ''; };
   function irLancamentos(p){ zerarDrill(); Object.assign(drill, p); limiteLanc = 300; abaAtual = 'lanc'; render(); window.scrollTo(0, 0); }
   let modoPlano = 'contas', ladoPlano = 'r', nivelGraf = 3, noSel = '', abertos = new Set(['01', '02']), ladoPivot = 's', limiteLanc = 300;
 
@@ -644,7 +662,7 @@
     if(!F.rows.length){ c.appendChild(el('div', 'vazio', 'Nenhum lançamento com os filtros atuais.')); return; }
     if(abaAtual !== 'lanc' && !VER.r && !VER.s){ c.appendChild(el('div', 'vazio', 'Receitas e Despesas estão desligadas — ligue pelo menos uma em "Mostrar".')); return; }
     if(abaAtual !== 'lanc') c.appendChild(el('div', 'dica-clique', '💡 Passe o mouse numa barra para ver os principais pagadores e fornecedores dela; clique para abrir o resumo e conferir os maiores lançamentos.'));
-    ({ geral: renderGeral, plano: renderPlano, contas: renderContas, empresas: renderEmpresas, lanc: renderLanc })[abaAtual](c);
+    ({ geral: renderGeral, plano: renderPlano, contas: renderContas, empresas: renderEmpresas, setores: renderSetores, lanc: renderLanc })[abaAtual](c);
     prepararGraficos().then(() => { (renderGraficos[abaAtual] || (() => {}))(); }).catch(() => {
       document.querySelectorAll('.graf .area').forEach(a => { a.replaceChildren(el('div', 'sub', 'Não consegui carregar a biblioteca de gráficos (precisa de internet). As tabelas continuam funcionando.')); });
     });
@@ -679,6 +697,7 @@
     const g = el('div', 'grade2');
     g.appendChild(caixaGraf('Receitas, despesas e resultado por mês', 'gMensal', true));
     g.appendChild(caixaGraf(TIT_MODO[modoSerie()] + ' por empresa', 'gEmpRes'));
+    if(temSetor) g.appendChild(caixaGraf(TIT_MODO[modoSerie()] + ' por setor', 'gSetRes'));
     if(VER.r) g.appendChild(caixaGraf('Receitas por conta (nível 3)', 'gDonutR'));
     if(VER.s) g.appendChild(caixaGraf('Despesas por conta (nível 3)', 'gDonutS'));
     c.appendChild(g);
@@ -689,7 +708,21 @@
     if(resto > 0) top.push({ k: 'Outros', v: resto });
     return top;
   }
+  // gráfico de uma série por setor (resultado | só receitas | só despesas | as duas), como o de empresas
+  function graficoPorSetor(id){
+    if(!temSetor) return;
+    const modo = modoSerie();
+    const ps = [...somar(F.rows, x => x.st).values()].sort((a, b) => (modo === 'res' ? (b.r - b.s) - (a.r - a.s) : modo === 's' ? b.s - a.s : b.r - a.r));
+    const ds = modo === 'res' ? [{ label: 'Resultado', data: ps.map(o => o.r - o.s), backgroundColor: ps.map(o => o.r - o.s < 0 ? cssVar('--neg') : cssVar('--pos')) }]
+      : modo === 'r' ? [{ label: 'Receitas', data: ps.map(o => o.r), backgroundColor: cssVar('--pos') }]
+      : modo === 's' ? [{ label: 'Despesas', data: ps.map(o => o.s), backgroundColor: cssVar('--neg') }]
+      : [{ label: 'Receitas', data: ps.map(o => o.r), backgroundColor: cssVar('--pos') }, { label: 'Despesas', data: ps.map(o => o.s), backgroundColor: cssVar('--neg') }];
+    desenhar(id, { type: 'bar', data: { labels: ps.map(o => nomeSetor(o.k)), datasets: ds },
+      options: { indexAxis: 'y', scales: { x: eixoR }, plugins: { legend: modo === 'ambos' ? legendaLados : { display: false }, tooltip: tooltipR } } },
+      (d, i) => ({ patch: { st: ps[i].k }, titulo: (modo === 'ambos' ? (d === 0 ? 'Receitas' : 'Despesas') : TIT_MODO[modo]) + ' — ' + nomeSetor(ps[i].k), lado: modo === 'res' ? 'rs' : modo === 'ambos' ? (d === 0 ? 'r' : 's') : modo }));
+  }
   renderGraficos.geral = () => {
+    graficoPorSetor('gSetRes');
     const meses = listaMeses(F.rows), pm = somar(F.rows, x => x.ym);
     const R = meses.map(m => (pm.get(m) || { r: 0 }).r), S = meses.map(m => (pm.get(m) || { s: 0 }).s);
     desenhar('gMensal', { type: 'bar', data: { labels: meses.map(nomeMes), datasets: [
@@ -866,10 +899,59 @@
       (ds, i) => ({ patch: { emp: arr[ds].k, ym: meses[i] }, titulo: (modo === 'r' ? 'Receitas' : modo === 's' ? 'Despesas' : 'Resultado') + ' — ' + nome(arr[ds].k) + ' — ' + nomeMes(meses[i]), lado: modo === 'r' || modo === 's' ? modo : 'rs' }));
   };
 
+  // ---------- setores ----------
+  function pivotContas(c, titulo, chaveDim, colunas, nomeCol){      // conta (nível 3) x uma dimensão; as 30 maiores contas, o resto em "Outras contas"
+    const tb = el('div', 'toolbar'); tb.appendChild(el('b', '', titulo)); const seg = el('div', 'seg');
+    if(VER.r && !VER.s) ladoPivot = 'r'; else if(!VER.r && VER.s) ladoPivot = 's';
+    [['r', 'Receitas'], ['s', 'Despesas']].filter(([k]) => VER[k]).forEach(([k, t]) => { const b = el('button', ladoPivot === k ? 'ativo' : '', t); b.type = 'button'; b.addEventListener('click', () => { ladoPivot = k; render(); }); seg.appendChild(b); });
+    tb.appendChild(seg); c.appendChild(tb);
+    const grupos = new Map();
+    F.rows.forEach(x => { const v = ladoPivot === 'r' ? x.r : x.s; if(!v) return; let g2 = grupos.get(x.pc); if(!g2){ g2 = { k: x.pc, tot: 0, por: new Map() }; grupos.set(x.pc, g2); } const d = chaveDim(x); g2.tot += v; g2.por.set(d, (g2.por.get(d) || 0) + v); });
+    const box2 = el('div', 'tabela-box'); const rol2 = el('div', 'rolagem'); const tab2 = el('table');
+    const th = el('thead'); const trh = el('tr'); trh.appendChild(el('th', 'txt', 'Conta')); colunas.forEach(k => trh.appendChild(el('th', '', nomeCol(k)))); trh.appendChild(el('th', '', 'Total')); th.appendChild(trh); tab2.appendChild(th);
+    const tb2 = el('tbody'); const ordenados = [...grupos.values()].sort((a, b) => b.tot - a.tot), topo = ordenados.slice(0, 30), resto = ordenados.slice(30);
+    if(resto.length){ const o = { k: '', nome: 'Outras contas (' + resto.length + ')', tot: 0, por: new Map() }; resto.forEach(g2 => { o.tot += g2.tot; g2.por.forEach((v, e) => o.por.set(e, (o.por.get(e) || 0) + v)); }); topo.push(o); }
+    topo.forEach(g2 => { const tr = el('tr'); tr.appendChild(el('td', 'txt', g2.nome || rotuloNo(g2.k))); colunas.forEach(k => tr.appendChild(el('td', '', g2.por.get(k) ? fmt(g2.por.get(k)) : '—'))); tr.appendChild(el('td', '', fmt(g2.tot))); tb2.appendChild(tr); });
+    tab2.appendChild(tb2); rol2.appendChild(tab2); box2.appendChild(rol2); c.appendChild(box2);
+  }
+  function renderSetores(c){
+    if(!temSetor){ c.appendChild(el('div', 'vazio', 'O arquivo de movimentação não traz as colunas SETOR e DESCRICAO_SETOR.')); return; }
+    const g = el('div', 'grade2'); g.appendChild(caixaGraf('Receitas, despesas e resultado por setor', 'gSet', true));
+    g.appendChild(caixaGraf('Evolução mensal — ' + (modoSerie() === 'r' ? 'receitas' : modoSerie() === 's' ? 'despesas' : 'resultado') + ' por setor (8 maiores)', 'gSetMes', true)); c.appendChild(g);
+    const mp = [...somar(F.rows, x => x.st).values()].sort((a, b) => b.r - a.r);
+    const box = el('div', 'tabela-box'); const rol = el('div', 'rolagem'); const tab = el('table');
+    tab.innerHTML = '<thead><tr><th>Setor</th><th>Receitas</th><th>Despesas</th><th>Resultado</th><th>Margem</th><th>Lanç.</th><th></th></tr></thead>';
+    const tbody = el('tbody'); const T = { r: 0, s: 0, n: 0 };
+    mp.forEach(o => {
+      const tr = el('tr', 'clicavel'); tr.appendChild(el('td', 'txt', nomeSetor(o.k)));
+      tr.appendChild(el('td', 'pos', fmt(o.r))); tr.appendChild(el('td', 'neg', fmt(o.s))); tr.appendChild(el('td', o.r - o.s < 0 ? 'neg' : 'pos', fmt(o.r - o.s)));
+      tr.appendChild(el('td', '', o.r ? fmtPct((o.r - o.s) / o.r * 100) : '—')); tr.appendChild(el('td', '', o.n.toLocaleString('pt-BR')));
+      const ta = el('td'); const bq = el('button', 'acao', '👥'); bq.type = 'button'; bq.title = 'Principais pagadores e fornecedores deste setor'; bq.addEventListener('click', (e) => { e.stopPropagation(); abrirResumo({ patch: { st: o.k }, titulo: 'Setor — ' + nomeSetor(o.k), lado: 'rs' }); }); ta.appendChild(bq); tr.appendChild(ta);
+      tr.addEventListener('click', () => irLancamentos({ st: o.k }));
+      tbody.appendChild(tr); T.r += o.r; T.s += o.s; T.n += o.n;
+    });
+    tab.appendChild(tbody); const tf = el('tfoot'); const trf = el('tr'); trf.appendChild(el('td', '', 'Total')); trf.appendChild(el('td', '', fmt(T.r))); trf.appendChild(el('td', '', fmt(T.s))); trf.appendChild(el('td', '', fmt(T.r - T.s))); trf.appendChild(el('td', '', T.r ? fmtPct((T.r - T.s) / T.r * 100) : '—')); trf.appendChild(el('td', '', T.n.toLocaleString('pt-BR'))); trf.appendChild(el('td')); tf.appendChild(trf); tab.appendChild(tf);
+    rol.appendChild(tab); box.appendChild(rol); c.appendChild(box);
+    pivotContas(c, 'Contas × setores', (x) => x.st, mp.map(o => o.k), nomeSetor);
+  }
+  renderGraficos.setores = () => {
+    if(!temSetor) return;
+    const arr = [...somar(F.rows, x => x.st).values()].sort((a, b) => b.r - a.r);
+    desenhar('gSet', { type: 'bar', data: { labels: arr.map(o => nomeSetor(o.k)), datasets: [{ label: 'Receitas', data: arr.map(o => o.r), backgroundColor: cssVar('--pos'), hidden: !VER.r }, { label: 'Despesas', data: arr.map(o => o.s), backgroundColor: cssVar('--neg'), hidden: !VER.s }, { label: 'Resultado', data: arr.map(o => o.r - o.s), backgroundColor: cssVar('--info'), hidden: !resVisivel() }] },
+      options: { indexAxis: 'y', scales: { x: eixoR }, plugins: { tooltip: tooltipR, legend: legendaLados } } },
+      (ds, i) => ({ patch: { st: arr[i].k }, titulo: ['Receitas', 'Despesas', 'Resultado'][ds] + ' — ' + nomeSetor(arr[i].k), lado: ['r', 's', 'rs'][ds] }));
+    const modo = modoSerie(), valor = (x) => modo === 'r' ? x.r : modo === 's' ? x.s : x.r - x.s;
+    const top = [...arr].sort((a, b) => (b.r + b.s) - (a.r + a.s)).slice(0, 8); const meses = listaMeses(F.rows); const por = new Map();
+    F.rows.forEach(x => { let m = por.get(x.st); if(!m){ m = new Map(); por.set(x.st, m); } m.set(x.ym, (m.get(x.ym) || 0) + valor(x)); });
+    desenhar('gSetMes', { type: 'line', data: { labels: meses.map(nomeMes), datasets: top.map((o, i) => ({ label: nomeSetor(o.k), data: meses.map(m => (por.get(o.k) || new Map()).get(m) || 0), borderColor: PALETA[i % PALETA.length], backgroundColor: PALETA[i % PALETA.length], tension: .25, pointRadius: 2 })) },
+      options: { scales: { y: eixoR }, plugins: { tooltip: tooltipR } } },
+      (ds, i) => ({ patch: { st: top[ds].k, ym: meses[i] }, titulo: (modo === 'r' ? 'Receitas' : modo === 's' ? 'Despesas' : 'Resultado') + ' — ' + nomeSetor(top[ds].k) + ' — ' + nomeMes(meses[i]), lado: modo === 'r' || modo === 's' ? modo : 'rs' }));
+  };
+
   // ---------- lançamentos ----------
   function linhasDrill(){
     const termo = semAcento(drill.busca);
-    return F.rows.filter(x => (!drill.plano || x.pc.startsWith(drill.plano)) && (!drill.conta || x.ct === drill.conta) && (!drill.emp || x.emp === drill.emp)
+    return F.rows.filter(x => (!drill.plano || x.pc.startsWith(drill.plano)) && (!drill.conta || x.ct === drill.conta) && (!drill.emp || x.emp === drill.emp) && (!drill.st || x.st === drill.st)
       && (!drill.ym || x.ym === drill.ym) && (!drill.lado || (drill.lado === 'r' ? x.r > 0 : x.s > 0))
       && (!termo || semAcento(x.h + ' ' + x.cl + ' ' + nomeNo(x.pc) + ' ' + x.pc + ' ' + x.ct).includes(termo))).sort((a, b) => (a.d < b.d ? 1 : a.d > b.d ? -1 : 0));
   }
@@ -881,6 +963,7 @@
     if(drill.plano) chip('Plano: ' + rotuloNo(drill.plano.length === 8 ? drill.plano : drill.plano), () => { drill.plano = ''; });
     if(drill.conta) chip('Conta: ' + drill.conta, () => { drill.conta = ''; });
     if(drill.emp) chip('Empresa: ' + ((empresas.get(drill.emp) || {}).nome || drill.emp), () => { drill.emp = ''; });
+    if(drill.st) chip('Setor: ' + nomeSetor(drill.st), () => { drill.st = ''; });
     if(drill.ym) chip('Mês: ' + nomeMes(drill.ym), () => { drill.ym = ''; });
     if(drill.lado) chip(drill.lado === 'r' ? 'Só receitas' : 'Só despesas', () => { drill.lado = ''; });
     const bc = el('button', 'btn sec', '⬇ CSV'); bc.type = 'button'; bc.addEventListener('click', () => exportar('csv')); tb.appendChild(bc);
@@ -892,10 +975,10 @@
   function renderTabelaLanc(){
     const L = linhasDrill(); const box = $('boxLanc'); if(!box) return; box.replaceChildren();
     const rol = el('div', 'rolagem'); const tab = el('table');
-    tab.innerHTML = '<thead><tr><th>Data</th><th class="txt">Empresa</th><th class="txt">Conta</th><th class="txt">Plano</th><th class="txt">Histórico</th><th>Receita</th><th>Despesa</th></tr></thead>';
+    tab.innerHTML = '<thead><tr><th>Data</th><th class="txt">Empresa</th>' + (temSetor ? '<th class="txt">Setor</th>' : '') + '<th class="txt">Conta</th><th class="txt">Plano</th><th class="txt">Histórico</th><th>Receita</th><th>Despesa</th></tr></thead>';
     const tbody = el('tbody');
     L.slice(0, limiteLanc).forEach(x => {
-      const tr = el('tr'); tr.appendChild(el('td', '', fmtDia(x.d))); tr.appendChild(el('td', 'txt', (empresas.get(x.emp) || {}).nome || x.emp)); tr.appendChild(el('td', 'txt', x.ct));
+      const tr = el('tr'); tr.appendChild(el('td', '', fmtDia(x.d))); tr.appendChild(el('td', 'txt', (empresas.get(x.emp) || {}).nome || x.emp)); if(temSetor) tr.appendChild(el('td', 'txt', nomeSetor(x.st))); tr.appendChild(el('td', 'txt', x.ct));
       tr.appendChild(el('td', 'txt', x.pc + (nomeNo(x.pc) ? ' · ' + nomeNo(x.pc) : ''))); tr.appendChild(el('td', 'hist', x.h));
       tr.appendChild(el('td', 'pos', x.r ? fmt(x.r) : '')); tr.appendChild(el('td', 'neg', x.s ? fmt(x.s) : '')); tbody.appendChild(tr);
     });
@@ -910,7 +993,7 @@
   const baixarBlob = (blob, nome) => { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = nome; document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500); };
   let libXlsx = null; const prepararXlsx = () => libXlsx || (libXlsx = window.XLSX ? Promise.resolve() : carregarScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'));
   function linhasExport(){
-    return linhasDrill().map(x => { const e = empresas.get(x.emp) || { nome: x.emp }; return { Data: fmtDia(x.d), Empresa: e.nome, Conta: x.ct, Tipo: x.tp, 'Cód. plano': x.pc, 'Nome do plano': nomeNo(x.pc), 'Histórico': x.h, Receita: x.r, Despesa: x.s }; });
+    return linhasDrill().map(x => { const e = empresas.get(x.emp) || { nome: x.emp }; return { Data: fmtDia(x.d), Empresa: e.nome, ...(temSetor ? { 'Cód. setor': x.st, Setor: nomeSetor(x.st) } : {}), Conta: x.ct, Tipo: x.tp, 'Cód. plano': x.pc, 'Nome do plano': nomeNo(x.pc), 'Histórico': x.h, Receita: x.r, Despesa: x.s }; });
   }
   async function exportar(formato){
     const dados = linhasExport(); if(!dados.length){ alert('Não há lançamentos para exportar com os filtros atuais.'); return; }
@@ -928,9 +1011,15 @@
   // ===================== carga =====================
   function aviso(tipo, texto){ const a = $('aviso'); if(!texto){ a.hidden = true; return; } a.className = 'aviso ' + (tipo || ''); a.textContent = texto; a.hidden = false; }
 
+  let jaCarregou = false;
   function aplicar(textos, origem){
     montar(textos); origemInfo = origem; statusColeta = textos[ARQ.status] || null;
-    carregarFiltrosSalvos(); construirFiltros();
+    // na 1ª carga vale o padrão (últimos 3 meses); ao atualizar os dados, período, empresas e setores escolhidos na tela são mantidos
+    const atual = { periodo: FIL.periodo, de: FIL.de, ate: FIL.ate, empOff: FIL.empOff, setOff: FIL.setOff }, primeira = !jaCarregou;
+    carregarFiltrosSalvos();
+    if(!primeira) Object.assign(FIL, atual);
+    else if(!filtrar().rows.length && linhas.length){ FIL.periodo = 'tudo'; aviso('alerta', 'Não há lançamentos nos últimos 3 meses — mostrando todo o período.'); }   // dados parados: não abrir em branco
+    jaCarregou = true; construirFiltros();
     $('inicio').replaceChildren(); $('app').hidden = false;
     $('rodape').textContent = origem; render(); preencherDados();
   }
@@ -941,6 +1030,7 @@
     if(q.dataFutura) li(q.dataFutura + ' lançamento(s) com data muito à frente (mais de 90 dias) ficaram de fora — provável erro de digitação da data no Sicon.');
     if(q.dataInvalida) li(q.dataInvalida + ' linha(s) com data ilegível foram ignoradas.');
     if(q.semPlano) li(q.semPlano + ' lançamento(s) sem plano de contas (aparecem como "Sem plano de contas").');
+    if(temSetor && q.semSetor) li(q.semSetor + ' lançamento(s) sem setor (aparecem como "Sem setor").');
     if(q.semEmpresa) li(q.semEmpresa + ' lançamento(s) sem empresa (aparecem como "Sem empresa").');
     li('Receita e despesa vêm das colunas RECEITA e DESPESA. Contas de passagem (PIX e cartões de crédito) já começam desmarcadas; a escolha fica salva neste aparelho.');
     li('Nomes dos grupos (níveis 1 e 2) não vêm no arquivo: use o ✏️ na aba Plano de contas ou publique um plano_contas.csv (colunas CODIGO e NOME) na pasta do Drive.');
@@ -1013,6 +1103,7 @@
   document.addEventListener('change', (e) => {
     const t = e.target; if(!(t instanceof HTMLInputElement)) return;
     if(t.dataset.emp !== undefined){ if(t.checked) FIL.empOff.delete(t.dataset.emp); else FIL.empOff.add(t.dataset.emp); }
+    else if(t.dataset.set !== undefined){ if(t.checked) FIL.setOff.delete(t.dataset.set); else FIL.setOff.add(t.dataset.set); }
     else if(t.dataset.cta !== undefined){ if(t.checked) FIL.ctaOff.delete(t.dataset.cta); else FIL.ctaOff.add(t.dataset.cta); salvarFiltros(); }
     else if(t.dataset.plaGrupo !== undefined){ t.dataset.plaGrupo.split('|').forEach(c => { if(t.checked) FIL.plaOff.delete(c); else FIL.plaOff.add(c); }); salvarFiltros(); construirArvore(); }
     else return;
@@ -1020,6 +1111,7 @@
   });
   document.addEventListener('click', (e) => {
     const b = e.target.closest('button[data-f]'); if(!b) return; const f = b.dataset.f;
+    if(f === 'set-todas') FIL.setOff = new Set(); if(f === 'set-nenhuma') FIL.setOff = new Set(setores.keys());
     if(f === 'emp-todas') FIL.empOff = new Set(); if(f === 'emp-nenhuma') FIL.empOff = new Set(empresas.keys());
     if(f === 'cta-todas') FIL.ctaOff = new Set(); if(f === 'cta-nenhuma') FIL.ctaOff = new Set(contasInfo.keys());
     if(f === 'cta-padrao') FIL.ctaOff = new Set([...contasInfo.keys()].filter(ehPassagem));
