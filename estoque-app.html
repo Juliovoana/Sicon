@@ -11169,7 +11169,7 @@ document.getElementById('almoxarifadoTrabalhoSelect').addEventListener('change',
 });
 let proximoIdLinhaBaixa = 1;
 
-/* ---------- Inventário: PDF agrupado por grupo, com 3 totais de valor ---------- */
+/* ---------- Inventário: PDF agrupado por grupo, valorizado só pelo preço médio (nem o valor cadastrado nem a última compra entram) ---------- */
 document.getElementById('btnAbrirInventario').addEventListener('click', () => {
     const statusEl = document.getElementById('statusInventario');
     statusEl.textContent = '';
@@ -11203,17 +11203,16 @@ function construirDadosInventario(mostrarSemEstoque) {
         const grupo = p.grupoId != null ? (catalogosBaixa.grupos || []).find(g => g.id === p.grupoId) : null;
         const nomeGrupo = grupo ? grupo.nome : semGrupoNome;
 
-        const valorCadastrado = Number(p.valor) || 0;
+        // O "valor cadastrado" do produto (p.valor) NÃO entra no inventário: ele guarda o preço do 1º lançamento do produto e, quando
+        // a embalagem é convertida na entrada (caixa -> unidade), continua sendo o preço da CAIXA. Só valem preço médio e última compra,
+        // que vêm das movimentações já com a quantidade/valor convertidos.
         const precoMedio = saldo.precoMedio != null ? Number(saldo.precoMedio) : 0;
-        const precoUltimaCompra = saldo.precoUltimaCompra != null ? Number(saldo.precoUltimaCompra) : 0;
 
         if (!gruposMap[nomeGrupo]) gruposMap[nomeGrupo] = [];
         gruposMap[nomeGrupo].push({
             produto: p, estoque,
-            valorCadastrado, precoMedio, precoUltimaCompra,
-            totalCadastrado: estoque * valorCadastrado,
-            totalPrecoMedio: estoque * precoMedio,
-            totalUltimaCompra: estoque * precoUltimaCompra
+            precoMedio,
+            totalPrecoMedio: estoque * precoMedio
         });
     });
 
@@ -11222,18 +11221,14 @@ function construirDadosInventario(mostrarSemEstoque) {
     const grupos = nomesGrupos.map(nome => {
         const itens = gruposMap[nome].sort((a, b) => a.produto.nome.localeCompare(b.produto.nome, 'pt-BR'));
         const subtotal = itens.reduce((acc, it) => ({
-            cadastrado: acc.cadastrado + it.totalCadastrado,
-            precoMedio: acc.precoMedio + it.totalPrecoMedio,
-            ultimaCompra: acc.ultimaCompra + it.totalUltimaCompra
-        }), { cadastrado: 0, precoMedio: 0, ultimaCompra: 0 });
+            precoMedio: acc.precoMedio + it.totalPrecoMedio
+        }), { precoMedio: 0 });
         return { nome, itens, subtotal };
     });
 
     const totalGeral = grupos.reduce((acc, g) => ({
-        cadastrado: acc.cadastrado + g.subtotal.cadastrado,
-        precoMedio: acc.precoMedio + g.subtotal.precoMedio,
-        ultimaCompra: acc.ultimaCompra + g.subtotal.ultimaCompra
-    }), { cadastrado: 0, precoMedio: 0, ultimaCompra: 0 });
+        precoMedio: acc.precoMedio + g.subtotal.precoMedio
+    }), { precoMedio: 0 });
 
     return { grupos, totalGeral };
 }
@@ -11267,21 +11262,18 @@ function construirPdfInventario(dados, nomeAlmoxarifado) {
             it.produto.nome,
             it.produto.un || 'UN',
             Number(it.estoque).toLocaleString('pt-BR'),
-            numSemMoeda(it.valorCadastrado),
             numSemMoeda(it.precoMedio),
-            numSemMoeda(it.precoUltimaCompra),
-            numSemMoeda(it.totalCadastrado)
+            numSemMoeda(it.totalPrecoMedio)
         ]);
 
         doc.autoTable({
             startY: y,
-            head: [['Produto', 'Un.', 'Estoque', 'Vlr. Cadastrado', 'Preço Médio', 'Última Compra', 'Total (cadastrado)']],
+            head: [['Produto', 'Un.', 'Estoque', 'Preço Médio', 'Total']],
             body: corpo,
             styles: { fontSize: 8 },
             headStyles: { fillColor: [27, 67, 50] },
             columnStyles: {
-                2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' },
-                5: { halign: 'right' }, 6: { halign: 'right' }
+                2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }
             },
             margin: { left: 14, right: 14 }
         });
@@ -11291,7 +11283,7 @@ function construirPdfInventario(dados, nomeAlmoxarifado) {
         doc.setFontSize(9);
         doc.setFont('helvetica', 'bold');
         doc.text(
-            `Subtotal ${grupo.nome} — Cadastrado: ${formatarMoeda(grupo.subtotal.cadastrado)}  ·  Preço médio: ${formatarMoeda(grupo.subtotal.precoMedio)}  ·  Última compra: ${formatarMoeda(grupo.subtotal.ultimaCompra)}`,
+            `Subtotal ${grupo.nome}: ${formatarMoeda(grupo.subtotal.precoMedio)}`,
             14, y
         );
         doc.setFont('helvetica', 'normal');
@@ -11304,9 +11296,7 @@ function construirPdfInventario(dados, nomeAlmoxarifado) {
     doc.text('TOTAL GERAL DO INVENTÁRIO', 14, y);
     y += 7;
     doc.setFontSize(10);
-    doc.text(`Pelo valor cadastrado: ${formatarMoeda(dados.totalGeral.cadastrado)}`, 14, y); y += 6;
-    doc.text(`Pelo preço médio: ${formatarMoeda(dados.totalGeral.precoMedio)}`, 14, y); y += 6;
-    doc.text(`Pela última compra: ${formatarMoeda(dados.totalGeral.ultimaCompra)}`, 14, y);
+    doc.text(`Pelo preço médio: ${formatarMoeda(dados.totalGeral.precoMedio)}`, 14, y);
     doc.setFont('helvetica', 'normal');
 
     return doc;
