@@ -220,6 +220,10 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 .fipl{font-size:14px;font-weight:600;color:var(--tx)}.fisb{font-size:12px;color:var(--tx2);margin-top:1px}
 .fisb2{font-size:11px;color:var(--tx3);margin-top:2px}
 .fi-mini-alert{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:#991b1b;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:1px 7px;margin-top:4px}
+.fi-mini-alert.proximo{color:#854d0e;background:#fef9c3;border-color:#fde047}
+.fi-mini-alert.ok{color:#166534;background:#dcfce7;border-color:#86efac}
+.fi-mini-alert.neutro{color:var(--tx3);background:var(--bg);border-color:var(--bd);font-weight:500}
+.fi-man{display:flex;flex-wrap:wrap;gap:4px}
 .fi.clicavel{cursor:pointer}
 .fi.clicavel:active{background:var(--nvl)}
 .fi.clicavel .fiseta{margin-left:auto;color:var(--tx3);font-size:16px}
@@ -235,6 +239,8 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 .spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 /* modal foto */
+.os-modal{display:none;position:fixed;inset:0;background:rgba(20,30,50,.55);z-index:90;overflow-y:auto;padding:14px 12px}
+.os-modal-box{max-width:560px;margin:0 auto}
 .fmodal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:100;align-items:center;justify-content:center;flex-direction:column;gap:12px}
 .fmodal.on{display:flex}
 .fmodal img{max-width:95vw;max-height:80vh;border-radius:8px;object-fit:contain}
@@ -282,6 +288,15 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 .man-field input:focus{outline:none;border-color:var(--nv)}
 .man-field input::placeholder{color:var(--tx3)}
 .man-obs{font-size:16px;padding:7px 10px;border:1px solid var(--bd);border-radius:var(--rs);background:var(--bg);color:var(--tx);font-family:var(--fn);width:100%;resize:none;height:50px}
+/* botão que salva SÓ a manutenção (independe do checklist) — cor âmbar de propósito,
+   diferente do azul "Salvar e enviar" do checklist, pra não confundir os dois */
+.man-save-bar{padding:12px 16px;background:#fffbeb;border-top:2px solid #f59e0b;display:flex;flex-direction:column;gap:6px}
+.btn-man-salvar{width:100%;height:44px;border-radius:var(--rs);border:none;background:#d97706;color:#fff;font-size:14px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;font-family:var(--fn)}
+.btn-man-salvar:disabled{opacity:.7;cursor:default}
+.man-save-hint{font-size:11px;color:#92400e;text-align:center;line-height:1.4}
+.man-foto-lbl{font-size:11px;font-weight:500;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em}
+.man-foto-wrap{position:relative;display:inline-block}
+.man-foto-x{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--nk);border:none;color:#fff;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1}
 .man-alert-bar{background:#fff7ed;border:1px solid #fed7aa;border-radius:var(--rs);padding:8px 12px;font-size:12px;color:#9a3412;display:flex;align-items:center;gap:6px}
 </style>
 </head>
@@ -328,6 +343,13 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
       <div class="sw">
         <i class="ti ti-search sic"></i>
         <input class="inp" id="dash-busca" placeholder="Buscar por placa ou modelo..." oninput="renderDash()">
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;padding-top:8px;font-size:12px;color:var(--tx2)">
+        <span>Ordenar por</span>
+        <select class="inp" id="dash-ordem" style="width:auto;height:30px;padding:2px 8px;font-size:12px" onchange="definirOrdemVeiculos(this.value)">
+          <option value="placa">Placa</option>
+          <option value="modelo">Modelo</option>
+        </select>
       </div>
     </div>
     <div style="padding:0 16px 4px;font-size:11px;color:var(--tx3)">Toque num veículo pra abrir o checklist dele</div>
@@ -389,6 +411,10 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
         </div>
         <div class="man-body" id="man-body">
           <div id="man-itens"><div style="padding:16px;font-size:13px;color:var(--tx3);text-align:center"><span class="spin" style="border-top-color:var(--nv);border-color:var(--bd)"></span> Carregando...</div></div>
+          <div class="man-save-bar">
+            <button class="btn-man-salvar" id="btn-man-salvar" onclick="salvarManutencaoAgora()"><i class="ti ti-tool"></i> Salvar manutenção</button>
+            <div class="man-save-hint" id="man-save-hint">Grava só as trocas/manutenções acima (com as fotos), <strong>sem precisar enviar o checklist</strong>.</div>
+          </div>
         </div>
       </div>
     </div>
@@ -438,6 +464,13 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
         <span style="font-size:12px;color:var(--tx2)" id="frst">Aguardando configuração</span>
         <button class="sbtn" onclick="sincFrota()"><i class="ti ti-refresh"></i> Atualizar</button>
       </div>
+      <div style="display:flex;align-items:center;gap:6px;padding:8px 16px 0;font-size:12px;color:var(--tx2)">
+        <span>Ordenar por</span>
+        <select class="inp" id="fr-ordem" style="width:auto;height:30px;padding:2px 8px;font-size:12px" onchange="definirOrdemVeiculos(this.value)">
+          <option value="placa">Placa</option>
+          <option value="modelo">Modelo</option>
+        </select>
+      </div>
       <div id="frlist"><div class="empty"><i class="ti ti-bus"></i>Configure a URL na aba Config</div></div>
     </div>
 
@@ -464,6 +497,7 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
         <div class="subtabs" style="border-top:1px solid var(--bd)">
           <button class="stab on" onclick="goAdminTab('veic',this)"><i class="ti ti-bus"></i> Veículos</button>
           <button class="stab" onclick="goAdminTab('itens',this)"><i class="ti ti-list-check"></i> Itens checklist</button>
+          <button class="stab" onclick="goAdminTab('man',this)"><i class="ti ti-tool"></i> Itens manutenção</button>
         </div>
 
         <div id="admin-veic" class="subscreen on">
@@ -504,6 +538,13 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
               <button class="btn-buscar" style="flex:1;justify-content:center" onclick="salvarVeiculoApp()"><i class="ti ti-device-floppy"></i> Salvar</button>
               <button class="sbtn" onclick="fecharFormVeiculo()" style="border:1px solid var(--bd);border-radius:var(--rs);padding:0 14px">Cancelar</button>
             </div>
+          </div>
+          <div class="hbusca" style="padding-top:4px;padding-bottom:6px">
+            <div class="sw">
+              <i class="ti ti-search sic"></i>
+              <input class="inp" id="admin-veic-busca" placeholder="Buscar veículo por placa, modelo, tipo ou categoria..." autocomplete="off" oninput="renderVeiculosAdmin()">
+            </div>
+            <div id="admin-veic-contagem" style="font-size:11px;color:var(--tx3);margin-top:4px"></div>
           </div>
           <div id="admin-veic-list"><div class="empty"><i class="ti ti-bus"></i>Carregando...</div></div>
         </div>
@@ -554,6 +595,33 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
             </div>
           </div>
           <div id="admin-itens-list"><div class="empty"><i class="ti ti-list-check"></i>Carregando...</div></div>
+        </div>
+
+        <div id="admin-man" class="subscreen">
+          <div class="card" style="padding:14px 16px">
+            <button class="btn-buscar" style="width:100%;justify-content:center" onclick="abrirFormTipoMan()"><i class="ti ti-plus"></i> Cadastrar item de manutenção</button>
+          </div>
+          <div id="form-tipoman" style="display:none" class="card">
+            <div class="lbl" id="ftm-titulo">Novo item de manutenção</div>
+            <div class="man-field" style="margin-bottom:8px"><label>Manutenção / troca</label><input class="inp" id="ftm-nome" placeholder="Ex: Troca de óleo, Pneus, Correia dentada"></div>
+            <div class="man-grid" style="margin-bottom:8px">
+              <div class="man-field">
+                <label>Tipo de veículo</label>
+                <input class="inp" id="ftm-tipovei" list="lista-tipos-item" placeholder="Ex: Van, Ônibus, Todos...">
+              </div>
+              <div class="man-field"><label>Ativo</label><select class="inp" id="ftm-ativo"><option value="Sim">Sim</option><option value="Não">Não</option></select></div>
+            </div>
+            <div class="man-grid" style="margin-bottom:6px">
+              <div class="man-field"><label>Intervalo (km)</label><input class="inp" id="ftm-km" type="number" inputmode="numeric" placeholder="Ex: 10000"></div>
+              <div class="man-field"><label>Intervalo (dias)</label><input class="inp" id="ftm-dias" type="number" inputmode="numeric" placeholder="Ex: 180"></div>
+            </div>
+            <p style="font-size:11px;color:var(--tx3);margin-bottom:10px">O intervalo em km calcula sozinho o "próximo KM previsto" ao lançar a última troca. "Todos" faz o item aparecer em qualquer tipo de veículo.</p>
+            <div style="display:flex;gap:8px">
+              <button class="btn-buscar" style="flex:1;justify-content:center" onclick="salvarTipoManApp()"><i class="ti ti-device-floppy"></i> Salvar</button>
+              <button class="sbtn" onclick="fecharFormTipoMan()" style="border:1px solid var(--bd);border-radius:var(--rs);padding:0 14px">Cancelar</button>
+            </div>
+          </div>
+          <div id="admin-man-list"><div class="empty"><i class="ti ti-tool"></i>Carregando...</div></div>
         </div>
       </div>
     </div>
@@ -612,7 +680,8 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
         </div>
       </div>
 
-      <div id="form-os" style="display:none" class="card">
+      <div id="form-os" class="os-modal" style="display:none">
+      <div class="card os-modal-box">
         <div class="lbl" id="fos-titulo">Nova OS</div>
 
         <div class="man-field" style="margin-bottom:8px;padding:10px 12px;border:2px solid var(--nv);border-radius:var(--rs);background:var(--nvl)">
@@ -686,10 +755,21 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 
         <div class="man-field" style="margin-bottom:10px"><label>Observação</label><textarea class="man-obs" id="fos-obs" placeholder="Detalhes do serviço, garantia..." style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()"></textarea></div>
 
+        <!-- Foto evidência (aparece na lista e no PDF da OS) -->
+        <div class="man-field" style="margin-bottom:10px">
+          <label>Foto evidência</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" class="sbtn" onclick="adicionarFotoOS(true)" style="border:1px solid var(--bd);border-radius:var(--rs);padding:8px 12px"><i class="ti ti-camera"></i> Tirar foto</button>
+            <button type="button" class="sbtn" onclick="adicionarFotoOS(false)" style="border:1px solid var(--bd);border-radius:var(--rs);padding:8px 12px"><i class="ti ti-photo"></i> Galeria</button>
+          </div>
+          <div id="fos-fotos" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px"></div>
+        </div>
+
         <div style="display:flex;gap:8px">
           <button class="btn-buscar" style="flex:1;justify-content:center" onclick="salvarOSApp()"><i class="ti ti-device-floppy"></i> Salvar</button>
           <button class="sbtn" onclick="fecharFormOS()" style="border:1px solid var(--bd);border-radius:var(--rs);padding:0 14px">Cancelar</button>
         </div>
+      </div>
       </div>
 
       <div id="os-list"><div class="empty"><i class="ti ti-file-invoice"></i>Nenhuma OS cadastrada</div></div>
@@ -930,6 +1010,8 @@ function init(){
   document.getElementById('cfgtabck').value = cfg.tabCk ||'Checklists';
   document.getElementById('dt').value  = new Date().toISOString().slice(0,10);
   document.getElementById('rdt').value = new Date().toISOString().slice(0,10);
+  document.getElementById('dash-ordem').value = ordemVeiculosAtual();
+  document.getElementById('fr-ordem').value = ordemVeiculosAtual();
   renderFrota(); renderDash(); updSub(); checkOnline();
   verificarSessaoConfigServidor();
   detectarUsuarioGoogle();
@@ -991,6 +1073,43 @@ async function carregarResumoFrota(){
   }catch(e){ /* lista funciona normal sem esse extra */ }
 }
 
+// Selos de manutenção na lista do Painel: um por item vencido (vermelho)
+// ou perto de vencer (amarelo), com o motivo, e um resumo dos em dia.
+// Worker antigo (sem `manutencoes`) cai no selo único "Manutenção vencida".
+function htmlManutencaoResumo(resumo){
+  if(!resumo) return '';
+  if(!Array.isArray(resumo.manutencoes)){
+    return resumo.manutencaoVencida
+      ? `<div><span class="fi-mini-alert"><i class="ti ti-alert-triangle"></i> Manutenção vencida</span></div>` : '';
+  }
+  const lista = resumo.manutencoes;
+  if(!lista.length) return `<div class="fi-man"><span class="fi-mini-alert neutro"><i class="ti ti-tool"></i> Sem manutenção registrada</span></div>`;
+  const fmtKm = n => Number(n).toLocaleString('pt-BR');
+  const motivo = m => {
+    const partes = [];
+    if(m.status==='vencida'){
+      if(m.diasRestantes!=null && m.diasRestantes<0) partes.push('venceu '+m.dataProx);
+      if(m.kmRestantes!=null && m.kmRestantes<=0) partes.push('passou '+fmtKm(-m.kmRestantes)+' km');
+    } else {
+      if(m.diasRestantes!=null && m.diasRestantes<=7) partes.push(m.diasRestantes===0?'vence hoje':'faltam '+m.diasRestantes+(m.diasRestantes===1?' dia':' dias'));
+      if(m.kmRestantes!=null && m.kmRestantes<=500) partes.push('faltam '+fmtKm(m.kmRestantes)+' km');
+    }
+    return partes.join(' / ');
+  };
+  const selos = lista.filter(m=>m.status!=='ok').map(m=>{
+    const cls = m.status==='vencida' ? '' : ' proximo';
+    const ic = m.status==='vencida' ? 'ti-alert-triangle' : 'ti-clock';
+    const mt = motivo(m);
+    return `<span class="fi-mini-alert${cls}"><i class="ti ${ic}"></i> ${escapeAttr(m.tipo)}${mt?' — '+mt:''}</span>`;
+  });
+  const emDia = lista.filter(m=>m.status==='ok');
+  if(emDia.length){
+    const titulo = emDia.map(m=>m.tipo+(m.kmProx!=null?' · próx. '+fmtKm(m.kmProx)+' km':'')+(m.dataProx?' · '+m.dataProx:'')).join('\n');
+    selos.push(`<span class="fi-mini-alert ok" title="${escapeAttr(titulo)}"><i class="ti ti-circle-check"></i> ${emDia.length} em dia</span>`);
+  }
+  return `<div class="fi-man">${selos.join('')}</div>`;
+}
+
 /* ══════════════════════════════════════════════════════════════════
    AJUDA DO MÓDULO -- conteúdo educativo pro operador (não é
    documentação técnica pra dev, é o "manual" de quem usa no dia a
@@ -1004,7 +1123,7 @@ async function carregarResumoFrota(){
    ══════════════════════════════════════════════════════════════════ */
 const AJUDA_FROTA = {
   titulo: 'Checklist Frota',
-  ultimaRevisao: '14/09/2026',
+  ultimaRevisao: '29/09/2026',
   secoes: [
     { id: 'geral', titulo: 'Visão geral', corpo: `
       <p>Registra o checklist diário de cada veículo da frota (Van, Micro Ônibus, Utilitário,
@@ -1028,8 +1147,15 @@ const AJUDA_FROTA = {
         <li><strong>Cards de resumo</strong> (total + por tipo de veículo) são clicáveis —
         tocar num card filtra a lista abaixo só pro tipo escolhido; tocar em "Total" limpa o
         filtro.</li>
+        <li><strong>"Ordenar por" (Placa / Modelo)</strong>, acima da lista, define a ordem
+        dos veículos dentro de cada grupo — a escolha vale pras duas telas (Painel e Ver
+        Frota, ver seção Frota) e fica lembrada no aparelho.</li>
         <li><strong>Tocar num veículo da lista já abre o checklist dele</strong> na aba Novo,
         pronto pra marcar os itens — sem precisar digitar nada na busca.</li>
+        <li>Cada veículo mostra a data, o motorista e o <strong>KM do último checklist</strong>,
+        e a situação das manutenções: selo <strong>vermelho</strong> pra cada manutenção
+        vencida, <strong>amarelo</strong> quando falta pouco (7 dias ou menos, ou 500 km ou
+        menos) e um selo verde com quantas estão em dia. A conta usa o KM do último checklist.</li>
         <li>Se você estiver logado como administrador, cada linha ganha um botão de editar o
         cadastro do veículo direto dali (sem precisar navegar até Frota → Gerenciar).</li>
       </ul>
@@ -1041,10 +1167,25 @@ const AJUDA_FROTA = {
         <strong>KM/horímetro atual</strong> — o sistema avisa se você digitar um valor
         <strong>menor</strong> que o último registrado, pra evitar erro de digitação.</li>
         <li><strong>Preencher com último checklist deste veículo</strong> reaproveita os
-        mesmos itens já usados na vez anterior, pra ganhar tempo.</li>
+        mesmos itens já usados na vez anterior, pra ganhar tempo. Se algum item estava marcado como
+        <strong>urgente</strong> (os que geram OS), o app pergunta se você quer <strong>reforçar a
+        urgência</strong>: confirmando, o item continua marcado como urgente / não resolvido, mas
+        <strong>não cria uma nova OS</strong> (a OS já existe); cancelando, o item volta para
+        “pendente” pra você avaliar de novo.</li>
         <li>O bloco <strong>Manutenção &amp; Trocas</strong> (quando aparece) permite registrar
         uma troca junto com o checklist, sem abrir outra tela — o status (em dia/vencido) agora
-        fica salvo no aparelho e continua aparecendo mesmo sem internet.</li>
+        fica salvo no aparelho e continua aparecendo mesmo sem internet. Cada item tem também
+        a <strong>Foto evidência</strong> (nota, peça trocada, painel...): toque em "Adicionar
+        foto da manutenção"; o "x" na miniatura remove.</li>
+        <li>O botão <strong style="color:#b45309">Salvar manutenção</strong> (âmbar, no fim do
+        bloco Manutenção &amp; Trocas — diferente do azul "Salvar e enviar") grava <strong>só as
+        manutenções</strong> (datas, KM, observação e fotos) <strong>sem precisar enviar o
+        checklist</strong> — e é <strong>exclusivo do administrador</strong>: usuário comum só
+        consulta a situação (campos travados, sem botão de salvar, e nada de manutenção vai junto
+        do checklist dele); pra lançar, entre em Frota → Gerenciar com a senha de administração
+        e volte ao checklist. Serve quando a troca foi feita mas o checklist do dia ainda não vai
+        ser fechado. Só funciona com internet, e só grava os itens que você preencheu. Se o
+        checklist for enviado depois, as manutenções preenchidas também vão junto (não duplica).</li>
         <li><strong>Salvar e enviar</strong> é um botão só — salva e manda pro servidor numa
         ação. Se não tiver internet (ou o envio falhar), os dados ficam salvos só neste
         aparelho como último recurso — e o app <strong>reenvia sozinho, sem precisar fazer
@@ -1065,10 +1206,13 @@ const AJUDA_FROTA = {
       Vans, Utilitários, Buggies &amp; Quadriciclos — quem ainda não tem categoria escolhida
       aparece em "Sem categoria"), depois pelo <strong>Tipo</strong> dentro de cada categoria.
       No Painel, tocar num card de Tipo filtra a lista de veículos só pra aquele grupo; tocar
-      em "Total" limpa o filtro.</p>
-      <p><strong>Gerenciar</strong> (só Administrador) tem 2 abas:</p>
+      em "Total" limpa o filtro. O seletor <strong>"Ordenar por" (Placa / Modelo)</strong>
+      acima da lista controla a ordem dos veículos dentro de cada grupo, nas duas telas.</p>
+      <p><strong>Gerenciar</strong> (só Administrador) tem 3 abas:</p>
       <ul>
         <li><strong>Veículos</strong> — cadastro (placa, modelo, ano, tipo, categoria).
+        Tem um campo de <strong>busca</strong> acima da lista (placa, modelo, tipo, categoria, ano,
+        "ativo"/"inativo"; ignora acento e hífen da placa; várias palavras = todas precisam bater).
         <strong>Tipo (checklist)</strong> é texto com sugestões, não uma lista fechada — dá
         pra digitar um tipo novo (Ônibus, Motos, Buggy...) a qualquer momento, sem precisar
         mexer em código; é ele que decide quais itens aparecem no checklist desse veículo.
@@ -1083,6 +1227,13 @@ const AJUDA_FROTA = {
         O botão <strong>🗐 duplicar</strong> no cabeçalho de um grupo copia os itens marcados
         (checkbox por item, todos marcados por padrão) pra outro tipo de veículo de uma vez —
         não duplica item que já existe no tipo de destino.</li>
+        <li><strong>Itens manutenção</strong> — o cadastro das manutenções/trocas que aparecem no
+        bloco Manutenção &amp; Trocas do checklist (troca de óleo, pneus, filtros...), por tipo de
+        veículo. Cada item tem o <strong>intervalo em km</strong> (calcula sozinho o "próximo KM
+        previsto" ao lançar a última troca) e o <strong>intervalo em dias</strong>. Tipo de
+        veículo "<strong>Todos</strong>" faz o item valer pra qualquer veículo. Desativar (lixeira)
+        tira o item da tela sem apagar o histórico já registrado. Sem nenhum item cadastrado, o app
+        usa uma lista padrão (óleo, filtros, pneus e revisão geral).</li>
       </ul>
     ` },
     { id: 'os', titulo: 'OS', corpo: `
@@ -1091,7 +1242,12 @@ const AJUDA_FROTA = {
         <li>Lista com busca e filtro por status: <strong>Urgente</strong>, Aberta, Em
         andamento, Concluída, Cancelada.</li>
         <li><strong>Nova Ordem de Serviço</strong> lança uma OS manual vinculada a um veículo —
-        não precisa vir de um checklist.</li>
+        não precisa vir de um checklist. O formulário abre num <strong>popup</strong> (janela
+        por cima da lista); "Cancelar" fecha sem salvar.</li>
+        <li><strong>Foto evidência</strong>: no popup, "Tirar foto" abre a câmera e "Galeria"
+        escolhe uma imagem do aparelho; dá pra anexar várias e remover com o "x". As fotos
+        aparecem na lista da OS e <strong>também no PDF</strong> (1 foto sai grande, 2 ou mais
+        saem lado a lado, em tamanho que dá pra ler nota, peça ou painel).</li>
         <li>Marcando <strong>"OS sem veículo específico"</strong> no formulário, a busca de
         veículo vira um campo de descrição livre — use pra serviços que não são de um veículo
         só, tipo dedetização ou manutenção da garagem/pátio. Essas OS não aparecem no histórico
@@ -1332,6 +1488,40 @@ async function preencherUltimoChecklist(){
       }
     });
 
+    // Itens que estavam NOK e são cadastrados pra gerar OS urgente: pergunta se quer REFORÇAR a urgência.
+    // Confirmando, o item continua marcado como urgente/não resolvido, mas NÃO gera uma nova OS (a OS já existe).
+    // Cancelando, o item volta para "pendente" pra ser avaliado de novo neste checklist.
+    const urgentes = Object.keys(est).filter(id => est[id].status==='nok' && geraOsNoTipo(vSel.tipo, est[id].nome));
+    if(urgentes.length){
+      const lista = urgentes.map(id=>'• '+est[id].nome).join('\n');
+      const reforcar = confirm('⚠ O último checklist deste veículo tem '+urgentes.length+' item(ns) marcado(s) como URGENTE (geram OS):\n\n'+lista+
+        '\n\nDeseja REFORÇAR a urgência?\n\nOK = continua marcado como urgente / não resolvido. NÃO cria uma nova OS.\nCancelar = não reforça: o item volta para "pendente" para você avaliar de novo.');
+      const hojeBR = new Date().toLocaleDateString('pt-BR');
+      urgentes.forEach(id=>{
+        if(reforcar){
+          est[id].semNovaOS = true;
+          est[id].obs = ((est[id].obs||'').replace(/\s*\[Urgência reforçada[^\]]*\]/g,'').trim()+' [Urgência reforçada em '+hojeBR+' — sem nova OS]').trim();
+          const ta = document.querySelector('#ex_'+id+' textarea'); if(ta) ta.value = est[id].obs;
+          const ex = document.getElementById('ex_'+id);
+          if(ex && !document.getElementById('urg_'+id)){
+            const sl = document.createElement('div'); sl.id = 'urg_'+id;
+            sl.style.cssText = 'background:#fee2e2;color:#991b1b;border-radius:6px;padding:5px 9px;font-size:12px;font-weight:600;margin-bottom:6px';
+            sl.textContent = '🚨 Urgência reforçada — não resolvido, sem gerar nova OS';
+            ex.insertBefore(sl, ex.firstChild);
+          }
+        } else {
+          est[id].status = null; est[id].obs = ''; est[id].fotoLinks = []; est[id].fotos = [];
+          const okB=document.getElementById('ok_'+id), nkB=document.getElementById('nok_'+id), ex=document.getElementById('ex_'+id);
+          if(okB) okB.setAttribute('style', OK0); if(nkB) nkB.setAttribute('style', NK0); if(ex) ex.className='cx';
+          const ta = document.querySelector('#ex_'+id+' textarea'); if(ta) ta.value = '';
+          const fp = document.getElementById('fp_'+id); if(fp) fp.innerHTML = '';
+        }
+      });
+      updCnt();
+      toast(reforcar ? '🚨 Urgência reforçada em '+urgentes.length+' item(ns) — nenhuma nova OS será criada' : urgentes.length+' item(ns) urgente(s) voltaram para pendente — avalie de novo');
+      document.getElementById('btn-ultimo-cl').style.display='none';
+      return;
+    }
     updCnt();
     toast('✓ Checklist de '+d.data+' carregado — revise e atualize o KM antes de enviar');
     // Esconde o botão após usar para evitar re-aplicar por engano
@@ -1404,6 +1594,10 @@ function limpar(){
 /* ── ITENS DO CHECKLIST ── */
 const IK='cv_itens9';
 let itensCache = JSON.parse(localStorage.getItem(IK)||'{}');
+// quais itens (por tipo de veículo) estão cadastrados pra gerar OS urgente quando marcados NOK -- vem do getItens (coluna criar_os)
+const IKOS='cv_itens_os1';
+let itensGeramOs = JSON.parse(localStorage.getItem(IKOS)||'{}');
+const geraOsNoTipo = (tipo, nome) => (itensGeramOs[tipo]||[]).includes(nome);
 
 async function carregarItens(){
   updStatusItens('carregando');
@@ -1416,6 +1610,7 @@ async function carregarItens(){
     for(const tipo of tipos){
       const r = await fetch(cfg.url+'?action=getItens&tipo='+encodeURIComponent(tipo));
       const d = await r.json();
+      if(Array.isArray(d.itens)) itensGeramOs[tipo] = d.itens.filter(x=>x && (x.criar_os || x.criarOs)).map(x=>x.item);
 
       // Suporte a dois formatos de retorno:
       // 1. Worker/Supabase: { itens:[{tipo,grupo,item}], grupos:{grupo:[item,...]} }
@@ -1441,6 +1636,7 @@ async function carregarItens(){
 
       if(grupos && grupos.length) novo[tipo] = grupos;
     }
+    try{ localStorage.setItem(IKOS, JSON.stringify(itensGeramOs)); }catch(e){}
     if(Object.keys(novo).length){
       itensCache = novo;
       localStorage.setItem(IK, JSON.stringify(novo));
@@ -1550,6 +1746,8 @@ function buildCL(tipo, itensRecuperados){
 }
 
 function marcar(id,s){
+  // mexeu no status: deixa de ser a "urgência reforçada" do último checklist (um NOK novo depois disso é uma ocorrência nova)
+  if(est[id].semNovaOS){ est[id].semNovaOS=false; const sl=document.getElementById('urg_'+id); if(sl) sl.remove(); }
   est[id].status=est[id].status===s?null:s;
   const ns=est[id].status;
   document.getElementById('ok_'+id).setAttribute('style',ns==='ok'?OK1:OK0);
@@ -1684,6 +1882,7 @@ function montarPayloadEnvio(reg){
       nome:       it.nome,
       status:     it.status||'pendente',
       obs:        it.obs||'',
+      semNovaOS:  !!it.semNovaOS,
       fotoBase64: it.fotoBase64||[],
       fotos:      it.fotos||[]
     }))
@@ -1706,7 +1905,7 @@ async function sincronizarPendentes(){
       enviados++;
       if(payload.manutencao && payload.manutencao.length){
         fetch(cfg.url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},
-          body:JSON.stringify({action:'gravarManutencao',placa:reg.placa,manutencao:payload.manutencao})}).catch(()=>{});
+          body:JSON.stringify({action:'gravarManutencao',senha:adminSenha,placa:reg.placa,manutencao:payload.manutencao})}).catch(()=>{});
       }
     }catch(e){ break; }
   }
@@ -1745,6 +1944,7 @@ async function enviar(){
       nome:     it.nome,
       status:   it.status||'pendente',
       obs:      it.obs||'',
+      semNovaOS: !!it.semNovaOS,
       fotoBase64: it.fotoBase64||[],
       fotos:    it.fotos||[]
     }))
@@ -1758,10 +1958,11 @@ async function enviar(){
     toast(modoEdicao?'✓ Checklist atualizado':'✓ Checklist enviado com sucesso');
     // Grava manutenção separadamente
     const manPayload = getPayloadManutencao();
+    const placaMan = vSel.placa;
     if(manPayload.length && cfg.url){
       fetch(cfg.url, {method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'},
-        body: JSON.stringify({action:'gravarManutencao', placa: vSel.placa, manutencao: manPayload})
-      }).catch(()=>{});
+        body: JSON.stringify({action:'gravarManutencao', senha: adminSenha, placa: vSel.placa, manutencao: manPayload})
+      }).then(()=>{ if(vSel && vSel.placa===placaMan) carregarHistoricoManutencao(placaMan); }).catch(()=>{});
     }
     mostrarResumo(reg, document.getElementById('clbody'));
     // rola até o resumo e deixa o botão marcado como concluído -- sem isso
@@ -2212,6 +2413,24 @@ async function sincFrota(){
   }catch(e){toast('Erro ao conectar — usando cache local');}
 }
 
+// ── Ordenar listagem de veículos (Painel + Frota) por Placa ou Modelo ──
+// Preferência compartilhada entre as duas telas (escolher numa reflete na
+// outra) e persistida no navegador, mesmo padrão cv_* já usado no resto do
+// app. Só muda a ORDEM dentro de cada grupo categoria/tipo -- o agrupamento
+// em si continua igual.
+const ORD_VEIC_KEY='cv_ordemveic';
+function ordemVeiculosAtual(){ return localStorage.getItem(ORD_VEIC_KEY)||'placa'; }
+function definirOrdemVeiculos(valor){
+  localStorage.setItem(ORD_VEIC_KEY, valor);
+  const selDash=document.getElementById('dash-ordem'); if(selDash) selDash.value=valor;
+  const selFr=document.getElementById('fr-ordem'); if(selFr) selFr.value=valor;
+  renderDash(); renderFrota();
+}
+function compararVeiculos(a,b){
+  const campo = ordemVeiculosAtual()==='modelo' ? 'modelo' : 'placa';
+  return String(a[campo]||'').localeCompare(String(b[campo]||''),'pt-BR',{numeric:true,sensitivity:'base'});
+}
+
 function renderFrota(){
   popularListasTipos();
   const list=document.getElementById('frlist'),st=document.getElementById('frst');
@@ -2237,7 +2456,7 @@ function renderFrota(){
     list.appendChild(hCat);
     Object.keys(porCategoria[cat]).sort().forEach(tipo=>{
       const h=document.createElement('div');h.style.cssText='padding:9px 16px 9px 30px;background:var(--bg);border-bottom:1px solid var(--bd);font-size:11px;font-weight:600;color:var(--tx2);text-transform:uppercase;letter-spacing:.06em';h.textContent=tipo+' ('+porCategoria[cat][tipo].length+')';list.appendChild(h);
-      porCategoria[cat][tipo].forEach(v=>{
+      porCategoria[cat][tipo].sort(compararVeiculos).forEach(v=>{
         const d=document.createElement('div');d.className='fi';
         d.innerHTML=`<div class="fiic"><i class="ti ${TPI[v.tipo]||'ti-car'}"></i></div><div><div class="fipl">${v.placa}</div><div class="fisb">${v.modelo} · ${v.ano}</div><span class="pill ${TPC[v.tipo]||'pu'}">${v.tipo}</span></div>`;
         list.appendChild(d);
@@ -2307,6 +2526,7 @@ function renderDash(){
   if(!filtrados.length){ lista.innerHTML='<div class="empty"><i class="ti ti-search-off"></i>Nenhum veículo encontrado'+(filtroTxt?' em "'+filtroTxt+'"':'')+'</div>'; return; }
 
   const g={}; filtrados.forEach(v=>{ if(!g[v.tipo])g[v.tipo]=[]; g[v.tipo].push(v); });
+  Object.keys(g).forEach(t=>g[t].sort(compararVeiculos));
   const soUmGrupo = Object.keys(g).length===1;
   lista.innerHTML='';
   Object.keys(g).sort().forEach(tipo=>{
@@ -2321,9 +2541,8 @@ function renderDash(){
       const d=document.createElement('div'); d.className='fi clicavel';
       const resumo = resumoFrota[v.placa];
       const infoUltimo = resumo && (resumo.ultimaData || resumo.ultimoMotorista)
-        ? `<div class="fisb2">${resumo.ultimaData ? 'Último checklist: '+resumo.ultimaData : 'Sem checklist ainda'}${resumo.ultimoMotorista ? ' · '+resumo.ultimoMotorista : ''}</div>` : '';
-      const alertaManutencao = resumo && resumo.manutencaoVencida
-        ? `<div><span class="fi-mini-alert"><i class="ti ti-alert-triangle"></i> Manutenção vencida</span></div>` : '';
+        ? `<div class="fisb2">${resumo.ultimaData ? 'Último checklist: '+resumo.ultimaData : 'Sem checklist ainda'}${resumo.ultimoMotorista ? ' · '+resumo.ultimoMotorista : ''}${resumo.ultimoKm!=null ? ' · <b>'+Number(resumo.ultimoKm).toLocaleString('pt-BR')+' km</b>' : ''}</div>` : '';
+      const alertaManutencao = htmlManutencaoResumo(resumo);
       d.innerHTML=`<div class="fiic"><i class="ti ${TPI[v.tipo]||'ti-car'}"></i></div><div><div class="fipl">${v.placa}</div><div class="fisb">${v.modelo} · ${v.ano}</div>${infoUltimo}${alertaManutencao}</div>`
         +(podeEditar ? `<button type="button" class="fi-btn" title="Editar veículo" data-editar-placa="${escapeAttr(v.placa)}"><i class="ti ti-edit"></i></button>` : '')
         +`<i class="ti ti-chevron-right fiseta"></i>`;
@@ -2421,6 +2640,7 @@ function goAdminTab(id, btn){
   btn.classList.add('on');
   if(id==='veic') carregarVeiculosAdmin();
   if(id==='itens') carregarItensAdmin();
+  if(id==='man') carregarTiposManAdmin();
 }
 
 function verificarSessaoAdmin(){
@@ -2434,6 +2654,7 @@ function verificarSessaoAdmin(){
     document.getElementById('admin-painel').style.display='none';
   }
   renderDash(); // mostra/esconde o botão de editar veículo da lista do Painel
+  if (vSel && document.getElementById('man-itens')) renderManItens(vSel.placa); // libera/trava a edição da manutenção
   verificarSessaoConfigServidor(); // libera/trava a URL do servidor na aba Config
 }
 
@@ -2811,7 +3032,29 @@ function renderOSVeiculo(){
    modo: "download" salva o arquivo no dispositivo
          "share"    abre o menu nativo de compartilhamento
                      (WhatsApp, e-mail, etc) quando suportado     */
+// Carrega uma foto pra dentro do PDF: reduz pra no máx. 1200px e devolve JPEG + proporção.
+// Se falhar (CORS, link quebrado), devolve null e o PDF sai sem essa foto.
+function carregarFotoPdf(url){
+  return new Promise((resolve)=>{
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = ()=>{
+      try{
+        let w = img.naturalWidth, h = img.naturalHeight;
+        const max = 1200;
+        if(w > max || h > max){ if(w > h){ h = Math.round(h*max/w); w = max; } else { w = Math.round(w*max/h); h = max; } }
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0,w,h);
+        resolve({ data: c.toDataURL('image/jpeg', 0.8), w, h });
+      }catch(e){ resolve(null); }
+    };
+    img.onerror = ()=> resolve(null);
+    img.src = url;
+  });
+}
+
 async function gerarPdfOS(os, modo){
+  const inicioGeracao = Date.now(); // pra saber se o toque do usuário ainda vale na hora de compartilhar
   if(typeof jspdf === 'undefined'){ toast('Biblioteca de PDF não carregou — verifique a internet'); return; }
   const { jsPDF } = jspdf;
   const doc = new jsPDF({ unit:'mm', format:'a4' });
@@ -2940,6 +3183,40 @@ async function gerarPdfOS(os, modo){
 
   if(os.observacao) linha('Observação', os.observacao);
 
+  // ── Fotos / evidências ──────────────────────────────────────────
+  // Tamanho pensado pra dar pra ler nota/peça/painel: 1 foto = até 130x100 mm;
+  // 2 ou mais = 2 por linha, até 88x80 mm cada. Quebra de página automática.
+  const fotosPdf = [];
+  for(const link of (os.fotos || [])){
+    const f = await carregarFotoPdf(driveThumbUrl(link, 1200));
+    if(f) fotosPdf.push(f);
+  }
+  if(fotosPdf.length){
+    if(y > 250){ doc.addPage(); y = 20; }
+    y += 2;
+    doc.setFontSize(8.5); doc.setTextColor(...cinza); doc.setFont(undefined,'bold');
+    doc.text('FOTOS / EVIDÊNCIAS', 14, y);
+    y += 5;
+    const unica = fotosPdf.length === 1;
+    const maxW = unica ? 130 : 88, maxH = unica ? 100 : 80;
+    const porLinha = unica ? 1 : 2;
+    for(let i = 0; i < fotosPdf.length; i += porLinha){
+      const grupo = fotosPdf.slice(i, i + porLinha).map(f => {
+        let w = maxW, h = w * f.h / f.w;
+        if(h > maxH){ h = maxH; w = h * f.w / f.h; }
+        return { f, w, h };
+      });
+      const alturaLinha = Math.max(...grupo.map(g => g.h));
+      if(y + alturaLinha > 275){ doc.addPage(); y = 20; }
+      grupo.forEach((g, k) => {
+        doc.addImage(g.f.data, 'JPEG', 14 + k * 94, y, g.w, g.h);
+      });
+      y += alturaLinha + 5;
+    }
+    doc.setFont(undefined,'normal'); doc.setTextColor(20,20,20);
+  }
+  if(y > 245){ doc.addPage(); y = 20; }
+
   // ── Link de aprovação embutido no próprio PDF ──────────────────
   // Antes esse link só ia no texto da legenda do compartilhamento
   // (modo "share"). Problema: quando se compartilha um ARQUIVO junto
@@ -3010,18 +3287,36 @@ async function gerarPdfOS(os, modo){
         const blob = doc.output('blob');
         const file = new File([blob], nomeArquivo, {type:'application/pdf'});
         if(navigator.canShare({files:[file]})){
-          await navigator.share({files:[file], title:'OS Nº '+os.numero, text:textoWpp});
-          return;
+          // O navegador só deixa abrir o compartilhamento de ARQUIVO logo depois de um toque do
+          // usuário (a "ativação" vale poucos segundos). Com fotos, o PDF demora mais pra ficar
+          // pronto e o toque já expirou: nesse caso o share falha e o código caía no fallback
+          // (baixa o PDF + abre o WhatsApp só com o texto) -- o arquivo não ia junto.
+          // Solução: se o toque expirou, mostra um botão "Compartilhar" (um toque novo, que vale).
+          const toqueValido = navigator.userActivation
+            ? navigator.userActivation.isActive
+            : (Date.now() - inicioGeracao) < 3000;
+          if(!toqueValido){ mostrarPopupCompartilharOS(file, textoWpp, os.numero); return; }
+          try{
+            await navigator.share({files:[file], title:'OS Nº '+os.numero, text:textoWpp});
+            return;
+          }catch(e){
+            if(e.name==='AbortError') return;
+            if(e.name==='NotAllowedError'){ mostrarPopupCompartilharOS(file, textoWpp, os.numero); return; }
+            throw e;
+          }
         }
       }catch(e){
         if(e.name==='AbortError') return;
       }
     }
 
-    // Fallback desktop: baixa o PDF e abre WhatsApp Web com o texto
-    doc.save(nomeArquivo);
-    const urlWpp = 'https://wa.me/?text='+encodeURIComponent(textoWpp);
-    window.open(urlWpp, '_blank');
+    // Fallback desktop: antes baixava o PDF E abria o WhatsApp Web ao mesmo
+    // tempo, sem perguntar -- as duas ações automáticas juntas confundiam o
+    // operador (pedido do usuário, 29/09/2026: "salvar" deve se comportar
+    // como "compartilhar", que é um clique deliberado, não 2 ações sozinhas).
+    // Agora mostra o mesmo tipo de popup já usado no celular (toque
+    // expirado), só que com as ações certas pro desktop.
+    mostrarPopupCompartilharDesktopOS(doc, nomeArquivo, textoWpp, os.numero);
     return;
   }
 
@@ -3035,6 +3330,57 @@ async function gerarPdfOS(os, modo){
   // Fallback: navegador sem suporte a compartilhar arquivos, ou modo "download"
   doc.save(nomeArquivo);
   if(modo==='share') toast('Compartilhamento não suportado neste navegador — PDF baixado');
+}
+
+/* ── Popup "PDF pronto": dá um toque novo pra o compartilhamento de arquivo funcionar ── */
+function mostrarPopupCompartilharOS(file, texto, numero){
+  const antigo = document.getElementById('popup-share-os'); if(antigo) antigo.remove();
+  const ov = document.createElement('div');
+  ov.id = 'popup-share-os'; ov.className = 'os-modal'; ov.style.display = 'block'; ov.style.zIndex = '95';
+  ov.innerHTML = `<div class="card os-modal-box" style="margin-top:12vh;text-align:center">
+      <div class="lbl" style="font-size:15px">📄 PDF da OS Nº ${numero} pronto</div>
+      <div style="font-size:12px;color:var(--tx2);margin:6px 0 14px">Toque em compartilhar para enviar o PDF junto com a mensagem.</div>
+      <button class="btn-buscar" id="psos-share" style="width:100%;justify-content:center;margin-bottom:8px"><i class="ti ti-share"></i> Compartilhar</button>
+      <button class="sbtn" id="psos-baixar" style="width:100%;border:1px solid var(--bd);border-radius:var(--rs);padding:10px;margin-bottom:8px"><i class="ti ti-download"></i> Baixar PDF</button>
+      <button class="sbtn" id="psos-fechar" style="width:100%;padding:8px">Fechar</button>
+    </div>`;
+  document.body.appendChild(ov);
+  const fechar = ()=> ov.remove();
+  document.getElementById('psos-fechar').onclick = fechar;
+  document.getElementById('psos-baixar').onclick = ()=>{
+    const a = document.createElement('a'); a.href = URL.createObjectURL(file); a.download = file.name; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href), 4000);
+  };
+  // sem nenhum await antes do share: precisa rodar direto no toque
+  document.getElementById('psos-share').onclick = ()=>{
+    navigator.share({files:[file], title:'OS Nº '+numero, text:texto})
+      .then(fechar)
+      .catch(e=>{ if(e.name!=='AbortError') toast('Não foi possível compartilhar — use "Baixar PDF"'); });
+  };
+}
+
+/* ── Popup "PDF pronto" pro DESKTOP (sem navigator.share de arquivo): baixar
+   e abrir o WhatsApp Web viram 2 botões separados, cada um 1 ação só --
+   antes as duas aconteciam sozinhas, ao mesmo tempo, direto ao salvar a OS
+   (pedido do usuário, 29/09/2026: "salvar" deve se comportar como
+   "compartilhar", que é um clique deliberado, não 2 ações automáticas). ── */
+function mostrarPopupCompartilharDesktopOS(pdfDoc, nomeArquivo, texto, numero){
+  const antigo = document.getElementById('popup-share-os'); if(antigo) antigo.remove();
+  const ov = document.createElement('div');
+  ov.id = 'popup-share-os'; ov.className = 'os-modal'; ov.style.display = 'block'; ov.style.zIndex = '95';
+  ov.innerHTML = `<div class="card os-modal-box" style="margin-top:12vh;text-align:center">
+      <div class="lbl" style="font-size:15px">📄 PDF da OS Nº ${numero} pronto</div>
+      <div style="font-size:12px;color:var(--tx2);margin:6px 0 14px">Baixe o PDF e depois abra o WhatsApp Web -- são 2 passos separados, pra não se perder.</div>
+      <button class="sbtn" id="psosd-baixar" style="width:100%;border:1px solid var(--bd);border-radius:var(--rs);padding:10px;margin-bottom:8px"><i class="ti ti-download"></i> Baixar PDF</button>
+      <button class="btn-buscar" id="psosd-wpp" style="width:100%;justify-content:center;margin-bottom:8px"><i class="ti ti-brand-whatsapp"></i> Abrir WhatsApp Web</button>
+      <button class="sbtn" id="psosd-fechar" style="width:100%;padding:8px">Fechar</button>
+    </div>`;
+  document.body.appendChild(ov);
+  document.getElementById('psosd-fechar').onclick = ()=> ov.remove();
+  document.getElementById('psosd-baixar').onclick = ()=> pdfDoc.save(nomeArquivo);
+  document.getElementById('psosd-wpp').onclick = ()=>{
+    window.open('https://wa.me/?text='+encodeURIComponent(texto), '_blank');
+  };
 }
 
 /* ── Gerar token de aprovação para a OS ──────────────────── */
@@ -3187,10 +3533,47 @@ function abrirFormOS(){
   document.getElementById('fos-obs').value='';
   produtosOSAtual = [];
   renderProdutosOS();
+  fotosOSSalvas = []; fotosOSNovas = []; renderFotosOS();
   document.getElementById('form-os').style.display='block';
-  document.getElementById('form-os').scrollIntoView({behavior:'smooth'});
   // Foco automático no campo de busca de veículo
   setTimeout(()=>document.getElementById('fos-busca').focus(), 350);
+}
+
+/* ── Foto evidência da OS ─────────────────────────────────── */
+let fotosOSSalvas = [];  // links já gravados (Storage/Drive)
+let fotosOSNovas  = [];  // base64 ainda não enviadas
+
+function renderFotosOS(){
+  const row = document.getElementById('fos-fotos'); if(!row) return;
+  row.innerHTML = '';
+  const add = (src, viewSrc, remover)=>{
+    const wrap = document.createElement('div'); wrap.className = 'man-foto-wrap';
+    const img = document.createElement('img'); img.className = 'fth'; img.src = src;
+    img.onclick = ()=> abrirFoto(viewSrc);
+    img.onerror = ()=>{ img.style.display = 'none'; };
+    const x = document.createElement('button'); x.type = 'button'; x.className = 'man-foto-x'; x.title = 'Remover foto';
+    x.innerHTML = '<i class="ti ti-x"></i>';
+    x.onclick = (e)=>{ e.stopPropagation(); remover(); renderFotosOS(); };
+    wrap.appendChild(img); wrap.appendChild(x); row.appendChild(wrap);
+  };
+  fotosOSSalvas.forEach((link,k)=> add(driveThumbUrl(link), driveThumbUrl(link,1200), ()=>{ fotosOSSalvas.splice(k,1); }));
+  fotosOSNovas.forEach((b64,k)=> add(b64, b64, ()=>{ fotosOSNovas.splice(k,1); }));
+}
+
+// camera=true abre a câmera traseira; false abre a galeria. 1000px/0,7 pra dar leitura no PDF
+function adicionarFotoOS(camera){
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*';
+  if(camera) inp.setAttribute('capture','environment');
+  inp.onchange = e=>{
+    const f = e.target.files[0]; if(!f) return;
+    comprimirImagem(f, 1000, 0.7, blob=>{
+      const r = new FileReader();
+      r.onload = ev=>{ fotosOSNovas.push(ev.target.result); renderFotosOS(); };
+      r.readAsDataURL(blob);
+    });
+  };
+  inp.click();
 }
 
 /* ── Produtos / peças utilizados na OS ────────────────────── */
@@ -3311,9 +3694,9 @@ function editarOSApp(os){
   const maoDeObraOriginal = Math.max(0, (Number(os.valor)||0) - totalProdutosSalvos);
   document.getElementById('fos-valor').value = maoDeObraOriginal || '';
   renderProdutosOS();
+  fotosOSSalvas = (os.fotos || []).slice(); fotosOSNovas = []; renderFotosOS();
 
   document.getElementById('form-os').style.display='block';
-  document.getElementById('form-os').scrollIntoView({behavior:'smooth'});
 }
 
 function fecharFormOS(){ document.getElementById('form-os').style.display='none'; }
@@ -3350,7 +3733,9 @@ async function salvarOSApp(){
     responsavel:document.getElementById('fos-responsavel').value.trim(),
     observacao:document.getElementById('fos-obs').value.trim(),
     status:document.getElementById('fos-status').value,
-    produtos: produtosValidos
+    produtos: produtosValidos,
+    fotos: fotosOSSalvas,          // links que continuam na OS
+    fotoBase64: fotosOSNovas       // fotos novas, o Worker envia pro Storage
   };
   if(editandoOSLinha){ payload.linha = editandoOSLinha; payload.numero = editandoOSNumero; }
 
@@ -3358,16 +3743,15 @@ async function salvarOSApp(){
     const r = await fetch(cfg.url, {method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload)});
     const d = await r.json();
     if(d.ok){
-      toast(d.acao==='criado' ? '✓ OS Nº '+d.numero+' criada' : '✓ OS atualizada');
+      toast((d.acao==='criado' ? '✓ OS Nº '+d.numero+' criada' : '✓ OS atualizada')
+        + (d.fotosFalharam ? ' — ⚠ '+d.fotosFalharam+' foto(s) não enviada(s)' : ''));
       fecharFormOS();
       await carregarOS();
-      // Gerar e compartilhar o PDF agora é opcional -- pergunta antes em
-      // vez de disparar automaticamente o compartilhamento (arquivo +
-      // texto) toda vez que uma OS é salva.
+      // Depois de salvar, já abre o compartilhamento do PDF (WhatsApp) direto, sem
+      // perguntar nada -- os operadores não se adaptaram à mensagem de confirmação
+      // (pedido do usuário, 24/09/2026; antes de 4.19 já era assim).
       const osGerada = osCache.find(o=> String(o.numero)===String(d.numero));
-      if(osGerada && confirm('OS salva. Deseja gerar e compartilhar o PDF agora?')){
-        gerarPdfOS(osGerada, 'share');
-      }
+      if(osGerada) gerarPdfOS(osGerada, 'share');
     } else { toast(d.erro || 'Erro ao salvar'); }
   }catch(e){ toast('Erro de conexão'); }
 }
@@ -3391,9 +3775,22 @@ async function carregarVeiculosAdmin(){
 
 function renderVeiculosAdmin(){
   const list = document.getElementById('admin-veic-list');
-  if(!veiculosAdminCache.length){ list.innerHTML='<div class="empty"><i class="ti ti-bus"></i>Nenhum veículo cadastrado</div>'; return; }
+  if(!veiculosAdminCache.length){ list.innerHTML='<div class="empty"><i class="ti ti-bus"></i>Nenhum veículo cadastrado</div>'; document.getElementById('admin-veic-contagem').textContent=''; return; }
+  // busca: ignora maiúsc./minúsc., acento e, na placa, hífen/espaço (digitar "abc1d23" acha "ABC-1D23");
+  // todas as palavras digitadas precisam aparecer (placa, modelo, tipo, categoria, ano ou situação)
+  const norm = normalizarNomeGrupo; // já existente: minúsculas, sem acento, sem espaços nas pontas
+  const termo = norm(document.getElementById('admin-veic-busca').value).trim();
+  const palavras = termo ? termo.split(/\s+/) : [];
+  const filtrados = palavras.length ? veiculosAdminCache.filter(v=>{
+    const alvo = norm([v.placa, v.modelo, v.tipo, v.tipo_veiculo, v.ano, String(v.ativo).toLowerCase()==='sim'?'ativo':'inativo'].join(' '));
+    const alvoPlaca = alvo.replace(/[-\s]/g,'');
+    return palavras.every(w=> alvo.includes(w) || alvoPlaca.includes(w.replace(/-/g,'')));
+  }) : veiculosAdminCache;
+  document.getElementById('admin-veic-contagem').textContent = palavras.length
+    ? filtrados.length+' de '+veiculosAdminCache.length+' veículo(s)' : veiculosAdminCache.length+' veículo(s)';
+  if(!filtrados.length){ list.innerHTML='<div class="empty"><i class="ti ti-search"></i>Nenhum veículo encontrado para essa busca</div>'; return; }
   list.innerHTML='';
-  veiculosAdminCache.forEach(v=>{
+  filtrados.forEach(v=>{
     const d=document.createElement('div'); d.className='fi';
     const inativoStyle = v.ativo.toLowerCase()!=='sim' ? 'opacity:.5' : '';
     d.style.cssText += inativoStyle;
@@ -3688,6 +4085,139 @@ async function excluirItemApp(linha, item){
 }
 
 
+/* ── CRUD ITENS DE MANUTENÇÃO (tabela manutencao_tipos) ── */
+let tiposManAdminCache = [];
+let editandoTipoManLinha = null;
+
+// os tipos de manutenção ficam em cache por tipo de veículo (MK_<tipo>) — depois de
+// qualquer alteração no cadastro, limpa tudo pra o checklist já buscar a lista nova
+function limparCacheTiposMan(){
+  Object.keys(localStorage).filter(k=>k.startsWith(MK)).forEach(k=>localStorage.removeItem(k));
+}
+
+async function carregarTiposManAdmin(){
+  const list = document.getElementById('admin-man-list');
+  if(!cfg.url || !navigator.onLine){ list.innerHTML='<div class="empty"><i class="ti ti-wifi-off"></i>Sem conexão</div>'; return; }
+  list.innerHTML = '<div style="padding:20px;text-align:center"><span class="spin" style="border-top-color:var(--nv);border-color:var(--bd)"></span></div>';
+  try{
+    const r = await fetch(cfg.url+'?action=getManutencaoAdmin');
+    const d = await r.json();
+    if(d.erro) throw new Error(d.erro);
+    tiposManAdminCache = d.tipos || [];
+    renderTiposManAdmin();
+  }catch(e){ list.innerHTML='<div class="empty"><i class="ti ti-alert-triangle"></i>Erro ao carregar<br><small>Confira se o Worker foi atualizado no Cloudflare (ação getManutencaoAdmin).</small></div>'; }
+}
+
+function renderTiposManAdmin(){
+  const list = document.getElementById('admin-man-list');
+  if(!tiposManAdminCache.length){
+    // tabela vazia: o checklist está usando a lista padrão embutida no código (TIPOS_MAN_DEFAULT).
+    // Mostra ela aqui e deixa gravar na tabela, pra virar cadastro editável.
+    list.innerHTML=`<div class="card">
+      <div class="lbl"><i class="ti ti-info-circle"></i> Ainda não há itens gravados no cadastro</div>
+      <p style="font-size:12px;color:var(--tx2);margin:6px 0 10px">O checklist está usando esta <strong>lista padrão do app</strong>, que não dá pra editar aqui:</p>
+      <div style="border:1px solid var(--bd);border-radius:var(--rs);margin-bottom:10px">${TIPOS_MAN_DEFAULT.map(t=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid var(--bdl);font-size:13px"><span>${t.tipo}</span><span style="color:var(--tx3);font-size:11px">${t.intervKm.toLocaleString('pt-BR')} km · ${t.intervDias} dias</span></div>`).join('')}</div>
+      <button class="btn-buscar" id="btn-tipoman-padrao" style="width:100%;justify-content:center" onclick="cadastrarTiposManPadrao()"><i class="ti ti-download"></i> Gravar estes itens no cadastro (para Todos os veículos)</button>
+      <p style="font-size:11px;color:var(--tx3);margin-top:8px">Depois de gravar, você edita, desativa ou cria versões por tipo de veículo. Ao ter itens cadastrados, o app deixa de usar a lista padrão.</p>
+    </div>`;
+    return;
+  }
+  list.innerHTML='';
+  const porTipo={};
+  tiposManAdminCache.forEach(t=>{ const k=t.tipoVei||'Todos'; if(!porTipo[k])porTipo[k]=[]; porTipo[k].push(t); });
+  Object.keys(porTipo).sort().forEach(tipoVei=>{
+    const h=document.createElement('div'); h.className='sec'; h.textContent=tipoVei; list.appendChild(h);
+    porTipo[tipoVei].forEach(t=>{
+      const d=document.createElement('div'); d.className='fi';
+      if(String(t.ativo).toLowerCase()!=='sim') d.style.opacity='.5';
+      const info=[t.intervaloKm?Number(t.intervaloKm).toLocaleString('pt-BR')+' km':'', t.intervaloDias?t.intervaloDias+' dias':''].filter(Boolean).join(' · ') || 'sem intervalo';
+      d.innerHTML=`<div style="flex:1"><div class="fipl" style="font-size:13px"></div><div style="font-size:11px;color:var(--tx3)">${info}</div></div>
+        <div class="fi-actions">
+          <button class="fi-btn" title="Editar" data-ed><i class="ti ti-edit"></i></button>
+          <button class="fi-btn danger" title="Desativar" data-del><i class="ti ti-trash"></i></button>
+        </div>`;
+      d.querySelector('.fipl').textContent=t.tipo; // textContent: nome digitado pelo usuário nunca vira HTML
+      d.querySelector('[data-ed]').addEventListener('click',()=>editarTipoMan(t));
+      d.querySelector('[data-del]').addEventListener('click',()=>excluirTipoMan(t));
+      list.appendChild(d);
+    });
+  });
+}
+
+async function cadastrarTiposManPadrao(){
+  if(!cfg.url || !navigator.onLine){ toast('Sem conexão'); return; }
+  const btn=document.getElementById('btn-tipoman-padrao'); btn.disabled=true;
+  let ok=0;
+  for(const t of TIPOS_MAN_DEFAULT){
+    btn.innerHTML=`<span class="spin"></span> Gravando ${ok+1}/${TIPOS_MAN_DEFAULT.length}...`;
+    try{
+      const r=await fetch(cfg.url,{method:'POST',headers:{'Content-Type':'text/plain'},
+        body:JSON.stringify({action:'salvarTipoManutencao',senha:adminSenha,tipo:t.tipo,tipoVei:'Todos',ativo:'Sim',intervaloKm:t.intervKm,intervaloDias:t.intervDias,usuario:usuarioGoogle})});
+      const d=await r.json(); if(d.ok) ok++;
+    }catch(e){ /* segue; o resumo abaixo mostra quantos deram certo */ }
+  }
+  toast(ok===TIPOS_MAN_DEFAULT.length?'✓ '+ok+' itens gravados no cadastro':ok+' de '+TIPOS_MAN_DEFAULT.length+' gravados — tente de novo (os já gravados não duplicam)');
+  limparCacheTiposMan(); carregarTiposManAdmin();
+}
+
+function abrirFormTipoMan(){
+  editandoTipoManLinha=null;
+  document.getElementById('ftm-titulo').textContent='Novo item de manutenção';
+  document.getElementById('ftm-nome').value='';
+  document.getElementById('ftm-tipovei').value='Todos';
+  document.getElementById('ftm-ativo').value='Sim';
+  document.getElementById('ftm-km').value='';
+  document.getElementById('ftm-dias').value='';
+  document.getElementById('form-tipoman').style.display='block';
+  document.getElementById('ftm-nome').focus();
+}
+
+function editarTipoMan(t){
+  editandoTipoManLinha=t.linha;
+  document.getElementById('ftm-titulo').textContent='Editar item de manutenção';
+  document.getElementById('ftm-nome').value=t.tipo||'';
+  document.getElementById('ftm-tipovei').value=t.tipoVei||'Todos';
+  document.getElementById('ftm-ativo').value=String(t.ativo).toLowerCase()==='sim'?'Sim':'Não';
+  document.getElementById('ftm-km').value=t.intervaloKm||'';
+  document.getElementById('ftm-dias').value=t.intervaloDias||'';
+  document.getElementById('form-tipoman').style.display='block';
+  document.getElementById('form-tipoman').scrollIntoView({behavior:'smooth'});
+}
+
+function fecharFormTipoMan(){ document.getElementById('form-tipoman').style.display='none'; }
+
+async function salvarTipoManApp(){
+  const tipo = document.getElementById('ftm-nome').value.trim();
+  const tipoVei = document.getElementById('ftm-tipovei').value.trim() || 'Todos';
+  if(!tipo){ toast('Informe o nome da manutenção'); return; }
+  if(!cfg.url || !navigator.onLine){ toast('Sem conexão'); return; }
+  const payload={action:'salvarTipoManutencao', senha:adminSenha, tipo, tipoVei,
+    ativo:document.getElementById('ftm-ativo').value,
+    intervaloKm:document.getElementById('ftm-km').value, intervaloDias:document.getElementById('ftm-dias').value,
+    usuario:usuarioGoogle};
+  if(editandoTipoManLinha) payload.linha=editandoTipoManLinha;
+  try{
+    const r = await fetch(cfg.url, {method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload)});
+    const d = await r.json();
+    if(d.ok){
+      toast('✓ Item de manutenção '+(d.acao==='criado'?'cadastrado':'atualizado'));
+      fecharFormTipoMan(); limparCacheTiposMan(); carregarTiposManAdmin();
+    } else toast(d.erro || 'Erro ao salvar');
+  }catch(e){ toast('Erro de conexão'); }
+}
+
+async function excluirTipoMan(t){
+  if(!confirm('Desativar "'+t.tipo+'" ('+(t.tipoVei||'Todos')+')? Ele deixa de aparecer na manutenção dos veículos (o histórico já registrado é mantido).')) return;
+  try{
+    const r = await fetch(cfg.url, {method:'POST', headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'excluirTipoManutencao', senha:adminSenha, linha:t.linha, tipo:t.tipo, usuario:usuarioGoogle})});
+    const d = await r.json();
+    if(d.ok){ toast('✓ Item desativado'); limparCacheTiposMan(); carregarTiposManAdmin(); }
+    else toast(d.erro || 'Erro ao desativar');
+  }catch(e){ toast('Erro de conexão'); }
+}
+
+
 function toast(msg){
   const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';
   clearTimeout(t._t);t._t=setTimeout(()=>t.style.display='none',3200);
@@ -3702,7 +4232,8 @@ function checkOnline(){
 const MK = 'cv_man10'; // v10 — cache por tipo de veículo // cache tipos de manutenção
 const HK = 'cv_manhist10'; // cache do histórico (última/próxima troca) por placa
 let tiposMan = JSON.parse(localStorage.getItem(MK) || '[]');
-let manEstado = {}; // { tipo: { dataUlt, kmUlt, dataProx, kmProx, obs } }
+let manEstado = {}; // { tipo: { dataUlt, kmUlt, dataProx, kmProx, obs, linha, fotos:[links salvos], fotoBase64:[novas, ainda não enviadas] } }
+const novoManEstado = () => ({ dataUlt:'', kmUlt:'', dataProx:'', kmProx:'', obs:'', linha:null, fotos:[], fotoBase64:[] });
 
 // Tipos padrão caso não haja servidor configurado
 // Fallback quando não há aba Manutencao ou sem conexão
@@ -3760,7 +4291,9 @@ async function carregarHistoricoManutencao(placa) {
           dataProx: h.dataProx || '',
           kmProx:   h.kmProx   || '',
           obs:      h.obs      || '',
-          linha:    h.linha    || null
+          linha:    h.linha    || null,
+          fotos:    h.fotos    || [],
+          fotoBase64: []
         };
       });
       localStorage.setItem(chaveHist, JSON.stringify(manEstado));
@@ -3786,10 +4319,12 @@ function renderManItens(placa) {
   const tipos = tiposMan.length ? tiposMan : TIPOS_MAN_DEFAULT;
   const body  = document.getElementById('man-itens');
   const hoje  = new Date();
+  const podeEditar = ehAdminMan();
+  const dis = podeEditar ? '' : 'disabled';
   let alertas = 0, ok = 0, proximos = 0;
   body.innerHTML = '';
 
-  tipos.forEach(t => {
+  tipos.forEach((t, i) => {
     const est  = manEstado[t.tipo] || {};
     const stat = calcStatusMan(est, t, hoje);
     if (stat === 'alert') alertas++;
@@ -3812,30 +4347,44 @@ function renderManItens(placa) {
       <div class="man-grid">
         <div class="man-field">
           <label>Data da última troca</label>
-          <input type="date" id="mdu_${t.tipo.replace(/\s+/g,'_')}" value="${est.dataUlt||''}"
+          <input type="date" id="mdu_${t.tipo.replace(/\s+/g,'_')}" ${dis} value="${est.dataUlt||''}"
             oninput="updMan('${t.tipo}','dataUlt',this.value)">
         </div>
         <div class="man-field">
           <label>KM na última troca</label>
-          <input type="number" id="mku_${t.tipo.replace(/\s+/g,'_')}" value="${est.kmUlt||''}"
+          <input type="number" id="mku_${t.tipo.replace(/\s+/g,'_')}" ${dis} value="${est.kmUlt||''}"
             placeholder="Ex: 85000" oninput="updMan('${t.tipo}','kmUlt',this.value)">
         </div>
         <div class="man-field">
           <label>Próxima troca (data)</label>
-          <input type="date" id="mdp_${t.tipo.replace(/\s+/g,'_')}" value="${est.dataProx||''}"
+          <input type="date" id="mdp_${t.tipo.replace(/\s+/g,'_')}" ${dis} value="${est.dataProx||''}"
             oninput="updMan('${t.tipo}','dataProx',this.value)">
         </div>
         <div class="man-field">
           <label>Próximo KM previsto</label>
-          <input type="number" id="mkp_${t.tipo.replace(/\s+/g,'_')}" value="${est.kmProx||''}"
+          <input type="number" id="mkp_${t.tipo.replace(/\s+/g,'_')}" ${dis} value="${est.kmProx||''}"
             placeholder="Ex: 95000" oninput="updMan('${t.tipo}','kmProx',this.value)">
         </div>
       </div>
-      <textarea class="man-obs" placeholder="Observações (oficina, peças, etc.)"
-        oninput="updMan('${t.tipo}','obs',this.value)">${est.obs||''}</textarea>`;
+      <textarea class="man-obs" ${dis} placeholder="Observações (oficina, peças, etc.)"
+        oninput="updMan('${t.tipo}','obs',this.value)">${est.obs||''}</textarea>
+      <div>
+        <div class="man-foto-lbl" style="margin-bottom:6px">Foto evidência</div>
+        <div class="frow" id="mfp_${i}"></div>
+        ${podeEditar ? `<button type="button" class="fbtn" style="margin-top:6px" onclick="tirarFotoMan(${i})"><i class="ti ti-camera"></i> Adicionar foto da manutenção</button>` : ''}
+      </div>`;
     body.appendChild(div);
-    if (!manEstado[t.tipo]) manEstado[t.tipo] = { dataUlt:'', kmUlt:'', dataProx:'', kmProx:'', obs:'', linha:null };
+    if (!manEstado[t.tipo]) manEstado[t.tipo] = novoManEstado();
+    renderFotosMan(i);
   });
+
+  // barra de salvar: botão só pro admin; usuário comum vê o aviso no lugar
+  const btnSalvarMan = document.getElementById('btn-man-salvar');
+  if (btnSalvarMan) btnSalvarMan.style.display = podeEditar ? '' : 'none';
+  const hintMan = document.getElementById('man-save-hint');
+  if (hintMan) hintMan.innerHTML = podeEditar
+    ? 'Grava só as trocas/manutenções acima (com as fotos), <strong>sem precisar enviar o checklist</strong>.'
+    : '<i class="ti ti-lock"></i> Somente o <strong>administrador</strong> registra manutenção e troca. Você pode consultar a situação aqui; para lançar, entre em <strong>Frota → Gerenciar</strong> com a senha de administração.';
 
   // Atualiza badge do header -- prioridade: vencido > vencimento
   // próximo > em dia > não registrado
@@ -3869,7 +4418,9 @@ function diasAte(dataStr, hoje) {
 }
 
 function calcStatusMan(est, tipo, hoje) {
-  if (!est.dataUlt && !est.kmUlt) return 'pendente';
+  // Só é "não registrado" se não tiver nada -- manutenção gravada só com a
+  // previsão (próxima data/KM), sem a última troca, ainda precisa avisar
+  if (!est.dataUlt && !est.kmUlt && !est.dataProx && !est.kmProx) return 'pendente';
 
   const kmAtual = Number(document.getElementById('km')?.value) || ultimoKmConhecido;
 
@@ -3917,15 +4468,17 @@ function motivoVencimentoMan(est, hoje){
 }
 
 function updMan(tipo, campo, valor) {
-  if (!manEstado[tipo]) manEstado[tipo] = { dataUlt:'', kmUlt:'', dataProx:'', kmProx:'', obs:'', linha:null };
+  if (!ehAdminMan()) return;
+  if (!manEstado[tipo]) manEstado[tipo] = novoManEstado();
   manEstado[tipo][campo] = valor;
   // Auto-calcula próximo KM se tiver KM atual e intervalo
   if (campo === 'kmUlt' && valor) {
     const tipos  = tiposMan.length ? tiposMan : TIPOS_MAN_DEFAULT;
     const t      = tipos.find(x => x.tipo === tipo);
-    const intervalo = t ? (t.intervKm || 0) : 0;
+    // tipos do servidor vêm como intervaloKm, os padrão (offline) como intervKm
+    const intervalo = t ? (t.intervaloKm || t.intervKm || 0) : 0;
     if (intervalo) {
-      const prox = parseInt(valor) + intervalo;
+      const prox = parseInt(valor) + Number(intervalo);
       manEstado[tipo].kmProx = prox;
       const el = document.getElementById('mkp_' + tipo.replace(/\s+/g,'_'));
       if (el) el.value = prox;
@@ -3950,9 +4503,97 @@ async function mostrarManutencao(placa, tipoVeiculo) {
   await carregarHistoricoManutencao(placa);
 }
 
+/* ── FOTO EVIDÊNCIA DA MANUTENÇÃO ── */
+// miniaturas de um item (índice na lista de tipos): fotos já salvas (links) + novas
+// ainda não enviadas (base64), cada uma com o "x" pra remover
+function renderFotosMan(i) {
+  const tipos = tiposMan.length ? tiposMan : TIPOS_MAN_DEFAULT;
+  const t = tipos[i], row = document.getElementById('mfp_' + i);
+  if (!t || !row) return;
+  const est = manEstado[t.tipo] || (manEstado[t.tipo] = novoManEstado());
+  row.innerHTML = '';
+  const add = (src, viewSrc, remover) => {
+    const wrap = document.createElement('div'); wrap.className = 'man-foto-wrap';
+    const img = document.createElement('img'); img.className = 'fth'; img.src = src; img.loading = 'lazy';
+    img.onclick = () => abrirFoto(viewSrc);
+    img.onerror = () => { img.style.display = 'none'; };
+    const x = document.createElement('button'); x.type = 'button'; x.className = 'man-foto-x'; x.title = 'Remover foto';
+    x.innerHTML = '<i class="ti ti-x"></i>';
+    x.onclick = (e) => { e.stopPropagation(); remover(); renderFotosMan(i); };
+    wrap.appendChild(img); if (ehAdminMan()) wrap.appendChild(x); row.appendChild(wrap);
+  };
+  (est.fotos || []).forEach((link, k) =>
+    add(driveThumbUrl(link), driveThumbUrl(link, 1200), () => { est.fotos.splice(k, 1); }));
+  (est.fotoBase64 || []).forEach((b64, k) =>
+    add(b64, b64, () => { est.fotoBase64.splice(k, 1); }));
+}
+
+function tirarFotoMan(i) {
+  if (!ehAdminMan()) { toast('Somente o administrador registra manutenção'); return; }
+  const tipos = tiposMan.length ? tiposMan : TIPOS_MAN_DEFAULT;
+  const t = tipos[i]; if (!t) return;
+  const inp = document.getElementById('finp');
+  inp.onchange = e => {
+    const f = e.target.files[0]; if (!f) return;
+    // 800px: evidência de manutenção (nota, peça, painel) precisa de mais nitidez que a foto de NOK
+    comprimirImagem(f, 800, 0.6, blob => {
+      const r = new FileReader();
+      r.onload = ev => {
+        if (!manEstado[t.tipo]) manEstado[t.tipo] = novoManEstado();
+        (manEstado[t.tipo].fotoBase64 = manEstado[t.tipo].fotoBase64 || []).push(ev.target.result);
+        renderFotosMan(i);
+      };
+      r.readAsDataURL(blob);
+    });
+    inp.value = '';
+  };
+  inp.click();
+}
+
+/* ── BOTÃO "SALVAR MANUTENÇÃO": grava só as manutenções (dados + fotos), sem enviar o checklist ── */
+async function salvarManutencaoAgora() {
+  if (!ehAdminMan()) { toast('Somente o administrador pode salvar manutenção e troca'); return; }
+  if (!vSel) { toast('Selecione um veículo primeiro'); return; }
+  const lista = getPayloadManutencao();
+  if (!lista.length) { toast('Preencha ao menos uma manutenção (data, KM ou foto) antes de salvar'); return; }
+  if (!cfg.url) { toast('Configure a URL na aba Config'); return; }
+  if (!navigator.onLine) { toast('Sem internet — a manutenção só pode ser salva com conexão'); return; }
+
+  const btn = document.getElementById('btn-man-salvar');
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Salvando manutenção...';
+  try {
+    // fetch normal (não no-cors) porque precisamos ler a resposta: ela traz os links das fotos enviadas
+    const r = await fetch(cfg.url, { method: 'POST', headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'gravarManutencao', senha: adminSenha, origem: 'botao_manutencao', placa: vSel.placa, usuario: usuarioGoogle || '', manutencao: lista }) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.erro || 'O servidor não confirmou o salvamento');
+    // guarda os links devolvidos e limpa as fotos novas (já subiram) — sem isso, salvar de
+    // novo (ou enviar o checklist) reenviaria as mesmas fotos
+    Object.entries(d.fotos || {}).forEach(([tipo, links]) => {
+      if (!manEstado[tipo]) manEstado[tipo] = novoManEstado();
+      manEstado[tipo].fotos = links; manEstado[tipo].fotoBase64 = [];
+    });
+    try { localStorage.setItem(HK + '_' + vSel.placa, JSON.stringify(manEstado)); } catch (e) {}
+    renderManItens(vSel.placa);
+    toast(d.avisoHistorico
+      ? '⚠ Manutenção salva, mas o histórico NÃO foi registrado — avise o administrador do sistema'
+      : '✓ Manutenção salva (' + lista.length + (lista.length === 1 ? ' item' : ' itens') + ')');
+    if (d.avisoHistorico) console.warn(d.avisoHistorico);
+  } catch (e) {
+    toast('Erro ao salvar manutenção: ' + (e.message || 'conexão'));
+  } finally {
+    btn.disabled = false; btn.innerHTML = '<i class="ti ti-tool"></i> Salvar manutenção';
+  }
+}
+
+// Manutenção/troca: qualquer um VÊ o bloco, mas só o administrador (logado em Frota → Gerenciar)
+// altera e salva. O Worker também exige a senha de admin em gravarManutencao.
+const ehAdminMan = () => nivelAcesso === 'admin' && !!adminSenha;
+
 function getPayloadManutencao() {
+  if (!ehAdminMan()) return []; // usuário comum nunca envia manutenção (nem junto do checklist)
   return Object.entries(manEstado)
-    .filter(([, v]) => v.dataUlt || v.kmUlt || v.dataProx || v.kmProx)
+    .filter(([, v]) => v.dataUlt || v.kmUlt || v.dataProx || v.kmProx || (v.fotoBase64 && v.fotoBase64.length))
     .map(([tipo, v]) => ({ tipo, ...v }));
 }
 
