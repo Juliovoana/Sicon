@@ -201,6 +201,7 @@
         <button class="aba-btn ativa" data-aba="registrar">👕 Registrar</button>
         <button class="aba-btn" data-aba="catalogo" id="aba-btn-catalogo" style="display:none;">📋 Catálogo</button>
         <button class="aba-btn" data-aba="renovacoes">⏰ Renovações</button>
+        <button class="aba-btn" data-aba="porsetor">📊 Por setor</button>
     </div>
 
     <!-- ==================== ABA REGISTRAR ==================== -->
@@ -265,6 +266,34 @@
             <div id="listaRenovacoes"></div>
             <div id="vazioRenovacoes" class="vazio hidden">Nada vencendo nos próximos 30 dias.</div>
         </div>
+    </div>
+
+    <!-- ==================== ABA POR SETOR (relatório de entregas) ==================== -->
+    <div class="conteudo-aba" id="aba-porsetor">
+        <div class="cartao">
+            <h2>Entrega por setor</h2>
+            <p class="subtitulo" style="margin:0 0 12px 0;">Tudo que saiu do estoque de uniformes/EPI no período, agrupado pelo <strong>setor</strong> que arcou com o custo: entregas a profissionais e baixas só pro setor. Devoluções são descontadas.</p>
+            <div class="grade">
+                <div class="campo"><label>De</label><input type="date" id="relSetorDe"></div>
+                <div class="campo"><label>Até</label><input type="date" id="relSetorAte"></div>
+                <div class="campo"><label>Setor</label><select id="relSetorSetor"><option value="">Todos os setores</option></select></div>
+                <div class="campo"><label>Tipo de item</label>
+                    <select id="relSetorTipo">
+                        <option value="">Uniformes, EPIs e avulsos</option>
+                        <option value="uniforme">Só uniformes</option>
+                        <option value="epi">Só EPIs</option>
+                        <option value="avulso">Só avulsos</option>
+                    </select>
+                </div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button type="button" class="btn btn-principal" id="btnGerarRelSetor" style="width:auto;">Gerar relatório</button>
+                <button type="button" class="btn btn-cinza" id="btnPdfRelSetor" style="width:auto;" disabled>📄 PDF</button>
+                <button type="button" class="btn btn-cinza" id="btnCsvRelSetor" style="width:auto;" disabled>📊 Excel (CSV)</button>
+            </div>
+            <p class="status-msg" id="statusRelSetor"></p>
+        </div>
+        <div id="relSetorResultado"></div>
     </div>
 </div>
 
@@ -524,7 +553,7 @@ function somarDias(dataISO, dias) {
 // ---------------------------------------------------------------
 const AJUDA_UNIFORMES_EPI = {
     titulo: 'Uniformes / EPI',
-    ultimaRevisao: '10/10/2026',
+    ultimaRevisao: '14/10/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>Controle de peças de uniforme e EPI entregues aos profissionais do Staff --
@@ -641,6 +670,24 @@ const AJUDA_UNIFORMES_EPI = {
             </ul>
             <p>Devolver ou descartar a peça (na aba Registrar, na ficha do profissional) tira o
             item dessa lista.</p>
+        ` },
+        { id: 'porsetor', titulo: 'Por setor', corpo: `
+            <p>Relatório de <strong>entrega por setor</strong>: tudo que saiu do estoque de uniformes/EPI,
+            agrupado pelo setor que arcou com o custo. Qualquer pessoa com acesso ao módulo consulta.</p>
+            <ul>
+                <li>Filtros: <strong>período</strong> (padrão = mês atual), <strong>setor</strong> e
+                <strong>tipo de item</strong> (uniforme, EPI ou avulso).</li>
+                <li>Entram as <strong>entregas a profissionais</strong> e as <strong>baixas só pro setor</strong>
+                (📤 Baixa / Entrega do catálogo), mais qualquer saída desses itens feita direto no Estoque.
+                As <strong>devoluções</strong> são descontadas da quantidade e do valor.</li>
+                <li>Cada setor mostra o total e os itens (quantidade e valor); em <strong>Ver lançamentos</strong>
+                aparecem data, item, profissional (ou "consumo do setor") e subsetor.</li>
+                <li><strong>Sem setor informado</strong> = entregas feitas pela ficha do profissional (aba Registrar),
+                que não perguntam o setor. Pra entrar no setor certo, use a <strong>📤 Baixa / Entrega</strong> do catálogo
+                informando setor + profissional.</li>
+                <li><strong>📄 PDF</strong> (visualizar / baixar / compartilhar) e <strong>📊 Excel (CSV)</strong> exportam o
+                que está na tela.</li>
+            </ul>
         ` }
     ]
 };
@@ -2300,6 +2347,247 @@ function renderizarRenovacoes(alertas) {
         </div>`;
     }).join('');
 }
+
+// ---------------------------------------------------------------
+// RELATÓRIO DE ENTREGA POR SETOR -- lê as SAÍDAS de estoque_movimentacoes (onde o setor é gravado, ver "Baixa / Entrega"):
+//   (a) as feitas por este módulo (fornecedor_nome = 'Uniformes/EPI': entrega a profissional e baixa só pro setor) e
+//   (b) qualquer outra saída dos produtos do catálogo (feita direto no Estoque). Devolução desconta (entregas com status 'devolvido'
+//   ligadas ao movimento). Entrega pela ficha do profissional não pergunta setor -> cai em "Sem setor informado".
+// ---------------------------------------------------------------
+let relSetorDados = null; // { periodo, filtros, grupos: [...], total } -- o que está na tela (base do PDF/CSV)
+let relSetorPronto = false;
+
+function primeiroDiaDoMesISO() { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1).toLocaleDateString('sv-SE'); }
+function hojeLocalISO() { return new Date().toLocaleDateString('sv-SE'); }
+
+async function prepararRelSetor() {
+    if (!document.getElementById('relSetorDe').value) document.getElementById('relSetorDe').value = primeiroDiaDoMesISO();
+    if (!document.getElementById('relSetorAte').value) document.getElementById('relSetorAte').value = hojeLocalISO();
+    if (relSetorPronto) return;
+    const { data } = await sb.from('unidade_setores').select('id, nome, ativo').eq('unidade_negocio_id', meuPerfil.unidadeId).order('nome');
+    const sel = document.getElementById('relSetorSetor');
+    sel.innerHTML = '<option value="">Todos os setores</option><option value="sem">Sem setor informado</option>'
+        + (data || []).map(st => `<option value="${st.id}">${escapeHtml(st.nome)}${st.ativo === false ? ' (inativo)' : ''}</option>`).join('');
+    relSetorPronto = true;
+}
+document.querySelector('[data-aba="porsetor"]').addEventListener('click', prepararRelSetor);
+
+async function buscarPaginado(montar) {
+    const todas = [];
+    for (let ini = 0; ; ini += 1000) {
+        const { data, error } = await montar().order('id').range(ini, ini + 999);
+        if (error) throw error;
+        todas.push(...(data || []));
+        if (!data || data.length < 1000) break;
+    }
+    return todas;
+}
+
+// nome do profissional gravado na observação ("Entrega uniforme/EPI — NOME — Setor: X / Y — obs")
+function destinoDaMovimentacao(m) {
+    const obs = String(m.observacao || '');
+    if (/^Entrega uniforme\/EPI/i.test(obs)) {
+        const partes = obs.split(' — ');
+        return partes[1] ? partes[1].trim() : 'Profissional';
+    }
+    if (/^Baixa uniforme\/EPI para o setor/i.test(obs)) return 'Consumo do setor';
+    return 'Baixa no Estoque';
+}
+
+async function gerarRelSetor() {
+    const statusEl = document.getElementById('statusRelSetor');
+    const de = document.getElementById('relSetorDe').value;
+    const ate = document.getElementById('relSetorAte').value;
+    const filtroSetor = document.getElementById('relSetorSetor').value;
+    const filtroTipo = document.getElementById('relSetorTipo').value;
+    statusEl.style.color = '';
+    if (!de || !ate) { statusEl.textContent = 'Informe o período (De / Até).'; return; }
+    if (de > ate) { statusEl.textContent = 'A data inicial é depois da final.'; return; }
+    statusEl.textContent = 'Buscando...';
+    document.getElementById('btnGerarRelSetor').disabled = true;
+    try {
+        await prepararRelSetor();
+        const un = meuPerfil.unidadeId;
+        const idsProdutosCatalogo = [...new Set(catalogo.map(c => c.produto_id).filter(Boolean))];
+        const consultas = [
+            buscarPaginado(() => sb.from('estoque_movimentacoes').select('*').eq('unidade_negocio_id', un).eq('tipo', 'saida')
+                .eq('fornecedor_nome', 'Uniformes/EPI').gte('data', de).lte('data', ate))
+        ];
+        for (let i = 0; i < idsProdutosCatalogo.length; i += 150) {
+            const lote = idsProdutosCatalogo.slice(i, i + 150);
+            consultas.push(buscarPaginado(() => sb.from('estoque_movimentacoes').select('*').eq('unidade_negocio_id', un).eq('tipo', 'saida')
+                .in('produto_id', lote).gte('data', de).lte('data', ate)));
+        }
+        const mapaMov = new Map();
+        (await Promise.all(consultas)).forEach(lista => lista.forEach(m => mapaMov.set(m.id, m)));
+        const movs = [...mapaMov.values()];
+
+        // devoluções: peças já devolvidas de cada movimento de entrega
+        const devolvidasPorMov = {};
+        const idsMov = movs.map(m => m.id);
+        for (let i = 0; i < idsMov.length; i += 150) {
+            const { data, error } = await sb.from('staff_uniformes_epi_entregas').select('estoque_movimentacao_entrega_id, quantidade')
+                .in('estoque_movimentacao_entrega_id', idsMov.slice(i, i + 150)).eq('status', 'devolvido');
+            if (error) throw error;
+            (data || []).forEach(e => { devolvidasPorMov[e.estoque_movimentacao_entrega_id] = (devolvidasPorMov[e.estoque_movimentacao_entrega_id] || 0) + (Number(e.quantidade) || 1); });
+        }
+
+        const [rs, rss] = await Promise.all([
+            sb.from('unidade_setores').select('id, nome').eq('unidade_negocio_id', un),
+            sb.from('unidade_subsetores').select('id, nome').eq('unidade_negocio_id', un)
+        ]);
+        const nomeSetor = {}; (rs.data || []).forEach(x => { nomeSetor[x.id] = x.nome; });
+        const nomeSubsetor = {}; (rss.data || []).forEach(x => { nomeSubsetor[x.id] = x.nome; });
+
+        const catPorProduto = {}; catalogo.forEach(c => { if (c.produto_id) catPorProduto[c.produto_id] = c; });
+        const linhas = [];
+        movs.forEach(m => {
+            const cat = m.produto_id ? catPorProduto[m.produto_id] : null;
+            const tipoItem = m.produto_id ? (cat ? cat.tipo : 'outro') : 'avulso';
+            const qtd = Math.max(0, (Number(m.qtd) || 0) - (devolvidasPorMov[m.id] || 0));
+            if (qtd <= 0) return;
+            const setorChave = m.setor_id != null ? String(m.setor_id) : 'sem';
+            if (filtroSetor && filtroSetor !== setorChave) return;
+            if (filtroTipo && filtroTipo !== tipoItem) return;
+            const vu = Number(m.valor_unit) || 0;
+            linhas.push({
+                setorChave,
+                setorNome: m.setor_id != null ? (nomeSetor[m.setor_id] || '#' + m.setor_id) : 'Sem setor informado',
+                subsetor: m.subsetor_id != null ? (nomeSubsetor[m.subsetor_id] || '#' + m.subsetor_id) : '',
+                data: String(m.data || '').slice(0, 10),
+                itemChave: m.produto_id ? 'p' + m.produto_id : 'a' + (m.descricao_avulsa || ''),
+                item: cat ? cat.nome + (cat.tamanho ? ' — ' + cat.tamanho : '') : (m.produto_id ? 'Produto #' + m.produto_id : (m.descricao_avulsa || 'Item') + ' (avulso)'),
+                tipoItem, destino: destinoDaMovimentacao(m), qtd, valorUnit: vu, total: qtd * vu
+            });
+        });
+
+        const porSetor = new Map();
+        linhas.forEach(l => {
+            if (!porSetor.has(l.setorChave)) porSetor.set(l.setorChave, { chave: l.setorChave, nome: l.setorNome, linhas: [], itens: new Map(), qtd: 0, total: 0 });
+            const g = porSetor.get(l.setorChave);
+            g.linhas.push(l); g.qtd += l.qtd; g.total += l.total;
+            const it = g.itens.get(l.itemChave) || { item: l.item, tipoItem: l.tipoItem, qtd: 0, total: 0 };
+            it.qtd += l.qtd; it.total += l.total; g.itens.set(l.itemChave, it);
+        });
+        const grupos = [...porSetor.values()].sort((a, b) => (a.chave === 'sem') - (b.chave === 'sem') || a.nome.localeCompare(b.nome, 'pt-BR'));
+        grupos.forEach(g => { g.linhas.sort((a, b) => a.data.localeCompare(b.data) || a.item.localeCompare(b.item, 'pt-BR')); g.itensLista = [...g.itens.values()].sort((a, b) => b.total - a.total); });
+
+        relSetorDados = {
+            de, ate, grupos,
+            filtroSetorTxt: filtroSetor ? document.getElementById('relSetorSetor').selectedOptions[0].textContent : 'Todos os setores',
+            filtroTipoTxt: document.getElementById('relSetorTipo').selectedOptions[0].textContent,
+            qtd: grupos.reduce((a, g) => a + g.qtd, 0), total: grupos.reduce((a, g) => a + g.total, 0)
+        };
+        renderizarRelSetor();
+        statusEl.textContent = '';
+    } catch (e) {
+        relSetorDados = null;
+        document.getElementById('relSetorResultado').innerHTML = '';
+        statusEl.style.color = 'var(--danger)';
+        statusEl.textContent = 'Erro ao gerar: ' + (e.message || e);
+    } finally {
+        document.getElementById('btnGerarRelSetor').disabled = false;
+        document.getElementById('btnPdfRelSetor').disabled = !relSetorDados || !relSetorDados.grupos.length;
+        document.getElementById('btnCsvRelSetor').disabled = !relSetorDados || !relSetorDados.grupos.length;
+    }
+}
+
+const ROTULO_TIPO_ITEM = { uniforme: 'Uniforme', epi: 'EPI', avulso: 'Avulso', outro: 'Outro' };
+
+function renderizarRelSetor() {
+    const wrap = document.getElementById('relSetorResultado');
+    const d = relSetorDados;
+    if (!d || !d.grupos.length) { wrap.innerHTML = '<div class="cartao"><div class="vazio">Nenhuma saída de uniforme/EPI nesse período e filtros.</div></div>'; return; }
+    wrap.innerHTML = `
+        <div class="cartao" style="display:flex; gap:24px; flex-wrap:wrap;">
+            <div><div class="subtitulo">Período</div><strong>${formatarDataSemFuso(d.de)} a ${formatarDataSemFuso(d.ate)}</strong></div>
+            <div><div class="subtitulo">Setores</div><strong>${d.grupos.length}</strong></div>
+            <div><div class="subtitulo">Peças entregues (líquido)</div><strong>${d.qtd.toLocaleString('pt-BR')}</strong></div>
+            <div><div class="subtitulo">Valor total</div><strong>${formatarMoeda(d.total)}</strong></div>
+        </div>
+    ` + d.grupos.map(g => `
+        <div class="cartao">
+            <div style="display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+                <h2 style="margin:0;">${escapeHtml(g.nome)}</h2>
+                <strong>${g.qtd.toLocaleString('pt-BR')} peça(s) · ${formatarMoeda(g.total)}</strong>
+            </div>
+            <table style="width:100%; border-collapse:collapse; font-size:.9rem;">
+                <thead><tr style="text-align:left; color:var(--muted);"><th style="padding:6px 4px;">Item</th><th style="padding:6px 4px;">Tipo</th><th style="padding:6px 4px; text-align:right;">Qtd</th><th style="padding:6px 4px; text-align:right;">Valor</th></tr></thead>
+                <tbody>${g.itensLista.map(it => `<tr style="border-top:1px solid var(--border);"><td style="padding:6px 4px;">${escapeHtml(it.item)}</td><td style="padding:6px 4px;">${ROTULO_TIPO_ITEM[it.tipoItem] || ''}</td><td style="padding:6px 4px; text-align:right;">${it.qtd.toLocaleString('pt-BR')}</td><td style="padding:6px 4px; text-align:right;">${formatarMoeda(it.total)}</td></tr>`).join('')}</tbody>
+            </table>
+            <details style="margin-top:10px;">
+                <summary style="cursor:pointer; color:var(--brand); font-weight:600;">Ver lançamentos (${g.linhas.length})</summary>
+                <table style="width:100%; border-collapse:collapse; font-size:.85rem; margin-top:8px;">
+                    <thead><tr style="text-align:left; color:var(--muted);"><th style="padding:5px 4px;">Data</th><th style="padding:5px 4px;">Item</th><th style="padding:5px 4px;">Profissional / destino</th><th style="padding:5px 4px;">Subsetor</th><th style="padding:5px 4px; text-align:right;">Qtd</th><th style="padding:5px 4px; text-align:right;">Total</th></tr></thead>
+                    <tbody>${g.linhas.map(l => `<tr style="border-top:1px solid var(--border);"><td style="padding:5px 4px; white-space:nowrap;">${formatarDataSemFuso(l.data)}</td><td style="padding:5px 4px;">${escapeHtml(l.item)}</td><td style="padding:5px 4px;">${escapeHtml(l.destino)}</td><td style="padding:5px 4px;">${escapeHtml(l.subsetor) || '—'}</td><td style="padding:5px 4px; text-align:right;">${l.qtd.toLocaleString('pt-BR')}</td><td style="padding:5px 4px; text-align:right;">${formatarMoeda(l.total)}</td></tr>`).join('')}</tbody>
+                </table>
+            </details>
+        </div>
+    `).join('');
+}
+
+document.getElementById('btnGerarRelSetor').addEventListener('click', gerarRelSetor);
+
+let autoTablePdfCarregado = false;
+document.getElementById('btnPdfRelSetor').addEventListener('click', async () => {
+    const d = relSetorDados;
+    if (!d || !d.grupos.length) return;
+    const statusEl = document.getElementById('statusRelSetor');
+    try {
+        statusEl.style.color = ''; statusEl.textContent = 'Montando o PDF...';
+        await carregarJsPdf();
+        if (!autoTablePdfCarregado) { await carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js'); autoTablePdfCarregado = true; }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape' });
+        const margem = 12;
+        doc.setFontSize(14); doc.setFont(undefined, 'bold');
+        doc.text('Entrega de uniformes/EPI por setor', margem, 14);
+        doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(90);
+        doc.text(`${meuPerfil.unidadeNome} · Período: ${formatarDataSemFuso(d.de)} a ${formatarDataSemFuso(d.ate)} · ${d.filtroSetorTxt} · ${d.filtroTipoTxt}`, margem, 20);
+        doc.text('Gerado em ' + new Date().toLocaleString('pt-BR'), margem, 25);
+        doc.setTextColor(0);
+        let y = 31;
+        d.grupos.forEach(g => {
+            if (y > 175) { doc.addPage(); y = 14; }
+            doc.setFontSize(11); doc.setFont(undefined, 'bold');
+            doc.text(`${g.nome} — ${g.qtd.toLocaleString('pt-BR')} peça(s) · ${formatarMoeda(g.total)}`, margem, y);
+            doc.autoTable({
+                startY: y + 2, margin: { left: margem, right: margem },
+                head: [['Data', 'Item', 'Tipo', 'Profissional / destino', 'Subsetor', 'Qtd', 'Vlr unit.', 'Total']],
+                body: g.linhas.map(l => [formatarDataSemFuso(l.data), l.item, ROTULO_TIPO_ITEM[l.tipoItem] || '', l.destino, l.subsetor || '—', l.qtd, formatarMoeda(l.valorUnit), formatarMoeda(l.total)]),
+                foot: [['', '', '', '', 'Subtotal', g.qtd, '', formatarMoeda(g.total)]],
+                styles: { fontSize: 8, cellPadding: 1.6 }, headStyles: { fillColor: [27, 67, 50] }, footStyles: { fillColor: [235, 235, 235], textColor: 0, fontStyle: 'bold' },
+                columnStyles: { 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' } },
+                showFoot: 'lastPage'
+            });
+            y = doc.lastAutoTable.finalY + 8;
+        });
+        if (y > 185) { doc.addPage(); y = 16; }
+        doc.setFontSize(11); doc.setFont(undefined, 'bold');
+        doc.text(`Total geral: ${d.qtd.toLocaleString('pt-BR')} peça(s) · ${formatarMoeda(d.total)}`, margem, y);
+        const total = doc.getNumberOfPages();
+        for (let i = 1; i <= total; i++) { doc.setPage(i); doc.setFontSize(8); doc.setFont(undefined, 'normal'); doc.setTextColor(120); doc.text(`Página ${i} de ${total}`, 297 - margem, 205, { align: 'right' }); }
+        statusEl.textContent = '';
+        mostrarPopupAcoesPdf('Relatório gerado', doc.output('blob'), `entrega-uniformes-epi-por-setor-${d.de}-a-${d.ate}.pdf`);
+    } catch (e) {
+        statusEl.style.color = 'var(--danger)';
+        statusEl.textContent = 'Não consegui gerar o PDF: ' + (e.message || e);
+    }
+});
+
+document.getElementById('btnCsvRelSetor').addEventListener('click', () => {
+    const d = relSetorDados;
+    if (!d || !d.grupos.length) return;
+    const cel = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const num = v => String(Number(v || 0).toFixed(2)).replace('.', ',');
+    const linhas = [['Setor', 'Subsetor', 'Data', 'Item', 'Tipo', 'Profissional / destino', 'Qtd', 'Valor unitário', 'Total']];
+    d.grupos.forEach(g => g.linhas.forEach(l => linhas.push([g.nome, l.subsetor, formatarDataSemFuso(l.data), l.item, ROTULO_TIPO_ITEM[l.tipoItem] || '', l.destino, l.qtd, num(l.valorUnit), num(l.total)])));
+    const csv = '\ufeff' + linhas.map(r => r.map(cel).join(';')).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `entrega-uniformes-epi-por-setor-${d.de}-a-${d.ate}.csv`;
+    a.click();
+});
 
 // ---------------------------------------------------------------
 // INÍCIO
