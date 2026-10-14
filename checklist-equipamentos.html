@@ -1109,7 +1109,11 @@ const AJUDA_CHECKLIST = {
         <strong>KM/horímetro atual</strong> — o sistema avisa (em vermelho) se você digitar um
         valor <strong>menor</strong> que o último registrado, pra evitar erro de digitação.</li>
         <li><strong>Preencher com último checklist deste veículo</strong> reaproveita os
-        mesmos itens já usados na vez anterior, pra ganhar tempo.</li>
+        mesmos itens já usados na vez anterior, pra ganhar tempo. Se algum item estava marcado como
+        <strong>urgente</strong> (os que têm “🚨 Gera OS”), o app pergunta se você quer <strong>reforçar
+        a urgência</strong>: confirmando, o item continua marcado como urgente / não resolvido, mas
+        <strong>não cria uma nova OS</strong> (a OS já existe); cancelando, o item volta para
+        “pendente” pra você avaliar de novo.</li>
         <li><strong>Status de funcionamento</strong> (Disponível/Locado/Manutenção/Não
         especificado) — se marcar Locado, pede também o local.</li>
         <li>Os itens do checklist mudam conforme o <strong>tipo</strong> do equipamento, mais
@@ -1431,6 +1435,8 @@ function buildChecklist(tipo){
 }
 
 function marcar(id, s){
+  // mexeu no status: deixa de ser a "urgência reforçada" do último checklist (um NOK novo depois disso é ocorrência nova)
+  if (est[id].semNovaOS) { est[id].semNovaOS = false; const sl = document.getElementById('urg_' + id); if (sl) sl.remove(); }
   est[id].status = est[id].status === s ? null : s;
   const ns = est[id].status;
   document.getElementById('ok_' + id).setAttribute('style', ns === 'ok' ? OK1 : OK0);
@@ -1494,6 +1500,42 @@ async function preencherUltimoChecklist(){
       aplicados++;
     });
 
+    // Itens que estavam NOK e estão cadastrados pra gerar OS ("🚨 Gera OS"): pergunta se quer REFORÇAR a urgência.
+    // Confirmando, o item continua marcado como urgente/não resolvido, mas NÃO gera uma nova OS (a OS já existe).
+    // Cancelando, o item volta para "pendente" pra ser avaliado de novo neste checklist.
+    const urgentes = Object.keys(est).filter(id => est[id].status === 'nok' && itensModeloGerarOsMap[est[id].itemModeloId]);
+    if (urgentes.length) {
+      const lista = urgentes.map(id => '• ' + est[id].nome).join('\n');
+      const reforcar = confirm('⚠ O último checklist deste equipamento tem ' + urgentes.length + ' item(ns) marcado(s) como URGENTE (geram OS):\n\n' + lista +
+        '\n\nDeseja REFORÇAR a urgência?\n\nOK = continua marcado como urgente / não resolvido. NÃO cria uma nova OS.\nCancelar = não reforça: o item volta para "pendente" para você avaliar de novo.');
+      const hojeBR = new Date().toLocaleDateString('pt-BR');
+      urgentes.forEach(id => {
+        if (reforcar) {
+          est[id].semNovaOS = true;
+          est[id].obs = ((est[id].obs || '').replace(/\s*\[Urgência reforçada[^\]]*\]/g, '').trim() + ' [Urgência reforçada em ' + hojeBR + ' — sem nova OS]').trim();
+          const ta = document.querySelector('#ex_' + id + ' textarea'); if (ta) ta.value = est[id].obs;
+          const ex = document.getElementById('ex_' + id);
+          if (ex && !document.getElementById('urg_' + id)) {
+            const sl = document.createElement('div'); sl.id = 'urg_' + id;
+            sl.style.cssText = 'background:#fee2e2;color:#991b1b;border-radius:6px;padding:5px 9px;font-size:12px;font-weight:600;margin-bottom:6px';
+            sl.textContent = '🚨 Urgência reforçada — não resolvido, sem gerar nova OS';
+            ex.insertBefore(sl, ex.firstChild);
+          }
+        } else {
+          est[id].status = null; est[id].obs = ''; est[id].fotoUrls = []; est[id].fotos = [];
+          document.getElementById('ok_' + id).setAttribute('style', OK0);
+          document.getElementById('nok_' + id).setAttribute('style', NK0);
+          document.getElementById('ex_' + id).className = 'cx';
+          const ta = document.querySelector('#ex_' + id + ' textarea'); if (ta) ta.value = '';
+          const fp = document.getElementById('fp_' + id); if (fp) fp.innerHTML = '';
+          aplicados--;
+        }
+      });
+      updCnt();
+      toast(reforcar ? '🚨 Urgência reforçada em ' + urgentes.length + ' item(ns) — nenhuma nova OS será criada'
+                     : urgentes.length + ' item(ns) urgente(s) voltaram para pendente — avalie de novo');
+      return;
+    }
     updCnt();
     toast(aplicados ? '✓ Preenchido com ' + aplicados + ' item(ns) do último checklist.' : 'O último checklist não tinha itens em comum com o modelo atual.');
   } catch (erro) {
@@ -2259,7 +2301,10 @@ async function enviarChecklist(){
     // (Almoxarifado/Setor/Evento) configurados em Gerenciar → OS
     // automática, sem depender do motorista escolher nada
     let mensagemFinal = '✓ Checklist enviado com sucesso!';
-    const itensParaOS = Object.values(est).filter(item => item.status === 'nok' && itensModeloGerarOsMap[item.itemModeloId]);
+    // item com "urgência reforçada" (vindo do último checklist) segue NOK/urgente, mas a OS já existe: NÃO gera outra
+    const reforcados = Object.values(est).filter(item => item.status === 'nok' && item.semNovaOS && itensModeloGerarOsMap[item.itemModeloId]);
+    if (reforcados.length) mensagemFinal = '✓ Checklist enviado — urgência reforçada em ' + reforcados.length + ' item(ns), sem nova OS.';
+    const itensParaOS = Object.values(est).filter(item => item.status === 'nok' && !item.semNovaOS && itensModeloGerarOsMap[item.itemModeloId]);
     if (itensParaOS.length) {
       if (!parametrosOSAutomatica || !parametrosOSAutomatica.almoxarifado_id || !parametrosOSAutomatica.setor_id || !parametrosOSAutomatica.evento_texto) {
         console.warn('OS automática não gerada: configure Almoxarifado/Setor/Evento em Gerenciar → OS automática.');
@@ -2295,7 +2340,7 @@ async function enviarChecklist(){
           const { error: errItensOS } = await sb.from('estoque_requisicoes_rapidas_itens').insert(itensOSPayload);
           if (errItensOS) throw errItensOS;
 
-          mensagemFinal = '✓ Checklist enviado — ' + itensParaOS.length + ' OS gerada(s) automaticamente.';
+          mensagemFinal = '✓ Checklist enviado — ' + itensParaOS.length + ' OS gerada(s) automaticamente.' + (reforcados.length ? ' Urgência reforçada em ' + reforcados.length + ' item(ns), sem nova OS.' : '');
         } catch (errOS) {
           console.error('Falha ao gerar OS automática:', errOS.message);
           mensagemFinal = '✓ Checklist enviado — mas houve erro ao gerar a OS automática: ' + errOS.message;

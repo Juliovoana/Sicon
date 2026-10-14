@@ -3375,6 +3375,10 @@ async function carregarMovimentacoes() {
         fornecedorCnpj: m.fornecedor_cnpj || '',
         fornecedorNome: m.fornecedor_nome || '',
         almoxarifadoId: m.almoxarifado_id != null ? Number(m.almoxarifado_id) : null,
+        setorId: m.setor_id != null ? Number(m.setor_id) : null,
+        subsetorId: m.subsetor_id != null ? Number(m.subsetor_id) : null,
+        planoContasId: m.plano_contas_id != null ? Number(m.plano_contas_id) : null,
+        estoqueNotaId: m.estoque_nota_id != null ? Number(m.estoque_nota_id) : null,
         descricaoAvulsa: m.descricao_avulsa || null
     }));
 }
@@ -3601,6 +3605,10 @@ const AJUDA_ESTOQUE = {
             Fornecedor, Tag, Evento ou <strong>Item avulso (nome ou parte do nome)</strong> — esse
             último busca pelo texto digitado no item avulso (ex: "madeira", "areia"), funciona
             sozinho ou junto com a guia de avulsos abaixo.</p>
+            <p><strong>Abrir a nota do lançamento:</strong> o selo <strong>Entrada ↗</strong> / <strong>Saída ↗</strong>
+            (sublinhado) abre a nota que originou o movimento — a nota de entrada, ou a requisição de saída — pra você
+            alterar. O mesmo vale no popup <strong>ℹ️</strong> do produto (histórico), que reabre sozinho ao fechar a nota.
+            Lançamento sem nota (baixa direta, por exemplo) tem o selo comum, sem o ↗: use <strong>✏️ Editar</strong>.</p>
             <p><strong>🏷️ Itens avulsos</strong> — procedimento pra item avulso (sem produto
             cadastrado, entrado por XML ou nota manual):</p>
             <ul>
@@ -4471,9 +4479,22 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
 });
 
 /* ---------- popup: histórico de movimentos de um produto ---------- */
-function abrirInfoProduto(produtoId) {
+// o evento pode estar gravado só como código ("2888") ou com descrição junto ("2888 — Reforma salão", "2888 - Reforma"):
+// no histórico do produto mostra APENAS o código
+function soCodigoEvento(valor) {
+    const v = String(valor || '').trim();
+    if (!v) return '';
+    if (eventos.some(e => e.codigo === v)) return v;
+    const m = v.match(/^(\S+?)\s*(?:—|–|-|:)\s+\S/);
+    return m ? m[1] : v;
+}
+async function abrirInfoProduto(produtoId) {
     const p = produtos.find(x => x.id === produtoId);
     if (!p) return;
+    // nomes de setor / plano de contas / almoxarifado vêm dos catálogos: garante que já foram carregados
+    if (!(catalogosBaixa.setores || []).length || !(catalogosBaixa.planoContas || []).length) {
+        try { catalogosBaixa = await chamarGet('listarCatalogosBaixa'); } catch (e) { console.warn('catálogos indisponíveis no histórico do produto:', e); }
+    }
 
     // com almoxarifado de trabalho selecionado, a lista também só
     // mostra movimentações DAQUELE almoxarifado -- coerente com o
@@ -4514,7 +4535,7 @@ function abrirInfoProduto(produtoId) {
             <div style="max-height:55vh; overflow:auto;">
             <table class="tabela">
                 <thead>
-                    <tr><th>Data</th><th>Tipo</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th>Almoxarifado</th><th>Tag</th><th>Evento</th><th>Projeto</th><th>Fornecedor / NF</th><th>Responsável</th><th>Obs.</th></tr>
+                    <tr><th>Data</th><th>Tipo</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th>Almoxarifado</th><th>Tag</th><th>Evento</th><th>Plano de contas</th><th>Setor</th><th>Projeto</th><th>Fornecedor / NF</th><th>Responsável</th><th>Obs.</th></tr>
                 </thead>
                 <tbody>
         `;
@@ -4526,12 +4547,14 @@ function abrirInfoProduto(produtoId) {
             html += `
                 <tr>
                     <td>${m.data}</td>
-                    <td><span class="pill ${m.tipo === 'entrada' ? 'pill-entrada' : 'pill-saida'}">${m.tipo === 'entrada' ? 'Entrada' : 'Saída'}</span></td>
+                    <td>${pillTipoMovimentacao(m)}</td>
                     <td class="num">${Number(m.qtd).toLocaleString('pt-BR')}</td>
                     <td class="num">${formatarMoeda(m.valorUnit)}</td>
                     <td>${(() => { const a = (catalogosBaixa.almoxarifados || []).find(x => x.id === m.almoxarifadoId); return a ? escapeHtml(a.nome) : '-'; })()}</td>
                     <td>${escapeHtml(m.tag) || '-'}</td>
-                    <td>${escapeHtml(m.evento) || '-'}</td>
+                    <td>${escapeHtml(soCodigoEvento(m.evento)) || '-'}</td>
+                    <td>${(() => { if (m.planoContasId == null) return '-'; const pc = (catalogosBaixa.planoContas || []).find(x => x.id === m.planoContasId); return pc ? escapeHtml(pc.codigo) + ' · ' + escapeHtml(pc.descricao) : '#' + m.planoContasId; })()}</td>
+                    <td>${(() => { if (m.setorId == null) return '-'; const st = (catalogosBaixa.setores || []).find(x => x.id === m.setorId); return st ? escapeHtml(st.nome) : '#' + m.setorId; })()}</td>
                     <td>${proj ? escapeHtml(proj.descricao) : '-'}</td>
                     <td>${fornecedorInfo}</td>
                     <td>${escapeHtml(m.responsavel) || '-'}</td>
@@ -4543,8 +4566,58 @@ function abrirInfoProduto(produtoId) {
     }
 
     document.getElementById('modalInfoProdutoConteudo').innerHTML = html;
+    document.querySelectorAll('#modalInfoProdutoConteudo [data-abrir-nota-mov]').forEach(el => {
+        el.addEventListener('click', () => abrirNotaDaMovimentacao(Number(el.dataset.abrirNotaMov), produtoId));
+    });
     document.getElementById('modalInfoProduto').classList.add('aberto');
 }
+
+/* ---------- Entrada/Saída clicável: abre a nota que originou a movimentação ----------
+   O selo "Entrada"/"Saída" das movimentações (guia Movimentações e popup "ℹ️" do produto) abre a nota de origem
+   (estoque_nota_id) pra alteração: nota de saída (requisição) -> modal da requisição; nota de entrada -> modal da nota.
+   Movimentação sem nota (baixa direta, ajuste...) continua com o selo comum, não clicável. */
+function pillTipoMovimentacao(m) {
+    const ehEntrada = m.tipo === 'entrada';
+    const rotulo = ehEntrada ? 'Entrada' : 'Saída';
+    const classe = ehEntrada ? 'pill-entrada' : 'pill-saida';
+    if (m.estoqueNotaId == null) return `<span class="pill ${classe}">${rotulo}</span>`;
+    return `<span class="pill ${classe}" data-abrir-nota-mov="${m.estoqueNotaId}" style="cursor:pointer; text-decoration:underline;" title="Abrir a nota que originou este lançamento (para alterar)">${rotulo} ↗</span>`;
+}
+
+let recarregarAposNota = false;
+let produtoParaReabrirAposNota = null;
+async function abrirNotaDaMovimentacao(notaId, produtoIdOrigem) {
+    try {
+        const { data: nota, error } = await sb.from('estoque_notas').select('id, tipo').eq('id', notaId).maybeSingle();
+        if (error) throw error;
+        if (!nota) { alert('A nota deste lançamento não existe mais.'); return; }
+        // o popup do produto fica por baixo da nota (mesmo nível de camada): fecha e reabre depois
+        document.getElementById('modalInfoProduto').classList.remove('aberto');
+        recarregarAposNota = true;
+        produtoParaReabrirAposNota = produtoIdOrigem || null;
+        if (nota.tipo === 'saida') await abrirModalRequisicaoCompleta(nota.id);
+        else await abrirNotaEntradaExistente(nota.id);
+    } catch (err) {
+        alert('Erro ao abrir a nota: ' + err.message);
+    }
+}
+
+// ao fechar a nota aberta por esse atalho (por qualquer caminho: fechar, finalizar, remover), atualiza as telas
+['modalNotaEntrada', 'modalRequisicaoCompleta'].forEach(idModal => {
+    const el = document.getElementById(idModal);
+    new MutationObserver(async () => {
+        if (el.classList.contains('aberto') || !recarregarAposNota) return;
+        recarregarAposNota = false;
+        const reabrir = produtoParaReabrirAposNota;
+        produtoParaReabrirAposNota = null;
+        try {
+            await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
+            renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+            if (document.getElementById('aba-movpainel').classList.contains('ativa')) await buscarPainelMovimentacoes();
+            if (reabrir) await abrirInfoProduto(reabrir);
+        } catch (err) { console.warn('atualização após fechar a nota:', err); }
+    }).observe(el, { attributes: true, attributeFilter: ['class'] });
+});
 
 document.getElementById('btnFecharInfoProduto').addEventListener('click', () => {
     document.getElementById('modalInfoProduto').classList.remove('aberto');
@@ -9379,6 +9452,7 @@ async function buscarPainelMovimentacoes() {
             descricaoAvulsa: m.descricao_avulsa || null,
             movimentacaoOrigemId: m.movimentacao_origem_id != null ? Number(m.movimentacao_origem_id) : null,
             setorId: m.setor_id != null ? Number(m.setor_id) : null,
+            estoqueNotaId: m.estoque_nota_id != null ? Number(m.estoque_nota_id) : null,
             veiculoId: m.equipamento_veiculo_id != null ? Number(m.equipamento_veiculo_id) : null
         }));
 
@@ -9455,7 +9529,7 @@ async function buscarPainelMovimentacoes() {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${m.data}</td>
-                <td><span class="pill ${m.tipo === 'entrada' ? 'pill-entrada' : 'pill-saida'}">${m.tipo === 'entrada' ? 'Entrada' : 'Saída'}</span></td>
+                <td>${pillTipoMovimentacao(m)}</td>
                 <td>${prod ? escapeHtml(prod.nome) : (m.descricaoAvulsa ? escapeHtml(m.descricaoAvulsa) + ' <span class="pill" style="background:#FBEAE8; color:#C0392B; font-size:0.65rem;">avulso</span>' : ('#' + m.produtoId))}</td>
                 <td class="num">${Number(m.qtd).toLocaleString('pt-BR')}</td>
                 <td class="num">${formatarMoeda(m.valorUnit)}</td>
@@ -9475,6 +9549,9 @@ async function buscarPainelMovimentacoes() {
                 </td>
             `;
             corpo.appendChild(tr);
+        });
+        corpo.querySelectorAll('[data-abrir-nota-mov]').forEach(el => {
+            el.addEventListener('click', () => abrirNotaDaMovimentacao(Number(el.dataset.abrirNotaMov)));
         });
         corpo.querySelectorAll('[data-editar-mov]').forEach(btn => {
             btn.addEventListener('click', () => abrirModalEditarMovimentacaoGeral(Number(btn.dataset.editarMov)));
