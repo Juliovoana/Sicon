@@ -438,6 +438,10 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
         <input class="inp" type="date" id="rdt" style="flex:.7;width:auto">
       </div>
       <button class="btn-buscar" onclick="recuperarChecklist()"><i class="ti ti-search"></i> Buscar</button>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px;font-size:13px;color:var(--tx2);cursor:pointer">
+        <input type="checkbox" id="rresumo" onchange="mudarModoResumoRec()" style="width:16px;height:16px">
+        <span><strong style="color:var(--tx)">Só resumo</strong> — veículo, motorista e quilometragem (pra ver quais veículos fizeram checklist no dia)</span>
+      </label>
     </div>
     <!-- Login admin inline na aba Recuperar -->
     <div id="rec-admin-bar" style="display:none;padding:10px 16px;background:var(--nvl);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:8px;flex-wrap:wrap">
@@ -990,6 +994,30 @@ const DEMO=[
 
 const CK='cv_cfg9', FK='cv_fr9', SK='cv_ck9';
 
+/* Fila local de checklists (cv_ck9): só os PENDENTES (ainda não enviados) precisam ficar guardados.
+   Antes, todo checklist enviado também era guardado aqui COM as fotos em base64 e nunca saía de lá —
+   o armazenamento do navegador (~5 MB, no iPhone/Safari principalmente) enchia e o próximo envio
+   estourava QuotaExceededError DEPOIS de já ter ido pro servidor: o botão ficava girando pra sempre.
+   Agora: enviados não são guardados, a gravação nunca lança erro e, se faltar espaço, descarta os
+   enviados antigos antes de desistir. */
+function lerSaves(){ try{ const v=JSON.parse(localStorage.getItem(SK)||'[]'); return Array.isArray(v)?v:[]; }catch(e){ return []; } }
+function gravarSaves(saves){
+  const tenta=lista=>{ try{ localStorage.setItem(SK,JSON.stringify(lista)); return true; }catch(e){ return false; } };
+  if(tenta(saves)) return true;
+  return tenta(saves.filter(x=>!x.sincronizado)); // sem espaço: larga os já enviados (nunca são lidos de novo)
+}
+// aparelhos que já acumularam enviados (com fotos) são limpos na abertura
+try{ const _s=lerSaves(), _p=_s.filter(x=>!x.sincronizado); if(_p.length!==_s.length) gravarSaves(_p); }catch(e){}
+
+/* fetch com limite de tempo: no celular com sinal fraco (ou o Safari segurando a conexão) o envio com fotos
+   podia ficar pendurado sem nunca resolver nem falhar. */
+function fetchComLimite(url, opts, ms){
+  const ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  const t=setTimeout(()=>{ if(ctrl) ctrl.abort(); }, ms||120000);
+  const o=ctrl?Object.assign({}, opts, {signal:ctrl.signal}):opts;
+  return fetch(url, o).finally(()=>clearTimeout(t));
+}
+
 // URL padrão do servidor — usada apenas se o dispositivo
 // ainda não tiver nenhuma configuração própria salva. Trocar e
 // salvar na aba Config substitui este padrão permanentemente.
@@ -1069,14 +1097,14 @@ async function carregarResumoFrota(){
   try{
     const r = await fetch(cfg.url+'?action=getResumoFrota');
     const d = await r.json();
-    if(d.resumo){ resumoFrota = d.resumo; renderDash(); }
+    if(d.resumo){ resumoFrota = d.resumo; renderDash(); if(typeof recUltimaBusca!=='undefined' && recUltimaBusca && modoResumoRec()) desenharRecuperados(); }
   }catch(e){ /* lista funciona normal sem esse extra */ }
 }
 
 // Selos de manutenção na lista do Painel: um por item vencido (vermelho)
 // ou perto de vencer (amarelo), com o motivo, e um resumo dos em dia.
 // Worker antigo (sem `manutencoes`) cai no selo único "Manutenção vencida".
-function htmlManutencaoResumo(resumo){
+function htmlManutencaoResumo(resumo, placaClicavel){
   if(!resumo) return '';
   if(!Array.isArray(resumo.manutencoes)){
     return resumo.manutencaoVencida
@@ -1100,7 +1128,8 @@ function htmlManutencaoResumo(resumo){
     const cls = m.status==='vencida' ? '' : ' proximo';
     const ic = m.status==='vencida' ? 'ti-alert-triangle' : 'ti-clock';
     const mt = motivo(m);
-    return `<span class="fi-mini-alert${cls}"><i class="ti ${ic}"></i> ${escapeAttr(m.tipo)}${mt?' — '+mt:''}</span>`;
+    const clic = placaClicavel ? ` data-man-placa="${escapeAttr(placaClicavel)}" data-man-tipo="${escapeAttr(m.tipo)}" style="cursor:pointer" title="Toque para informar a realização desta manutenção"` : '';
+    return `<span class="fi-mini-alert${cls}"${clic}><i class="ti ${ic}"></i> ${escapeAttr(m.tipo)}${mt?' — '+mt:''}</span>`;
   });
   const emDia = lista.filter(m=>m.status==='ok');
   if(emDia.length){
@@ -1123,7 +1152,7 @@ function htmlManutencaoResumo(resumo){
    ══════════════════════════════════════════════════════════════════ */
 const AJUDA_FROTA = {
   titulo: 'Checklist Frota',
-  ultimaRevisao: '29/09/2026',
+  ultimaRevisao: '17/10/2026',
   secoes: [
     { id: 'geral', titulo: 'Visão geral', corpo: `
       <p>Registra o checklist diário de cada veículo da frota (Van, Micro Ônibus, Utilitário,
@@ -1194,11 +1223,30 @@ const AJUDA_FROTA = {
         estão esperando pra sincronizar (ex: "2 pend.") e some sozinho quando termina.</li>
         <li>Depois de enviar com sucesso, a tela rola até o resumo e o botão fica marcado como
         "Enviado" até você tocar em "Novo checklist" — evita reenvio duplicado sem querer.</li>
+        <li>Se o envio demorar mais de 2 minutos (sinal fraco, muitas fotos), o app para de esperar,
+        guarda o checklist neste aparelho e reenvia sozinho depois. Se aparecer a mensagem
+        "não consegui confirmar o envio", confira em <strong>Recuperar</strong> se ele já chegou — se
+        chegou, não precisa fazer nada. Só os checklists <em>ainda não enviados</em> ficam guardados no
+        aparelho; os já enviados não ocupam espaço.</li>
       </ul>
     ` },
     { id: 'rec', titulo: 'Recuperar', corpo: `
       <p>Busca checklists já enviados, por placa/modelo e/ou data — útil pra conferir o que já
       foi lançado ou reabrir os dados de um checklist anterior pra edição.</p>
+      <p><strong>Só resumo</strong>: marque a caixa abaixo do botão Buscar pra ver uma lista enxuta com
+      <strong>veículo, motorista e quilometragem</strong> (e a hora) de cada checklist do dia — ideal pra conferir
+      quais veículos já fizeram checklist. Sem placa informada, o resumo também mostra, no fim, os veículos da frota
+      que <strong>ainda não têm checklist</strong> naquele dia (com o último km e a data do último checklist deles).
+      Cada veículo mostra também a <strong>situação de manutenção</strong>, igual ao Painel — selos vermelhos
+      (vencida) e amarelos (perto de vencer) com o motivo, ou "N em dia" — e o topo do resumo conta quantos
+      veículos têm manutenção pendente. Logo abaixo aparecem também as <strong>OS abertas</strong> do veículo
+      (Urgente em vermelho; Aberta e Em andamento em amarelo, com o número e o serviço) e o topo conta quantos veículos têm
+      OS aberta. Toque numa <strong>etiqueta de OS</strong> para mudar o status ou informar a realização (“Concluída”) — o popup mostra a <strong>observação</strong> e as <strong>peças/produtos destinados</strong> à OS (com quantidade, valor e total) para você conferir se tudo foi atendido antes de concluir — e numa
+      <strong>etiqueta de manutenção</strong> para informar a realização (data, km e próximo vencimento — só o
+      administrador, logado na barra acima). Quando não há placa informada, o resumo mostra os botões <strong>Todos / Fizeram / Pendentes</strong> e a contagem “N sem checklist” no topo (toque para ver só os veículos que ainda não fizeram checklist no dia). O botão <strong>PDF do resumo</strong> gera o mesmo resumo da tela (quem fez e quem está sem checklist, com motorista, hora, km, manutenção e OS), respeitando o filtro Todos / Fizeram / Pendentes escolhido. O botão <strong>PDF de pendências</strong> gera o relatório da frota com
+      as manutenções vencidas/a vencer e as OS abertas de cada veículo. A manutenção é a situação <em>atual</em> do veículo (calculada com o último
+      km registrado), não a de quando o checklist foi feito. A escolha fica lembrada neste aparelho; desmarcando,
+      volta a lista completa (com itens, fotos e os botões de editar/corrigir KM/excluir).</p>
     ` },
     { id: 'fr', titulo: 'Frota', corpo: `
       <p><strong>Ver frota</strong> e o <strong>Painel</strong>: veículos agrupados em dois
@@ -1818,15 +1866,15 @@ function fecharFoto(){ document.getElementById('fmodal').classList.remove('on');
    tela de lista de pendentes; fica guardado em localStorage e é
    reenviado sozinho por sincronizarPendentes() assim que a internet
    voltar, ver mais abaixo) ── */
-function salvar(){
-  if(!vSel){ toast('Selecione um veículo'); return; }
+function salvar(idFixo){
+  if(!vSel){ toast('Selecione um veículo'); return false; }
   const motorista = document.getElementById('mot').value.trim();
-  if(!motorista){ toast('Informe o nome do motorista antes de salvar'); document.getElementById('mot').focus(); return; }
+  if(!motorista){ toast('Informe o nome do motorista antes de salvar'); document.getElementById('mot').focus(); return false; }
   const kmVal = document.getElementById('km').value.trim();
-  if(!kmVal){ toast('KM do veículo é obrigatório'); document.getElementById('km').focus(); return; }
-  if(!kmValido()){ toast('KM não pode ser menor que o último registrado — verifique'); document.getElementById('km').focus(); return; }
-  const saves=JSON.parse(localStorage.getItem(SK)||'[]');
-  const agora=Date.now();
+  if(!kmVal){ toast('KM do veículo é obrigatório'); document.getElementById('km').focus(); return false; }
+  if(!kmValido()){ toast('KM não pode ser menor que o último registrado — verifique'); document.getElementById('km').focus(); return false; }
+  const saves=lerSaves();
+  const agora=idFixo||Date.now(); // idFixo = o mesmo id do envio que falhou (um reenvio não vira checklist duplicado)
   const reg={id:agora,
     action: modoEdicao ? 'editarChecklist' : 'gravarChecklist',
     checklistId: checklistRecuperado ? checklistRecuperado.id : agora,
@@ -1838,10 +1886,16 @@ function salvar(){
     data:document.getElementById('dt').value,
     hora:new Date().toTimeString().slice(0,5),
     itens:JSON.parse(JSON.stringify(est)), manutencao:getPayloadManutencao(), sincronizado:false};
-  saves.push(reg); localStorage.setItem(SK,JSON.stringify(saves));
+  saves.push(reg);
+  if(!gravarSaves(saves)){
+    toast('⚠ Sem espaço no aparelho — este checklist NÃO ficou guardado. Conecte à internet e envie de novo.');
+    atualizarBadgeConexao();
+    return false;
+  }
   toast('✓ Salvo offline — '+saves.filter(x=>!x.sincronizado).length+' pendente(s). Envia sozinho quando a internet voltar.');
   mostrarResumo(reg, document.getElementById('clbody'));
   atualizarBadgeConexao();
+  return true;
 }
 
 /* ── REENVIO AUTOMÁTICO DOS PENDENTES ──────────────────────
@@ -1854,7 +1908,7 @@ function salvar(){
 let syncPendentesEmAndamento=false;
 
 function contarPendentes(){
-  return JSON.parse(localStorage.getItem(SK)||'[]').filter(x=>!x.sincronizado).length;
+  return lerSaves().filter(x=>!x.sincronizado).length;
 }
 
 function atualizarBadgeConexao(){
@@ -1891,7 +1945,7 @@ function montarPayloadEnvio(reg){
 
 async function sincronizarPendentes(){
   if(syncPendentesEmAndamento || !navigator.onLine || !cfg.url) return;
-  const saves=JSON.parse(localStorage.getItem(SK)||'[]');
+  const saves=lerSaves();
   const pendentes=saves.filter(x=>!x.sincronizado);
   if(!pendentes.length) return;
   syncPendentesEmAndamento=true;
@@ -1900,7 +1954,7 @@ async function sincronizarPendentes(){
     if(!navigator.onLine) break; // caiu de novo no meio do lote -- para e tenta na próxima
     try{
       const payload=montarPayloadEnvio(reg);
-      await fetch(cfg.url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)});
+      await fetchComLimite(cfg.url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)});
       reg.sincronizado=true;
       enviados++;
       if(payload.manutencao && payload.manutencao.length){
@@ -1909,7 +1963,7 @@ async function sincronizarPendentes(){
       }
     }catch(e){ break; }
   }
-  localStorage.setItem(SK,JSON.stringify(saves));
+  gravarSaves(saves.filter(x=>!x.sincronizado)); // fica só o que ainda está pendente (os enviados saem da fila)
   syncPendentesEmAndamento=false;
   if(enviados) toast('✓ '+enviados+' checklist'+(enviados>1?'s':'')+' pendente'+(enviados>1?'s':'')+' enviado'+(enviados>1?'s':'')+' automaticamente');
   atualizarBadgeConexao();
@@ -1923,14 +1977,15 @@ async function enviar(){
   const kmVal = document.getElementById('km').value.trim();
   if(!kmVal){ toast('KM do veículo é obrigatório'); document.getElementById('km').focus(); return; }
   if(!kmValido()){ toast('KM não pode ser menor que o último registrado — verifique'); document.getElementById('km').focus(); return; }
-  if(!navigator.onLine){ salvar(); toast('Sem internet — os dados ficaram salvos só neste aparelho. Envie de novo quando tiver conexão.'); return; }
+  if(!navigator.onLine){ if(salvar()) toast('Sem internet — os dados ficaram salvos só neste aparelho. Envie de novo quando tiver conexão.'); return; }
   if(!cfg.url){ toast('Configure a URL na aba Config'); return; }
   const btn=document.getElementById('benv');
   btn.innerHTML='<span class="spin"></span>'; btn.disabled=true;
 
+  const idEnvio = checklistRecuperado ? checklistRecuperado.id : Date.now();
   const payload={
     action: modoEdicao ? 'editarChecklist' : 'gravarChecklist',
-    id: checklistRecuperado ? checklistRecuperado.id : Date.now(),
+    id: idEnvio,
     placa:vSel.placa, modelo:vSel.modelo, tipo:vSel.tipo,
     motorista:motorista,
     usuario:usuarioGoogle||'',
@@ -1950,19 +2005,29 @@ async function enviar(){
     }))
   };
 
+  // 1) o envio em si (com limite de tempo). Só um erro AQUI vira "guardado no aparelho".
+  let enviou=false;
   try{
-    await fetch(cfg.url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)});
-    const saves=JSON.parse(localStorage.getItem(SK)||'[]');
-    const reg={...payload, sincronizado:true};
-    saves.push(reg); localStorage.setItem(SK,JSON.stringify(saves));
+    await fetchComLimite(cfg.url,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)}, 120000);
+    enviou=true;
+  }catch(e){
+    // rede caiu ou demorou demais: guarda na fila com o MESMO id (o reenvio não cria outro checklist)
+    let guardou=false; try{ guardou=salvar(idEnvio); }catch(e2){ console.warn('salvar:', e2); }
+    if(guardou) toast('Não consegui confirmar o envio (sinal fraco ou demora) — ficou guardado neste aparelho e será reenviado sozinho. Se já aparecer em Recuperar, não precisa reenviar.');
+    btn.innerHTML='<i class="ti ti-cloud-upload"></i> Salvar e enviar'; btn.disabled=false;
+    return;
+  }
+  // 2) já foi pro servidor: o que vem abaixo é só tela — nada aqui pode travar o botão nem mandar reenviar
+  try{
+    const reg={...payload, sincronizado:true}; // só na memória, pro resumo (enviado não é mais guardado no aparelho)
     toast(modoEdicao?'✓ Checklist atualizado':'✓ Checklist enviado com sucesso');
     // Grava manutenção separadamente
     const manPayload = getPayloadManutencao();
     const placaMan = vSel.placa;
     if(manPayload.length && cfg.url){
-      fetch(cfg.url, {method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'},
+      fetchComLimite(cfg.url, {method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain'},
         body: JSON.stringify({action:'gravarManutencao', senha: adminSenha, placa: vSel.placa, manutencao: manPayload})
-      }).then(()=>{ if(vSel && vSel.placa===placaMan) carregarHistoricoManutencao(placaMan); }).catch(()=>{});
+      }, 120000).then(()=>{ if(vSel && vSel.placa===placaMan) carregarHistoricoManutencao(placaMan); }).catch(()=>{});
     }
     mostrarResumo(reg, document.getElementById('clbody'));
     // rola até o resumo e deixa o botão marcado como concluído -- sem isso
@@ -1971,14 +2036,12 @@ async function enviar(){
     // já tendo salvo. Só volta ao normal quando clicar em "Novo checklist"
     // (novoChecklist() reabilita e troca o texto de volta).
     document.getElementById('clbody').scrollIntoView({behavior:'smooth', block:'start'});
-    btn.innerHTML='<i class="ti ti-circle-check"></i> '+(modoEdicao?'Atualizado':'Enviado');
-  }catch(e){
-    salvar(); toast('Erro de rede — os dados ficaram salvos só neste aparelho. Envie de novo quando tiver conexão.');
-    btn.innerHTML='<i class="ti ti-cloud-upload"></i> Salvar e enviar'; btn.disabled=false;
-  }
+  }catch(e){ console.warn('Pós-envio:', e); }
+  btn.innerHTML='<i class="ti ti-circle-check"></i> '+(modoEdicao?'Atualizado':'Enviado');
 }
 
 /* ── RECUPERAR CHECKLIST ── */
+try{ const cRes=document.getElementById('rresumo'); if(cRes&&localStorage.getItem('cv_rec_resumo')==='1') cRes.checked=true; }catch(e){}
 async function recuperarChecklist(){
   const placa=(recSel&&recSel.placa)||document.getElementById('rbusca').value.trim();
   const data=document.getElementById('rdt').value;
@@ -1995,11 +2058,439 @@ async function recuperarChecklist(){
     if(placa) url+='&placa='+encodeURIComponent(placa);
     const r=await fetch(url);
     const d=await r.json();
-    if(!d.encontrado){ body.innerHTML='<div class="empty"><i class="ti ti-search-off"></i>'+(d.mensagem||'Nenhum checklist encontrado para esta data')+'</div>'; return; }
-    renderChecklists(d.checklists, body);
+    recUltimaBusca={ data, placa, checklists:(d.encontrado&&d.checklists)||[], mensagem:d.mensagem||'' };
+    recFiltroResumo='todos';
+    // no resumo sem placa, "nenhum checklist" também é informação (todos os veículos ficam como "sem checklist")
+    if(!d.encontrado && !(modoResumoRec() && !placa)){ body.innerHTML='<div class="empty"><i class="ti ti-search-off"></i>'+(d.mensagem||'Nenhum checklist encontrado para esta data')+'</div>'; return; }
+    desenharRecuperados();
   }catch(e){
     body.innerHTML='<div class="empty"><i class="ti ti-wifi-off"></i>Erro ao conectar com o servidor</div>';
   }
+}
+
+/* ── Recuperar: modo "só resumo" (veículo · motorista · km) ──────────────
+   Serve pra conferir, num relance, quais veículos fizeram checklist no dia. Usa o mesmo resultado da busca
+   (sem nova chamada ao servidor ao alternar o modo). Sem placa informada, também lista os veículos da frota
+   que NÃO têm checklist naquele dia. */
+const RESUMO_REC_K='cv_rec_resumo';
+let recUltimaBusca=null;
+function modoResumoRec(){ const c=document.getElementById('rresumo'); return !!(c&&c.checked); }
+function mudarModoResumoRec(){
+  try{ localStorage.setItem(RESUMO_REC_K, modoResumoRec()?'1':'0'); }catch(e){}
+  if(recUltimaBusca) desenharRecuperados();
+}
+function desenharRecuperados(){
+  const body=document.getElementById('recbody');
+  if(!recUltimaBusca) return;
+  if(modoResumoRec()) renderResumoRec(recUltimaBusca, body);
+  else if(recUltimaBusca.checklists.length) renderChecklists(recUltimaBusca.checklists, body);
+  else body.innerHTML='<div class="empty"><i class="ti ti-search-off"></i>'+(recUltimaBusca.mensagem||'Nenhum checklist encontrado para esta data')+'</div>';
+}
+function escRec(t){ return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function placaChaveRec(p){ return String(p||'').toUpperCase().replace(/[^A-Z0-9]/g,''); }
+function dataBRRec(iso){ const m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})/); return m?`${m[3]}/${m[2]}/${m[1]}`:String(iso||''); }
+
+// situação de manutenção de um veículo, no mesmo critério do Painel (getResumoFrota): vencida / próxima / em dia
+function resumoManutencaoRec(placa){
+  const k=placaChaveRec(placa);
+  const chave=Object.keys(resumoFrota||{}).find(p=>placaChaveRec(p)===k);
+  return chave?resumoFrota[chave]:null;
+}
+// OS abertas (Urgente / Aberta / Em andamento) do veículo -- mesma lista da aba OS (getOrdensServico), carregada em silêncio
+const STATUS_OS_ABERTA=['Urgente','Aberta','Em andamento'];
+let osResumoRecEm=0, osResumoRecCarregando=false;
+function osAbertasRec(placa){
+  const k=placaChaveRec(placa);
+  return (osCache||[]).filter(o=>STATUS_OS_ABERTA.includes(o.status)&&placaChaveRec(o.veiculo)===k)
+    .sort((a,b)=>(a.status==='Urgente'?0:1)-(b.status==='Urgente'?0:1)||(Number(a.numero)||0)-(Number(b.numero)||0));
+}
+function htmlOSAbertasRec(placa){
+  const lista=osAbertasRec(placa);
+  if(!lista.length) return '';
+  return `<div class="fi-man">${lista.map(o=>{
+    const cls=o.status==='Urgente'?'':' proximo';
+    const serv=String(o.servico||'').trim();
+    return `<span class="fi-mini-alert${cls}" data-os-linha="${escRec(o.linha)}" style="cursor:pointer" title="${escRec(o.servico||'')} — toque para mudar o status ou informar a conclusão"><i class="ti ti-tool"></i> OS ${escRec(o.numero)} · ${escRec(o.status)}${serv?' — '+escRec(serv.length>38?serv.slice(0,38)+'…':serv):''}</span>`;
+  }).join('')}</div>`;
+}
+async function carregarOSResumoRec(){
+  if(!cfg.url || !navigator.onLine || osResumoRecCarregando) return;
+  if(Date.now()-osResumoRecEm<60000) return; // não rebusca a cada clique
+  osResumoRecCarregando=true;
+  try{
+    const r=await fetch(cfg.url+'?action=getOrdensServico');
+    const d=await r.json();
+    if(Array.isArray(d.ordens)){ osCache=d.ordens; osResumoRecEm=Date.now(); }
+  }catch(e){ /* o resumo funciona sem as OS */ }
+  osResumoRecCarregando=false;
+  if(recUltimaBusca && modoResumoRec()) desenharRecuperados();
+}
+function temPendenciaManutRec(res){
+  if(!res) return false;
+  if(Array.isArray(res.manutencoes)) return res.manutencoes.some(m=>m.status!=='ok');
+  return !!res.manutencaoVencida;
+}
+
+let recFiltroResumo='todos'; // todos | feitos | pendentes (só na memória; volta a 'todos' ao buscar de novo)
+function mudarFiltroResumoRec(f){ recFiltroResumo=f; if(recUltimaBusca) desenharRecuperados(); }
+function renderResumoRec(busca, body){
+  // km/manutenção vêm do mesmo resumo do Painel; se ainda não chegou (ou o aparelho acabou de abrir), busca e redesenha
+  if(!Object.keys(resumoFrota||{}).length && cfg.url && navigator.onLine) carregarResumoFrota();
+  carregarOSResumoRec();
+  const lista=(busca.checklists||[]).slice().sort((a,b)=>String(a.placa).localeCompare(String(b.placa),'pt-BR')||String(a.hora||'').localeCompare(String(b.hora||'')));
+  const feitos=new Set(lista.map(c=>placaChaveRec(c.placa)));
+  const veiculosFeitos=feitos.size;
+  const comPend=new Set(lista.filter(c=>temPendenciaManutRec(resumoManutencaoRec(c.placa))).map(c=>placaChaveRec(c.placa))).size;
+  const comOS=new Set(lista.filter(c=>osAbertasRec(c.placa).length).map(c=>placaChaveRec(c.placa))).size;
+  // sem placa informada: quem NÃO fez checklist naquele dia (da frota carregada neste aparelho)
+  const sem=(!busca.placa && Array.isArray(frota))
+    ? frota.filter(v=>v&&v.placa&&!feitos.has(placaChaveRec(v.placa))&&String(v.ativo||'').toLowerCase()!=='não'&&String(v.ativo||'').toLowerCase()!=='nao')
+        .sort((a,b)=>String(a.placa).localeCompare(String(b.placa),'pt-BR'))
+    : [];
+  const filtro=(!busca.placa&&sem.length)?recFiltroResumo:'todos';
+  const cab=`<div style="padding:12px 16px;background:var(--nvl);border-bottom:1px solid var(--bd);font-size:13px;color:var(--nv);font-weight:600">
+      <i class="ti ti-list-check"></i> ${dataBRRec(busca.data)} · ${lista.length} checklist(s) · ${veiculosFeitos} veículo(s)${comPend?` · <span style="color:#b91c1c"><i class="ti ti-alert-triangle"></i> ${comPend} com manutenção pendente</span>`:''}${(sem.length&&!busca.placa)?` · <span style="color:#92400e;cursor:pointer;text-decoration:underline" onclick="mudarFiltroResumoRec('pendentes')"><i class="ti ti-clipboard-x"></i> ${sem.length} sem checklist</span>`:''}${comOS?` · <span style="color:#b45309"><i class="ti ti-tool"></i> ${comOS} com OS aberta</span>`:''}</div>`;
+  const linhas=lista.map(c=>{
+    const res=resumoManutencaoRec(c.placa);
+    return `
+    <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 16px;border-bottom:1px solid var(--bdl);background:var(--sf)">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:600;color:var(--tx)">${escRec(c.placa)}<span style="font-weight:400;color:var(--tx2)"> · ${escRec(c.modelo)}</span></div>
+        <div style="font-size:12px;color:var(--tx2);margin-top:2px"><i class="ti ti-user" style="font-size:12px"></i> ${escRec(c.motorista||'—')}${c.hora?` · <i class="ti ti-clock" style="font-size:12px"></i> ${escRec(c.hora)}`:''}</div>
+        ${htmlManutencaoResumo(res, c.placa)}${htmlOSAbertasRec(c.placa)}
+      </div>
+      <div style="font-size:13px;font-weight:600;color:var(--tx);white-space:nowrap">${c.km?Number(c.km).toLocaleString('pt-BR')+' km':'<span style="color:var(--tx3);font-weight:400">sem km</span>'}</div>
+    </div>`;}).join('');
+
+  // sem placa informada: mostra quem NÃO fez checklist naquele dia (da frota carregada neste aparelho)
+  let faltam='';
+  {
+    if(sem.length){
+      faltam=`<div id="rec-sem-checklist" style="padding:12px 16px;background:#fffbeb;border-top:1px solid #fde68a;border-bottom:1px solid #fde68a;font-size:13px;color:#92400e;font-weight:600;margin-top:8px">
+          <i class="ti ti-alert-triangle"></i> Sem checklist neste dia (${sem.length})</div>`
+        + sem.map(v=>{
+            const res=resumoManutencaoRec(v.placa);
+            const ult=res&&res.ultimoKm!=null?`<div style="font-size:12px;color:var(--tx2);white-space:nowrap;text-align:right">último: <b>${Number(res.ultimoKm).toLocaleString('pt-BR')} km</b>${res.ultimaData?`<br>${escRec(res.ultimaData)}`:''}</div>`:'';
+            return `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 16px;border-bottom:1px solid var(--bdl);background:var(--sf)">
+              <div style="flex:1;min-width:0;font-size:13px;color:var(--tx)">${escRec(v.placa)}<span style="color:var(--tx2)"> · ${escRec(v.modelo||'')}</span>${htmlManutencaoResumo(res, v.placa)}${htmlOSAbertasRec(v.placa)}</div>${ult}</div>`;
+          }).join('');
+    }
+  }
+  const barra=`<div style="padding:8px 16px;background:var(--sf);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <button type="button" class="sbtn" onclick="gerarPdfPendenciasRec()" style="border:1px solid var(--bd);border-radius:var(--rs);padding:7px 12px"><i class="ti ti-file-type-pdf"></i> PDF de pendências</button>
+      <button type="button" class="sbtn" onclick="gerarPdfResumoRec()" style="border:1px solid var(--bd);border-radius:var(--rs);padding:7px 12px"><i class="ti ti-file-type-pdf"></i> PDF do resumo</button>
+      <span style="font-size:11px;color:var(--tx3);flex:1;min-width:160px">Toque numa etiqueta de manutenção ou de OS para informar a realização / mudar o status.</span></div>`;
+  const opc=(f,rot)=>`<button type="button" class="sbtn" onclick="mudarFiltroResumoRec('${f}')" style="border:1px solid ${filtro===f?'var(--nv)':'var(--bd)'};background:${filtro===f?'var(--nvl)':'var(--sf)'};color:${filtro===f?'var(--nv)':'var(--tx2)'};font-weight:${filtro===f?'700':'500'};border-radius:var(--rs);padding:6px 10px;font-size:12px">${rot}</button>`;
+  const barraFiltro=(!busca.placa&&sem.length)?`<div style="padding:8px 16px;background:var(--sf);border-bottom:1px solid var(--bd);display:flex;gap:6px;flex-wrap:wrap">
+      ${opc('todos','Todos')}${opc('feitos','Fizeram ('+veiculosFeitos+')')}${opc('pendentes','⚠ Pendentes ('+sem.length+')')}</div>`:'';
+  const vazio='<div class="empty"><i class="ti ti-search-off"></i>Nenhum checklist enviado neste dia</div>';
+  const parteFeitos=lista.length?linhas:vazio;
+  const corpo=filtro==='pendentes'?faltam:(filtro==='feitos'?parteFeitos:parteFeitos+faltam);
+  body.innerHTML=cab+barra+barraFiltro+corpo;
+}
+
+/* ── Recuperar: ações nas etiquetas (toque) + PDF de pendências ───────────────────
+   • etiqueta de OS  -> mudar o status / marcar como concluída (mesma ação atualizarStatusOS da aba OS)
+   • etiqueta de manutenção -> informar a realização (data, km, próximo vencimento) = gravarManutencao,
+     que SÓ o administrador pode (o servidor também exige a senha) */
+document.getElementById('recbody').addEventListener('click', e=>{
+  const os=e.target.closest('[data-os-linha]');
+  if(os){ abrirAcaoOSRec(os.dataset.osLinha); return; }
+  const man=e.target.closest('[data-man-tipo]');
+  if(man){ abrirAcaoManRec(man.dataset.manPlaca, man.dataset.manTipo); }
+});
+
+function fecharAcaoRec(){ const a=document.getElementById('modal-rec-acao'); if(a) a.remove(); }
+function abrirModalRec(titulo, corpoHtml){
+  fecharAcaoRec();
+  const ov=document.createElement('div');
+  ov.id='modal-rec-acao'; ov.className='os-modal'; ov.style.display='block'; ov.style.zIndex='95';
+  ov.innerHTML=`<div class="card os-modal-box" style="margin-top:8vh">
+      <div class="lbl" style="font-size:14px;margin-bottom:10px">${titulo}</div>${corpoHtml}</div>`;
+  ov.addEventListener('click',ev=>{ if(ev.target===ov) fecharAcaoRec(); });
+  document.body.appendChild(ov);
+  return ov;
+}
+const STATUS_OS_TODOS=['Urgente','Aberta','Em andamento','Concluída','Cancelada'];
+
+// Observação + peças/produtos destinados à OS: aparecem no popup pra conferir se tudo foi atendido antes de concluir
+function htmlConferenciaOSRec(os){
+  const moeda=v=>'R$ '+Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:2});
+  const prods=(os.produtos||[]).filter(p=>p&&(p.produto||'').toString().trim());
+  const sub=p=>Number(p.subtotal)||(Number(p.quantidade)||0)*(Number(p.valorUnitario)||0);
+  const totPecas=prods.reduce((t,p)=>t+sub(p),0);
+  const obs=(os.observacao||'').toString().trim();
+  const cx='background:var(--sf);border:1px solid var(--bd);border-radius:var(--rs);padding:8px 10px;margin-bottom:10px';
+  const rot='font-size:10.5px;font-weight:700;color:var(--tx3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px';
+  const bObs=`<div style="${cx}"><div style="${rot}">Observação</div>${obs?`<div style="font-size:13px;color:var(--tx);white-space:pre-wrap">${escRec(obs)}</div>`:`<div style="font-size:12px;color:var(--tx3)">Sem observação registrada.</div>`}</div>`;
+  const bPecas=`<div style="${cx}"><div style="${rot}">Peças / produtos destinados${prods.length?' ('+prods.length+')':''}</div>`+(prods.length
+    ? `<div style="max-height:30vh;overflow:auto">`+prods.map(p=>`<div style="display:flex;gap:8px;justify-content:space-between;align-items:baseline;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--bd)">
+        <span style="flex:1;min-width:0;word-break:break-word">${escRec(p.produto)}</span>
+        <span style="white-space:nowrap;color:var(--tx2)">${escRec(p.quantidade||0)} × ${moeda(p.valorUnitario)}</span>
+        <b style="white-space:nowrap">${moeda(sub(p))}</b></div>`).join('')+`</div>
+       <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--tx2);padding-top:6px"><span>Total em peças</span><b>${moeda(totPecas)}</b></div>`
+        +(Number(os.valor)?`<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--tx2)"><span>Valor total da OS</span><b>${moeda(os.valor)}</b></div>`:'')
+    : `<div style="font-size:12px;color:#92400e">Nenhuma peça/produto registrado nesta OS.</div>`)+`</div>`;
+  return bObs+bPecas;
+}
+function abrirAcaoOSRec(linha){
+  const os=(osCache||[]).find(o=>String(o.linha)===String(linha));
+  if(!os){ toast('OS não encontrada — atualize a lista'); return; }
+  abrirModalRec(`<i class="ti ti-tool"></i> OS ${escRec(os.numero)} · ${escRec(os.veiculo)}`, `
+    <div style="font-size:13px;color:var(--tx);margin-bottom:4px">${escRec(os.servico||'')}</div>
+    <div style="font-size:12px;color:var(--tx2);margin-bottom:12px">Aberta em ${escRec(os.data||'')}${os.fornecedor?' · '+escRec(os.fornecedor):''} · status atual: <b>${escRec(os.status)}</b></div>
+    ${htmlConferenciaOSRec(os)}
+    <div class="lbl">Status</div>
+    <select class="inp" id="rec-os-status" style="margin-bottom:12px">${STATUS_OS_TODOS.map(s2=>`<option value="${s2}"${s2===os.status?' selected':''}>${s2}</option>`).join('')}</select>
+    <button class="btn-buscar" id="rec-os-concluir" style="width:100%;justify-content:center;margin-bottom:8px"><i class="ti ti-circle-check"></i> Informar realização — marcar como Concluída</button>
+    <button class="sbtn" id="rec-os-salvar" style="width:100%;border:1px solid var(--bd);border-radius:var(--rs);padding:10px;margin-bottom:8px"><i class="ti ti-device-floppy"></i> Salvar status escolhido</button>
+    <button class="sbtn" onclick="fecharAcaoRec()" style="width:100%;padding:8px">Fechar</button>`);
+  document.getElementById('rec-os-concluir').onclick=()=>salvarStatusOSRec(os,'Concluída');
+  document.getElementById('rec-os-salvar').onclick=()=>salvarStatusOSRec(os,document.getElementById('rec-os-status').value);
+}
+async function salvarStatusOSRec(os, novo){
+  if(!cfg.url||!navigator.onLine){ toast('Sem conexão — não foi possível atualizar'); return; }
+  if(novo===os.status){ fecharAcaoRec(); return; }
+  try{
+    const r=await fetch(cfg.url,{method:'POST',headers:{'Content-Type':'text/plain'},
+      body:JSON.stringify({action:'atualizarStatusOS',linha:os.linha,status:novo,senha:adminSenha||'',usuario:usuarioGoogle})});
+    const d=await r.json();
+    if(!d.ok){ toast(d.erro||'Erro ao atualizar status'); return; }
+    os.status=novo;
+    fecharAcaoRec();
+    toast('✓ OS '+os.numero+': '+novo);
+    if(recUltimaBusca && modoResumoRec()) desenharRecuperados();
+  }catch(e){ toast('Erro de conexão'); }
+}
+
+function somarDiasISORec(iso, dias){
+  const m=String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})/); if(!m) return '';
+  const d=new Date(Date.UTC(+m[1],+m[2]-1,+m[3])); d.setUTCDate(d.getUTCDate()+Number(dias));
+  return d.toISOString().slice(0,10);
+}
+async function abrirAcaoManRec(placa, tipo){
+  if(!ehAdminMan()){
+    abrirModalRec(`<i class="ti ti-tool"></i> ${escRec(tipo)} · ${escRec(placa)}`, `
+      <div style="font-size:13px;color:var(--tx);margin-bottom:12px">Só o <b>administrador</b> registra a realização de manutenção. Entre com a senha de administrador na barra acima (“Senha admin para excluir/corrigir”) e toque na etiqueta de novo.</div>
+      <button class="sbtn" onclick="fecharAcaoRec()" style="width:100%;padding:8px">Fechar</button>`);
+    return;
+  }
+  if(!cfg.url||!navigator.onLine){ toast('Sem conexão — não é possível registrar a manutenção'); return; }
+  abrirModalRec(`<i class="ti ti-tool"></i> ${escRec(tipo)} · ${escRec(placa)}`, `<div style="padding:14px;text-align:center"><span class="spin" style="border-top-color:var(--nv);border-color:var(--bd)"></span></div>`);
+  // histórico atual do item (pra não apagar fotos/obs) + intervalos do tipo de veículo
+  const v=(frota||[]).find(x=>placaChaveRec(x.placa)===placaChaveRec(placa));
+  let hist=null, interv={km:0,dias:0};
+  try{
+    const [rh,rt]=await Promise.all([
+      fetch(cfg.url+'?action=getHistoricoMan&placa='+encodeURIComponent(placa)).then(r=>r.json()),
+      fetch(cfg.url+'?action=getManutencao'+(v&&v.tipo?'&tipoVeiculo='+encodeURIComponent(v.tipo):'')).then(r=>r.json())
+    ]);
+    hist=((rh&&rh.historico)||[]).find(h=>h.tipo===tipo)||null;
+    const t=((rt&&rt.tipos)||[]).find(x=>x.tipo===tipo)||(TIPOS_MAN_DEFAULT||[]).find(x=>x.tipo===tipo);
+    if(t){ interv.km=Number(t.intervaloKm||t.intervKm||0); interv.dias=Number(t.intervaloDias||t.intervDias||0); }
+  }catch(e){ /* sem histórico/intervalo: o formulário abre em branco e dá pra preencher à mão */ }
+  if(!document.getElementById('modal-rec-acao')) return; // fechou enquanto carregava
+  const res=resumoManutencaoRec(placa);
+  const hoje=new Date().toLocaleDateString('sv-SE');
+  const kmSug=res&&res.ultimoKm!=null?res.ultimoKm:'';
+  const prevAtual=hist?[hist.dataProx?'previsto '+dataBRRec(hist.dataProx):'',hist.kmProx?Number(hist.kmProx).toLocaleString('pt-BR')+' km':''].filter(Boolean).join(' · '):'';
+  abrirModalRec(`<i class="ti ti-tool"></i> ${escRec(tipo)} · ${escRec(placa)}`, `
+    ${prevAtual?`<div style="font-size:12px;color:var(--tx2);margin-bottom:10px">Previsão atual: ${escRec(prevAtual)}${hist&&hist.dataUlt?' · última: '+escRec(dataBRRec(hist.dataUlt)):''}</div>`:''}
+    <div class="lbl">Data da realização</div>
+    <input class="inp" type="date" id="rec-man-data" value="${hoje}" style="margin-bottom:10px">
+    <div class="lbl">KM na realização</div>
+    <input class="inp" type="number" inputmode="numeric" id="rec-man-km" value="${escRec(kmSug)}" placeholder="km do veículo" style="margin-bottom:10px">
+    <div class="lbl">Próximo vencimento ${interv.dias||interv.km?'(calculado pelo intervalo — pode ajustar)':'(sem intervalo cadastrado — preencha se quiser)'}</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <input class="inp" type="date" id="rec-man-pdata" style="flex:1">
+      <input class="inp" type="number" inputmode="numeric" id="rec-man-pkm" placeholder="km previsto" style="flex:1">
+    </div>
+    <div class="lbl">Observação (opcional)</div>
+    <input class="inp" type="text" id="rec-man-obs" value="${escRec(hist&&hist.obs||'')}" style="margin-bottom:12px">
+    <button class="btn-buscar" id="rec-man-salvar" style="width:100%;justify-content:center;margin-bottom:8px"><i class="ti ti-circle-check"></i> Informar realização</button>
+    <button class="sbtn" onclick="fecharAcaoRec()" style="width:100%;padding:8px">Cancelar</button>`);
+  const recalc=()=>{
+    const d=document.getElementById('rec-man-data').value, k=parseInt(document.getElementById('rec-man-km').value,10);
+    if(interv.dias&&d) document.getElementById('rec-man-pdata').value=somarDiasISORec(d,interv.dias);
+    if(interv.km&&k) document.getElementById('rec-man-pkm').value=k+interv.km;
+  };
+  document.getElementById('rec-man-data').addEventListener('change',recalc);
+  document.getElementById('rec-man-km').addEventListener('input',recalc);
+  recalc();
+  document.getElementById('rec-man-salvar').onclick=async ()=>{
+    const dataUlt=document.getElementById('rec-man-data').value;
+    if(!dataUlt){ toast('Informe a data da realização'); return; }
+    const btn=document.getElementById('rec-man-salvar'); btn.disabled=true;
+    try{
+      const item={tipo, dataUlt,
+        kmUlt:document.getElementById('rec-man-km').value||'',
+        dataProx:document.getElementById('rec-man-pdata').value||'',
+        kmProx:document.getElementById('rec-man-pkm').value||'',
+        obs:document.getElementById('rec-man-obs').value.trim(),
+        fotos:(hist&&hist.fotos)||[], fotoBase64:[]};
+      const r=await fetch(cfg.url,{method:'POST',headers:{'Content-Type':'text/plain'},
+        body:JSON.stringify({action:'gravarManutencao',senha:adminSenha,origem:'botao_manutencao',placa,usuario:usuarioGoogle||'',manutencao:[item]})});
+      const d=await r.json();
+      if(!d.ok) throw new Error(d.erro||'O servidor não confirmou o salvamento');
+      try{ localStorage.removeItem(HK+'_'+placa); }catch(e){}
+      fecharAcaoRec();
+      toast(d.avisoHistorico?'⚠ Manutenção salva, mas o histórico NÃO foi registrado — avise o administrador do sistema':'✓ Realização registrada: '+tipo);
+      carregarResumoFrota(); // recalcula as etiquetas e redesenha o resumo
+    }catch(e){ btn.disabled=false; toast('Erro ao registrar: '+(e.message||'conexão')); }
+  };
+}
+
+/* PDF de pendências: manutenções vencidas / a vencer + OS abertas, por veículo da frota (só quem tem pendência) */
+function motivoManRec(m){
+  const fk=n=>Number(n).toLocaleString('pt-BR'); const p=[];
+  if(m.status==='vencida'){
+    if(m.diasRestantes!=null&&m.diasRestantes<0) p.push('venceu em '+m.dataProx+' ('+(-m.diasRestantes)+' dia(s) de atraso)');
+    if(m.kmRestantes!=null&&m.kmRestantes<=0) p.push('passou '+fk(-m.kmRestantes)+' km do previsto ('+fk(m.kmProx)+')');
+  } else {
+    if(m.diasRestantes!=null&&m.diasRestantes<=7) p.push(m.diasRestantes===0?'vence hoje':'vence em '+m.diasRestantes+' dia(s) ('+m.dataProx+')');
+    if(m.kmRestantes!=null&&m.kmRestantes<=500) p.push('faltam '+fk(m.kmRestantes)+' km (previsto '+fk(m.kmProx)+')');
+  }
+  return p.join(' · ')||'verificar';
+}
+function linhasPendenciasRec(){
+  const linhas=[]; let semPend=0;
+  (frota||[]).filter(v=>v&&v.placa&&String(v.ativo||'').toLowerCase()!=='não'&&String(v.ativo||'').toLowerCase()!=='nao')
+    .sort((a,b)=>String(a.placa).localeCompare(String(b.placa),'pt-BR')).forEach(v=>{
+      const res=resumoManutencaoRec(v.placa); const itens=[];
+      if(res&&Array.isArray(res.manutencoes)){
+        res.manutencoes.filter(m=>m.status==='vencida').forEach(m=>itens.push({sit:'Manutenção VENCIDA',cor:[185,28,28],desc:m.tipo,det:motivoManRec(m)}));
+        res.manutencoes.filter(m=>m.status==='proximo').forEach(m=>itens.push({sit:'Manutenção a vencer',cor:[180,83,9],desc:m.tipo,det:motivoManRec(m)}));
+      } else if(res&&res.manutencaoVencida) itens.push({sit:'Manutenção VENCIDA',cor:[185,28,28],desc:'(sem detalhe — atualize o Worker)',det:''});
+      osAbertasRec(v.placa).forEach(o=>itens.push({sit:'OS '+o.status,cor:o.status==='Urgente'?[185,28,28]:[180,83,9],desc:o.servico||'',det:'OS nº '+o.numero+(o.data?' · aberta em '+o.data:'')+(o.fornecedor?' · '+o.fornecedor:'')}));
+      if(!itens.length){ semPend++; return; }
+      linhas.push({veiculo:v.placa+(v.modelo?' · '+v.modelo:''), km:res&&res.ultimoKm!=null?Number(res.ultimoKm).toLocaleString('pt-BR')+' km':'—', itens});
+    });
+  return {linhas, semPend};
+}
+let autoTableRecCarregado=false;
+function carregarAutoTableRec(){
+  return new Promise((resolve,reject)=>{
+    if(autoTableRecCarregado || (window.jspdf&&window.jspdf.jsPDF&&window.jspdf.jsPDF.API.autoTable)){ autoTableRecCarregado=true; return resolve(); }
+    const sc=document.createElement('script');
+    sc.src='https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js';
+    sc.onload=()=>{ autoTableRecCarregado=true; resolve(); }; sc.onerror=()=>reject(new Error('não consegui carregar o gerador de tabelas (sem internet?)'));
+    document.head.appendChild(sc);
+  });
+}
+async function gerarPdfPendenciasRec(){
+  if(!window.jspdf){ toast('Biblioteca de PDF indisponível (sem internet?)'); return; }
+  toast('Montando o PDF…');
+  try{
+    osResumoRecEm=0; // força dados atuais
+    await Promise.all([carregarResumoFrota(), carregarOSResumoRec(), carregarAutoTableRec()]);
+    const {linhas, semPend}=linhasPendenciasRec();
+    const {jsPDF}=window.jspdf; const doc=new jsPDF({orientation:'landscape'});
+    const empresa=(dadosEmpresaCache&&dadosEmpresaCache.RazaoSocial)||'';
+    const mg=10;
+    doc.setFontSize(14); doc.setFont(undefined,'bold'); doc.text('Pendências de manutenção e reparos da frota', mg, 14);
+    doc.setFontSize(9); doc.setFont(undefined,'normal'); doc.setTextColor(90);
+    doc.text((empresa?empresa+' · ':'')+'Gerado em '+new Date().toLocaleString('pt-BR')+' · situação atual (km = último checklist)', mg, 20);
+    doc.setTextColor(0);
+    const totMan=linhas.reduce((n,l)=>n+l.itens.filter(i=>i.sit.startsWith('Manutenção')).length,0);
+    const totOS=linhas.reduce((n,l)=>n+l.itens.filter(i=>i.sit.startsWith('OS')).length,0);
+    doc.setFontSize(10);
+    doc.text(linhas.length+' veículo(s) com pendência · '+totMan+' manutenção(ões) vencida(s)/a vencer · '+totOS+' OS aberta(s) · '+semPend+' veículo(s) sem pendência', mg, 26);
+    if(!linhas.length){ doc.setFontSize(12); doc.text('Nenhuma pendência de manutenção ou OS aberta na frota.', mg, 38); }
+    else {
+      const corpo=[];
+      linhas.forEach(l=>l.itens.forEach((it,i)=>{
+        const sit={content:it.sit, styles:{textColor:it.cor, fontStyle:'bold'}};
+        const linha=[sit,it.desc,it.det];
+        if(i===0){ linha.unshift({content:l.veiculo,rowSpan:l.itens.length,styles:{fontStyle:'bold',valign:'top'}},{content:l.km,rowSpan:l.itens.length,styles:{valign:'top'}}); }
+        corpo.push(linha);
+      }));
+      doc.autoTable({startY:30, margin:{left:mg,right:mg},
+        head:[['Veículo','Km atual','Situação','Manutenção / serviço','Detalhe / prazo']], body:corpo,
+        styles:{fontSize:8.5,cellPadding:1.8}, headStyles:{fillColor:[26,58,92]},
+        columnStyles:{0:{cellWidth:52},1:{cellWidth:24},2:{cellWidth:40}}});
+    }
+    const n=doc.getNumberOfPages();
+    for(let i=1;i<=n;i++){ doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text('Página '+i+' de '+n, 297-mg, 205, {align:'right'}); }
+    mostrarPopupPdfRec(doc.output('blob'), 'pendencias-frota-'+new Date().toLocaleDateString('sv-SE')+'.pdf');
+  }catch(e){ toast('Não consegui gerar o PDF: '+(e.message||e)); }
+}
+/* PDF do resumo do dia: o mesmo que se vê na tela (Fizeram / Sem checklist), respeitando o filtro escolhido */
+function textoPendenciasVeiculoRec(placa){
+  const linhas=[]; let grave=false;
+  const res=resumoManutencaoRec(placa);
+  if(res&&Array.isArray(res.manutencoes)){
+    res.manutencoes.filter(m=>m.status==='vencida').forEach(m=>{ grave=true; linhas.push('Manutenção VENCIDA: '+m.tipo+' — '+motivoManRec(m)); });
+    res.manutencoes.filter(m=>m.status==='proximo').forEach(m=>linhas.push('Manutenção a vencer: '+m.tipo+' — '+motivoManRec(m)));
+  } else if(res&&res.manutencaoVencida){ grave=true; linhas.push('Manutenção VENCIDA'); }
+  osAbertasRec(placa).forEach(o=>{ if(o.status==='Urgente') grave=true; linhas.push('OS '+o.numero+' ('+o.status+'): '+(o.servico||'')); });
+  return {texto:linhas.join('\n'), grave};
+}
+async function gerarPdfResumoRec(){
+  const busca=recUltimaBusca;
+  if(!busca){ toast('Faça a busca do dia primeiro'); return; }
+  if(!window.jspdf){ toast('Biblioteca de PDF indisponível (sem internet?)'); return; }
+  toast('Montando o PDF…');
+  try{
+    osResumoRecEm=0;
+    await Promise.all([carregarResumoFrota(), carregarOSResumoRec(), carregarAutoTableRec()]);
+    const lista=(busca.checklists||[]).slice().sort((a,b)=>String(a.placa).localeCompare(String(b.placa),'pt-BR')||String(a.hora||'').localeCompare(String(b.hora||'')));
+    const feitos=new Set(lista.map(c=>placaChaveRec(c.placa)));
+    const sem=(!busca.placa&&Array.isArray(frota))
+      ? frota.filter(v=>v&&v.placa&&!feitos.has(placaChaveRec(v.placa))&&String(v.ativo||'').toLowerCase()!=='não'&&String(v.ativo||'').toLowerCase()!=='nao')
+          .sort((a,b)=>String(a.placa).localeCompare(String(b.placa),'pt-BR'))
+      : [];
+    const filtro=(!busca.placa&&sem.length)?recFiltroResumo:'todos';
+    const {jsPDF}=window.jspdf; const doc=new jsPDF({orientation:'landscape'});
+    const empresa=(dadosEmpresaCache&&dadosEmpresaCache.RazaoSocial)||'';
+    const mg=10;
+    const rotFiltro=filtro==='pendentes'?'Somente veículos sem checklist':(filtro==='feitos'?'Somente veículos que fizeram checklist':'Todos os veículos');
+    doc.setFontSize(14); doc.setFont(undefined,'bold'); doc.text('Resumo de checklists — '+dataBRRec(busca.data), mg, 14);
+    doc.setFontSize(9); doc.setFont(undefined,'normal'); doc.setTextColor(90);
+    doc.text((empresa?empresa+' · ':'')+'Gerado em '+new Date().toLocaleString('pt-BR')+' · '+rotFiltro, mg, 20);
+    doc.setTextColor(0); doc.setFontSize(10);
+    const veicFeitos=feitos.size;
+    doc.text(lista.length+' checklist(s) · '+veicFeitos+' veículo(s) fizeram'+(sem.length?' · '+sem.length+' sem checklist':''), mg, 26);
+    const corpo=[]; const sec=(t,cor)=>corpo.push([{content:t,colSpan:5,styles:{fillColor:cor,fontStyle:'bold',textColor:[40,40,40]}}]);
+    const celPend=v=>{ const r=textoPendenciasVeiculoRec(v); return {content:r.texto||'—', styles:r.grave?{textColor:[185,28,28]}:{}}; };
+    if(filtro!=='pendentes'){
+      sec('Fizeram checklist ('+veicFeitos+' veículo(s))',[219,234,254]);
+      if(!lista.length) corpo.push([{content:'Nenhum checklist enviado neste dia',colSpan:5,styles:{fontStyle:'italic'}}]);
+      lista.forEach(c=>corpo.push([
+        {content:c.placa+(c.modelo?' · '+c.modelo:''),styles:{fontStyle:'bold'}},
+        c.motorista||'—', c.hora||'—', c.km?Number(c.km).toLocaleString('pt-BR')+' km':'sem km', celPend(c.placa)]));
+    }
+    if(filtro!=='feitos' && sem.length){
+      sec('Sem checklist neste dia ('+sem.length+')',[254,243,199]);
+      sem.forEach(v=>{ const r=resumoManutencaoRec(v.placa);
+        corpo.push([{content:v.placa+(v.modelo?' · '+v.modelo:''),styles:{fontStyle:'bold'}}, '—', '—',
+          r&&r.ultimoKm!=null?'último: '+Number(r.ultimoKm).toLocaleString('pt-BR')+' km'+(r.ultimaData?' ('+r.ultimaData+')':''):'—', celPend(v.placa)]); });
+    }
+    doc.autoTable({startY:30, margin:{left:mg,right:mg},
+      head:[['Veículo','Motorista','Hora','Km','Manutenção / OS abertas']], body:corpo,
+      styles:{fontSize:8.5,cellPadding:1.8}, headStyles:{fillColor:[26,58,92]},
+      columnStyles:{0:{cellWidth:62},1:{cellWidth:40},2:{cellWidth:16},3:{cellWidth:42}}});
+    const n=doc.getNumberOfPages();
+    for(let i=1;i<=n;i++){ doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text('Página '+i+' de '+n, 297-mg, 205, {align:'right'}); }
+    mostrarPopupPdfRec(doc.output('blob'), 'resumo-checklists-'+busca.data+'.pdf');
+  }catch(e){ toast('Não consegui gerar o PDF: '+(e.message||e)); }
+}
+function mostrarPopupPdfRec(blob, nome){
+  const ov=abrirModalRec('📄 PDF pronto', `
+    <div style="font-size:12px;color:var(--tx2);margin:0 0 12px">O que você quer fazer com o PDF?</div>
+    <button class="btn-buscar" id="rpdf-ver" style="width:100%;justify-content:center;margin-bottom:8px"><i class="ti ti-eye"></i> Visualizar</button>
+    <button class="sbtn" id="rpdf-baixar" style="width:100%;border:1px solid var(--bd);border-radius:var(--rs);padding:10px;margin-bottom:8px"><i class="ti ti-download"></i> Baixar</button>
+    <button class="sbtn" id="rpdf-share" style="width:100%;border:1px solid var(--bd);border-radius:var(--rs);padding:10px;margin-bottom:8px"><i class="ti ti-share"></i> Compartilhar</button>
+    <button class="sbtn" onclick="fecharAcaoRec()" style="width:100%;padding:8px">Fechar</button>`);
+  const url=URL.createObjectURL(blob);
+  document.getElementById('rpdf-ver').onclick=()=>window.open(url,'_blank');
+  document.getElementById('rpdf-baixar').onclick=()=>{ const a=document.createElement('a'); a.href=url; a.download=nome; a.click(); };
+  document.getElementById('rpdf-share').onclick=async ()=>{
+    try{
+      const f=new File([blob],nome,{type:'application/pdf'});
+      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[f]})) await navigator.share({files:[f],title:nome});
+      else toast('Compartilhamento direto indisponível neste aparelho — use Baixar');
+    }catch(e){ if(e.name!=='AbortError') toast('Não foi possível compartilhar — use Baixar'); }
+  };
 }
 
 function renderChecklists(checklists, body){
