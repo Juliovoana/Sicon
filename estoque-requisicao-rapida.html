@@ -172,6 +172,17 @@
         .modal-ajuda-nav-item{ margin-bottom:0; flex-shrink:0; }
     }
 </style>
+<script>
+/* Aviso padrão quando o banco recusa a ação por falta de permissão (RLS) */
+(function(){
+  var MSG_SEM_PERMISSAO = '🔒 Usuário sem permissão para esta ação. Fale com o administrador da unidade.';
+  var alertOriginal = window.alert.bind(window);
+  window.alert = function(m){
+    if (/row-level security|permission denied/i.test(String(m))) m = MSG_SEM_PERMISSAO;
+    alertOriginal(m);
+  };
+})();
+</script>
 </head>
 <body>
 
@@ -617,7 +628,7 @@ const REQ_ATENDER_URL = new URLSearchParams(window.location.search).get('atender
 // ---------------------------------------------------------------
 const AJUDA_REQRAPIDA = {
     titulo: 'Requisição Rápida',
-    ultimaRevisao: '12/09/2026',
+    ultimaRevisao: '16/10/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>App de requisição de material e serviço/abastecimento do almoxarifado --
@@ -634,6 +645,8 @@ const AJUDA_REQRAPIDA = {
             <strong>⛽ Serviço/Abastecimento</strong> (veículo/equipamento + descrição do
             serviço) -- cada um mostra sua própria lista de itens.</p>
             <ul>
+                <li><strong>Setor não está na lista?</strong> Quem é administrador (ou o usuário principal) vê o link
+                <strong>＋ cadastrar setor</strong> ao lado do campo e cria na hora; os demais pedem a um administrador.</li>
                 <li><strong>Almoxarifado, Setor e Evento são obrigatórios.</strong> Evento é
                 sempre uma escolha ativa (busca por código/descrição) -- o app <strong>lembra
                 o último almoxarifado, setor e evento escolhidos</strong> nesse aparelho e já
@@ -679,7 +692,11 @@ const AJUDA_REQRAPIDA = {
                 atendido, e só pra quem criou ou é Administrador/Principal.</li>
                 <li><strong>📄 A4 / 🧾 Bobina</strong> reimprime o PDF (com o link de
                 aprovação/atendimento embutido, clicável, mesmo que o app de destino no
-                celular descarte a legenda do compartilhamento).</li>
+                celular descarte a legenda do compartilhamento). Todo item já atendido mostra
+                no PDF, numa linha só, o <strong>valor unitário e o total</strong> (em
+                serviço/abastecimento só o total, já que não tem "unitário" nesse tipo), com o
+                <strong>"Valor total atendido"</strong> da requisição inteira no rodapé --
+                item ainda não atendido não mostra valor nenhum.</li>
             </ul>
         ` },
         { id: 'produtos', titulo: 'Produtos do almoxarifado', corpo: `
@@ -924,6 +941,103 @@ function abrirEscolhaUnidade() {
 }
 document.getElementById('btn-trocar-unidade').addEventListener('click', abrirEscolhaUnidade);
 
+
+/* ===== SETOR / SUBSETOR: cadastro só por ADMINISTRADOR ou PRINCIPAL =====
+   A tela esconde o "＋ cadastrar" de quem não pode, mas a trava de verdade é no banco
+   (setores-cadastro-restrito.sql: fn_pode_cadastrar_setor + trigger em unidade_setores/unidade_subsetores).
+   Sem o SQL rodado ainda, vale a regra local do módulo (parâmetro "regraLocal"). */
+let podeCadastrarSetorFlag = false;
+async function carregarPodeCadastrarSetor(unidadeId, regraLocal) {
+    let ok = null;
+    try {
+        const { data, error } = await sb.rpc('fn_pode_cadastrar_setor', { p_unidade_negocio_id: unidadeId });
+        if (!error && typeof data === 'boolean') ok = data;
+    } catch (e) { /* função ainda não existe no banco */ }
+    podeCadastrarSetorFlag = ok === null ? !!(regraLocal && regraLocal()) : ok;
+    return podeCadastrarSetorFlag;
+}
+const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal podem cadastrar setores e subsetores.';
+
+function abrirCadastroRapidoSetor({ unidadeId, tipo, setor, aoSalvar }) {
+    if (!podeCadastrarSetorFlag) { alert(MSG_SEM_PERMISSAO_SETOR); return; }
+    if (tipo === 'subsetor' && !setor) { alert('Escolha o setor primeiro — o subsetor é criado dentro dele.'); return; }
+    const rot = tipo === 'setor' ? 'setor' : 'subsetor';
+    const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px;';
+    ov.innerHTML = `<div style="background:#fff;color:#222;border-radius:12px;padding:18px;width:100%;max-width:380px;box-shadow:0 10px 40px rgba(0,0,0,.3);font-family:inherit;">
+        <h3 style="margin:0 0 4px;font-size:1.05rem;">Novo ${rot}</h3>
+        <p style="margin:0 0 12px;font-size:.85rem;color:#666;">${tipo === 'subsetor' ? 'Dentro do setor <b>' + esc(setor.nome) + '</b>.' : 'Fica disponível em todos os módulos desta unidade.'}</p>
+        <input type="text" id="cadRapSetorNome" maxlength="80" placeholder="Nome do ${rot}" autocomplete="off" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:1rem;">
+        <p id="cadRapSetorMsg" style="min-height:1.2em;margin:8px 0 0;font-size:.85rem;color:#b00020;"></p>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+            <button type="button" id="cadRapSetorCancelar" style="flex:1;padding:10px;border:1px solid #ccc;background:#f4f4f4;border-radius:8px;cursor:pointer;">Cancelar</button>
+            <button type="button" id="cadRapSetorSalvar" style="flex:1;padding:10px;border:0;background:#1a3a5c;color:#fff;border-radius:8px;cursor:pointer;font-weight:600;">Salvar</button>
+        </div></div>`;
+    document.body.appendChild(ov);
+    const nomeEl = ov.querySelector('#cadRapSetorNome'), msgEl = ov.querySelector('#cadRapSetorMsg'), btn = ov.querySelector('#cadRapSetorSalvar');
+    nomeEl.focus();
+    ov.querySelector('#cadRapSetorCancelar').onclick = () => ov.remove();
+    ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+    const salvar = async () => {
+        const nome = nomeEl.value.trim().replace(/\s+/g, ' ');
+        msgEl.textContent = '';
+        if (!nome) { msgEl.textContent = 'Informe o nome do ' + rot + '.'; nomeEl.focus(); return; }
+        btn.disabled = true;
+        try {
+            const tabela = tipo === 'setor' ? 'unidade_setores' : 'unidade_subsetores';
+            let q = sb.from(tabela).select('id, nome').eq('unidade_negocio_id', unidadeId);
+            if (tipo === 'subsetor') q = q.eq('setor_id', setor.id);
+            const { data: existentes, error: eEx } = await q;
+            if (eEx) throw eEx;
+            const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+            if ((existentes || []).some(r => norm(r.nome) === norm(nome))) throw new Error('Já existe ' + (tipo === 'setor' ? 'um setor' : 'um subsetor neste setor') + ' com esse nome.');
+            const registro = { unidade_negocio_id: unidadeId, nome, ativo: true };
+            if (tipo === 'subsetor') registro.setor_id = setor.id;
+            const { data, error } = await sb.from(tabela).insert(registro).select().single();
+            if (error) throw error;
+            try { await registrarSentinela('cadastro_rapido_' + tipo, `Cadastrou ${rot} "${nome}"${tipo === 'subsetor' ? ' no setor ' + setor.nome : ''} (id ${data.id})`); } catch (_) { /* auditoria não bloqueia */ }
+            ov.remove();
+            if (aoSalvar) aoSalvar(data);
+        } catch (e) {
+            msgEl.textContent = /42501|Somente administradores/.test((e && (e.code + ' ' + e.message)) || '') ? MSG_SEM_PERMISSAO_SETOR : ('Erro: ' + (e.message || e));
+            btn.disabled = false;
+        }
+    };
+    btn.onclick = salvar;
+    nomeEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); salvar(); } });
+}
+
+// repovoa os dois selects de setor (requisição e "detalhes do item") mantendo o que já estava escolhido
+function repopularSelectsSetorReq(selecionarEm, novoId) {
+    const s1 = document.getElementById('campoSetor'), s2 = document.getElementById('editarDetalhesSetor');
+    const v1 = s1.value, v2 = s2.value;
+    s1.innerHTML = '<option value="">-- selecione --</option>' + setores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+    s2.innerHTML = '<option value="">-- usar o da requisição --</option>' + setores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+    s1.value = selecionarEm === 'campoSetor' ? String(novoId) : v1;
+    s2.value = selecionarEm === 'editarDetalhesSetor' ? String(novoId) : v2;
+}
+function instalarLinksCadastroSetor() {
+    ['campoSetor', 'editarDetalhesSetor'].forEach(selId => {
+        const lab = document.getElementById(selId).closest('.campo').querySelector('label');
+        const a = document.createElement('a');
+        a.href = '#'; a.className = 'link-cad-setor'; a.textContent = '＋ cadastrar setor'; a.style.cssText = 'float:right;font-size:.8em;font-weight:600;text-decoration:none;display:none;';
+        a.title = 'Cadastro rápido (só administrador ou principal)';
+        a.addEventListener('click', e => {
+            e.preventDefault();
+            abrirCadastroRapidoSetor({ unidadeId: meuPerfil.unidadeId, tipo: 'setor', aoSalvar: s => {
+                setores.push(s); setores.sort((x, y) => String(x.nome).localeCompare(String(y.nome), 'pt-BR'));
+                repopularSelectsSetorReq(selId, s.id);
+            } });
+        });
+        lab.appendChild(a);
+    });
+}
+function atualizarLinksCadastroSetor() {
+    document.querySelectorAll('.link-cad-setor').forEach(a => { a.style.display = podeCadastrarSetorFlag ? '' : 'none'; });
+}
+instalarLinksCadastroSetor();
+
 async function definirUnidadeAtiva(vinculo) {
     meuPerfil.unidadeId = vinculo.unidade_id;
     meuPerfil.unidadeNome = vinculo.nome;
@@ -947,6 +1061,8 @@ async function iniciarApp() {
     document.getElementById('aba-btn-atender').style.display = podeAtender ? '' : 'none';
     document.getElementById('btnGerenciarVeiculos').classList.toggle('hidden', !(meuPerfil.ehPrincipal || meuPerfil.papel === 'administrador'));
     document.getElementById('aba-btn-aprovadores').style.display = meuPerfil.ehPrincipal ? '' : 'none';
+    await carregarPodeCadastrarSetor(meuPerfil.unidadeId, () => meuPerfil.ehPrincipal || meuPerfil.papel === 'administrador');
+    atualizarLinksCadastroSetor();
 
     // Confere se o usuário logado é aprovador ativo desta unidade -- usado
     // pra mostrar (ou não) os botões de aprovar/reprovar direto na lista
@@ -1951,7 +2067,7 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
             // uma requisição nova -- busca ela já atualizada, com os
             // itens certos, direto do banco
             const { data: reqAtualizada } = await sb.from('estoque_requisicoes_rapidas')
-                .select('*, estoque_requisicoes_rapidas_itens(*)')
+                .select('*, estoque_requisicoes_rapidas_itens(*, estoque_requisicoes_rapidas_atendimentos(*))')
                 .eq('id', requisicaoEmEdicaoId).single();
             if (reqAtualizada) {
                 await gerarEAbrirPopupPdf(reqAtualizada, reqAtualizada.estoque_requisicoes_rapidas_itens || [], 'a4');
@@ -2745,6 +2861,33 @@ document.getElementById('btnConfirmarAtender').addEventListener('click', async (
 let pdfGeradoAtual = null; // {blob, nomeArquivo}
 let requisicaoAbertaNoPopup = null; // {req, itens} -- pra "trocar formato" conseguir regerar
 
+// valor já atendido de um item: em material soma qtd × valor_unitario de
+// cada atendimento (e tira a média ponderada do valor unitário, pro caso de
+// atendimentos parciais em preços diferentes); em serviço o campo
+// "valor_unitario" já É o valor total daquele atendimento (ver rótulo
+// "Valor total (R$)" no modal Atender), então soma direto sem multiplicar
+// por qtd e não existe "unitário" nesse caso
+function valoresAtendidoItem(item, ehServico) {
+    const atendimentos = item.estoque_requisicoes_rapidas_atendimentos || [];
+    let qtdTotal = 0, valorTotal = 0;
+    atendimentos.forEach(a => {
+        const qtd = Number(a.qtd) || 0;
+        const valorUnit = Number(a.valor_unitario) || 0;
+        qtdTotal += qtd;
+        valorTotal += ehServico ? valorUnit : qtd * valorUnit;
+    });
+    const valorUnitMedio = (!ehServico && qtdTotal > 0) ? valorTotal / qtdTotal : null;
+    return { valorTotal, valorUnitMedio };
+}
+// texto de uma linha só, pronto pro PDF -- unitário e total juntos quando faz
+// sentido ter "unitário" (material); em serviço só existe o total
+function linhaValorAtendido(valores) {
+    if (!valores || valores.valorTotal <= 0) return null;
+    return valores.valorUnitMedio != null
+        ? `Valor unit: ${formatarMoeda(valores.valorUnitMedio)} · Total: ${formatarMoeda(valores.valorTotal)}`
+        : `Valor atendido: ${formatarMoeda(valores.valorTotal)}`;
+}
+
 async function gerarEAbrirPopupPdf(req, itens, formato) {
     requisicaoAbertaNoPopup = { req, itens };
     const resultado = await construirPdfRequisicao(req, itens, formato);
@@ -2826,18 +2969,21 @@ async function construirPdfRequisicao(req, itens, formato) {
         itens.forEach((item, idx) => {
             doc.setFont('helvetica', 'bold');
             let tituloItem, detalhes;
+            const linhaValorBobina = linhaValorAtendido(valoresAtendidoItem(item, ehServico));
             if (ehServico) {
                 const veiculo = veiculosEquipamentos.find(v => v.id === item.equipamento_veiculo_id);
                 tituloItem = item.servico_descricao || '-';
                 detalhes = [
                     veiculo ? `Veículo: ${veiculo.nome}` : null,
                     item.fornecedor_recomendado ? `Fornecedor: ${item.fornecedor_recomendado}` : null,
-                    item.qtd_solicitada != null ? `Qtd: ${item.qtd_solicitada}${item.unidade_medida ? ' ' + item.unidade_medida : ''}` : null
+                    item.qtd_solicitada != null ? `Qtd: ${item.qtd_solicitada}${item.unidade_medida ? ' ' + item.unidade_medida : ''}` : null,
+                    linhaValorBobina
                 ].filter(Boolean);
             } else {
                 const prod = produtos.find(p => p.id === item.produto_id);
                 tituloItem = item.produto_id != null ? (prod ? prod.nome : '#' + item.produto_id) : `${item.descricao_livre} (novo)`;
                 detalhes = [`Qtd: ${item.qtd_solicitada}`];
+                if (linhaValorBobina) detalhes.push(linhaValorBobina);
             }
             const linhasTitulo = doc.splitTextToSize(`${idx + 1}. ${tituloItem}`, larguraUtil);
             doc.text(linhasTitulo, margem, y);
@@ -2865,6 +3011,7 @@ async function construirPdfRequisicao(req, itens, formato) {
         doc.setFont('helvetica', 'normal');
         itens.forEach(item => {
             if (y > 275) { doc.addPage(); y = margem; }
+            const linhaValorA4 = linhaValorAtendido(valoresAtendidoItem(item, ehServico));
             if (ehServico) {
                 const veiculo = veiculosEquipamentos.find(v => v.id === item.equipamento_veiculo_id);
                 doc.text(item.servico_descricao || '-', margem, y, { maxWidth: 70 });
@@ -2878,7 +3025,25 @@ async function construirPdfRequisicao(req, itens, formato) {
                 doc.text(String(item.qtd_solicitada), margem + larguraUtil, y, { align: 'right' });
             }
             y += 6;
+            if (linhaValorA4) {
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(fonteBase - 1); doc.setTextColor(100);
+                doc.text(linhaValorA4, margem, y);
+                doc.setFontSize(fonteBase); doc.setTextColor(0);
+                y += 5;
+            }
         });
+    }
+
+    const valorTotalAtendido = itens.reduce((acc, item) => acc + valoresAtendidoItem(item, ehServico).valorTotal, 0);
+    if (valorTotalAtendido > 0) {
+        if (y > 270) { doc.addPage(); y = margem; }
+        y += formato === 'bobina' ? 1 : 2;
+        doc.setDrawColor(200); doc.line(margem, y, margem + larguraUtil, y);
+        y += formato === 'bobina' ? 5 : 6;
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(fonteBase);
+        doc.text(`Valor total atendido: ${formatarMoeda(valorTotalAtendido)}`, margem + larguraUtil, y, { align: 'right' });
+        doc.setFont('helvetica', 'normal');
+        y += formato === 'bobina' ? 5 : 6;
     }
 
     // ── Link de aprovação embutido no próprio PDF ──────────────────

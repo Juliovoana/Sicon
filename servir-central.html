@@ -109,6 +109,13 @@
   }
   .card-modulo:hover .btn-editar-modulo{ opacity:1; }
   .card-modulo .btn-editar-modulo:hover{ background:var(--border); }
+  .card-modulo .badge-restrito{ position:absolute; top:8px; left:8px; font-size:.68rem; font-weight:700; background:var(--brand-soft); color:var(--brand-2); border-radius:999px; padding:2px 7px; }
+  .acesso-lista{ border:1px solid var(--border); border-radius:10px; max-height:240px; overflow:auto; margin-top:8px; }
+  .acesso-lista label{ display:flex; align-items:center; gap:8px; padding:8px 10px; font-size:.84rem; border-bottom:1px solid var(--border); cursor:pointer; margin:0; font-weight:500; }
+  .acesso-lista label:last-child{ border-bottom:none; }
+  .acesso-lista label.fixo{ cursor:default; color:var(--muted); }
+  .acesso-lista input{ width:auto; margin:0; }
+  .acesso-lista .tag-principal{ margin-left:auto; font-size:.68rem; font-weight:700; background:var(--brand-soft); color:var(--brand-2); border-radius:999px; padding:2px 8px; }
   .vazio-modulos{ text-align:center; padding:60px 20px; color:var(--muted); font-size:.9rem; }
 
   .modal-lista-overlay{ position:fixed; inset:0; background:rgba(23,30,26,.5); z-index:70; display:none; align-items:center; justify-content:center; padding:20px; }
@@ -375,6 +382,13 @@
         <button class="drawer-close" id="btnFecharDrawerModulo">✕</button>
       </div>
       <div class="drawer-body">
+        <div class="drawer-section" id="d_modelo_secao" style="display:none;">
+          <div class="field-group">
+            <label>Começar de um modelo padrão da Servir</label>
+            <select id="d_modelo"></select>
+            <p style="font-size:.76rem; color:var(--muted); margin-top:6px;">Preenche nome, endereço e ícone. Você ainda pode alterar antes de salvar.</p>
+          </div>
+        </div>
         <div class="drawer-section">
           <div class="field-group"><label>Nome</label><input type="text" id="d_nome_modulo" placeholder="Ex: Locadora de Veículos"></div>
           <div class="field-group"><label>URL</label><input type="text" id="d_url_modulo" placeholder="https://..."></div>
@@ -409,10 +423,25 @@
               <option value="armarinho">Armarinho e Cosméticos</option>
               <option value="prontuario">Prontuário Médico</option>
               <option value="uniformes_epi">Uniformes / EPI</option>
+              <option value="painel_financeiro">Painel financeiro</option>
+              <option value="fechamento_caixas">Fechamento de caixas</option>
+              <option value="extratos_contas">Extratos de contas</option>
               <option value="parceiros">Parceiros Comerciais</option>
               <option value="vitrine">Vitrine (TV)</option>
               <option value="externo">Externo / outro</option>
             </select>
+          </div>
+        </div>
+        <div class="drawer-section" id="d_acesso_secao" style="display:none;">
+          <div class="field-group">
+            <label>Quem vê este ícone</label>
+            <select id="d_acesso_modo">
+              <option value="todos">Todos os operadores da unidade</option>
+              <option value="selecionados">Só os operadores selecionados</option>
+            </select>
+            <p style="font-size:.76rem; color:var(--muted); margin-top:6px;">O principal da unidade sempre vê todos os ícones. Isto controla o ícone na Central; o acesso dentro de cada módulo segue as regras do próprio módulo.</p>
+            <div class="acesso-lista" id="d_acesso_lista" style="display:none;"></div>
+            <p id="d_acesso_aviso" style="font-size:.78rem; color:var(--danger); margin-top:6px; display:none;"></p>
           </div>
         </div>
       </div>
@@ -725,6 +754,7 @@
     document.getElementById('btnTrocarAgencia').style.display = vinculosDoUsuario.length > 1 ? 'flex' : 'none';
     document.getElementById('btnConvidarColaborador').style.display = ehPrincipalAtual ? 'flex' : 'none';
     document.getElementById('btnDadosUnidade').style.display = ehPrincipalAtual ? 'flex' : 'none';
+    document.getElementById('btnNovoModulo').style.display = ehPrincipalAtual ? '' : 'none';
     carregarDadosUnidade(); // aplica cor/fundo/logo da unidade atual automaticamente
     verificarPendenciaLicenca(agenciaId, 'servir_central');
   }
@@ -1268,6 +1298,9 @@
     uniformes_epi: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46 16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"/></svg>',
     parceiros: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m11 17 2 2a1 1 0 1 0 3-3"/><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4"/><path d="m21 3 1 11h-2"/><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3"/><path d="M3 4h8"/></svg>',
     vitrine: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m10 8.5 5 2.5-5 2.5z"/></svg>',
+    painel_financeiro: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15v3"/><path d="M12 9v9"/><path d="M17 5v13"/></svg>',
+    fechamento_caixas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/><circle cx="12" cy="16.5" r="1.2" fill="currentColor"/></svg>',
+    extratos_contas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>',
     externo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>'
   };
 
@@ -1565,17 +1598,91 @@
     if(arquivo) await enviarIconeModulo(arquivo);
   });
 
+  // ---- acesso por operador (servir-central-acesso-modulos.sql) ----
+  let temRestrito = false;                 // a coluna "restrito" existe? (SQL rodado)
+  let atribuicoes = new Map();             // id do módulo (texto) -> Set de user_id com acesso
+  let usuariosUnidadeCache = null;         // { unidade, lista:[{user_id, email, ehPrincipal}] }
+  let selecionadosDrawer = new Set();
+  // modelos padrão da Servir, chamados daqui (a página abre no mesmo endereço da Central)
+  const MODELOS_PADRAO = [
+    { id: 'painel_financeiro', nome: 'Painel financeiro', pagina: 'painel-financeiro.html', icone: 'painel_financeiro' },
+    { id: 'fechamento_caixas', nome: 'Fechamento de caixas', pagina: 'fechamento-caixas.html', icone: 'fechamento_caixas' },
+    { id: 'extratos_contas', nome: 'Extratos de contas', pagina: 'extratos-contas.html', icone: 'extratos_contas' },
+    { id: 'uniformes_epi', nome: 'Uniformes / EPI', pagina: 'staff-uniformes-epi.html', icone: 'uniformes_epi' }
+  ];
+  const urlDoModelo = (m) => new URL(m.pagina, location.href.split('#')[0].split('?')[0]).href;
+  const semBarra = (u) => String(u || '').trim().replace(/\/+$/, '').toLowerCase();
+
   async function carregarTudo(){
     const { data, error } = await sb.from('servir_unidade_modulos').select('*').eq('unidade_negocio_id', agenciaId).order('ordem_exibicao', { ascending: true });
     if(error){ alert('Erro ao carregar módulos: ' + error.message); return; }
     todosModulos = data || [];
+    if(todosModulos.length) temRestrito = 'restrito' in todosModulos[0];
+    else { const r = await sb.from('servir_unidade_modulos').select('restrito').limit(1); temRestrito = !r.error; }
+    atribuicoes = new Map();
+    if(temRestrito && ehPrincipalAtual){
+      const r = await sb.from('servir_unidade_modulos_usuarios').select('modulo_id, user_id').eq('unidade_negocio_id', agenciaId);
+      if(r.error){ console.warn('Atribuições de módulos indisponíveis:', r.error.message); temRestrito = false; }
+      else (r.data || []).forEach(a => { const k = String(a.modulo_id); if(!atribuicoes.has(k)) atribuicoes.set(k, new Set()); atribuicoes.get(k).add(a.user_id); });
+    }
     renderGridModulos();
+  }
+
+  async function carregarUsuariosUnidade(){
+    if(usuariosUnidadeCache && usuariosUnidadeCache.unidade === agenciaId) return usuariosUnidadeCache.lista;
+    const { data: vs, error } = await sb.from('servir_unidade_usuarios').select('user_id, eh_principal').eq('unidade_negocio_id', agenciaId);
+    if(error) throw new Error(error.message);
+    const lista = await Promise.all((vs || []).map(async v => {
+      let email = '';
+      try { const r = await sb.rpc('fn_obter_email_usuario', { p_user_id: v.user_id }); email = r.data || ''; } catch(e){ /* mostra o id */ }
+      return { user_id: v.user_id, email: email || ('usuário ' + String(v.user_id).slice(0, 8)), ehPrincipal: !!v.eh_principal };
+    }));
+    lista.sort((a, b) => (b.ehPrincipal - a.ehPrincipal) || a.email.localeCompare(b.email));
+    usuariosUnidadeCache = { unidade: agenciaId, lista };
+    return lista;
+  }
+
+  async function renderListaAcesso(){
+    const box = document.getElementById('d_acesso_lista'), aviso = document.getElementById('d_acesso_aviso');
+    const modo = document.getElementById('d_acesso_modo').value;
+    box.style.display = modo === 'selecionados' ? 'block' : 'none';
+    aviso.style.display = 'none';
+    if(modo !== 'selecionados') return;
+    box.textContent = 'Carregando operadores...';
+    try {
+      const lista = await carregarUsuariosUnidade();
+      box.textContent = '';
+      lista.forEach(u => {
+        const l = document.createElement('label'); const cb = document.createElement('input'); cb.type = 'checkbox';
+        const t = document.createElement('span'); t.textContent = u.email;
+        l.appendChild(cb); l.appendChild(t);
+        if(u.ehPrincipal){ cb.checked = true; cb.disabled = true; l.classList.add('fixo'); const g = document.createElement('span'); g.className = 'tag-principal'; g.textContent = 'principal · sempre vê'; l.appendChild(g); }
+        else { cb.checked = selecionadosDrawer.has(u.user_id); cb.addEventListener('change', () => { if(cb.checked) selecionadosDrawer.add(u.user_id); else selecionadosDrawer.delete(u.user_id); }); }
+        box.appendChild(l);
+      });
+      if(!lista.some(u => !u.ehPrincipal)){ aviso.textContent = 'Esta unidade não tem outros operadores além do principal.'; aviso.style.display = 'block'; }
+    } catch(e){ box.textContent = ''; aviso.textContent = 'Não consegui listar os operadores: ' + e.message; aviso.style.display = 'block'; }
+  }
+  document.getElementById('d_acesso_modo').addEventListener('change', renderListaAcesso);
+
+  document.getElementById('d_modelo').addEventListener('change', (e) => {
+    const m = MODELOS_PADRAO.find(x => x.id === e.target.value); if(!m) return;
+    document.getElementById('d_nome_modulo').value = m.nome;
+    document.getElementById('d_url_modulo').value = urlDoModelo(m);
+    document.getElementById('d_tipo_icone').value = m.icone;
+  });
+
+  async function registrarSentinelaCentral(tipoAcao, descricao){
+    try {
+      const { data: { session } } = await sb.auth.getSession();
+      await sb.from('servir_sentinela').insert({ unidade_negocio_id: agenciaId, modulo: 'servir_central', tipo_acao: tipoAcao, descricao, operador: session?.user?.email || null, operador_user_id: session?.user?.id || null });
+    } catch(e){ console.warn('sentinela:', e); }
   }
 
   function renderGridModulos(){
     const grid = document.getElementById('gridModulos');
     if(todosModulos.length === 0){
-      grid.innerHTML = '<div class="vazio-modulos" style="grid-column:1/-1;">Nenhum módulo cadastrado ainda. Clique em "+ Adicionar módulo" pra começar.</div>';
+      grid.innerHTML = '<div class="vazio-modulos" style="grid-column:1/-1;">' + (ehPrincipalAtual ? 'Nenhum módulo cadastrado ainda. Clique em "+ Adicionar módulo" pra começar.' : 'Nenhum módulo liberado para o seu usuário. Peça ao principal da unidade.') + '</div>';
       return;
     }
     grid.innerHTML = '';
@@ -1585,14 +1692,17 @@
       a.href = m.url;
       a.target = '_blank';
       a.rel = 'noopener';
+      const nAtrib = (atribuicoes.get(String(m.id)) || new Set()).size;
       a.innerHTML = `
-        <button type="button" class="btn-editar-modulo" title="Editar">
+        ${ehPrincipalAtual && m.restrito ? `<span class="badge-restrito" title="Só o principal e ${nAtrib} operador(es) veem este ícone">🔒 ${nAtrib}</span>` : ''}
+        ${ehPrincipalAtual ? `<button type="button" class="btn-editar-modulo" title="Editar">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></svg>
-        </button>
+        </button>` : ''}
         <div class="icone-modulo">${m.icone_url ? `<img src="${m.icone_url}" alt="" style="width:100%; height:100%; object-fit:cover; border-radius:14px;">` : (iconesModulo[m.tipo_icone] || iconesModulo.externo)}</div>
         <div class="nome-modulo">${m.nome}</div>
       `;
-      a.querySelector('.btn-editar-modulo').addEventListener('click', (e) => {
+      const btnEd = a.querySelector('.btn-editar-modulo');
+      if(btnEd) btnEd.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
         abrirDrawerModulo(m.id);
@@ -1620,6 +1730,18 @@
       document.getElementById('placeholderIconeModulo').style.display = '';
     }
     document.getElementById('btnExcluirModulo').style.display = id ? 'block' : 'none';
+    // modelos padrão (só ao criar) e acesso por operador (só principal)
+    document.getElementById('d_modelo_secao').style.display = id ? 'none' : '';
+    if(!id){
+      const sel = document.getElementById('d_modelo');
+      const jaTem = new Set(todosModulos.map(x => semBarra(x.url)));
+      sel.innerHTML = '<option value="">— Módulo livre (preencher à mão) —</option>' + MODELOS_PADRAO.map(x => `<option value="${x.id}">${x.nome}${jaTem.has(semBarra(urlDoModelo(x))) ? ' (já adicionado)' : ''}</option>`).join('');
+      sel.value = '';
+    }
+    document.getElementById('d_acesso_secao').style.display = ehPrincipalAtual && temRestrito ? '' : 'none';
+    selecionadosDrawer = new Set(id ? (atribuicoes.get(String(id)) || []) : []);
+    document.getElementById('d_acesso_modo').value = m.restrito ? 'selecionados' : 'todos';
+    renderListaAcesso();
     document.getElementById('drawerModuloOverlay').classList.add('show');
   }
 
@@ -1636,15 +1758,41 @@
     if(!url){ alert('Informe a URL do módulo.'); return; }
     if(!/^https?:\/\//i.test(url)) url = 'https://' + url;
 
+    const controlaAcesso = ehPrincipalAtual && temRestrito;
+    const restrito = controlaAcesso && document.getElementById('d_acesso_modo').value === 'selecionados';
+    if(restrito && selecionadosDrawer.size === 0 && !confirm('Nenhum operador foi marcado: só o principal vai ver este ícone. Continuar?')) return;
+
     btn.disabled = true;
     btn.textContent = 'Salvando...';
     try{
       const payload = { unidade_negocio_id: agenciaId, nome, url, tipo_icone: tipoIcone, icone_url: document.getElementById('d_icone_url').value.trim() || null };
-      const query = moduloIdAtual
-        ? sb.from('servir_unidade_modulos').update(payload).eq('id', moduloIdAtual)
-        : sb.from('servir_unidade_modulos').insert(payload);
-      const { error } = await query;
-      if(error) throw new Error(error.message);
+      if(controlaAcesso) payload.restrito = restrito;
+      const eraRestrito = moduloIdAtual ? !!(todosModulos.find(x => x.id === moduloIdAtual) || {}).restrito : false;
+      let idSalvo = moduloIdAtual;
+      if(moduloIdAtual){
+        const { error } = await sb.from('servir_unidade_modulos').update(payload).eq('id', moduloIdAtual);
+        if(error) throw new Error(error.message);
+      } else {
+        const { data: novo, error } = await sb.from('servir_unidade_modulos').insert(payload).select('id').single();
+        if(error) throw new Error(error.message);
+        idSalvo = novo.id;
+      }
+      if(controlaAcesso){
+        const atual = atribuicoes.get(String(idSalvo)) || new Set();
+        const desejado = restrito ? selecionadosDrawer : new Set();
+        const remover = [...atual].filter(u => !desejado.has(u));
+        const incluir = [...desejado].filter(u => !atual.has(u));
+        try {
+          if(remover.length){ const r = await sb.from('servir_unidade_modulos_usuarios').delete().eq('modulo_id', idSalvo).in('user_id', remover); if(r.error) throw new Error(r.error.message); }
+          if(incluir.length){ const r = await sb.from('servir_unidade_modulos_usuarios').insert(incluir.map(u => ({ modulo_id: idSalvo, user_id: u, unidade_negocio_id: agenciaId }))); if(r.error) throw new Error(r.error.message); }
+        } catch(e2){
+          await carregarTudo();
+          throw new Error('O ícone foi salvo, mas a lista de operadores NÃO foi gravada (' + e2.message + '). Abra o módulo e salve de novo.');
+        }
+        if(remover.length || incluir.length || restrito !== eraRestrito){
+          registrarSentinelaCentral('acesso_icone_alterado', `Ícone "${nome}": ${restrito ? 'restrito a ' + desejado.size + ' operador(es)' : 'liberado a todos os operadores'} (+${incluir.length} / -${remover.length})`);
+        }
+      }
 
       document.getElementById('drawerModuloOverlay').classList.remove('show');
       await carregarTudo();

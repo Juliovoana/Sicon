@@ -1076,7 +1076,7 @@ function toggleMenuMobile(){
    ══════════════════════════════════════════════════════════════════ */
 const AJUDA_CHECKLIST = {
   titulo: 'Checklist Equipamentos',
-  ultimaRevisao: '11/09/2026',
+  ultimaRevisao: '16/10/2026',
   secoes: [
     { id: 'geral', titulo: 'Visão geral', corpo: `
       <p>Esse app registra o checklist diário de veículos/equipamentos (carro, gerador,
@@ -1161,7 +1161,8 @@ const AJUDA_CHECKLIST = {
       <p>Solicitações de abastecimento, separadas em <strong>Pendentes</strong>,
       <strong>Atendidas</strong> e <strong>Reprovadas</strong>.</p>
       <p>"Nova solicitação" pede o veículo/equipamento e fica pendente até alguém aprovar
-      (atender) ou reprovar.</p>
+      (atender) ou reprovar. Se o setor não existir, o administrador (ou o usuário principal) vê o link
+      <strong>＋ cadastrar</strong> ao lado do campo Setor; os demais pedem a um administrador.</p>
       <p>🗑️ <strong>Excluir</strong>: aparece nas abas Pendentes e Reprovadas pra quem criou a
       solicitação ou pra um administrador — nunca numa já Atendida (poderia deixar
       estoque/financeiro inconsistente). É uma ação crítica e fica registrada na sentinela.</p>
@@ -2874,6 +2875,75 @@ async function carregarAlmoxarifados(){
   return almoxarifadosCache;
 }
 
+
+/* ===== SETOR / SUBSETOR: cadastro só por ADMINISTRADOR ou PRINCIPAL =====
+   A tela esconde o "＋ cadastrar" de quem não pode, mas a trava de verdade é no banco
+   (setores-cadastro-restrito.sql: fn_pode_cadastrar_setor + trigger em unidade_setores/unidade_subsetores).
+   Sem o SQL rodado ainda, vale a regra local do módulo (parâmetro "regraLocal"). */
+let podeCadastrarSetorFlag = false;
+async function carregarPodeCadastrarSetor(unidadeId, regraLocal) {
+    let ok = null;
+    try {
+        const { data, error } = await sb.rpc('fn_pode_cadastrar_setor', { p_unidade_negocio_id: unidadeId });
+        if (!error && typeof data === 'boolean') ok = data;
+    } catch (e) { /* função ainda não existe no banco */ }
+    podeCadastrarSetorFlag = ok === null ? !!(regraLocal && regraLocal()) : ok;
+    return podeCadastrarSetorFlag;
+}
+const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal podem cadastrar setores e subsetores.';
+
+function abrirCadastroRapidoSetor({ unidadeId, tipo, setor, aoSalvar }) {
+    if (!podeCadastrarSetorFlag) { alert(MSG_SEM_PERMISSAO_SETOR); return; }
+    if (tipo === 'subsetor' && !setor) { alert('Escolha o setor primeiro — o subsetor é criado dentro dele.'); return; }
+    const rot = tipo === 'setor' ? 'setor' : 'subsetor';
+    const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px;';
+    ov.innerHTML = `<div style="background:#fff;color:#222;border-radius:12px;padding:18px;width:100%;max-width:380px;box-shadow:0 10px 40px rgba(0,0,0,.3);font-family:inherit;">
+        <h3 style="margin:0 0 4px;font-size:1.05rem;">Novo ${rot}</h3>
+        <p style="margin:0 0 12px;font-size:.85rem;color:#666;">${tipo === 'subsetor' ? 'Dentro do setor <b>' + esc(setor.nome) + '</b>.' : 'Fica disponível em todos os módulos desta unidade.'}</p>
+        <input type="text" id="cadRapSetorNome" maxlength="80" placeholder="Nome do ${rot}" autocomplete="off" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:1rem;">
+        <p id="cadRapSetorMsg" style="min-height:1.2em;margin:8px 0 0;font-size:.85rem;color:#b00020;"></p>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+            <button type="button" id="cadRapSetorCancelar" style="flex:1;padding:10px;border:1px solid #ccc;background:#f4f4f4;border-radius:8px;cursor:pointer;">Cancelar</button>
+            <button type="button" id="cadRapSetorSalvar" style="flex:1;padding:10px;border:0;background:#1a3a5c;color:#fff;border-radius:8px;cursor:pointer;font-weight:600;">Salvar</button>
+        </div></div>`;
+    document.body.appendChild(ov);
+    const nomeEl = ov.querySelector('#cadRapSetorNome'), msgEl = ov.querySelector('#cadRapSetorMsg'), btn = ov.querySelector('#cadRapSetorSalvar');
+    nomeEl.focus();
+    ov.querySelector('#cadRapSetorCancelar').onclick = () => ov.remove();
+    ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+    const salvar = async () => {
+        const nome = nomeEl.value.trim().replace(/\s+/g, ' ');
+        msgEl.textContent = '';
+        if (!nome) { msgEl.textContent = 'Informe o nome do ' + rot + '.'; nomeEl.focus(); return; }
+        btn.disabled = true;
+        try {
+            const tabela = tipo === 'setor' ? 'unidade_setores' : 'unidade_subsetores';
+            let q = sb.from(tabela).select('id, nome').eq('unidade_negocio_id', unidadeId);
+            if (tipo === 'subsetor') q = q.eq('setor_id', setor.id);
+            const { data: existentes, error: eEx } = await q;
+            if (eEx) throw eEx;
+            const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+            if ((existentes || []).some(r => norm(r.nome) === norm(nome))) throw new Error('Já existe ' + (tipo === 'setor' ? 'um setor' : 'um subsetor neste setor') + ' com esse nome.');
+            const registro = { unidade_negocio_id: unidadeId, nome, ativo: true };
+            if (tipo === 'subsetor') registro.setor_id = setor.id;
+            const { data, error } = await sb.from(tabela).insert(registro).select().single();
+            if (error) throw error;
+            try { await registrarSentinela('cadastro_rapido_' + tipo, `Cadastrou ${rot} "${nome}"${tipo === 'subsetor' ? ' no setor ' + setor.nome : ''} (id ${data.id})`); } catch (_) { /* auditoria não bloqueia */ }
+            ov.remove();
+            if (aoSalvar) aoSalvar(data);
+        } catch (e) {
+            msgEl.textContent = /42501|Somente administradores/.test((e && (e.code + ' ' + e.message)) || '') ? MSG_SEM_PERMISSAO_SETOR : ('Erro: ' + (e.message || e));
+            btn.disabled = false;
+        }
+    };
+    btn.onclick = salvar;
+    nomeEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); salvar(); } });
+}
+
+let podeCadSetorCarregado = false;
+
 async function carregarSetoresParaSolicitacao(){
   if (setoresUnidadeCache) return setoresUnidadeCache;
   const { data, error } = await sb.from('unidade_setores').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId);
@@ -3203,6 +3273,7 @@ async function abrirFormSolicitacao(tipo){
   tipoSolicitacaoAtual = tipo;
   const [almoxarifados, setores] = await Promise.all([carregarAlmoxarifados(), carregarSetoresParaSolicitacao()]);
   if (!almoxarifados.length) { toast('Nenhum almoxarifado cadastrado pra essa unidade — fale com o administrador.'); return; }
+  if (!podeCadSetorCarregado) { await carregarPodeCadastrarSetor(meuPerfil.unidadeId, souAdmin); podeCadSetorCarregado = true; }
 
   const almoxarifadoPadraoId = lerPadrao('almoxarifado_id');
   const almoxarifadoInicial = almoxarifados.find(a => String(a.id) === almoxarifadoPadraoId) || almoxarifados[0];
@@ -3231,7 +3302,7 @@ async function abrirFormSolicitacao(tipo){
         <div id="sol-almoxarifado-confirmacao" style="font-size:12px;color:var(--ok);margin-top:4px">${almoxarifadoInicial ? 'Selecionado: ' + escapeHtml(almoxarifadoInicial.nome || almoxarifadoInicial.descricao || ('Almoxarifado ' + almoxarifadoInicial.id)) : ''}</div>
       </div>
       <div class="man-field" style="position:relative">
-        <label>Setor *</label>
+        <label>Setor * ${podeCadastrarSetorFlag ? '<a href="#" id="sol-setor-cad" style="float:right;font-size:12px;font-weight:600;text-decoration:none">＋ cadastrar</a>' : ''}</label>
         <input class="inp" type="text" id="sol-setor-busca" placeholder="Buscar setor..." autocomplete="off" data-selecionado-id="${escapeHtml(setorPadraoId)}" data-selecionado-texto="${escapeHtml(setorPadraoTexto)}">
         <div class="lista-sugestoes-autocomplete" id="sol-setor-sugestoes"></div>
         <div id="sol-setor-confirmacao" style="font-size:12px;color:var(--ok);margin-top:4px">${setorPadraoTexto ? 'Selecionado: ' + escapeHtml(setorPadraoTexto) : ''}</div>
@@ -3312,6 +3383,16 @@ async function abrirFormSolicitacao(tipo){
   configurarBuscaComConfirmacao('sol-setor-busca', 'sol-setor-sugestoes', 'sol-setor-confirmacao', setores,
     (item, termo) => (item.nome || item.descricao || '').toLowerCase().includes(termo),
     (item) => item.nome || item.descricao || ('Setor ' + item.id));
+  const linkCadSetor = document.getElementById('sol-setor-cad');
+  if (linkCadSetor) linkCadSetor.addEventListener('click', (e) => {
+    e.preventDefault();
+    abrirCadastroRapidoSetor({ unidadeId: meuPerfil.unidadeId, tipo: 'setor', aoSalvar: (s) => {
+      setores.push(s); // mesma lista (cache) usada pela busca
+      const inp = document.getElementById('sol-setor-busca');
+      inp.value = ''; inp.dataset.selecionadoId = s.id; inp.dataset.selecionadoTexto = s.nome; inp.dataset.valorSalvo = s.nome;
+      document.getElementById('sol-setor-confirmacao').textContent = 'Selecionado: ' + s.nome;
+    } });
+  });
 
   const eventos = await carregarEventosParaSolicitacao();
   configurarBuscaComConfirmacao('sol-evento-busca', 'sol-evento-sugestoes', 'sol-evento-confirmacao', eventos,

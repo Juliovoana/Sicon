@@ -1047,6 +1047,7 @@
     document.getElementById('operadorPill').textContent = meuEmail;
     document.getElementById('btnTrocarAgencia').style.display = vinculosDoUsuario.length > 1 ? 'flex' : 'none';
     document.getElementById('btnConvidarColaborador').style.display = ehPrincipalAtual ? 'flex' : 'none';
+    carregarPodeCadastrarSetor(agenciaId, () => ehPrincipalAtual);
     carregarPersonalizacao();
   }
 
@@ -2486,7 +2487,25 @@
   let origemCriacaoRapida = null; // { entidade, inputBusca, inputOculto }
   const ENTIDADE_POR_TIPO_CAMPO = { pessoa: 'pessoa', empresa: 'empresas', setor: 'unidade_setores', plano: 'unidade_plano_de_contas', conta: 'financeiro_contas_correntes' };
 
+
+/* ===== SETOR / SUBSETOR: cadastro só por ADMINISTRADOR ou PRINCIPAL =====
+   A tela esconde o "＋ cadastrar" de quem não pode, mas a trava de verdade é no banco
+   (setores-cadastro-restrito.sql: fn_pode_cadastrar_setor + trigger em unidade_setores/unidade_subsetores).
+   Sem o SQL rodado ainda, vale a regra local do módulo (parâmetro "regraLocal"). */
+let podeCadastrarSetorFlag = false;
+async function carregarPodeCadastrarSetor(unidadeId, regraLocal) {
+    let ok = null;
+    try {
+        const { data, error } = await sb.rpc('fn_pode_cadastrar_setor', { p_unidade_negocio_id: unidadeId });
+        if (!error && typeof data === 'boolean') ok = data;
+    } catch (e) { /* função ainda não existe no banco */ }
+    podeCadastrarSetorFlag = ok === null ? !!(regraLocal && regraLocal()) : ok;
+    return podeCadastrarSetorFlag;
+}
+const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal podem cadastrar setores e subsetores.';
+
   function abrirCriacaoRapida(tipoCampo, inputBusca, inputOculto){
+    if(tipoCampo === 'setor' && !podeCadastrarSetorFlag){ alert(MSG_SEM_PERMISSAO_SETOR); return; }
     origemCriacaoRapida = { entidade: ENTIDADE_POR_TIPO_CAMPO[tipoCampo], inputBusca, inputOculto };
     document.getElementById('seletorEntidadeCadastro').value = origemCriacaoRapida.entidade;
     abrirModalCadastro(null);
@@ -3552,6 +3571,7 @@
   }
 
   function abrirModalCadastro(id){
+    if(document.getElementById('seletorEntidadeCadastro').value === 'unidade_setores' && !podeCadastrarSetorFlag){ alert(MSG_SEM_PERMISSAO_SETOR); origemCriacaoRapida = null; return; }
     cadastroIdAtual = id;
     const entidade = document.getElementById('seletorEntidadeCadastro').value;
     const config = CONFIG_CADASTROS[entidade];

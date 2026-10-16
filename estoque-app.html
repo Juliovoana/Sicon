@@ -1459,6 +1459,36 @@
 
 <!-- ===================== MODAL / POPUP: Editar produto ===================== -->
 <!-- ===================== MODAL / POPUP: Novo grupo de produtos (cadastro rápido) ===================== -->
+<div class="modal-overlay" id="modalNovoProdutoNota" style="z-index:1200;">
+    <div class="modal-caixa">
+        <h4 style="margin-top:0;">Cadastrar produto</h4>
+        <p class="subtitulo" style="margin:0 0 10px 0;">Cria o produto no catálogo do Estoque e já o seleciona neste item da nota. O estoque inicial é 0 — a quantidade entra pela própria nota.</p>
+        <div class="campo"><label>Nome do produto *</label><input type="text" id="npnNome" autocomplete="off"></div>
+        <div class="grade col4">
+            <div class="campo"><label>Unidade</label><input type="text" id="npnUn" value="UN"></div>
+            <div class="campo"><label>Valor unitário (R$)</label><input type="number" step="0.01" min="0" id="npnValor"></div>
+            <div class="campo" style="grid-column: span 2;"><label>Código externo (opcional)</label><input type="text" id="npnCodExt" placeholder="código no sistema externo"></div>
+        </div>
+        <div class="campo" style="position:relative;">
+            <label>Grupo *</label>
+            <input type="text" id="npnGrupoBusca" placeholder="Buscar grupo..." autocomplete="off">
+            <div id="npnGrupoResultados" class="dropdown-busca-evento"></div>
+            <p class="subtitulo" id="npnGrupoSelecionado" style="margin-top:4px;"></p>
+        </div>
+        <div class="campo" style="position:relative;">
+            <label>Almoxarifado *</label>
+            <input type="text" id="npnAlmoxBusca" placeholder="Buscar almoxarifado..." autocomplete="off">
+            <div id="npnAlmoxResultados" class="dropdown-busca-evento"></div>
+            <p class="subtitulo" id="npnAlmoxSelecionado" style="margin-top:4px;"></p>
+        </div>
+        <p class="status-msg" id="statusNovoProdutoNota"></p>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+            <button class="btn btn-cinza" id="btnCancelarNovoProdutoNota" style="flex:1;">Cancelar</button>
+            <button class="btn btn-verde" id="btnSalvarNovoProdutoNota" style="flex:1;">Salvar e selecionar</button>
+        </div>
+    </div>
+</div>
+
 <div class="modal-overlay" id="modalNovoGrupoProduto" style="z-index:1200;">
     <div class="modal-caixa">
         <h4 style="margin-top:0;" id="tituloNovoGrupoProduto">Novo grupo de produtos</h4>
@@ -1762,6 +1792,7 @@
                         <div style="display:flex; gap:6px;">
                             <input type="text" id="notaItemProdutoBusca" placeholder="Buscar ou digitar nome de produto novo..." style="flex:1;">
                             <button type="button" class="btn btn-cinza btn-pequeno" id="btnSincronizarProdutoNota" title="Recarrega a lista de produtos (pra achar produtos criados agora há pouco)">🔄</button>
+                            <button type="button" class="btn btn-verde btn-pequeno" id="btnCadastrarProdutoNota" title="Cadastrar um produto novo (com grupo e almoxarifado) e já selecioná-lo nesta nota">＋ Produto</button>
                         </div>
                         <div id="notaItemProdutoResultados"></div>
                         <label style="display:flex; align-items:center; gap:6px; font-size:0.82em; cursor:pointer; margin-top:4px;" title="Entra só como descrição livre, sem criar produto no catálogo (nota sem XML, consumo direto, nota consolidada). A saída é feita pela Baixa Direta abaixo.">
@@ -2893,6 +2924,7 @@ async function chamarPost(acao, d) {
         return;
     }
     if (acao === 'salvarSetor') {
+        if (!ehAdministradorOuPrincipal()) throw new Error('Somente administradores ou o usuário principal podem cadastrar, alterar ou excluir setores e subsetores.');
         const registro = { unidade_negocio_id: meuPerfil.unidadeId, nome: d.nome, ativo: d.ativo };
         const query = d.id ? sb.from('unidade_setores').update(registro).eq('id', d.id) : sb.from('unidade_setores').insert(registro);
         const { error } = await query;
@@ -2900,11 +2932,13 @@ async function chamarPost(acao, d) {
         return;
     }
     if (acao === 'excluirSetor') {
+        if (!ehAdministradorOuPrincipal()) throw new Error('Somente administradores ou o usuário principal podem cadastrar, alterar ou excluir setores e subsetores.');
         const { error } = await sb.from('unidade_setores').delete().eq('id', d.id);
         if (error) throw error;
         return;
     }
     if (acao === 'salvarSubsetor') {
+        if (!ehAdministradorOuPrincipal()) throw new Error('Somente administradores ou o usuário principal podem cadastrar, alterar ou excluir setores e subsetores.');
         const registro = { unidade_negocio_id: meuPerfil.unidadeId, setor_id: d.setorId, nome: d.nome, ativo: d.ativo };
         const query = d.id ? sb.from('unidade_subsetores').update(registro).eq('id', d.id) : sb.from('unidade_subsetores').insert(registro);
         const { error } = await query;
@@ -2912,6 +2946,7 @@ async function chamarPost(acao, d) {
         return;
     }
     if (acao === 'excluirSubsetor') {
+        if (!ehAdministradorOuPrincipal()) throw new Error('Somente administradores ou o usuário principal podem cadastrar, alterar ou excluir setores e subsetores.');
         const { error } = await sb.from('unidade_subsetores').delete().eq('id', d.id);
         if (error) throw error;
         return;
@@ -3493,7 +3528,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
    ============================================================ */
 const AJUDA_ESTOQUE = {
     titulo: 'Estoque — Controle de Estoque & Projetos',
-    ultimaRevisao: '14/10/2026',
+    ultimaRevisao: '16/10/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>O Estoque controla o material físico da unidade (contêiner/esquadria): o que entra
@@ -3640,6 +3675,10 @@ const AJUDA_ESTOQUE = {
                 <li><strong>+ Nova requisição</strong>: saída avulsa de estoque <strong>sem</strong>
                 vínculo com projeto (ex.: manutenção de veículo/equipamento) — permite registrar
                 KM/horímetro pra próxima troca.</li>
+                <li><strong>＋ Produto (ao lado do 🔄 no campo Produto da entrada manual)</strong>: cadastra um produto novo sem sair da nota —
+                nome, unidade, valor, <strong>grupo</strong> e <strong>almoxarifado</strong> (o do item já vem marcado) — e já o seleciona no item.
+                O estoque inicial é 0; a quantidade entra pela própria nota. Antes só dava digitar um nome novo, e o produto nascia sem escolha
+                de grupo. Para o almoxarifado de Uniformes/EPI use o "Novo produto" da aba Estoque (pede o tipo do catálogo).</li>
                 <li><strong>🔗 Notas parciais (produto a produto — importação de XML e entrada manual)</strong>:
                 serve pra quando a compra grande vem numa nota só, mas a entrada real foi lançada aos
                 poucos, por <strong>notinhas manuais</strong> de recebimento (ex.: madeira com romaneio).
@@ -3727,6 +3766,9 @@ const AJUDA_ESTOQUE = {
             <p>Listas base usadas nos formulários de estoque e requisição:</p>
             <ul>
                 <li><strong>Almoxarifados</strong> — só o Principal ou Administradores podem criar/editar.</li>
+                <li><strong>Setores e Subsetores</strong> — só o Principal ou Administradores cadastram, editam ou excluem
+                (inclusive o "＋ cadastrar" dentro dos formulários). É um cadastro compartilhado com Financeiro, Eventos, Obras,
+                Uniformes/EPI etc., e a trava vale também no banco.</li>
                 <li><strong>Plano de Contas em níveis</strong> — o plano tem 3 níveis: <strong>1</strong> (01 Receitas, 02
                 Despesas, 03 Investimentos), <strong>2</strong> (01.01 Receitas Operacionais) e <strong>3</strong> (01.01.01
                 Locações de Gerador). Os níveis 1 e 2 são cadastrados em <strong>Grupos do plano de contas</strong>; o
@@ -6205,7 +6247,12 @@ function aplicarPermissoesNaInterface() {
     if (btnImportarNFe) btnImportarNFe.style.display = temPermissaoEstoque('notas_entrada') ? '' : 'none';
     const btnAbrirProtocolo = document.getElementById('btnAbrirProtocolo');
     if (btnAbrirProtocolo) btnAbrirProtocolo.style.display = temPermissaoEstoque('protocolo') ? '' : 'none';
-    document.querySelectorAll('.btn-cad-rapido').forEach(b => { b.style.display = temPermissaoEstoque('cadastros') ? '' : 'none'; });
+    // setor e subsetor: só administrador ou principal (a trava de verdade é o trigger do banco — setores-cadastro-restrito.sql)
+    document.querySelectorAll('.btn-cad-rapido').forEach(b => {
+        const soAdmin = b.dataset.tipoCad === 'setor' || b.dataset.tipoCad === 'subsetor';
+        b.style.display = (soAdmin ? ehAdministradorOuPrincipal() : temPermissaoEstoque('cadastros')) ? '' : 'none';
+    });
+    ['btnNovoSetorCad', 'btnNovoSubsetorCad'].forEach(id => { const b = document.getElementById(id); if (b) b.style.display = ehAdministradorOuPrincipal() ? '' : 'none'; });
     const btnImportarNFeNotas = document.getElementById('btnImportarNFeNotas');
     if (btnImportarNFeNotas) btnImportarNFeNotas.style.display = temPermissaoEstoque('notas_entrada') ? '' : 'none';
 
@@ -10726,6 +10773,7 @@ function atualizarModoAvulsoItemNota() {
     busca.placeholder = avulso ? 'Descrição do item avulso (ex: Metro cúbico de madeira serrada)...' : 'Buscar ou digitar nome de produto novo...';
     document.getElementById('btnNotaItemParciais').style.display = (avulso || notaTipoEmEdicao === 'saida') ? 'none' : '';
     document.getElementById('btnSincronizarProdutoNota').style.display = avulso ? 'none' : '';
+    document.getElementById('btnCadastrarProdutoNota').style.display = (avulso || !temPermissaoEstoque('editar_produto')) ? 'none' : '';
     document.getElementById('notaItemProdutoResultados').classList.remove('aberto');
     if (avulso) {
         produtoSelecionadoItemNota = null;
@@ -10737,6 +10785,78 @@ function atualizarModoAvulsoItemNota() {
     }
 }
 document.getElementById('notaItemAvulso').addEventListener('change', atualizarModoAvulsoItemNota);
+
+/* ---------- cadastrar produto direto da nota de entrada (botão "＋ Produto" ao lado do 🔄) ---------- */
+// Antes só dava pra digitar um nome novo e o sistema criava o produto "no escuro" (grupo 1, unidade UN). Aqui o produto nasce
+// completo (grupo e almoxarifado escolhidos), igual ao "Novo produto" da aba Estoque, e já fica selecionado no item da nota.
+let grupoSelecionadoNovoProdutoNota = null, almoxSelecionadoNovoProdutoNota = null;
+configurarBuscaCatalogoSimples('npnGrupoBusca', 'npnGrupoResultados', () => catalogosBaixa.grupos || [], (item) => {
+    grupoSelecionadoNovoProdutoNota = item;
+    document.getElementById('npnGrupoSelecionado').textContent = `Selecionado: ${item.nome}`;
+});
+configurarBuscaCatalogoSimples('npnAlmoxBusca', 'npnAlmoxResultados', () => catalogosBaixa.almoxarifados || [], (item) => {
+    almoxSelecionadoNovoProdutoNota = item;
+    document.getElementById('npnAlmoxSelecionado').textContent = `Selecionado: ${item.nome}`;
+});
+document.getElementById('btnCadastrarProdutoNota').addEventListener('click', async () => {
+    if (!temPermissaoEstoque('editar_produto')) { alert('Você não tem permissão para cadastrar produtos.'); return; }
+    if (!catalogosBaixa.grupos || !catalogosBaixa.grupos.length || !catalogosBaixa.almoxarifados || !catalogosBaixa.almoxarifados.length) {
+        catalogosBaixa = await chamarGet('listarCatalogosBaixa');
+    }
+    grupoSelecionadoNovoProdutoNota = null;
+    document.getElementById('npnGrupoBusca').value = ''; document.getElementById('npnGrupoSelecionado').textContent = '';
+    // almoxarifado: o do item da nota; senão o de trabalho
+    almoxSelecionadoNovoProdutoNota = almoxarifadoSelecionadoNotaItem
+        ? ((catalogosBaixa.almoxarifados || []).find(a => String(a.id) === String(almoxarifadoSelecionadoNotaItem.id)) || almoxarifadoSelecionadoNotaItem)
+        : (almoxarifadoTrabalho ? (catalogosBaixa.almoxarifados || []).find(a => a.id === almoxarifadoTrabalho) || null : null);
+    document.getElementById('npnAlmoxBusca').value = '';
+    document.getElementById('npnAlmoxSelecionado').textContent = almoxSelecionadoNovoProdutoNota ? `Selecionado: ${almoxSelecionadoNovoProdutoNota.nome}` : '';
+    // o que já foi digitado no campo Produto / Valor vira ponto de partida
+    document.getElementById('npnNome').value = produtoSelecionadoItemNota ? '' : document.getElementById('notaItemProdutoBusca').value.trim();
+    document.getElementById('npnValor').value = document.getElementById('notaItemValor').value || '';
+    document.getElementById('npnUn').value = 'UN'; document.getElementById('npnCodExt').value = '';
+    const st = document.getElementById('statusNovoProdutoNota'); st.className = 'status-msg'; st.textContent = '';
+    document.getElementById('modalNovoProdutoNota').classList.add('aberto');
+    document.getElementById('npnNome').focus();
+});
+document.getElementById('btnCancelarNovoProdutoNota').addEventListener('click', () => document.getElementById('modalNovoProdutoNota').classList.remove('aberto'));
+document.getElementById('btnSalvarNovoProdutoNota').addEventListener('click', async () => {
+    const st = document.getElementById('statusNovoProdutoNota');
+    const erro = (msg, foco) => { st.className = 'status-msg erro'; st.textContent = msg; if (foco) document.getElementById(foco).focus(); };
+    const nome = document.getElementById('npnNome').value.trim();
+    if (!nome) return erro('Informe o nome do produto.', 'npnNome');
+    if (!grupoSelecionadoNovoProdutoNota) return erro('Escolha o grupo do produto.', 'npnGrupoBusca');
+    if (!almoxSelecionadoNovoProdutoNota) return erro('Escolha o almoxarifado.', 'npnAlmoxBusca');
+    if (ehAlmoxarifadoUniformesEpi(almoxSelecionadoNovoProdutoNota)) return erro('Produto de Uniformes/EPI precisa do tipo no catálogo do Staff: cadastre pelo "Novo produto" da aba Estoque.');
+    const nomeMaiusculo = nome.toUpperCase();
+    if (produtos.some(p => String(p.nome || '').toUpperCase() === nomeMaiusculo)) return erro('Já existe um produto com esse nome — busque no campo Produto.', 'npnNome');
+    const codigoExterno = document.getElementById('npnCodExt').value.trim();
+    const valor = parseFloat(document.getElementById('npnValor').value) || 0;
+    const btn = document.getElementById('btnSalvarNovoProdutoNota'); btn.disabled = true;
+    st.className = 'status-msg'; st.textContent = 'Salvando...';
+    try {
+        const criado = await chamarPost('salvarProduto', { produto: {
+            codigoExterno: codigoExterno || null, nome: nomeMaiusculo, valor,
+            un: document.getElementById('npnUn').value.trim().toUpperCase() || 'UN',
+            grupoId: grupoSelecionadoNovoProdutoNota.id, estoqueInicial: 0, estoque: 0,
+            almoxarifadoPadraoId: almoxSelecionadoNovoProdutoNota.id, valorEstoqueInicial: null, precoMedio: null
+        } });
+        await carregarProdutos();
+        atualizarTagContagem();
+        const p = produtos.find(x => x.id === criado.id) || criado;
+        produtoSelecionadoItemNota = p;
+        notaItemParciais = { ids: [], qtdCoberta: 0 };
+        atualizarResumoParciaisItemNota();
+        document.getElementById('notaItemProdutoBusca').value = p.nome;
+        document.getElementById('notaItemProdutoSelecionado').textContent = `Selecionado: #${p.id} — ${p.nome}`;
+        if (!document.getElementById('notaItemValor').value) document.getElementById('notaItemValor').value = valor;
+        document.getElementById('notaItemProdutoResultados').classList.remove('aberto');
+        try { await registrarSentinela('produto_criado_na_nota_entrada', `Produto "${nomeMaiusculo}" (#${p.id}) cadastrado pela nota de entrada (grupo ${grupoSelecionadoNovoProdutoNota.nome}, almoxarifado ${almoxSelecionadoNovoProdutoNota.nome})`); } catch (_) { /* auditoria não bloqueia */ }
+        document.getElementById('modalNovoProdutoNota').classList.remove('aberto');
+    } catch (e) {
+        console.error(e); erro('⚠️ ' + (e.message || e));
+    } finally { btn.disabled = false; }
+});
 
 /* ---------- busca de produto pro item da nota ---------- */
 document.getElementById('notaItemProdutoBusca').addEventListener('input', () => {
@@ -12187,7 +12307,7 @@ function renderizarTabelaCadSetores() {
         <tr>
             <td>${escapeHtml(s.nome)}</td>
             <td class="center">${s.ativo ? '✅' : '—'}</td>
-            <td class="center"><button class="btn btn-cinza btn-pequeno" data-editar-setor="${s.id}">✏️ Editar</button></td>
+            <td class="center">${ehAdministradorOuPrincipal() ? `<button class="btn btn-cinza btn-pequeno" data-editar-setor="${s.id}">✏️ Editar</button>` : '—'}</td>
         </tr>
     `).join('') || `<tr><td colspan="3" class="vazio">${termo ? 'Nenhum setor encontrado.' : 'Nenhum setor cadastrado.'}</td></tr>`;
     document.querySelectorAll('[data-editar-setor]').forEach(btn => {
@@ -12209,7 +12329,7 @@ function renderizarTabelaCadSubsetores() {
                 <td>${escapeHtml(s.nome)}</td>
                 <td>${setor ? escapeHtml(setor.nome) : '-'}</td>
                 <td class="center">${s.ativo ? '✅' : '—'}</td>
-                <td class="center"><button class="btn btn-cinza btn-pequeno" data-editar-subsetor="${s.id}">✏️ Editar</button></td>
+                <td class="center">${ehAdministradorOuPrincipal() ? `<button class="btn btn-cinza btn-pequeno" data-editar-subsetor="${s.id}">✏️ Editar</button>` : '—'}</td>
             </tr>
         `;
     }).join('') || `<tr><td colspan="4" class="vazio">${termo ? 'Nenhum subsetor encontrado.' : 'Nenhum subsetor cadastrado.'}</td></tr>`;
@@ -12369,6 +12489,10 @@ let cadGenericoAposSalvar = null;
 let cadGenericoSugestaoCodigo = '';   // último código sugerido automaticamente (pra só sobrescrever se o usuário não mexeu)
 function abrirModalCadGenerico(tipo, id, opts) {
     opts = opts || {};
+    if ((tipo === 'setor' || tipo === 'subsetor') && !ehAdministradorOuPrincipal()) {
+        alert('Somente administradores ou o usuário principal podem cadastrar ou alterar setores e subsetores.');
+        return;
+    }
     cadGenericoTipoAtual = tipo;
     cadGenericoIdAtual = id || null;
     cadGenericoAposSalvar = opts.aoSalvar || null;
@@ -12532,6 +12656,7 @@ function instalarCadastroRapido() {
         const a = document.createElement('a');
         a.href = '#';
         a.className = 'btn-cad-rapido';
+        a.dataset.tipoCad = tipo;
         a.textContent = '＋ cadastrar';
         a.title = 'Cadastro rápido: cria e já seleciona neste campo';
         a.style.cssText = 'float:right; font-size:.8em; font-weight:600; text-decoration:none; color:#1565c0;';

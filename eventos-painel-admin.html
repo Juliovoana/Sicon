@@ -363,6 +363,17 @@
   .spinner{ width:32px; height:32px; border:3px solid var(--border); border-top-color:var(--brand); border-radius:50%; animation:spin .8s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
 </style>
+<script>
+/* Aviso padrão quando o banco recusa a ação por falta de permissão (RLS) */
+(function(){
+  var MSG_SEM_PERMISSAO = '🔒 Usuário sem permissão para esta ação. Fale com o administrador da unidade.';
+  var alertOriginal = window.alert.bind(window);
+  window.alert = function(m){
+    if (/row-level security|permission denied/i.test(String(m))) m = MSG_SEM_PERMISSAO;
+    alertOriginal(m);
+  };
+})();
+</script>
 </head>
 <body>
 
@@ -1751,6 +1762,8 @@
     (linhas || []).forEach(l => { permissoesEventos[l.permissao] = l.permitido; });
   }
   function temPermissaoEventos(permissao){
+    // setor é cadastro compartilhado com os outros módulos: só administrador ou principal (mesmo quem está "sem papel" não cadastra)
+    if(permissao === 'cadastrar_setor') return papelEventosAtual === 'principal' || papelEventosAtual === 'administrador';
     if(permissoesEventos === null) return true;
     return !!permissoesEventos[permissao];
   }
@@ -3177,6 +3190,7 @@
   const rotuloPlanoContas = pc => `${pc.codigo} — ${pc.descricao}`;
 
   async function criarSetorUnidade(nome){
+    if(!temPermissaoEventos('cadastrar_setor')) throw new Error('Somente administradores ou o usuário principal podem cadastrar setores.');
     const { data, error } = await sb.from('unidade_setores').insert({ unidade_negocio_id: agenciaId, nome, ativo: true }).select().single();
     if(error) throw new Error(error.message);
     todosSetoresUnidade.push(data);
@@ -3198,8 +3212,8 @@
       const lista = t ? todosSetoresUnidade.filter(s => (s.nome || '').toLowerCase().includes(t)) : todosSetoresUnidade;
       const encontrados = lista.slice(0, t ? 8 : 20);
       sugestoes.innerHTML = encontrados.map(s => `<div class="sugestao-autocomplete" data-id="${s.id}">${escaparHtmlVenda(s.nome)}</div>`).join('')
-        + (!encontrados.length && !t ? '<div class="sugestao-autocomplete-vazia">Nenhum setor cadastrado nesta unidade — digite um nome para criar.</div>' : '')
-        + (termo ? `<div class="sugestao-autocomplete sugestao-criar" data-criar="1">+ Criar setor "${escaparHtmlVenda(termo)}"</div>` : '');
+        + (!encontrados.length && !t ? (temPermissaoEventos('cadastrar_setor') ? '<div class="sugestao-autocomplete-vazia">Nenhum setor cadastrado nesta unidade — digite um nome para criar.</div>' : '<div class="sugestao-autocomplete-vazia">Nenhum setor cadastrado nesta unidade — peça a um administrador.</div>') : '')
+        + (termo && temPermissaoEventos('cadastrar_setor') ? `<div class="sugestao-autocomplete sugestao-criar" data-criar="1">+ Criar setor "${escaparHtmlVenda(termo)}"</div>` : '');
       sugestoes.classList.add('show');
       sugestoes.querySelectorAll('[data-id]').forEach(el => el.addEventListener('click', () => {
         const setor = todosSetoresUnidade.find(s => s.id === Number(el.dataset.id));

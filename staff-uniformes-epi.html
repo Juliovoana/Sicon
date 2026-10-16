@@ -202,6 +202,7 @@
         <button class="aba-btn" data-aba="catalogo" id="aba-btn-catalogo" style="display:none;">📋 Catálogo</button>
         <button class="aba-btn" data-aba="renovacoes">⏰ Renovações</button>
         <button class="aba-btn" data-aba="porsetor">📊 Por setor</button>
+        <button class="aba-btn" data-aba="estoquelocal">🏬 Estoque por local</button>
     </div>
 
     <!-- ==================== ABA REGISTRAR ==================== -->
@@ -250,6 +251,7 @@
                 <h2 style="margin:0;">Itens de catálogo</h2>
                 <div style="display:flex; gap:8px;">
                     <button type="button" class="btn btn-cinza" id="btnConfigRecibo" style="width:auto;">🧾 Dados do recibo</button>
+                    <button type="button" class="btn btn-cinza" id="btnAgregarItemEstoque" style="width:auto;" title="Escolher um produto que já existe no Estoque e passar a controlá-lo como uniforme/EPI">📥 Agregar do Estoque</button>
                     <button type="button" class="btn btn-principal" id="btnNovoItemCatalogo" style="width:auto;">+ Novo item</button>
                 </div>
             </div>
@@ -265,6 +267,27 @@
             <p class="subtitulo" style="margin:0 0 12px 0;">Itens em aberto (ainda com o profissional) cuja data prevista pra nova aquisição, ou validade do CA (EPI), já passou ou vence nos próximos 30 dias.</p>
             <div id="listaRenovacoes"></div>
             <div id="vazioRenovacoes" class="vazio hidden">Nada vencendo nos próximos 30 dias.</div>
+        </div>
+    </div>
+
+    <!-- ==================== ABA ESTOQUE POR LOCAL (saldo por almoxarifado + transferência) ==================== -->
+    <div class="conteudo-aba" id="aba-estoquelocal">
+        <div class="cartao">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:8px;">
+                <h2 style="margin:0;">Estoque por local</h2>
+                <button type="button" class="btn btn-principal" id="btnNovaTransferencia" style="width:auto; display:none;">🔁 Transferir entre almoxarifados</button>
+            </div>
+            <p class="subtitulo" style="margin:0 0 12px 0;">Saldo de cada item do catálogo em cada almoxarifado. O estoque do item é um só — aqui você vê como ele está dividido, transfere entre os locais e, se quiser, <strong>une</strong> os locais num total só (na tela, no PDF e no CSV).</p>
+            <div id="blocoLocaisEstoque" style="display:flex; flex-wrap:wrap; gap:6px 16px; margin-bottom:10px;"></div>
+            <div style="display:flex; gap:8px 16px; flex-wrap:wrap; align-items:center; margin-bottom:12px;">
+                <label style="display:flex; gap:6px; align-items:center; font-size:.9rem;"><input type="checkbox" id="estLocalUnir"> Unir os locais marcados (um total só)</label>
+                <label style="display:flex; gap:6px; align-items:center; font-size:.9rem;"><input type="checkbox" id="estLocalSoComSaldo"> Só itens com saldo</label>
+                <div class="campo" style="margin:0; flex:1; min-width:180px;"><input type="text" id="estLocalBusca" placeholder="Filtrar item..."></div>
+                <button type="button" class="btn btn-cinza" id="btnPdfEstLocal" style="width:auto;">📄 PDF</button>
+                <button type="button" class="btn btn-cinza" id="btnCsvEstLocal" style="width:auto;">⬇ CSV</button>
+            </div>
+            <div id="tabelaEstLocal" style="overflow-x:auto;"></div>
+            <p class="status-msg" id="statusEstLocal"></p>
         </div>
     </div>
 
@@ -285,15 +308,57 @@
                         <option value="avulso">Só avulsos</option>
                     </select>
                 </div>
+                <div class="campo"><label>Visão</label>
+                    <select id="relSetorVisao">
+                        <option value="lista">Lista por setor</option>
+                        <option value="item_setor">Cruzado: Item × Setor</option>
+                        <option value="item_subsetor">Cruzado: Item × Subsetor</option>
+                        <option value="item_mes">Cruzado: Item × Mês</option>
+                        <option value="setor_mes">Cruzado: Setor × Mês</option>
+                        <option value="subsetor_mes">Cruzado: Subsetor × Mês</option>
+                    </select>
+                </div>
+                <div class="campo"><label>Valores em</label>
+                    <select id="relSetorMetrica">
+                        <option value="ambos">Reais e quantidade — R$ (qtd)</option>
+                        <option value="valor">Só reais (R$)</option>
+                        <option value="qtd">Quantidade de peças</option>
+                    </select>
+                </div>
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <button type="button" class="btn btn-principal" id="btnGerarRelSetor" style="width:auto;">Gerar relatório</button>
+                <button type="button" class="btn btn-cinza" id="btnAnoRelSetor" style="width:auto;" title="De 1º de janeiro até hoje">Ano atual</button>
                 <button type="button" class="btn btn-cinza" id="btnPdfRelSetor" style="width:auto;" disabled>📄 PDF</button>
                 <button type="button" class="btn btn-cinza" id="btnCsvRelSetor" style="width:auto;" disabled>📊 Excel (CSV)</button>
             </div>
             <p class="status-msg" id="statusRelSetor"></p>
         </div>
         <div id="relSetorResultado"></div>
+    </div>
+</div>
+
+<!-- ==================== MODAL: TRANSFERIR ENTRE ALMOXARIFADOS ==================== -->
+<div id="modal-transferencia" class="modal-overlay">
+    <div class="modal-caixa" style="max-width:480px;">
+        <h3>Transferir entre almoxarifados</h3>
+        <p class="subtitulo" style="margin-bottom:12px;">O estoque total do item não muda: a quantidade sai de um local e entra no outro.</p>
+        <div class="campo"><label>Item</label><select id="transfItem"></select></div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <div class="campo" style="flex:1; min-width:180px;"><label>De (sai)</label><select id="transfDe"></select></div>
+            <div class="campo" style="flex:1; min-width:180px;"><label>Para (entra)</label><select id="transfPara"></select></div>
+        </div>
+        <p class="subtitulo" id="transfSaldos" style="margin:0 0 10px 0;"></p>
+        <div style="display:flex; gap:8px;">
+            <div class="campo" style="flex:1;"><label>Quantidade</label><input type="number" id="transfQtd" min="1" step="1" value="1"></div>
+            <div class="campo" style="flex:1;"><label>Data</label><input type="date" id="transfData"></div>
+        </div>
+        <div class="campo"><label>Observação (opcional)</label><input type="text" id="transfObs" maxlength="120"></div>
+        <div style="display:flex; gap:8px; margin-top:6px;">
+            <button type="button" class="btn btn-cinza" id="btnCancelarTransf" style="flex:1;">Cancelar</button>
+            <button type="button" class="btn btn-principal" id="btnConfirmarTransf" style="flex:1;">Transferir</button>
+        </div>
+        <p class="status-msg" id="statusTransf"></p>
     </div>
 </div>
 
@@ -304,6 +369,10 @@
         <p class="subtitulo" id="novaEntregaProfissionalTexto" style="margin-bottom:14px;"></p>
 
         <div class="campo"><label>Data de entrega (vale pra todos os itens deste recibo)</label><input type="date" id="campoDataEntrega"></div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <div class="campo" style="flex:1; min-width:200px;"><label>Setor (entra no relatório por setor)</label><select id="campoSetorNovaEntrega"></select></div>
+            <div class="campo" style="flex:1; min-width:200px;"><label>Subsetor (opcional)</label><select id="campoSubsetorNovaEntrega"></select></div>
+        </div>
 
         <div style="display:flex; gap:8px; margin-bottom:14px;">
             <button type="button" class="btn tipo-item-btn ativa" data-tipo-item="catalogado" style="flex:1;">📋 Do catálogo</button>
@@ -325,6 +394,7 @@
         </div>
 
         <div class="grade">
+            <div class="campo hidden" id="blocoLocalSaidaEntrega" style="grid-column: span 2;"><label>Sai de (almoxarifado)</label><select id="campoLocalSaidaEntrega"></select></div>
             <div class="campo"><label>Quantidade</label><input type="number" min="1" step="1" id="campoQtdEntrega" value="1"></div>
             <div class="campo"><label>Valor unitário (R$)</label><input type="number" min="0" step="0.01" id="campoValorEntrega"></div>
             <div class="campo" style="grid-column: span 2;"><label>Data prevista p/ nova aquisição (opcional)</label><input type="date" id="campoDataPrevista"></div>
@@ -398,6 +468,40 @@
     </div>
 </div>
 
+<!-- ==================== MODAL: AGREGAR PRODUTO DO ESTOQUE AO CATÁLOGO ==================== -->
+<div id="modal-agregar-estoque" class="modal-overlay">
+    <div class="modal-caixa" style="max-width:520px;">
+        <h3>Agregar item do Estoque ao catálogo</h3>
+        <p class="subtitulo" style="margin-bottom:14px;">Escolha um produto que <strong>já está cadastrado no Estoque</strong> (de qualquer almoxarifado) para controlá-lo como uniforme/EPI. O produto, o saldo e o histórico continuam no Estoque — nada é duplicado nem movido.</p>
+
+        <div class="campo linha-busca">
+            <label>Produto do Estoque</label>
+            <input type="text" id="campoBuscaAgregarEstoque" placeholder="Digite parte do nome do produto..." autocomplete="off">
+            <div id="resultadosAgregarEstoque" class="resultados-busca"></div>
+            <p class="selecionado-texto" id="agregarEstoqueSelecionadoTexto"></p>
+        </div>
+
+        <div class="grade">
+            <div class="campo"><label>Tipo</label>
+                <select id="campoTipoAgregar"><option value="uniforme">👕 Uniforme</option><option value="epi">🦺 EPI</option></select>
+            </div>
+            <div class="campo"><label>Nome no catálogo</label><input type="text" id="campoNomeAgregar"></div>
+            <div class="campo"><label>Tamanho (opcional)</label><input type="text" id="campoTamanhoAgregar" placeholder="Ex: M"></div>
+            <div class="campo"><label>Vida útil (dias, opcional)</label><input type="number" min="0" step="1" id="campoVidaUtilAgregar" placeholder="Ex: 365"></div>
+        </div>
+        <div id="blocoCamposEpiAgregar" class="grade hidden">
+            <div class="campo"><label>Nº do CA</label><input type="text" id="campoNumeroCaAgregar"></div>
+            <div class="campo"><label>Validade do CA</label><input type="date" id="campoValidadeCaAgregar"></div>
+        </div>
+
+        <div style="display:flex; gap:8px;">
+            <button type="button" class="btn btn-cinza" id="btnCancelarAgregarEstoque" style="flex:1;">Cancelar</button>
+            <button type="button" class="btn btn-principal" id="btnConfirmarAgregarEstoque" style="flex:1;">Agregar ao catálogo</button>
+        </div>
+        <p class="status-msg" id="statusAgregarEstoque"></p>
+    </div>
+</div>
+
 <!-- ==================== MODAL: ITEM DE CATÁLOGO ==================== -->
 <div id="modal-catalogo-item" class="modal-overlay">
     <div class="modal-caixa" style="max-width:520px;">
@@ -463,6 +567,8 @@
             <div id="resultadosBuscaProfissionalBaixaSetor" class="resultados-busca"></div>
             <p class="selecionado-texto" id="profissionalBaixaSetorTexto"></p>
         </div>
+
+        <div class="campo hidden" id="blocoLocalSaidaBaixa"><label>Sai de (almoxarifado)</label><select id="campoLocalSaidaBaixa"></select></div>
 
         <div class="grade">
             <div class="campo"><label>Quantidade</label><input type="number" min="1" step="1" id="campoQtdBaixaSetor" value="1"></div>
@@ -553,7 +659,7 @@ function somarDias(dataISO, dias) {
 // ---------------------------------------------------------------
 const AJUDA_UNIFORMES_EPI = {
     titulo: 'Uniformes / EPI',
-    ultimaRevisao: '14/10/2026',
+    ultimaRevisao: '17/10/2026',  /* setor: cadastro rápido só admin/principal */
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>Controle de peças de uniforme e EPI entregues aos profissionais do Staff --
@@ -566,6 +672,17 @@ const AJUDA_UNIFORMES_EPI = {
         { id: 'registrar', titulo: 'Registrar entrega', corpo: `
             <p>Busca o profissional, depois <strong>+ Nova entrega</strong>.</p>
             <ul>
+                <li><strong>Setor</strong> (e subsetor, opcional): escolha o setor que arca com o custo da entrega — ele
+                vale pro recibo inteiro e é o que aparece no relatório <strong>Por setor</strong>. É obrigatório quando a
+                unidade tem setores cadastrados (Estoque → Cadastros → Setores). Faltou o setor ou subsetor? O link
+                <strong>＋ cadastrar</strong> ao lado do campo cria na hora — <strong>só aparece para administradores e
+                para o usuário principal</strong>; os demais pedem a um administrador.</li>
+                <li><strong>Sai de (almoxarifado)</strong>: quando a unidade tem mais de um almoxarifado (ex.: RH e SST), cada item do
+                carrinho pergunta <em>de qual local a peça sai</em> — já vem marcado o local padrão do item e cada opção mostra o saldo
+                daquele local. A baixa de estoque e o histórico ficam <strong>nesse local</strong>, e a <strong>devolução volta pra ele</strong>.
+                Em "Itens em aberto" cada peça mostra 📍 o local de onde saiu. O app <strong>lembra o último local escolhido neste
+                aparelho</strong> e já vem com ele marcado na próxima saída (vale para a entrega e para a baixa; se ele não existir mais, volta
+                ao padrão do item). Com um almoxarifado só, nada muda.</li>
                 <li><strong>Virou um carrinho</strong>: escolhe um item (do catálogo ou avulso),
                 quantidade e valor, e clica <strong>"+ Adicionar item à entrega"</strong> --
                 repete quantas vezes precisar (é assim que se monta um recibo com várias peças
@@ -624,6 +741,11 @@ const AJUDA_UNIFORMES_EPI = {
                 (a tela do Estoque pede o Tipo — Uniforme ou EPI — e, opcionalmente, tamanho, CA e vida útil).
                 Se quem cadastrou no Estoque não for Administrador do Staff nem Principal, o produto fica só no
                 estoque e a tela avisa — aí o item precisa ser cadastrado aqui, no catálogo.</li>
+                <li><strong>📥 Agregar do Estoque</strong> (botão no topo da lista): escolha um produto que <strong>já existe no
+                Estoque</strong> (buscando pelo nome, de qualquer almoxarifado) e defina se é <strong>Uniforme</strong> ou
+                <strong>EPI</strong> (mais tamanho, vida útil e, no EPI, CA e validade). O item passa a aparecer no catálogo e nas
+                entregas; o produto, o saldo e o histórico <strong>continuam no Estoque</strong> (nada é duplicado nem movido de
+                almoxarifado). Produto que já está no catálogo aparece esmaecido na busca.</li>
                 <li><strong>📤 Baixa / Entrega</strong> (botão em cada item do catálogo): tira o item do estoque
                 <strong>na hora</strong>, escolhendo o <strong>Setor</strong> (obrigatório), o
                 <strong>Subsetor</strong> daquele setor (opcional) e, se quiser, um
@@ -671,6 +793,23 @@ const AJUDA_UNIFORMES_EPI = {
             <p>Devolver ou descartar a peça (na aba Registrar, na ficha do profissional) tira o
             item dessa lista.</p>
         ` },
+        { id: 'estoquelocal', titulo: 'Estoque por local', corpo: `
+            <p>O estoque de cada item é <strong>um só</strong>, mas pode estar dividido em mais de um
+            <strong>almoxarifado</strong> (ex.: RH e Segurança do Trabalho). Esta aba mostra o saldo de cada item do catálogo
+            em cada local.</p>
+            <ul>
+                <li><strong>Locais</strong>: marque quais almoxarifados entram na conta. Só aparecem os que têm itens do catálogo.</li>
+                <li><strong>Unir os locais marcados</strong>: troca as colunas por um <em>total único</em> (com a distribuição ao lado) —
+                vale na tela, no PDF e no CSV. <strong>Só itens com saldo</strong> e o filtro por nome ajudam a enxugar a lista.</li>
+                <li><strong>🔁 Transferir entre almoxarifados</strong> (botão no topo ou na linha do item): escolhe o item, o local de
+                origem e o de destino e a quantidade. O sistema grava <strong>uma saída na origem e uma entrada no destino</strong>
+                (o estoque total não muda) e confere os dois saldos. Se a origem não tiver saldo suficiente, pede confirmação
+                (o local ficaria negativo). A transferência <strong>não conta como consumo</strong> no relatório Por setor e vai
+                para a auditoria.</li>
+                <li>O segundo almoxarifado precisa existir: cadastre em <em>Estoque → Cadastros → Almoxarifados</em> (só administrador
+                ou principal).</li>
+            </ul>
+        ` },
         { id: 'porsetor', titulo: 'Por setor', corpo: `
             <p>Relatório de <strong>entrega por setor</strong>: tudo que saiu do estoque de uniformes/EPI,
             agrupado pelo setor que arcou com o custo. Qualquer pessoa com acesso ao módulo consulta.</p>
@@ -682,11 +821,17 @@ const AJUDA_UNIFORMES_EPI = {
                 As <strong>devoluções</strong> são descontadas da quantidade e do valor.</li>
                 <li>Cada setor mostra o total e os itens (quantidade e valor); em <strong>Ver lançamentos</strong>
                 aparecem data, item, profissional (ou "consumo do setor") e subsetor.</li>
-                <li><strong>Sem setor informado</strong> = entregas feitas pela ficha do profissional (aba Registrar),
-                que não perguntam o setor. Pra entrar no setor certo, use a <strong>📤 Baixa / Entrega</strong> do catálogo
-                informando setor + profissional.</li>
+                <li><strong>Sem setor informado</strong> = entregas antigas (feitas pela ficha do profissional antes de a
+                <strong>Nova entrega</strong> passar a pedir o setor). As novas já entram no setor escolhido.</li>
+                <li><strong>Visões cruzadas</strong> (campo "Visão"), no formato da planilha de consumo mensal de EPI:
+                <strong>Item × Setor</strong> (itens nas linhas, setores nas colunas — use o período de 1 mês pra ter a "aba do
+                mês"), <strong>Item × Subsetor</strong> (o <strong>setor</strong> fica numa linha única de cabeçalho acima dos seus
+                subsetores; escolha um setor no filtro pra ver só os dele), <strong>Subsetor × Mês</strong> (cada setor é uma
+                linha em destaque, com o subtotal, acima dos seus subsetores), <strong>Item × Mês</strong> (itens × meses — escolha um setor no filtro pra ter a "aba do setor") e
+                <strong>Setor × Mês</strong> (visão geral). Cada célula mostra o valor em <strong>R$ com a quantidade de peças entre parênteses</strong> — ex.: <strong>100,00 (2)</strong> —
+                (dá pra trocar o campo "Valores em" pra ver só reais ou só quantidade), com total por linha e por coluna. O botão <strong>Ano atual</strong> preenche de 1º de janeiro até hoje.</li>
                 <li><strong>📄 PDF</strong> (visualizar / baixar / compartilhar) e <strong>📊 Excel (CSV)</strong> exportam o
-                que está na tela.</li>
+                que está na tela (lista ou cruzado).</li>
             </ul>
         ` }
     ]
@@ -893,6 +1038,8 @@ async function iniciarApp() {
     document.getElementById('btnNovaEntrega').style.display = podeRegistrar() ? '' : 'none';
     document.getElementById('aba-btn-catalogo').style.display = podeGerenciarCatalogo() ? '' : 'none';
     document.getElementById('btnConfigRecibo').style.display = podeGerenciarCatalogo() ? '' : 'none';
+    await carregarPodeCadastrarSetor(meuPerfil.unidadeId, podeGerenciarCatalogo);
+    atualizarLinksCadastroSetor();
 
     await Promise.all([carregarProfissionais(), carregarAlmoxarifados(), carregarCatalogo(), carregarConfigRecibo()]);
     renderizarCatalogoAdmin();
@@ -996,17 +1143,20 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
 // BUSCA DE PROFISSIONAL (autocomplete local, mesmo espírito do
 // configurarAutocompleteProfissionalGenerico do staff-painel-admin.html)
 // ---------------------------------------------------------------
+const LIMITE_BUSCA = 10;   // quantos resultados as buscas mostram (inclusive com o campo vazio)
 const campoBuscaProfissional = document.getElementById('campoBuscaProfissional');
 const resultadosBuscaProfissional = document.getElementById('resultadosBuscaProfissional');
-campoBuscaProfissional.addEventListener('input', () => {
-    const termo = campoBuscaProfissional.value.trim().toLowerCase();
-    if (!termo) { resultadosBuscaProfissional.classList.remove('aberto'); return; }
-    const achados = profissionais.filter(p => p.nome_completo.toLowerCase().includes(termo)).slice(0, 8);
-    resultadosBuscaProfissional.innerHTML = achados.length
+// PADRÃO DE BUSCA (ver CLAUDE.md): campo vazio ao clicar/focar lista os primeiros resultados; digitando, filtra por qualquer trecho
+function renderBuscaProfissional(campo, resultados) {
+    const termo = campo.value.trim().toLowerCase();
+    const achados = profissionais.filter(p => !termo || p.nome_completo.toLowerCase().includes(termo)).slice(0, LIMITE_BUSCA);
+    resultados.innerHTML = achados.length
         ? achados.map(p => `<div class="resultado-item" data-id="${p.id}">${escapeHtml(p.nome_completo)}<div class="sub">${escapeHtml(p.staff_funcoes?.nome || '')}</div></div>`).join('')
         : '<div class="resultado-item">Nenhum profissional encontrado</div>';
-    resultadosBuscaProfissional.classList.add('aberto');
-});
+    resultados.classList.add('aberto');
+}
+campoBuscaProfissional.addEventListener('input', () => renderBuscaProfissional(campoBuscaProfissional, resultadosBuscaProfissional));
+['focus', 'click'].forEach(ev => campoBuscaProfissional.addEventListener(ev, () => { if (!campoBuscaProfissional.value.trim()) renderBuscaProfissional(campoBuscaProfissional, resultadosBuscaProfissional); }));
 resultadosBuscaProfissional.addEventListener('mousedown', (e) => {
     const item = e.target.closest('.resultado-item[data-id]');
     if (!item) return;
@@ -1064,7 +1214,7 @@ function renderizarHistoricoProfissional() {
         return `<div class="item-linha">
             <div class="info">
                 <div class="nome">${escapeHtml(nome)} <span class="pill pill-${it.status}">${it.status === 'devolvido' ? 'Devolvido' : 'Descartado'}</span></div>
-                <div class="meta">${it.tamanho ? 'Tamanho ' + escapeHtml(it.tamanho) + ' · ' : ''}${formatarDataSemFuso(it.data_baixa)}${condicaoTexto}${it.motivo_baixa ? ' · ' + escapeHtml(it.motivo_baixa) : ''}</div>
+                <div class="meta">${localDaEntrega(it)}${it.tamanho ? 'Tamanho ' + escapeHtml(it.tamanho) + ' · ' : ''}${formatarDataSemFuso(it.data_baixa)}${condicaoTexto}${it.motivo_baixa ? ' · ' + escapeHtml(it.motivo_baixa) : ''}</div>
             </div>
             <div class="acoes">
                 ${it.numero_recibo_baixa != null ? `<button type="button" class="btn btn-cinza" data-recibo-baixa="${it.id}">🖨️ Recibo Nº ${it.numero_recibo_baixa}</button>` : ''}
@@ -1113,7 +1263,7 @@ function renderizarItensAbertos() {
             return `<div class="item-linha" style="margin-bottom:6px;">
                 <div class="info">
                     <div class="nome">${escapeHtml(nome)} ${tipoPill}</div>
-                    <div class="meta">${it.tamanho ? 'Tamanho ' + escapeHtml(it.tamanho) + ' · ' : ''}${it.valor_unitario ? formatarMoeda(it.valor_unitario) + ' · ' : ''}${it.data_prevista_nova_aquisicao ? 'Próxima aquisição: ' + formatarDataSemFuso(it.data_prevista_nova_aquisicao) : ''}</div>
+                    <div class="meta">${localDaEntrega(it)}${it.tamanho ? 'Tamanho ' + escapeHtml(it.tamanho) + ' · ' : ''}${it.valor_unitario ? formatarMoeda(it.valor_unitario) + ' · ' : ''}${it.data_prevista_nova_aquisicao ? 'Próxima aquisição: ' + formatarDataSemFuso(it.data_prevista_nova_aquisicao) : ''}</div>
                 </div>
                 <div class="acoes">
                     <button type="button" class="btn btn-cinza" data-devolver="${it.id}">↩️ Devolver</button>
@@ -1140,8 +1290,23 @@ document.getElementById('listaItensAbertos').addEventListener('click', (e) => {
 // ---------------------------------------------------------------
 // NOVA ENTREGA
 // ---------------------------------------------------------------
-document.getElementById('btnNovaEntrega').addEventListener('click', () => {
+// setor/subsetor da entrega: gravados no movimento de estoque (setor_id/subsetor_id), que é de onde o relatório "Por setor" lê
+function popularSubsetoresNovaEntrega() {
+    const setorId = document.getElementById('campoSetorNovaEntrega').value;
+    const lista = subsetoresUnidade.filter(s => String(s.setor_id) === String(setorId));
+    const sel = document.getElementById('campoSubsetorNovaEntrega');
+    sel.innerHTML = '<option value="">' + (setorId ? (lista.length ? 'Sem subsetor' : 'Este setor não tem subsetores') : 'Escolha o setor primeiro') + '</option>'
+        + lista.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+    sel.disabled = !lista.length;
+}
+document.getElementById('campoSetorNovaEntrega').addEventListener('change', popularSubsetoresNovaEntrega);
+
+document.getElementById('btnNovaEntrega').addEventListener('click', async () => {
     if (!profissionalSelecionado) return;
+    if (!setoresUnidade.length) await carregarSetoresUnidade();
+    popularSelectSetores('campoSetorNovaEntrega');
+    if (!setoresUnidade.length) document.getElementById('campoSetorNovaEntrega').options[0].textContent = podeCadastrarSetorFlag ? 'Nenhum setor — use ＋ cadastrar' : 'Nenhum setor cadastrado (peça a um administrador)';
+    popularSubsetoresNovaEntrega();
     document.getElementById('novaEntregaProfissionalTexto').textContent = 'Pra: ' + profissionalSelecionado.nome_completo;
     document.getElementById('campoDataEntrega').value = hojeISO();
     document.getElementById('campoObservacaoEntrega').value = '';
@@ -1164,6 +1329,7 @@ function limparCamposItemEntrega() {
     document.getElementById('campoDataPrevista').value = '';
     document.getElementById('statusItemCarrinho').textContent = '';
     itemCatalogoSelEntrega = null;
+    document.getElementById('blocoLocalSaidaEntrega').classList.add('hidden');
 }
 
 function definirTipoItemNovaEntrega(tipo) {
@@ -1178,15 +1344,16 @@ document.querySelectorAll('#modal-nova-entrega [data-tipo-item]').forEach(btn =>
 
 const campoBuscaItemCatalogo = document.getElementById('campoBuscaItemCatalogo');
 const resultadosBuscaItemCatalogo = document.getElementById('resultadosBuscaItemCatalogo');
-campoBuscaItemCatalogo.addEventListener('input', () => {
+function renderBuscaItemCatalogo() {
     const termo = campoBuscaItemCatalogo.value.trim().toLowerCase();
-    if (!termo) { resultadosBuscaItemCatalogo.classList.remove('aberto'); return; }
-    const achados = catalogo.filter(c => c.ativo && (c.nome.toLowerCase().includes(termo) || (c.tamanho || '').toLowerCase().includes(termo) || c.tipo.includes(termo))).slice(0, 8);
+    const achados = catalogo.filter(c => c.ativo && (!termo || c.nome.toLowerCase().includes(termo) || (c.tamanho || '').toLowerCase().includes(termo) || c.tipo.includes(termo))).slice(0, LIMITE_BUSCA);
     resultadosBuscaItemCatalogo.innerHTML = achados.length
         ? achados.map(c => `<div class="resultado-item" data-id="${c.id}">${escapeHtml(c.nome)}${c.tamanho ? ' — ' + escapeHtml(c.tamanho) : ''}<div class="sub">${c.tipo} · saldo: ${c.estoque_produtos?.estoque ?? 0}</div></div>`).join('')
         : '<div class="resultado-item">Nenhum item encontrado</div>';
     resultadosBuscaItemCatalogo.classList.add('aberto');
-});
+}
+campoBuscaItemCatalogo.addEventListener('input', renderBuscaItemCatalogo);
+['focus', 'click'].forEach(ev => campoBuscaItemCatalogo.addEventListener(ev, () => { if (!campoBuscaItemCatalogo.value.trim()) renderBuscaItemCatalogo(); }));
 resultadosBuscaItemCatalogo.addEventListener('mousedown', (e) => {
     const item = e.target.closest('.resultado-item[data-id]');
     if (!item) return;
@@ -1197,6 +1364,7 @@ resultadosBuscaItemCatalogo.addEventListener('mousedown', (e) => {
     campoBuscaItemCatalogo.value = c.nome + (c.tamanho ? ' — ' + c.tamanho : '');
     document.getElementById('itemCatalogoSelecionadoTexto').textContent = 'Saldo atual: ' + (c.estoque_produtos?.estoque ?? 0);
     resultadosBuscaItemCatalogo.classList.remove('aberto');
+    garantirSaldosLocal().then(() => { if (itemCatalogoSelEntrega === c) popularSelectLocalSaida('campoLocalSaidaEntrega', c, 'blocoLocalSaidaEntrega'); });
     if (c.vida_util_dias) {
         const dataEntrega = document.getElementById('campoDataEntrega').value || hojeISO();
         document.getElementById('campoDataPrevista').value = somarDias(dataEntrega, c.vida_util_dias);
@@ -1219,12 +1387,18 @@ document.getElementById('btnAdicionarItemCarrinho').addEventListener('click', ()
     const dataPrevista = document.getElementById('campoDataPrevista').value || null;
     if (quantidade < 1) { statusEl.textContent = 'Quantidade precisa ser pelo menos 1.'; return; }
 
-    let catalogoId = null, descricaoAvulsa = null, tamanho = null, nomeExibicao = '';
+    let catalogoId = null, descricaoAvulsa = null, tamanho = null, nomeExibicao = '', localSaida = null;
     if (tipoItemNovaEntrega === 'catalogado') {
         if (!itemCatalogoSelEntrega) { statusEl.textContent = 'Busque e selecione um item do catálogo.'; return; }
         catalogoId = itemCatalogoSelEntrega.id;
         tamanho = itemCatalogoSelEntrega.tamanho;
         nomeExibicao = itemCatalogoSelEntrega.nome;
+        localSaida = localDeSaidaEscolhido('campoLocalSaidaEntrega', 'blocoLocalSaidaEntrega');
+        if (localSaida) {
+            const jaNoCarrinho = carrinhoEntrega.filter(x => x.catalogoId === catalogoId && x.almoxarifadoId != null && String(x.almoxarifadoId) === String(localSaida.id)).reduce((t, x) => t + x.quantidade, 0);
+            const disponivel = saldoNoLocal(itemCatalogoSelEntrega.produto_id, localSaida.id) - jaNoCarrinho;
+            if (quantidade > disponivel && !confirm(`O saldo de "${localSaida.nome}" é ${disponivel} e você está dando saída em ${quantidade} — esse local ficará negativo. Continuar?`)) return;
+        }
     } else {
         descricaoAvulsa = document.getElementById('campoDescricaoAvulsa').value.trim();
         if (!descricaoAvulsa) { statusEl.textContent = 'Descreva o item avulso.'; return; }
@@ -1232,7 +1406,7 @@ document.getElementById('btnAdicionarItemCarrinho').addEventListener('click', ()
         nomeExibicao = descricaoAvulsa;
     }
 
-    carrinhoEntrega.push({ catalogoId, descricaoAvulsa, tamanho, quantidade, valorUnit, dataPrevista, nomeExibicao });
+    carrinhoEntrega.push({ catalogoId, descricaoAvulsa, tamanho, quantidade, valorUnit, dataPrevista, nomeExibicao, almoxarifadoId: localSaida ? localSaida.id : null, localNome: localSaida ? localSaida.nome : '' });
     renderizarCarrinhoEntrega();
     const tipoAtual = tipoItemNovaEntrega;
     limparCamposItemEntrega();
@@ -1248,7 +1422,7 @@ function renderizarCarrinhoEntrega() {
         <div class="item-linha" style="padding:8px 10px; margin-bottom:6px;">
             <div class="info">
                 <div class="nome">${it.quantidade}x ${escapeHtml(it.nomeExibicao)}${it.tamanho ? ' — ' + escapeHtml(it.tamanho) : ''}</div>
-                <div class="meta">${it.valorUnit ? formatarMoeda(it.valorUnit) + ' cada' : ''}</div>
+                <div class="meta">${it.valorUnit ? formatarMoeda(it.valorUnit) + ' cada' : ''}${it.localNome ? (it.valorUnit ? ' · ' : '') + '📍 sai de ' + escapeHtml(it.localNome) : ''}</div>
             </div>
             <div class="acoes"><button type="button" class="btn btn-perigo" data-remover-item-carrinho="${i}" style="padding:6px 10px; font-size:.78rem;">✕</button></div>
         </div>
@@ -1284,6 +1458,10 @@ document.getElementById('btnSalvarNovaEntrega').addEventListener('click', async 
     if (!carrinhoEntrega.length) { statusEl.textContent = 'Adicione pelo menos um item à entrega.'; return; }
     const dataEntrega = document.getElementById('campoDataEntrega').value || hojeISO();
     const observacao = document.getElementById('campoObservacaoEntrega').value.trim();
+    // setor obrigatório quando a unidade tem setores cadastrados (é o que alimenta o relatório por setor)
+    const setor = setoresUnidade.find(s => String(s.id) === document.getElementById('campoSetorNovaEntrega').value) || null;
+    if (setoresUnidade.length && !setor) { statusEl.textContent = 'Escolha o setor da entrega (ele entra no relatório por setor).'; document.getElementById('campoSetorNovaEntrega').focus(); return; }
+    const subsetor = setor ? (subsetoresUnidade.find(s => String(s.id) === document.getElementById('campoSubsetorNovaEntrega').value && String(s.setor_id) === String(setor.id)) || null) : null;
 
     const btn = document.getElementById('btnSalvarNovaEntrega');
     btn.disabled = true; btn.textContent = 'Registrando...';
@@ -1299,7 +1477,7 @@ document.getElementById('btnSalvarNovaEntrega').addEventListener('click', async 
                 profissionalId: profissionalSelecionado.id, catalogoId: it.catalogoId,
                 descricaoAvulsa: it.descricaoAvulsa, tamanho: it.tamanho,
                 quantidade: it.quantidade, valorUnit: it.valorUnit,
-                dataEntrega, dataPrevista: it.dataPrevista, observacao, numeroRecibo
+                dataEntrega, dataPrevista: it.dataPrevista, observacao, numeroRecibo, setor, subsetor, almoxarifadoId: it.almoxarifadoId
             });
             // já sai do carrinho (o original, exibido na tela) conforme é
             // gravado -- se algo falhar no meio, o que restou reflete só o
@@ -1331,7 +1509,7 @@ document.getElementById('btnSalvarNovaEntrega').addEventListener('click', async 
 // pra isso, é o padrão da plataforma)
 // "profissional" (objeto) e "setor" ({id, nome}) são opcionais: a "Baixa / Entrega" do catálogo passa os dois (entrega ao
 // profissional já com o setor que vai arcar com o custo); o fluxo normal da ficha do profissional segue sem setor.
-async function registrarNovaEntrega({ profissionalId, catalogoId, descricaoAvulsa, tamanho, quantidade, valorUnit, dataEntrega, dataPrevista, observacao, numeroRecibo, profissional, setor, subsetor }) {
+async function registrarNovaEntrega({ profissionalId, catalogoId, descricaoAvulsa, tamanho, quantidade, valorUnit, dataEntrega, dataPrevista, observacao, numeroRecibo, profissional, setor, subsetor, almoxarifadoId: almoxEscolhido }) {
     const nomeProfissional = (profissional || profissionalSelecionado).nome_completo;
     const sufixoSetor = setor ? ' — Setor: ' + setor.nome + (subsetor ? ' / ' + subsetor.nome : '') : '';
     const camposSetorMov = setor ? { setor_id: setor.id, ...(subsetor ? { subsetor_id: subsetor.id } : {}) } : {};
@@ -1343,7 +1521,7 @@ async function registrarNovaEntrega({ profissionalId, catalogoId, descricaoAvuls
     if (catalogoId) {
         const item = catalogo.find(c => c.id === catalogoId);
         produtoId = item?.estoque_produtos?.id || null;
-        almoxarifadoId = item?.estoque_produtos?.almoxarifado_padrao_id || almoxarifadoId;
+        almoxarifadoId = almoxEscolhido || item?.estoque_produtos?.almoxarifado_padrao_id || almoxarifadoId;   // local escolhido em "Sai de"; sem escolha = padrão do item
         if (!produtoId) throw new Error('Item de catálogo sem produto de estoque vinculado.');
 
         const { data: mov, error: eMov } = await sb.from('estoque_movimentacoes').insert({
@@ -1389,6 +1567,7 @@ async function registrarNovaEntrega({ profissionalId, catalogoId, descricaoAvuls
     const { error: eEnt } = await sb.from('staff_uniformes_epi_entregas').insert(linhas);
     if (eEnt) throw eEnt;
 
+    saldosLocal = [];
     await registrarSentinela('entrega_uniforme_epi', `${quantidade}x ${catalogoId ? (catalogo.find(c=>c.id===catalogoId)?.nome||'') : descricaoAvulsa} para ${nomeProfissional}${setor ? ' (setor ' + setor.nome + (subsetor ? ' / ' + subsetor.nome : '') + ')' : ''}`);
 }
 
@@ -1413,6 +1592,110 @@ async function carregarSetoresUnidade() {
     setoresUnidade = rs.error ? [] : (rs.data || []).filter(s => s.ativo !== false);
     subsetoresUnidade = rss.error ? [] : (rss.data || []).filter(s => s.ativo !== false);
 }
+
+
+/* ===== SETOR / SUBSETOR: cadastro só por ADMINISTRADOR ou PRINCIPAL =====
+   A tela esconde o "＋ cadastrar" de quem não pode, mas a trava de verdade é no banco
+   (setores-cadastro-restrito.sql: fn_pode_cadastrar_setor + trigger em unidade_setores/unidade_subsetores).
+   Sem o SQL rodado ainda, vale a regra local do módulo (parâmetro "regraLocal"). */
+let podeCadastrarSetorFlag = false;
+async function carregarPodeCadastrarSetor(unidadeId, regraLocal) {
+    let ok = null;
+    try {
+        const { data, error } = await sb.rpc('fn_pode_cadastrar_setor', { p_unidade_negocio_id: unidadeId });
+        if (!error && typeof data === 'boolean') ok = data;
+    } catch (e) { /* função ainda não existe no banco */ }
+    podeCadastrarSetorFlag = ok === null ? !!(regraLocal && regraLocal()) : ok;
+    return podeCadastrarSetorFlag;
+}
+const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal podem cadastrar setores e subsetores.';
+
+function abrirCadastroRapidoSetor({ unidadeId, tipo, setor, aoSalvar }) {
+    if (!podeCadastrarSetorFlag) { alert(MSG_SEM_PERMISSAO_SETOR); return; }
+    if (tipo === 'subsetor' && !setor) { alert('Escolha o setor primeiro — o subsetor é criado dentro dele.'); return; }
+    const rot = tipo === 'setor' ? 'setor' : 'subsetor';
+    const esc = t => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3000;display:flex;align-items:center;justify-content:center;padding:16px;';
+    ov.innerHTML = `<div style="background:#fff;color:#222;border-radius:12px;padding:18px;width:100%;max-width:380px;box-shadow:0 10px 40px rgba(0,0,0,.3);font-family:inherit;">
+        <h3 style="margin:0 0 4px;font-size:1.05rem;">Novo ${rot}</h3>
+        <p style="margin:0 0 12px;font-size:.85rem;color:#666;">${tipo === 'subsetor' ? 'Dentro do setor <b>' + esc(setor.nome) + '</b>.' : 'Fica disponível em todos os módulos desta unidade.'}</p>
+        <input type="text" id="cadRapSetorNome" maxlength="80" placeholder="Nome do ${rot}" autocomplete="off" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #ccc;border-radius:8px;font-size:1rem;">
+        <p id="cadRapSetorMsg" style="min-height:1.2em;margin:8px 0 0;font-size:.85rem;color:#b00020;"></p>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+            <button type="button" id="cadRapSetorCancelar" style="flex:1;padding:10px;border:1px solid #ccc;background:#f4f4f4;border-radius:8px;cursor:pointer;">Cancelar</button>
+            <button type="button" id="cadRapSetorSalvar" style="flex:1;padding:10px;border:0;background:#1a3a5c;color:#fff;border-radius:8px;cursor:pointer;font-weight:600;">Salvar</button>
+        </div></div>`;
+    document.body.appendChild(ov);
+    const nomeEl = ov.querySelector('#cadRapSetorNome'), msgEl = ov.querySelector('#cadRapSetorMsg'), btn = ov.querySelector('#cadRapSetorSalvar');
+    nomeEl.focus();
+    ov.querySelector('#cadRapSetorCancelar').onclick = () => ov.remove();
+    ov.addEventListener('mousedown', e => { if (e.target === ov) ov.remove(); });
+    const salvar = async () => {
+        const nome = nomeEl.value.trim().replace(/\s+/g, ' ');
+        msgEl.textContent = '';
+        if (!nome) { msgEl.textContent = 'Informe o nome do ' + rot + '.'; nomeEl.focus(); return; }
+        btn.disabled = true;
+        try {
+            const tabela = tipo === 'setor' ? 'unidade_setores' : 'unidade_subsetores';
+            let q = sb.from(tabela).select('id, nome').eq('unidade_negocio_id', unidadeId);
+            if (tipo === 'subsetor') q = q.eq('setor_id', setor.id);
+            const { data: existentes, error: eEx } = await q;
+            if (eEx) throw eEx;
+            const norm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+            if ((existentes || []).some(r => norm(r.nome) === norm(nome))) throw new Error('Já existe ' + (tipo === 'setor' ? 'um setor' : 'um subsetor neste setor') + ' com esse nome.');
+            const registro = { unidade_negocio_id: unidadeId, nome, ativo: true };
+            if (tipo === 'subsetor') registro.setor_id = setor.id;
+            const { data, error } = await sb.from(tabela).insert(registro).select().single();
+            if (error) throw error;
+            try { await registrarSentinela('cadastro_rapido_' + tipo, `Cadastrou ${rot} "${nome}"${tipo === 'subsetor' ? ' no setor ' + setor.nome : ''} (id ${data.id})`); } catch (_) { /* auditoria não bloqueia */ }
+            ov.remove();
+            if (aoSalvar) aoSalvar(data);
+        } catch (e) {
+            msgEl.textContent = /42501|Somente administradores/.test((e && (e.code + ' ' + e.message)) || '') ? MSG_SEM_PERMISSAO_SETOR : ('Erro: ' + (e.message || e));
+            btn.disabled = false;
+        }
+    };
+    btn.onclick = salvar;
+    nomeEl.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); salvar(); } });
+}
+
+function popularSelectSetores(selId, selecionadoId) {
+    const sel = document.getElementById(selId);
+    sel.innerHTML = '<option value="">Escolha o setor...</option>' + setoresUnidade.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+    if (selecionadoId != null) sel.value = String(selecionadoId);
+}
+// links "＋ cadastrar" ao lado de Setor/Subsetor nos dois formulários (só aparecem pra administrador/principal)
+function instalarLinksCadastroSetor() {
+    const mk = (selId, aoClicar) => {
+        const lab = document.getElementById(selId).closest('.campo').querySelector('label');
+        const a = document.createElement('a');
+        a.href = '#'; a.className = 'link-cad-setor'; a.textContent = '＋ cadastrar'; a.style.cssText = 'float:right;font-size:.8em;font-weight:600;text-decoration:none;display:none;';
+        a.title = 'Cadastro rápido (só administrador ou principal)';
+        a.addEventListener('click', e => { e.preventDefault(); aoClicar(); });
+        lab.appendChild(a);
+    };
+    const cfg = [
+        { setor: 'campoSetorNovaEntrega', sub: 'campoSubsetorNovaEntrega', repSub: () => popularSubsetoresNovaEntrega() },
+        { setor: 'campoSetorBaixaSetor', sub: 'campoSubsetorBaixaSetor', repSub: () => popularSubsetoresBaixaSetor() }
+    ];
+    cfg.forEach(c => {
+        mk(c.setor, () => abrirCadastroRapidoSetor({ unidadeId: meuPerfil.unidadeId, tipo: 'setor', aoSalvar: s => {
+            setoresUnidade.push(s); setoresUnidade.sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+            popularSelectSetores(c.setor, s.id); c.repSub();
+        } }));
+        mk(c.sub, () => {
+            const setor = setoresUnidade.find(s => String(s.id) === document.getElementById(c.setor).value);
+            abrirCadastroRapidoSetor({ unidadeId: meuPerfil.unidadeId, tipo: 'subsetor', setor, aoSalvar: s => {
+                subsetoresUnidade.push(s); c.repSub(); document.getElementById(c.sub).value = String(s.id);
+            } });
+        });
+    });
+}
+function atualizarLinksCadastroSetor() {
+    document.querySelectorAll('.link-cad-setor').forEach(a => { a.style.display = podeCadastrarSetorFlag ? '' : 'none'; });
+}
+instalarLinksCadastroSetor();
 
 // subsetor é opcional e depende do setor escolhido (só lista os subsetores daquele setor)
 function popularSubsetoresBaixaSetor() {
@@ -1443,8 +1726,10 @@ async function abrirModalBaixaSetor(catalogoId) {
     itemBaixaSetor = item;
     if (!setoresUnidade.length) await carregarSetoresUnidade();
     if (!setoresUnidade.length) { alert('Nenhum setor cadastrado nesta unidade. Cadastre os setores no Estoque (Cadastros → Setores) antes de dar baixa por setor.'); return; }
+    await garantirSaldosLocal();
+    popularSelectLocalSaida('campoLocalSaidaBaixa', item, 'blocoLocalSaidaBaixa');
     document.getElementById('baixaSetorItemTexto').textContent = item.nome + (item.tamanho ? ' — ' + item.tamanho : '') + ' · Saldo atual: ' + (item.estoque_produtos?.estoque ?? 0);
-    document.getElementById('campoSetorBaixaSetor').innerHTML = '<option value="">Escolha o setor...</option>' + setoresUnidade.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+    popularSelectSetores('campoSetorBaixaSetor');
     popularSubsetoresBaixaSetor();
     document.getElementById('campoQtdBaixaSetor').value = 1;
     document.getElementById('campoValorBaixaSetor').value = item.estoque_produtos?.valor || '';
@@ -1462,14 +1747,9 @@ const campoBuscaProfBaixaSetor = document.getElementById('campoBuscaProfissional
 const resultadosProfBaixaSetor = document.getElementById('resultadosBuscaProfissionalBaixaSetor');
 campoBuscaProfBaixaSetor.addEventListener('input', () => {
     if (profissionalBaixaSetor) definirProfissionalBaixaSetor(null);       // digitou de novo: desfaz a escolha anterior
-    const termo = campoBuscaProfBaixaSetor.value.trim().toLowerCase();
-    if (!termo) { resultadosProfBaixaSetor.classList.remove('aberto'); return; }
-    const achados = profissionais.filter(p => p.nome_completo.toLowerCase().includes(termo)).slice(0, 8);
-    resultadosProfBaixaSetor.innerHTML = achados.length
-        ? achados.map(p => `<div class="resultado-item" data-id="${p.id}">${escapeHtml(p.nome_completo)}<div class="sub">${escapeHtml(p.staff_funcoes?.nome || '')}</div></div>`).join('')
-        : '<div class="resultado-item">Nenhum profissional encontrado</div>';
-    resultadosProfBaixaSetor.classList.add('aberto');
+    renderBuscaProfissional(campoBuscaProfBaixaSetor, resultadosProfBaixaSetor);
 });
+['focus', 'click'].forEach(ev => campoBuscaProfBaixaSetor.addEventListener(ev, () => { if (!campoBuscaProfBaixaSetor.value.trim()) renderBuscaProfissional(campoBuscaProfBaixaSetor, resultadosProfBaixaSetor); }));
 resultadosProfBaixaSetor.addEventListener('mousedown', (e) => {
     const it = e.target.closest('.resultado-item[data-id]');
     if (!it) return;
@@ -1480,9 +1760,9 @@ resultadosProfBaixaSetor.addEventListener('mousedown', (e) => {
 campoBuscaProfBaixaSetor.addEventListener('blur', () => setTimeout(() => resultadosProfBaixaSetor.classList.remove('aberto'), 200));
 
 // baixa só pro setor: movimento de saída (com setor) + ajuste de saldo. Mesmo padrão de escrita direta de registrarNovaEntrega.
-async function registrarBaixaSoSetor({ item, setor, subsetor, quantidade, valorUnit, data, observacao }) {
+async function registrarBaixaSoSetor({ item, setor, subsetor, quantidade, valorUnit, data, observacao, almoxarifadoId: almoxEscolhido }) {
     const produtoId = item.estoque_produtos.id;
-    const almoxarifadoId = item.estoque_produtos.almoxarifado_padrao_id || almoxarifadoDedicado()?.id || null;
+    const almoxarifadoId = almoxEscolhido || item.estoque_produtos.almoxarifado_padrao_id || almoxarifadoDedicado()?.id || null;
     const { error: eMov } = await sb.from('estoque_movimentacoes').insert({
         data, produto_id: produtoId, tipo: 'saida',
         qtd: quantidade, valor_unit: valorUnit, almoxarifado: 1, almoxarifado_id: almoxarifadoId,
@@ -1495,6 +1775,7 @@ async function registrarBaixaSoSetor({ item, setor, subsetor, quantidade, valorU
     if (eMov) throw eMov;
     const { error: eAjuste } = await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: produtoId, p_delta: -quantidade, p_almoxarifado_id: almoxarifadoId });
     if (eAjuste) throw eAjuste;
+    saldosLocal = [];
     await registrarSentinela('baixa_uniforme_epi_setor', `${quantidade}x ${item.nome}${item.tamanho ? ' — ' + item.tamanho : ''} para o setor ${setor.nome}${subsetor ? ' / ' + subsetor.nome : ''}`);
 }
 
@@ -1511,8 +1792,9 @@ document.getElementById('btnConfirmarBaixaSetor').addEventListener('click', asyn
     const valorUnit = Number(document.getElementById('campoValorBaixaSetor').value) || 0;
     const data = document.getElementById('campoDataBaixaSetor').value || hojeISO();
     const observacao = document.getElementById('campoObservacaoBaixaSetor').value.trim();
-    const saldo = Number(item.estoque_produtos?.estoque ?? 0);
-    if (quantidade > saldo && !confirm(`O saldo atual é ${saldo} e você está dando baixa em ${quantidade} — o estoque ficará negativo. Continuar?`)) return;
+    const localSaida = localDeSaidaEscolhido('campoLocalSaidaBaixa', 'blocoLocalSaidaBaixa');
+    const saldo = localSaida ? saldoNoLocal(item.produto_id, localSaida.id) : Number(item.estoque_produtos?.estoque ?? 0);
+    if (quantidade > saldo && !confirm(`O saldo ${localSaida ? 'de "' + localSaida.nome + '" ' : 'atual '}é ${saldo} e você está dando baixa em ${quantidade} — ${localSaida ? 'esse local' : 'o estoque'} ficará negativo. Continuar?`)) return;
 
     const btn = document.getElementById('btnConfirmarBaixaSetor');
     btn.disabled = true; btn.textContent = 'Registrando...';
@@ -1524,14 +1806,14 @@ document.getElementById('btnConfirmarBaixaSetor').addEventListener('click', asyn
             await registrarNovaEntrega({
                 profissionalId: prof.id, catalogoId: item.id, descricaoAvulsa: null, tamanho: item.tamanho,
                 quantidade, valorUnit, dataEntrega: data, dataPrevista: document.getElementById('campoDataPrevistaBaixaSetor').value || null,
-                observacao, numeroRecibo, profissional: prof, setor, subsetor
+                observacao, numeroRecibo, profissional: prof, setor, subsetor, almoxarifadoId: localSaida ? localSaida.id : null
             });
             document.getElementById('modal-baixa-setor').classList.remove('aberto');
             if (profissionalSelecionado && profissionalSelecionado.id === prof.id) await carregarItensAbertos(prof.id);
             await carregarCatalogo(); renderizarCatalogoAdmin(); await carregarRenovacoes();
             await gerarEAbrirReciboEntrega(numeroRecibo, prof.id, prof);
         } else {
-            await registrarBaixaSoSetor({ item, setor, subsetor, quantidade, valorUnit, data, observacao });
+            await registrarBaixaSoSetor({ item, setor, subsetor, quantidade, valorUnit, data, observacao, almoxarifadoId: localSaida ? localSaida.id : null });
             document.getElementById('modal-baixa-setor').classList.remove('aberto');
             await carregarCatalogo(); renderizarCatalogoAdmin();
         }
@@ -1540,6 +1822,292 @@ document.getElementById('btnConfirmarBaixaSetor').addEventListener('click', asyn
     } finally {
         btn.disabled = false; btn.textContent = 'Confirmar baixa';
     }
+});
+
+// ---------------------------------------------------------------
+// ESTOQUE POR LOCAL + TRANSFERÊNCIA ENTRE ALMOXARIFADOS
+//   O saldo de verdade já é por almoxarifado (estoque_saldo_almoxarifado, 1 linha por produto+almoxarifado) e o estoque do item
+//   é a soma deles. Esta aba só LÊ esse saldo (com opção de unir os locais) e faz a transferência: 1 saída no local de origem +
+//   1 entrada no destino (mesma quantidade), cada uma com seu ajuste de saldo. O estoque total não muda.
+//   As duas linhas levam fornecedor_nome = NOME_TRANSFERENCIA — é assim que o relatório "Por setor" as ignora (não são consumo).
+// ---------------------------------------------------------------
+const NOME_TRANSFERENCIA = 'Transferência entre almoxarifados';
+let saldosLocal = [];        // [{produtoId, almoxarifadoId, estoque}] só dos produtos do catálogo
+let locaisEstoque = [];      // almoxarifados que têm item do catálogo (ou são o dedicado)
+let locaisMarcados = new Set();
+let locaisJaInicializados = false;
+
+function saldoNoLocal(produtoId, almoxarifadoId) {
+    const r = saldosLocal.find(x => String(x.produtoId) === String(produtoId) && String(x.almoxarifadoId) === String(almoxarifadoId));
+    return r ? r.estoque : 0;
+}
+
+// saldo por almoxarifado dos produtos do catálogo (guardado em saldosLocal; zerado depois de cada entrega/baixa/devolução)
+async function carregarSaldosLocal() {
+    const un = meuPerfil.unidadeId;
+    if (!almoxarifados.length) await carregarAlmoxarifados();
+    const ids = [...new Set(catalogo.map(c => c.produto_id).filter(Boolean))];
+    const linhas = [];
+    for (let i = 0; i < ids.length; i += 150) {
+        const lote = ids.slice(i, i + 150);
+        // sem .order('id'): não sei se essa tabela tem coluna id; ordena pelas colunas que certamente existem
+        for (let ini = 0; ; ini += 1000) {
+            const { data, error } = await sb.from('estoque_saldo_almoxarifado').select('produto_id, almoxarifado_id, estoque')
+                .eq('unidade_negocio_id', un).in('produto_id', lote).order('produto_id').order('almoxarifado_id').range(ini, ini + 999);
+            if (error) throw error;
+            linhas.push(...(data || []));
+            if (!data || data.length < 1000) break;
+        }
+    }
+    saldosLocal = linhas.map(r => ({ produtoId: r.produto_id, almoxarifadoId: r.almoxarifado_id, estoque: Number(r.estoque) || 0 }));
+}
+async function garantirSaldosLocal() { if (!saldosLocal.length) { try { await carregarSaldosLocal(); } catch (e) { console.warn('saldo por local:', e.message); } } }
+
+// "Sai de (almoxarifado)": só aparece quando a unidade tem 2+ almoxarifados; vem marcado o padrão do item
+function localPadraoDoItem(c) {
+    return String(c.estoque_produtos?.almoxarifado_padrao_id || almoxarifadoDedicado()?.id || (almoxarifados[0] || {}).id || '');
+}
+// o último local escolhido fica lembrado neste aparelho (por unidade) e vira o padrão da próxima saída
+function chaveLocalSaida() { return 'uniformes_epi_ultimo_local_saida_' + meuPerfil.unidadeId; }
+function lerUltimoLocalSaida() { try { return localStorage.getItem(chaveLocalSaida()) || ''; } catch (e) { return ''; } }
+function gravarUltimoLocalSaida(id) { try { localStorage.setItem(chaveLocalSaida(), String(id)); } catch (e) { /* sem armazenamento: só não lembra */ } }
+['campoLocalSaidaEntrega', 'campoLocalSaidaBaixa'].forEach(id => document.getElementById(id).addEventListener('change', e => { if (e.target.value) gravarUltimoLocalSaida(e.target.value); }));
+function popularSelectLocalSaida(selId, c, blocoId) {
+    const mostrar = !!c && almoxarifados.length >= 2;
+    document.getElementById(blocoId).classList.toggle('hidden', !mostrar);
+    if (!mostrar) return;
+    const sel = document.getElementById(selId), padrao = localPadraoDoItem(c);
+    sel.innerHTML = almoxarifados.map(a => `<option value="${a.id}">${escapeHtml(a.nome)} — saldo ${saldoNoLocal(c.produto_id, a.id)}</option>`).join('');
+    const lembrado = lerUltimoLocalSaida();   // 1º o último escolhido neste aparelho; senão o padrão do item
+    sel.value = almoxarifados.some(a => String(a.id) === lembrado) ? lembrado
+        : (almoxarifados.some(a => String(a.id) === padrao) ? padrao : String(almoxarifados[0].id));
+}
+// id do local escolhido (ou null quando só há um almoxarifado = comportamento de sempre)
+function localDeSaidaEscolhido(selId, blocoId) {
+    if (almoxarifados.length < 2 || document.getElementById(blocoId).classList.contains('hidden')) return null;
+    const a = almoxarifados.find(x => String(x.id) === document.getElementById(selId).value);
+    return a || null;
+}
+// no cartão "itens em aberto" do profissional: de onde a peça saiu
+function localDaEntrega(it) {
+    if (almoxarifados.length < 2 || !it.catalogo_id || !it.almoxarifado_id) return '';
+    const a = almoxarifados.find(x => String(x.id) === String(it.almoxarifado_id));
+    return a ? '📍 ' + escapeHtml(a.nome) + ' · ' : '';
+}
+
+async function carregarEstoqueLocal() {
+    const statusEl = document.getElementById('statusEstLocal');
+    statusEl.style.color = ''; statusEl.textContent = 'Carregando...';
+    try {
+        if (!almoxarifados.length) await carregarAlmoxarifados();
+        await carregarSaldosLocal();
+        const idsLocais = new Set(saldosLocal.map(r => String(r.almoxarifadoId)));
+        catalogo.forEach(c => { const a = c.estoque_produtos?.almoxarifado_padrao_id; if (a != null) idsLocais.add(String(a)); });
+        const ded = almoxarifadoDedicado(); if (ded) idsLocais.add(String(ded.id));
+        locaisEstoque = almoxarifados.filter(a => idsLocais.has(String(a.id)));
+        if (!locaisJaInicializados) { locaisMarcados = new Set(locaisEstoque.map(a => String(a.id))); locaisJaInicializados = true; }
+        else { locaisMarcados = new Set([...locaisMarcados].filter(id => locaisEstoque.some(a => String(a.id) === id))); }
+        statusEl.textContent = '';
+        renderEstoqueLocal();
+    } catch (e) {
+        statusEl.style.color = 'var(--danger)'; statusEl.textContent = 'Erro ao carregar o estoque por local: ' + (e.message || e);
+    }
+}
+
+// monta a matriz uma vez; tela, PDF e CSV usam a mesma
+function montarEstoqueLocal() {
+    const unir = document.getElementById('estLocalUnir').checked;
+    const soSaldo = document.getElementById('estLocalSoComSaldo').checked;
+    const termo = document.getElementById('estLocalBusca').value.trim().toLowerCase();
+    const marcados = locaisEstoque.filter(l => locaisMarcados.has(String(l.id)));
+    const itens = catalogo.filter(c => c.produto_id && c.ativo !== false && (!termo || (c.nome + ' ' + (c.tamanho || '')).toLowerCase().includes(termo)))
+        .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    const linhas = itens.map(c => {
+        const porLocal = marcados.map(l => saldoNoLocal(c.produto_id, l.id));
+        return { item: c, porLocal, total: porLocal.reduce((x, y) => x + y, 0) };
+    }).filter(r => !soSaldo || r.porLocal.some(v => v !== 0));
+    const cab = unir ? ['Item', 'Tipo', 'Estoque (unido)', 'Distribuição'] : ['Item', 'Tipo', ...marcados.map(l => l.nome), 'Total'];
+    const corpo = linhas.map(r => {
+        const nome = r.item.nome + (r.item.tamanho ? ' — ' + r.item.tamanho : '');
+        const tipo = r.item.tipo === 'epi' ? 'EPI' : 'Uniforme';
+        if (unir) return [nome, tipo, r.total, marcados.map((l, i) => l.nome + ': ' + r.porLocal[i]).filter((_, i) => r.porLocal[i] !== 0).join(' · ') || '—'];
+        return [nome, tipo, ...r.porLocal, r.total];
+    });
+    const totaisLocal = marcados.map((_, i) => linhas.reduce((x, r) => x + r.porLocal[i], 0));
+    const totalGeral = totaisLocal.reduce((x, y) => x + y, 0);
+    const rodape = unir ? ['TOTAL', '', totalGeral, ''] : ['TOTAL', '', ...totaisLocal, totalGeral];
+    return { unir, marcados, linhas, cab, corpo, rodape, totalGeral };
+}
+
+function renderEstoqueLocal() {
+    const bloco = document.getElementById('blocoLocaisEstoque');
+    bloco.innerHTML = locaisEstoque.length
+        ? '<span style="font-size:.85rem; color:var(--muted); align-self:center;">Locais:</span>' + locaisEstoque.map(l =>
+            `<label style="display:flex; gap:6px; align-items:center; font-size:.9rem;"><input type="checkbox" data-local-estoque="${l.id}" ${locaisMarcados.has(String(l.id)) ? 'checked' : ''}> ${escapeHtml(l.nome)}</label>`).join('')
+        : '<span class="subtitulo">Nenhum almoxarifado com itens do catálogo ainda.</span>';
+    const m = montarEstoqueLocal();
+    const podeTransf = podeRegistrar() && almoxarifados.length >= 2;
+    document.getElementById('btnNovaTransferencia').style.display = podeTransf ? '' : 'none';
+    if (!m.linhas.length) { document.getElementById('tabelaEstLocal').innerHTML = '<div class="vazio">Nenhum item para mostrar com esses filtros.</div>'; return; }
+    const numCls = v => v < 0 ? 'color:#b00020; font-weight:700;' : (v === 0 ? 'color:#999;' : '');
+    const th = (t, dir) => `<th style="text-align:${dir || 'left'}; padding:6px 8px; border-bottom:2px solid var(--border); white-space:nowrap;">${escapeHtml(t)}</th>`;
+    const ncol = m.cab.length;
+    const html = `<table style="width:100%; border-collapse:collapse; font-size:.9rem;">
+        <thead><tr>${m.cab.map((c, i) => th(c, (i >= 2 && !(m.unir && i === 3)) ? 'right' : 'left')).join('')}${podeTransf ? th('', 'center') : ''}</tr></thead>
+        <tbody>${m.corpo.map((r, idx) => `<tr style="border-bottom:1px solid var(--border);">
+            ${r.map((v, i) => i < 2 || (m.unir && i === 3)
+                ? `<td style="padding:6px 8px; ${i === 3 ? 'color:var(--muted); font-size:.82rem;' : ''}">${escapeHtml(v)}</td>`
+                : `<td style="padding:6px 8px; text-align:right; ${numCls(Number(v))}">${v}</td>`).join('')}
+            ${podeTransf ? `<td style="padding:4px 8px; text-align:center;"><button type="button" class="btn btn-cinza" data-transferir-item="${m.linhas[idx].item.id}" style="width:auto; padding:4px 10px; font-size:.8rem;">🔁</button></td>` : ''}</tr>`).join('')}</tbody>
+        <tfoot><tr style="font-weight:700; background:var(--brand-soft, #f1f5f2);">${m.rodape.map((v, i) => `<td style="padding:6px 8px; text-align:${i >= 2 && !(m.unir && i === 3) ? 'right' : 'left'};">${escapeHtml(v)}</td>`).join('')}${podeTransf ? '<td></td>' : ''}</tr></tfoot></table>`;
+    document.getElementById('tabelaEstLocal').innerHTML = html;
+}
+
+document.querySelector('[data-aba="estoquelocal"]').addEventListener('click', carregarEstoqueLocal);
+['estLocalUnir', 'estLocalSoComSaldo'].forEach(id => document.getElementById(id).addEventListener('change', renderEstoqueLocal));
+document.getElementById('estLocalBusca').addEventListener('input', renderEstoqueLocal);
+document.getElementById('blocoLocaisEstoque').addEventListener('change', (e) => {
+    const cb = e.target.closest('[data-local-estoque]'); if (!cb) return;
+    if (cb.checked) locaisMarcados.add(cb.dataset.localEstoque); else locaisMarcados.delete(cb.dataset.localEstoque);
+    renderEstoqueLocal();
+});
+document.getElementById('tabelaEstLocal').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-transferir-item]'); if (b) abrirModalTransferencia(b.dataset.transferirItem);
+});
+
+async function pdfEstoqueLocal() {
+    const m = montarEstoqueLocal(); const statusEl = document.getElementById('statusEstLocal');
+    if (!m.linhas.length) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = 'Nada para gerar com esses filtros.'; return; }
+    try {
+        statusEl.style.color = ''; statusEl.textContent = 'Montando o PDF...';
+        await carregarJsPdf();
+        if (!autoTablePdfCarregado) { await carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js'); autoTablePdfCarregado = true; }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: m.cab.length > 6 ? 'landscape' : 'portrait' });
+        const margem = 10;
+        doc.setFontSize(13); doc.setFont(undefined, 'bold'); doc.text('Estoque de uniformes e EPI por local', margem, 13);
+        doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(90);
+        doc.text(`${meuPerfil.unidadeNome} · ${m.unir ? 'Locais unidos: ' : 'Locais: '}${m.marcados.map(l => l.nome).join(' + ') || '—'} · Gerado em ${new Date().toLocaleString('pt-BR')}`, margem, 19);
+        doc.setTextColor(0);
+        const direita = {}; m.cab.forEach((_, i) => { if (i >= 2 && !(m.unir && i === 3)) direita[i] = { halign: 'right' }; });
+        doc.autoTable({
+            startY: 24, margin: { left: margem, right: margem },
+            head: [m.cab], body: m.corpo, foot: [m.rodape],
+            styles: { fontSize: 8, cellPadding: 1.6 }, headStyles: { fillColor: [27, 67, 50] },
+            footStyles: { fillColor: [235, 235, 235], textColor: 0, fontStyle: 'bold' }, columnStyles: direita
+        });
+        const total = doc.getNumberOfPages(); const w = doc.internal.pageSize.getWidth(), h = doc.internal.pageSize.getHeight();
+        for (let i = 1; i <= total; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text(`Página ${i} de ${total}`, w - margem, h - 5, { align: 'right' }); }
+        statusEl.textContent = '';
+        mostrarPopupAcoesPdf('Relatório gerado', doc.output('blob'), `estoque-uniformes-epi-por-local-${hojeISO()}.pdf`);
+    } catch (e) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = 'Não consegui gerar o PDF: ' + (e.message || e); }
+}
+function csvEstoqueLocal() {
+    const m = montarEstoqueLocal();
+    const cel = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const csv = '\ufeff' + [m.cab, ...m.corpo, m.rodape].map(r => r.map(cel).join(';')).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `estoque-uniformes-epi-por-local-${hojeISO()}.csv`; a.click();
+}
+document.getElementById('btnPdfEstLocal').addEventListener('click', pdfEstoqueLocal);
+document.getElementById('btnCsvEstLocal').addEventListener('click', csvEstoqueLocal);
+
+// ----- transferência -----
+function atualizarSaldosTransferencia() {
+    const item = catalogo.find(c => String(c.id) === document.getElementById('transfItem').value);
+    const de = document.getElementById('transfDe').value, para = document.getElementById('transfPara').value;
+    const nome = id => (almoxarifados.find(a => String(a.id) === String(id)) || {}).nome || '—';
+    document.getElementById('transfSaldos').innerHTML = item
+        ? `Saldo atual — <strong>${escapeHtml(nome(de))}</strong>: ${saldoNoLocal(item.produto_id, de)} · <strong>${escapeHtml(nome(para))}</strong>: ${saldoNoLocal(item.produto_id, para)}`
+        : '';
+}
+function abrirModalTransferencia(catalogoIdPre) {
+    if (almoxarifados.length < 2) { alert('Só existe um almoxarifado nesta unidade. Cadastre o segundo no Estoque (Cadastros → Almoxarifados) para poder transferir.'); return; }
+    const itens = catalogo.filter(c => c.produto_id && c.ativo !== false).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    document.getElementById('transfItem').innerHTML = itens.map(c => `<option value="${c.id}">${escapeHtml(c.nome + (c.tamanho ? ' — ' + c.tamanho : ''))}</option>`).join('');
+    if (catalogoIdPre) document.getElementById('transfItem').value = String(catalogoIdPre);
+    const opcoes = almoxarifados.map(a => `<option value="${a.id}">${escapeHtml(a.nome)}</option>`).join('');
+    document.getElementById('transfDe').innerHTML = opcoes; document.getElementById('transfPara').innerHTML = opcoes;
+    // origem sugerida = onde o item tem mais saldo; destino = outro local
+    const it = catalogo.find(c => String(c.id) === document.getElementById('transfItem').value);
+    let origem = almoxarifados[0].id;
+    if (it) { let melhor = -Infinity; almoxarifados.forEach(a => { const v = saldoNoLocal(it.produto_id, a.id); if (v > melhor) { melhor = v; origem = a.id; } }); }
+    document.getElementById('transfDe').value = String(origem);
+    document.getElementById('transfPara').value = String((almoxarifados.find(a => String(a.id) !== String(origem)) || almoxarifados[1]).id);
+    document.getElementById('transfQtd').value = 1; document.getElementById('transfData').value = hojeISO(); document.getElementById('transfObs').value = '';
+    document.getElementById('statusTransf').textContent = ''; document.getElementById('statusTransf').style.color = '';
+    atualizarSaldosTransferencia();
+    document.getElementById('modal-transferencia').classList.add('aberto');
+}
+document.getElementById('btnNovaTransferencia').addEventListener('click', () => abrirModalTransferencia(null));
+document.getElementById('btnCancelarTransf').addEventListener('click', () => document.getElementById('modal-transferencia').classList.remove('aberto'));
+['transfItem', 'transfDe', 'transfPara'].forEach(id => document.getElementById(id).addEventListener('change', atualizarSaldosTransferencia));
+
+async function lerSaldoLocalBanco(produtoId, almoxarifadoId) {
+    const { data, error } = await sb.from('estoque_saldo_almoxarifado').select('estoque')
+        .eq('unidade_negocio_id', meuPerfil.unidadeId).eq('produto_id', produtoId).eq('almoxarifado_id', almoxarifadoId).maybeSingle();
+    if (error) throw error;
+    return data ? Number(data.estoque) || 0 : null;   // null = ainda não existe linha de saldo nesse local
+}
+
+document.getElementById('btnConfirmarTransf').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusTransf'); statusEl.textContent = ''; statusEl.style.color = 'var(--danger)';
+    if (!podeRegistrar()) { statusEl.textContent = 'Você não tem permissão para registrar transferências.'; return; }
+    const item = catalogo.find(c => String(c.id) === document.getElementById('transfItem').value);
+    if (!item || !item.produto_id) { statusEl.textContent = 'Escolha o item.'; return; }
+    const de = almoxarifados.find(a => String(a.id) === document.getElementById('transfDe').value);
+    const para = almoxarifados.find(a => String(a.id) === document.getElementById('transfPara').value);
+    if (!de || !para) { statusEl.textContent = 'Escolha o local de origem e o de destino.'; return; }
+    if (String(de.id) === String(para.id)) { statusEl.textContent = 'A origem e o destino precisam ser diferentes.'; return; }
+    const qtd = Number(document.getElementById('transfQtd').value);
+    if (!Number.isInteger(qtd) || qtd < 1) { statusEl.textContent = 'A quantidade precisa ser um número inteiro de pelo menos 1.'; return; }
+    const data = document.getElementById('transfData').value || hojeISO();
+    const obs = document.getElementById('transfObs').value.trim();
+    const saldoOrigem = saldoNoLocal(item.produto_id, de.id);
+    if (qtd > saldoOrigem && !confirm(`O saldo de "${de.nome}" é ${saldoOrigem} e você está transferindo ${qtd} — esse local ficará negativo. Continuar?`)) return;
+
+    const btn = document.getElementById('btnConfirmarTransf'); btn.disabled = true; btn.textContent = 'Transferindo...';
+    const produtoId = item.produto_id;
+    const base = {
+        data, produto_id: produtoId, qtd, valor_unit: Number(item.estoque_produtos?.valor) || 0, almoxarifado: 1,
+        observacao: `Transferência ${de.nome} → ${para.nome}` + (obs ? ' — ' + obs : ''),
+        responsavel: meuPerfil.nomeOperador, fornecedor_nome: NOME_TRANSFERENCIA, afeta_preco_medio: false, unidade_negocio_id: meuPerfil.unidadeId
+    };
+    const desfazer = { movs: [], ajustes: [] };   // o que já foi gravado, pra desfazer se algo falhar no meio
+    try {
+        const antesDe = await lerSaldoLocalBanco(produtoId, de.id);
+        const antesPara = await lerSaldoLocalBanco(produtoId, para.id);
+        // garante a linha de saldo do destino (o local pode nunca ter tido esse item)
+        if (antesPara === null) {
+            const { error: eNovo } = await sb.from('estoque_saldo_almoxarifado').insert({ unidade_negocio_id: meuPerfil.unidadeId, produto_id: produtoId, almoxarifado_id: para.id, estoque: 0, estoque_inicial: 0 });
+            if (eNovo) console.warn('Não criei a linha de saldo do destino (a função de ajuste pode criar):', eNovo.message);
+        }
+        const { data: movSaida, error: eS } = await sb.from('estoque_movimentacoes').insert({ ...base, tipo: 'saida', almoxarifado_id: de.id }).select().single();
+        if (eS) throw eS; desfazer.movs.push(movSaida.id);
+        const { data: movEntrada, error: eE } = await sb.from('estoque_movimentacoes').insert({ ...base, tipo: 'entrada', almoxarifado_id: para.id }).select().single();
+        if (eE) throw eE; desfazer.movs.push(movEntrada.id);
+        const { error: a1 } = await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: produtoId, p_delta: -qtd, p_almoxarifado_id: de.id });
+        if (a1) throw a1; desfazer.ajustes.push({ delta: qtd, almox: de.id });
+        const { error: a2 } = await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: produtoId, p_delta: qtd, p_almoxarifado_id: para.id });
+        if (a2) throw a2;
+
+        // confere se o saldo andou como esperado nos dois locais
+        const depoisDe = await lerSaldoLocalBanco(produtoId, de.id), depoisPara = await lerSaldoLocalBanco(produtoId, para.id);
+        const okDe = depoisDe === (antesDe ?? 0) - qtd, okPara = depoisPara === (antesPara ?? 0) + qtd;
+        try { await registrarSentinela('transferencia_uniforme_epi', `${qtd}x ${item.nome}${item.tamanho ? ' — ' + item.tamanho : ''}: ${de.nome} → ${para.nome}`); } catch (_) { /* auditoria não bloqueia */ }
+        document.getElementById('modal-transferencia').classList.remove('aberto');
+        await carregarCatalogo(); renderizarCatalogoAdmin(); await carregarEstoqueLocal();
+        if (!okDe || !okPara) {
+            const st = document.getElementById('statusEstLocal'); st.style.color = 'var(--danger)';
+            st.textContent = `Transferência registrada, mas o saldo conferido no banco não bateu (${de.nome}: ${depoisDe}, ${para.nome}: ${depoisPara}). Rode "Reprocessar Estoque" no Estoque e confira.`;
+        }
+    } catch (e) {
+        // desfaz o que já tinha sido gravado (melhor esforço)
+        for (const a of desfazer.ajustes) { try { await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: produtoId, p_delta: a.delta, p_almoxarifado_id: a.almox }); } catch (_) { /* ignora */ } }
+        for (const id of desfazer.movs) { try { await sb.from('estoque_movimentacoes').delete().eq('id', id); } catch (_) { /* ignora */ } }
+        statusEl.textContent = 'Erro ao transferir (nada foi alterado): ' + (e.message || e);
+    } finally { btn.disabled = false; btn.textContent = 'Transferir'; }
 });
 
 // ---------------------------------------------------------------
@@ -1632,6 +2200,7 @@ async function confirmarBaixa(entregaId, tipoBaixa, dataBaixa, motivo, condicaoD
             });
             if (eAjuste) throw eAjuste;
             atualizacao.estoque_movimentacao_baixa_id = mov.id;
+            saldosLocal = [];
         }
     }
     // descarte de item já entregue não mexe em estoque -- a peça já saiu
@@ -1877,11 +2446,22 @@ document.getElementById('btnSalvarCatalogo').addEventListener('click', async () 
             almoxarifado_padrao_id: almoxarifadoId,
             unidade_negocio_id: meuPerfil.unidadeId
         };
-        if (itemAtual?.produto_id) produtoPayload.id = itemAtual.produto_id;
         Object.keys(produtoPayload).forEach(k => produtoPayload[k] === undefined && delete produtoPayload[k]);
 
-        const { data: produto, error: eProd } = await sb.from('estoque_produtos').upsert(produtoPayload).select().single();
-        if (eProd) throw eProd;
+        let produto;
+        if (itemAtual?.produto_id) {
+            // produto já existe (inclusive item AGREGADO do Estoque, que não nasceu aqui): atualiza só o que este formulário gerencia.
+            // Nada de upsert -- ele reescreveria unidade/grupo do produto com os valores padrão deste formulário.
+            const { data, error: eProd } = await sb.from('estoque_produtos')
+                .update({ nome, valor, estoque_inicial: estoqueInicial, almoxarifado_padrao_id: almoxarifadoId })
+                .eq('id', itemAtual.produto_id).eq('unidade_negocio_id', meuPerfil.unidadeId).select().single();
+            if (eProd) throw eProd;
+            produto = data;
+        } else {
+            const { data, error: eProd } = await sb.from('estoque_produtos').upsert(produtoPayload).select().single();
+            if (eProd) throw eProd;
+            produto = data;
+        }
 
         const catalogoPayload = {
             unidade_negocio_id: meuPerfil.unidadeId, produto_id: produto.id, tipo: tipoCatalogoAtual, nome,
@@ -1920,6 +2500,111 @@ document.getElementById('btnSalvarCatalogo').addEventListener('click', async () 
         statusEl.textContent = 'Erro ao salvar: ' + (e.message || e);
     } finally {
         btn.disabled = false; btn.textContent = 'Salvar';
+    }
+});
+
+// ---------------------------------------------------------------
+// AGREGAR ao catálogo um produto que JÁ EXISTE no Estoque (cadastrado direto lá, ou de outro almoxarifado). Só cria a linha do
+// catálogo apontando pro produto -- o produto/saldo/histórico seguem no Estoque (o caminho "Novo item" cria o produto junto).
+// ---------------------------------------------------------------
+let produtoAgregar = null;
+let resultadosAgregarCache = {};
+let timerBuscaAgregar = null;
+const campoBuscaAgregarEstoque = document.getElementById('campoBuscaAgregarEstoque');
+const resultadosAgregarEstoque = document.getElementById('resultadosAgregarEstoque');
+
+function escolherProdutoAgregar(prod) {
+    produtoAgregar = prod;
+    document.getElementById('agregarEstoqueSelecionadoTexto').textContent = prod ? `Selecionado: ${prod.nome} · saldo ${prod.estoque ?? 0}` : '';
+    document.getElementById('campoNomeAgregar').value = prod ? prod.nome : '';
+}
+function abrirModalAgregarEstoque() {
+    escolherProdutoAgregar(null);
+    campoBuscaAgregarEstoque.value = '';
+    resultadosAgregarEstoque.classList.remove('aberto');
+    document.getElementById('campoTipoAgregar').value = 'uniforme';
+    document.getElementById('blocoCamposEpiAgregar').classList.add('hidden');
+    ['campoTamanhoAgregar', 'campoVidaUtilAgregar', 'campoNumeroCaAgregar', 'campoValidadeCaAgregar'].forEach(id => { document.getElementById(id).value = ''; });
+    document.getElementById('statusAgregarEstoque').textContent = '';
+    document.getElementById('modal-agregar-estoque').classList.add('aberto');
+    campoBuscaAgregarEstoque.focus();
+}
+document.getElementById('btnAgregarItemEstoque').addEventListener('click', abrirModalAgregarEstoque);
+document.getElementById('btnCancelarAgregarEstoque').addEventListener('click', () => document.getElementById('modal-agregar-estoque').classList.remove('aberto'));
+document.getElementById('campoTipoAgregar').addEventListener('change', e => document.getElementById('blocoCamposEpiAgregar').classList.toggle('hidden', e.target.value !== 'epi'));
+
+async function buscarProdutosEstoqueParaAgregar(termo) {
+    const limpo = termo.replace(/[%_\\]/g, ' ').trim();
+    const { data, error } = await sb.from('estoque_produtos')
+        .select('id, nome, un, estoque, valor, almoxarifado_padrao_id')
+        .eq('unidade_negocio_id', meuPerfil.unidadeId).ilike('nome', '%' + limpo + '%').order('nome').limit(40);
+    if (error) throw error;
+    return data || [];
+}
+campoBuscaAgregarEstoque.addEventListener('input', () => {
+    clearTimeout(timerBuscaAgregar);
+    const termo = campoBuscaAgregarEstoque.value.trim();
+    if (termo.length < 2) { resultadosAgregarEstoque.classList.remove('aberto'); return; }
+    timerBuscaAgregar = setTimeout(async () => {
+        try {
+            const noCatalogo = new Set(catalogo.map(c => c.produto_id).filter(Boolean));
+            const achados = await buscarProdutosEstoqueParaAgregar(termo);
+            resultadosAgregarCache = {}; achados.forEach(a => { resultadosAgregarCache[a.id] = a; });
+            resultadosAgregarEstoque.innerHTML = achados.length
+                ? achados.map(a => {
+                    const jaTem = noCatalogo.has(a.id);
+                    const almox = almoxarifados.find(x => String(x.id) === String(a.almoxarifado_padrao_id));
+                    return `<div class="resultado-item" data-id="${a.id}" ${jaTem ? 'style="opacity:.5; cursor:not-allowed;" data-ja="1"' : ''}>${escapeHtml(a.nome)}<div class="sub">${almox ? escapeHtml(almox.nome) + ' · ' : ''}saldo: ${a.estoque ?? 0}${jaTem ? ' · já está no catálogo' : ''}</div></div>`;
+                }).join('')
+                : '<div class="resultado-item" style="cursor:default;">Nenhum produto do Estoque com esse nome.</div>';
+            resultadosAgregarEstoque.classList.add('aberto');
+        } catch (e) {
+            resultadosAgregarEstoque.innerHTML = `<div class="resultado-item" style="cursor:default; color:var(--danger);">Erro na busca: ${escapeHtml(e.message || String(e))}</div>`;
+            resultadosAgregarEstoque.classList.add('aberto');
+        }
+    }, 250);
+});
+resultadosAgregarEstoque.addEventListener('mousedown', (e) => {
+    const it = e.target.closest('.resultado-item[data-id]');
+    if (!it || it.dataset.ja) return;
+    e.preventDefault();
+    const prod = resultadosAgregarCache[it.dataset.id];
+    if (!prod) return;
+    escolherProdutoAgregar(prod);
+    campoBuscaAgregarEstoque.value = prod.nome;
+    resultadosAgregarEstoque.classList.remove('aberto');
+});
+campoBuscaAgregarEstoque.addEventListener('blur', () => setTimeout(() => resultadosAgregarEstoque.classList.remove('aberto'), 200));
+
+document.getElementById('btnConfirmarAgregarEstoque').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusAgregarEstoque');
+    statusEl.style.color = ''; statusEl.textContent = '';
+    if (!produtoAgregar) { statusEl.textContent = 'Escolha o produto do Estoque.'; return; }
+    if (catalogo.some(c => c.produto_id === produtoAgregar.id)) { statusEl.textContent = 'Esse produto já está no catálogo.'; return; }
+    const nome = document.getElementById('campoNomeAgregar').value.trim();
+    if (!nome) { statusEl.textContent = 'Informe o nome no catálogo.'; return; }
+    const tipo = document.getElementById('campoTipoAgregar').value;
+    const btn = document.getElementById('btnConfirmarAgregarEstoque');
+    btn.disabled = true; btn.textContent = 'Agregando...';
+    try {
+        const { error } = await sb.from('staff_uniformes_epi_catalogo').insert({
+            unidade_negocio_id: meuPerfil.unidadeId, produto_id: produtoAgregar.id, tipo, nome,
+            tamanho: document.getElementById('campoTamanhoAgregar').value.trim() || null,
+            numero_ca: tipo === 'epi' ? (document.getElementById('campoNumeroCaAgregar').value.trim() || null) : null,
+            validade_ca: tipo === 'epi' ? (document.getElementById('campoValidadeCaAgregar').value || null) : null,
+            vida_util_dias: Number(document.getElementById('campoVidaUtilAgregar').value) || null,
+            ativo: true
+        });
+        if (error) throw error;
+        await registrarSentinela('catalogo_uniforme_epi_agregado', `Produto do Estoque agregado ao catálogo: ${nome} (${tipo}), produto #${produtoAgregar.id}`);
+        document.getElementById('modal-agregar-estoque').classList.remove('aberto');
+        await carregarCatalogo();
+        renderizarCatalogoAdmin();
+    } catch (e) {
+        statusEl.style.color = 'var(--danger)';
+        statusEl.textContent = 'Não consegui agregar: ' + (e.message || e);
+    } finally {
+        btn.disabled = false; btn.textContent = 'Agregar ao catálogo';
     }
 });
 
@@ -2420,7 +3105,7 @@ async function gerarRelSetor() {
         }
         const mapaMov = new Map();
         (await Promise.all(consultas)).forEach(lista => lista.forEach(m => mapaMov.set(m.id, m)));
-        const movs = [...mapaMov.values()];
+        const movs = [...mapaMov.values()].filter(m => m.fornecedor_nome !== NOME_TRANSFERENCIA);   // transferência entre almoxarifados não é consumo
 
         // devoluções: peças já devolvidas de cada movimento de entrega
         const devolvidasPorMov = {};
@@ -2452,6 +3137,7 @@ async function gerarRelSetor() {
             const vu = Number(m.valor_unit) || 0;
             linhas.push({
                 setorChave,
+                subsetorChave: setorChave + '|' + (m.subsetor_id != null ? m.subsetor_id : 'sem'),
                 setorNome: m.setor_id != null ? (nomeSetor[m.setor_id] || '#' + m.setor_id) : 'Sem setor informado',
                 subsetor: m.subsetor_id != null ? (nomeSubsetor[m.subsetor_id] || '#' + m.subsetor_id) : '',
                 data: String(m.data || '').slice(0, 10),
@@ -2473,7 +3159,7 @@ async function gerarRelSetor() {
         grupos.forEach(g => { g.linhas.sort((a, b) => a.data.localeCompare(b.data) || a.item.localeCompare(b.item, 'pt-BR')); g.itensLista = [...g.itens.values()].sort((a, b) => b.total - a.total); });
 
         relSetorDados = {
-            de, ate, grupos,
+            de, ate, grupos, linhas,
             filtroSetorTxt: filtroSetor ? document.getElementById('relSetorSetor').selectedOptions[0].textContent : 'Todos os setores',
             filtroTipoTxt: document.getElementById('relSetorTipo').selectedOptions[0].textContent,
             qtd: grupos.reduce((a, g) => a + g.qtd, 0), total: grupos.reduce((a, g) => a + g.total, 0)
@@ -2497,6 +3183,7 @@ const ROTULO_TIPO_ITEM = { uniforme: 'Uniforme', epi: 'EPI', avulso: 'Avulso', o
 function renderizarRelSetor() {
     const wrap = document.getElementById('relSetorResultado');
     const d = relSetorDados;
+    if (d && d.grupos.length && document.getElementById('relSetorVisao').value !== 'lista') { renderizarCruzadoRelSetor(); return; }
     if (!d || !d.grupos.length) { wrap.innerHTML = '<div class="cartao"><div class="vazio">Nenhuma saída de uniforme/EPI nesse período e filtros.</div></div>'; return; }
     wrap.innerHTML = `
         <div class="cartao" style="display:flex; gap:24px; flex-wrap:wrap;">
@@ -2526,12 +3213,232 @@ function renderizarRelSetor() {
     `).join('');
 }
 
+// ---------------------------------------------------------------
+// VISÕES CRUZADAS (inspiradas na planilha "Consumo mensal de EPI - setorizado": uma aba por mês com Item × Setor e uma aba por
+// setor com Item × Mês). Tudo montado no navegador a partir das mesmas linhas do relatório (relSetorDados.linhas).
+//   Item × Setor -> use o período de 1 mês (= a aba do mês); Item × Mês -> escolha 1 setor no filtro (= a aba do setor);
+//   Setor × Mês  -> visão geral de todos os setores mês a mês. Valores em R$ ou em quantidade de peças.
+// ---------------------------------------------------------------
+const ABREV_MES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+function rotuloMesRel(ym) { return ABREV_MES[Number(ym.slice(5, 7)) - 1] + '/' + ym.slice(2, 4); }
+function mesesEntre(de, ate) {
+    const out = []; let y = Number(de.slice(0, 4)), m = Number(de.slice(5, 7));
+    const yf = Number(ate.slice(0, 4)), mf = Number(ate.slice(5, 7));
+    while (y < yf || (y === yf && m <= mf)) { out.push(y + '-' + String(m).padStart(2, '0')); m++; if (m > 12) { m = 1; y++; } }
+    return out;
+}
+const TITULO_VISAO = { item_setor: 'Item × Setor', item_subsetor: 'Item × Subsetor', item_mes: 'Item × Mês', setor_mes: 'Setor × Mês', subsetor_mes: 'Subsetor × Mês' };
+
+function montarMatrizRelSetor() {
+    const d = relSetorDados;
+    const visao = document.getElementById('relSetorVisao').value;
+    const metrica = document.getElementById('relSetorMetrica').value;
+    const mesesPeriodo = mesesEntre(d.de, d.ate);
+    // dimensões possíveis (linha ou coluna): cada uma devolve {chave, rotulo, ord}; "ord" ordena [grupo, texto, grupo2, texto2]
+    const DIM = {
+        item: l => ({ chave: l.itemChave, rotulo: l.item, ord: [0, l.item, 0, ''] }),
+        setor: l => ({ chave: l.setorChave, rotulo: l.setorNome, ord: [l.setorChave === 'sem' ? 1 : 0, l.setorNome, 0, ''] }),
+        // Subsetor sempre aparece com o setor na frente (o mesmo nome de subsetor pode existir em setores diferentes)
+        subsetor: l => ({
+            chave: l.subsetorChave,
+            rotulo: l.setorChave === 'sem' ? l.setorNome : l.setorNome + ' › ' + (l.subsetor || '(sem subsetor)'),
+            grupo: l.setorNome, semSetor: l.setorChave === 'sem', curto: l.setorChave === 'sem' ? '—' : (l.subsetor || '(sem subsetor)'),
+            ord: [l.setorChave === 'sem' ? 1 : 0, l.setorNome, l.subsetor ? 0 : 1, l.subsetor || '']
+        }),
+        mes: l => ({ chave: l.data.slice(0, 7) })
+    };
+    const [linhaDe, colunaDe] = {
+        item_setor: ['item', 'setor'], item_subsetor: ['item', 'subsetor'], item_mes: ['item', 'mes'],
+        setor_mes: ['setor', 'mes'], subsetor_mes: ['subsetor', 'mes']
+    }[visao];
+    const cmp = (a, b) => (a.ord[0] - b.ord[0]) || a.ord[1].localeCompare(b.ord[1], 'pt-BR') || (a.ord[2] - b.ord[2]) || a.ord[3].localeCompare(b.ord[3], 'pt-BR');
+
+    let colunas;
+    if (colunaDe === 'mes') colunas = mesesPeriodo.map(ym => ({ chave: ym, rotulo: rotuloMesRel(ym) }));
+    else {
+        const mapa = new Map();
+        d.linhas.forEach(l => { const c = DIM[colunaDe](l); if (!mapa.has(c.chave)) mapa.set(c.chave, c); });
+        colunas = [...mapa.values()].sort(cmp);
+    }
+    const linhasMap = new Map();
+    d.linhas.forEach(l => {
+        const dl = DIM[linhaDe](l);
+        if (!linhasMap.has(dl.chave)) linhasMap.set(dl.chave, { ...dl, celulas: {}, total: { v: 0, q: 0 } });
+        const r = linhasMap.get(dl.chave); const c = DIM[colunaDe](l).chave;
+        const cel = r.celulas[c] || (r.celulas[c] = { v: 0, q: 0 });
+        cel.v += l.total; cel.q += l.qtd; r.total.v += l.total; r.total.q += l.qtd;
+    });
+    const linhas = [...linhasMap.values()].sort(cmp);
+    const totaisCol = {}; const totalGeral = { v: 0, q: 0 };
+    linhas.forEach(r => {
+        Object.entries(r.celulas).forEach(([c, cel]) => { const t = totaisCol[c] || (totaisCol[c] = { v: 0, q: 0 }); t.v += cel.v; t.q += cel.q; });
+        totalGeral.v += r.total.v; totalGeral.q += r.total.q;
+    });
+    const fmtV = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtQ = q => q.toLocaleString('pt-BR');
+    return {
+        visao, metrica, colunas, linhas, totaisCol, totalGeral,
+        // quando a dimensão é Subsetor, o SETOR vira cabeçalho de grupo (colspan nas colunas / linha própria nas linhas)
+        grupoCol: colunaDe === 'subsetor', grupoLin: linhaDe === 'subsetor',
+        rotuloPrimeira: linhaDe === 'item' ? 'EPI / Item' : linhaDe === 'setor' ? 'Setor' : 'Setor › Subsetor',
+        descMetrica: metrica === 'qtd' ? 'quantidade de peças' : metrica === 'valor' ? 'valores em R$' : 'valores em R$ e (quantidade de peças)',
+        titulo: 'Consumo de uniformes/EPI — ' + TITULO_VISAO[visao] + ' (' + (metrica === 'qtd' ? 'quantidade de peças' : metrica === 'valor' ? 'R$' : 'R$ e quantidade') + ')',
+        // número usado pra sombrear a célula; célula = { v: valor em R$, q: quantidade de peças }
+        prim: cel => !cel ? 0 : (metrica === 'qtd' ? cel.q : cel.v),
+        fmt: cel => {
+            if (!cel || (!cel.v && !cel.q)) return '';
+            if (metrica === 'qtd') return fmtQ(cel.q);
+            if (metrica === 'valor') return fmtV(cel.v);
+            return fmtV(cel.v) + ' (' + fmtQ(cel.q) + ')';
+        }
+    };
+}
+
+// agrupa itens CONSECUTIVOS pelo campo "grupo" (já vêm ordenados por setor): [{grupo, itens:[...]}]
+function agruparConsecutivos(lista) {
+    const out = [];
+    lista.forEach(x => {
+        const g = out[out.length - 1];
+        if (g && g.grupo === x.grupo) g.itens.push(x); else out.push({ grupo: x.grupo, itens: [x] });
+    });
+    return out;
+}
+// subtotal por coluna de um conjunto de linhas (usado na linha-cabeçalho do setor)
+function somarLinhasRel(linhas) {
+    const celulas = {}; const total = { v: 0, q: 0 };
+    linhas.forEach(r => {
+        Object.entries(r.celulas).forEach(([c, cel]) => { const t = celulas[c] || (celulas[c] = { v: 0, q: 0 }); t.v += cel.v; t.q += cel.q; });
+        total.v += r.total.v; total.q += r.total.q;
+    });
+    return { celulas, total };
+}
+
+function renderizarCruzadoRelSetor() {
+    const d = relSetorDados;
+    const m = montarMatrizRelSetor();
+    const maxCel = Math.max(0, ...m.linhas.flatMap(r => Object.values(r.celulas).map(m.prim)));
+    const th = 'padding:6px 8px; text-align:right; white-space:nowrap; background:var(--brand); color:#fff; position:sticky; top:0;';
+    const th2 = th.replace('top:0', 'top:31px');
+    const celula = cel => m.fmt(cel) ? `<td style="padding:5px 8px; text-align:right; white-space:nowrap; background:rgba(27,67,50,${(0.06 + 0.3 * (maxCel ? m.prim(cel) / maxCel : 0)).toFixed(2)});">${m.fmt(cel)}</td>` : '<td style="padding:5px 8px;"></td>';
+    const nCols = m.colunas.length;
+
+    // cabeçalho: com colunas por subsetor, o setor fica numa linha única acima (colspan) e o subsetor embaixo
+    let thead;
+    if (m.grupoCol) {
+        thead = `<tr><th rowspan="2" style="${th} text-align:left; left:0; z-index:2;">${m.rotuloPrimeira}</th>`
+            + agruparConsecutivos(m.colunas).map(g => `<th colspan="${g.itens.length}" style="${th} text-align:center; border-left:1px solid rgba(255,255,255,.35);">${escapeHtml(g.grupo)}</th>`).join('')
+            + `<th rowspan="2" style="${th}">TOTAL</th></tr>`
+            + `<tr>${m.colunas.map(c => `<th style="${th2} font-weight:500;">${escapeHtml(c.curto)}</th>`).join('')}</tr>`;
+    } else {
+        thead = `<tr><th style="${th} text-align:left; left:0; z-index:2;">${m.rotuloPrimeira}</th>${m.colunas.map(c => `<th style="${th}">${escapeHtml(c.rotulo)}</th>`).join('')}<th style="${th}">TOTAL</th></tr>`;
+    }
+
+    // linhas: com linhas por subsetor, o setor vira uma linha-cabeçalho (com subtotal) acima dos seus subsetores
+    const linhaNormal = (r, rotulo, recuo) => `<tr style="border-top:1px solid var(--border);"><td style="padding:5px 8px; ${recuo ? 'padding-left:24px;' : ''} position:sticky; left:0; background:var(--surface); white-space:nowrap; font-weight:${recuo ? 400 : 600};">${escapeHtml(rotulo)}</td>${m.colunas.map(c => celula(r.celulas[c.chave])).join('')}<td style="padding:5px 8px; text-align:right; font-weight:700;">${m.fmt(r.total)}</td></tr>`;
+    let tbody;
+    if (m.grupoLin) {
+        tbody = agruparConsecutivos(m.linhas).map(g => {
+            if (g.itens[0].semSetor) return linhaNormal(g.itens[0], g.grupo, false); // sem setor não tem subsetor: uma linha só
+            const sub = somarLinhasRel(g.itens);
+            return `<tr style="border-top:2px solid var(--border); background:var(--brand-soft); font-weight:700;"><td style="padding:6px 8px; position:sticky; left:0; background:var(--brand-soft); white-space:nowrap;">${escapeHtml(g.grupo)}</td>${m.colunas.map(c => `<td style="padding:6px 8px; text-align:right; white-space:nowrap;">${m.fmt(sub.celulas[c.chave])}</td>`).join('')}<td style="padding:6px 8px; text-align:right;">${m.fmt(sub.total)}</td></tr>`
+                + g.itens.map(r => linhaNormal(r, r.curto, true)).join('');
+        }).join('');
+    } else {
+        tbody = m.linhas.map(r => linhaNormal(r, r.rotulo, false)).join('');
+    }
+
+    document.getElementById('relSetorResultado').innerHTML = `
+        <div class="cartao">
+            <h2 style="margin:0 0 4px 0;">${TITULO_VISAO[m.visao]}</h2>
+            <p class="subtitulo" style="margin:0 0 10px 0;">${formatarDataSemFuso(d.de)} a ${formatarDataSemFuso(d.ate)} · ${escapeHtml(d.filtroSetorTxt)} · ${escapeHtml(d.filtroTipoTxt)} · ${m.descMetrica}${m.visao === 'item_setor' ? ' — dica: use o período de 1 mês pra ter a "aba do mês"' : ''}${m.visao === 'item_mes' && !document.getElementById('relSetorSetor').value ? ' — dica: escolha um setor no filtro pra ter a "aba do setor"' : ''}${m.grupoLin ? ' — a linha em destaque de cada setor é o subtotal dele' : ''}</p>
+            <div style="overflow:auto; max-height:70vh;">
+                <table style="border-collapse:collapse; font-size:.85rem; min-width:100%;">
+                    <thead>${thead}</thead>
+                    <tbody>${tbody}</tbody>
+                    <tfoot><tr style="border-top:2px solid var(--ink); font-weight:700;"><td style="padding:6px 8px; position:sticky; left:0; background:var(--surface);">TOTAL</td>${m.colunas.map(c => `<td style="padding:6px 8px; text-align:right;">${m.fmt(m.totaisCol[c.chave])}</td>`).join('')}<td style="padding:6px 8px; text-align:right;">${m.fmt(m.totalGeral)}</td></tr></tfoot>
+                </table>
+            </div>
+        </div>`;
+}
+
+document.getElementById('relSetorVisao').addEventListener('change', () => { if (relSetorDados) renderizarRelSetor(); });
+document.getElementById('relSetorMetrica').addEventListener('change', () => { if (relSetorDados) renderizarRelSetor(); });
+document.getElementById('btnAnoRelSetor').addEventListener('click', () => {
+    document.getElementById('relSetorDe').value = new Date().getFullYear() + '-01-01';
+    document.getElementById('relSetorAte').value = hojeLocalISO();
+});
+
+async function gerarPdfCruzadoRelSetor() {
+    const d = relSetorDados; const m = montarMatrizRelSetor();
+    const statusEl = document.getElementById('statusRelSetor');
+    try {
+        statusEl.style.color = ''; statusEl.textContent = 'Montando o PDF...';
+        await carregarJsPdf();
+        if (!autoTablePdfCarregado) { await carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js'); autoTablePdfCarregado = true; }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape' });
+        const margem = 10;
+        doc.setFontSize(13); doc.setFont(undefined, 'bold');
+        doc.text(m.titulo, margem, 13);
+        doc.setFontSize(9); doc.setFont(undefined, 'normal'); doc.setTextColor(90);
+        doc.text(`${meuPerfil.unidadeNome} · Período: ${formatarDataSemFuso(d.de)} a ${formatarDataSemFuso(d.ate)} · ${d.filtroSetorTxt} · ${d.filtroTipoTxt} · Gerado em ${new Date().toLocaleString('pt-BR')}`, margem, 18);
+        doc.setTextColor(0);
+        const muitas = m.colunas.length > 11;
+        const direita = {}; for (let i = 1; i <= m.colunas.length + 1; i++) direita[i] = { halign: 'right' };
+        doc.autoTable({
+            startY: 22, margin: { left: margem, right: margem },
+            head: m.grupoCol
+                ? [[{ content: m.rotuloPrimeira, rowSpan: 2 }, ...agruparConsecutivos(m.colunas).map(g => ({ content: g.grupo, colSpan: g.itens.length, styles: { halign: 'center' } })), { content: 'TOTAL', rowSpan: 2 }],
+                   m.colunas.map(c => c.curto)]
+                : [[m.rotuloPrimeira, ...m.colunas.map(c => c.rotulo), 'TOTAL']],
+            body: m.grupoLin
+                ? agruparConsecutivos(m.linhas).flatMap(g => {
+                    if (g.itens[0].semSetor) return [[g.grupo, ...m.colunas.map(c => m.fmt(g.itens[0].celulas[c.chave])), m.fmt(g.itens[0].total)]];
+                    const sub = somarLinhasRel(g.itens);
+                    const negrito = { fontStyle: 'bold', fillColor: [225, 236, 229] };
+                    return [
+                        [{ content: g.grupo, styles: negrito }, ...m.colunas.map(c => ({ content: m.fmt(sub.celulas[c.chave]), styles: negrito })), { content: m.fmt(sub.total), styles: negrito }],
+                        ...g.itens.map(r => [{ content: r.curto, styles: { cellPadding: { top: 1.4, bottom: 1.4, left: 6, right: 1.4 } } }, ...m.colunas.map(c => m.fmt(r.celulas[c.chave])), m.fmt(r.total)])
+                    ];
+                })
+                : m.linhas.map(r => [r.rotulo, ...m.colunas.map(c => m.fmt(r.celulas[c.chave])), m.fmt(r.total)]),
+            foot: [['TOTAL', ...m.colunas.map(c => m.fmt(m.totaisCol[c.chave])), m.fmt(m.totalGeral)]],
+            styles: { fontSize: muitas ? 6.5 : 8, cellPadding: 1.4 }, headStyles: { fillColor: [27, 67, 50], halign: 'right' },
+            footStyles: { fillColor: [235, 235, 235], textColor: 0, fontStyle: 'bold' }, columnStyles: direita,
+            didParseCell: h => { if (h.section === 'head' && h.column.index === 0 && h.row.index === 0) h.cell.styles.halign = 'left'; }
+        });
+        const total = doc.getNumberOfPages();
+        for (let i = 1; i <= total; i++) { doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text(`Página ${i} de ${total}`, 297 - margem, 205, { align: 'right' }); }
+        statusEl.textContent = '';
+        mostrarPopupAcoesPdf('Relatório gerado', doc.output('blob'), `consumo-uniformes-epi-${m.visao.replace('_', '-x-')}-${d.de}-a-${d.ate}.pdf`);
+    } catch (e) {
+        statusEl.style.color = 'var(--danger)';
+        statusEl.textContent = 'Não consegui gerar o PDF: ' + (e.message || e);
+    }
+}
+
+function baixarCsvCruzadoRelSetor() {
+    const d = relSetorDados; const m = montarMatrizRelSetor();
+    const cel = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    // "R$ (qtd)" sai como texto igual à tela; só reais / só quantidade saem como número (somável no Excel)
+    const num = cel => !cel || (!cel.v && !cel.q) ? '' : m.metrica === 'ambos' ? m.fmt(cel) : m.metrica === 'qtd' ? String(cel.q) : Number(cel.v).toFixed(2).replace('.', ',');
+    const linhas = [[m.rotuloPrimeira, ...m.colunas.map(c => c.rotulo), 'TOTAL']];
+    m.linhas.forEach(r => linhas.push([r.rotulo, ...m.colunas.map(c => num(r.celulas[c.chave])), num(r.total)]));
+    linhas.push(['TOTAL', ...m.colunas.map(c => num(m.totaisCol[c.chave])), num(m.totalGeral)]);
+    const csv = '\ufeff' + linhas.map(r => r.map(cel).join(';')).join('\r\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    a.download = `consumo-uniformes-epi-${m.visao.replace('_', '-x-')}-${d.de}-a-${d.ate}.csv`;
+    a.click();
+}
+
 document.getElementById('btnGerarRelSetor').addEventListener('click', gerarRelSetor);
 
 let autoTablePdfCarregado = false;
 document.getElementById('btnPdfRelSetor').addEventListener('click', async () => {
     const d = relSetorDados;
     if (!d || !d.grupos.length) return;
+    if (document.getElementById('relSetorVisao').value !== 'lista') { await gerarPdfCruzadoRelSetor(); return; }
     const statusEl = document.getElementById('statusRelSetor');
     try {
         statusEl.style.color = ''; statusEl.textContent = 'Montando o PDF...';
@@ -2578,6 +3485,7 @@ document.getElementById('btnPdfRelSetor').addEventListener('click', async () => 
 document.getElementById('btnCsvRelSetor').addEventListener('click', () => {
     const d = relSetorDados;
     if (!d || !d.grupos.length) return;
+    if (document.getElementById('relSetorVisao').value !== 'lista') { baixarCsvCruzadoRelSetor(); return; }
     const cel = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
     const num = v => String(Number(v || 0).toFixed(2)).replace('.', ',');
     const linhas = [['Setor', 'Subsetor', 'Data', 'Item', 'Tipo', 'Profissional / destino', 'Qtd', 'Valor unitário', 'Total']];
