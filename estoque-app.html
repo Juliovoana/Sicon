@@ -803,6 +803,7 @@
                 <button class="btn btn-verde" id="btnNovaNotaEntrada">+ Nova entrada direta</button>
                 <button class="btn btn-cinza" id="btnImportarNFeNotas" type="button">📄 Importar NF-e (XML)</button>
                 <button class="btn btn-azul" id="btnAbrirProtocolo" type="button" title="Agrupar notas já lançadas num número de protocolo (Financeiro)">📮 Protocolo</button>
+                <button class="btn btn-cinza" id="btnClassificarNotas" type="button" title="Notas cujo rateio está sem Setor, Plano de contas ou Evento">🧭 Classificar notas</button>
                 <button class="btn btn-verde" id="btnNovaRequisicaoCompleta">+ Nova requisição</button>
             </div>
         </div>
@@ -1784,6 +1785,15 @@
                 <div id="listaPedidosAgregados" style="margin-top:10px;"></div>
             </div>
 
+            <!-- rateio gerado pela nota: compra (100% da entrada) e, se houver, baixa direta (só aparece se existir) -->
+            <div id="blocoRateioNota" style="display:none; background:#F0F8F0; border:1px solid #BFE0BF; border-radius:8px; padding:12px 14px; margin-bottom:16px;">
+                <h4 style="margin:0;" id="tituloRateioNota">📊 Rateio da nota</h4>
+                <p class="subtitulo" style="margin:6px 0 8px 0;">Gerado automaticamente (percentual pelo valor; empresa = padrão do Financeiro). A <strong>compra</strong> rateia 100% do que foi lançado na entrada;
+                    a <strong>baixa direta</strong> mostra para onde o material foi destinado (transferência, não é nova despesa). Se houver baixa, a nota fica <strong>bloqueada</strong>
+                    para exclusão e para mudar quantidade/valor dos itens — desfaça as baixas para liberar.</p>
+                <div id="listaRateioNota"></div>
+            </div>
+
             <h4 style="margin-bottom:8px;">Itens</h4>
             <div id="blocoAdicionarItemNota">
                 <div class="grade col4" style="align-items:flex-end;">
@@ -2000,6 +2010,63 @@
             <button class="btn btn-verde" id="btnSalvarEditarTitulo">Salvar</button>
         </div>
         <span class="status-msg" id="statusEditarTitulo"></span>
+    </div>
+</div>
+
+<!-- ===================== MODAL / POPUP: Classificar notas (Setor / Plano / Evento em branco no rateio) ===================== -->
+<div class="modal-overlay" id="modalClassificarNotas" style="z-index:1100;">
+    <div class="modal-caixa larga" style="max-width:1200px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <h4 style="margin:0;">🧭 Classificar notas — Setor, Plano de contas e Evento</h4>
+            <button class="btn btn-cinza btn-pequeno" id="btnFecharClassificarNotas">✕ Fechar</button>
+        </div>
+        <p class="subtitulo" style="margin-bottom:10px;">Lista os rateios das notas (compra e baixa direta) que estão <strong>sem Setor, Plano de contas ou Evento</strong> — o Financeiro e a DRE precisam dos três.
+            Marque as notas, escolha o que falta e clique em <strong>Aplicar aos marcados</strong>: só os campos <strong>em branco</strong> são preenchidos (o que já está preenchido não muda) e o rateio é refeito sozinho.
+            Em notas de compra que já tiveram baixa direta, a coluna <em>Sugestão</em> traz a classificação da baixa.</p>
+
+        <div class="grade col4">
+            <div class="campo"><label>Mostrar</label>
+                <select id="classifFiltroTipo"><option value="">Compra e baixa direta</option><option value="compra">Só compra</option><option value="baixa">Só baixa direta</option></select></div>
+            <div class="campo"><label>Que estão sem</label>
+                <select id="classifFiltroFalta"><option value="">Qualquer campo</option><option value="setor">Setor</option><option value="plano">Plano de contas</option><option value="evento">Evento</option></select></div>
+            <div class="campo"><label>Buscar nota</label><input type="text" id="classifFiltroBusca" placeholder="NF, fornecedor ou nº da nota..." autocomplete="off"></div>
+            <div class="campo" style="align-self:flex-end;"><span class="subtitulo" id="classifContagem"></span></div>
+        </div>
+        <div class="grade col3" style="margin-top:10px;">
+            <div class="campo" style="position:relative;">
+                <label>Setor a aplicar</label>
+                <input type="text" id="classifSetorBusca" placeholder="Buscar setor..." autocomplete="off">
+                <div id="classifSetorResultados" class="dropdown-busca-evento"></div>
+                <p class="subtitulo" id="classifSetorSelecionado" style="margin-top:4px;"></p>
+            </div>
+            <div class="campo" style="position:relative;">
+                <label>Plano de contas a aplicar</label>
+                <input type="text" id="classifPlanoBusca" placeholder="Buscar código ou descrição..." autocomplete="off">
+                <div id="classifPlanoResultados" class="dropdown-busca-evento"></div>
+                <p class="subtitulo" id="classifPlanoSelecionado" style="margin-top:4px;"></p>
+            </div>
+            <div class="campo" style="position:relative;">
+                <label>Evento a aplicar</label>
+                <input type="text" id="classifEventoBusca" placeholder="Buscar evento..." autocomplete="off">
+                <div id="classifEventoResultados" class="dropdown-busca-evento"></div>
+                <p class="subtitulo" id="classifEventoSelecionado" style="margin-top:4px;"></p>
+            </div>
+        </div>
+        <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <button class="btn btn-verde" id="btnAplicarClassif">✔ Aplicar aos marcados</button>
+            <button class="btn btn-cinza btn-pequeno" id="btnMarcarTodosClassif">☑ Marcar todos da lista</button>
+            <button class="btn btn-cinza btn-pequeno" id="btnLimparMarcasClassif">Limpar marcação</button>
+            <button class="btn btn-azul btn-pequeno" id="btnUsarSugestoesClassif" title="Aplica a sugestão de cada linha marcada que tenha sugestão">💡 Usar sugestões nos marcados</button>
+            <span class="status-msg" id="statusClassifNotas"></span>
+        </div>
+
+        <div style="max-height:50vh; overflow:auto; margin-top:12px;">
+            <table class="tabela" style="font-size:0.85em;">
+                <thead><tr><th></th><th>Nota</th><th>Rateio</th><th>Setor</th><th>Plano de contas</th><th>Evento</th><th>Sugestão</th><th>Ações</th></tr></thead>
+                <tbody id="corpoClassifNotas"></tbody>
+            </table>
+            <div class="vazio" id="vazioClassifNotas" style="display:none;">Nenhuma pendência de classificação. 🎉</div>
+        </div>
     </div>
 </div>
 
@@ -2834,6 +2901,8 @@ async function chamarPost(acao, d) {
                 if (e2) throw e2;
             }
         }
+        // entrada de nota (rateio da compra) ou saída ligada a uma nota de entrada (baixa direta): gera/atualiza o rateio da nota
+        if (m.estoqueNotaId || (m.tipo === 'saida' && m.movimentacaoOrigemId)) await sincronizarRateioPorMovimento(movInserida);
         return movInserida;
     }
     if (acao === 'registrarMovimentacaoBaixaNota') {
@@ -2862,6 +2931,7 @@ async function chamarPost(acao, d) {
             });
             if (e2) throw e2;
         }
+        await sincronizarRateioPorMovimento({ movimentacao_origem_id: m.movimentacaoOrigemId || null });
         return;
     }
     if (acao === 'salvarTipoProjeto') {
@@ -3187,6 +3257,7 @@ async function chamarPost(acao, d) {
             : sb.from('estoque_notas').insert(registro);
         const { data: notaCriada, error } = await query.select().single();
         if (error) throw error;
+        if (n.id && registro.tipo !== 'saida') await sincronizarRateioNota(n.id);   // setor/evento/plano da nota são o padrão do rateio da compra
         return notaCriada;
     }
     if (acao === 'salvarTitulosNota') {
@@ -3221,6 +3292,7 @@ async function chamarPost(acao, d) {
         return;
     }
     if (acao === 'removerNota') {
+        await bloquearSeNotaComRateio(d.estoqueNotaId, 'exclusão');
         // notas agregadas a esta (nota_definitiva_id) deixam de estar agregadas -- continuam existindo
         const { error: e0 } = await sb.from('estoque_notas').update({ nota_definitiva_id: null }).eq('nota_definitiva_id', d.estoqueNotaId);
         if (e0) throw e0;
@@ -3232,6 +3304,7 @@ async function chamarPost(acao, d) {
         const { error: e3 } = await sb.from('estoque_notas').delete().eq('id', d.estoqueNotaId);
         if (e3) throw e3;
         // recalcula estoque, preço médio e última compra a partir do histórico já sem essa nota
+        await sincronizarRateioNota(d.estoqueNotaId);   // nota excluída: remove o rateio da compra
         const { data: reprocessados, error: e4 } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId });
         if (e4) throw e4;
         const pulados = (reprocessados || []).filter(r => r.pulado_motivo);
@@ -3287,16 +3360,23 @@ async function chamarPost(acao, d) {
         return;
     }
     if (acao === 'excluirMovimentacaoIndividual') {
+        const { data: alvo } = await sb.from('estoque_movimentacoes').select('tipo,estoque_nota_id,movimentacao_origem_id').eq('id', d.movId).maybeSingle();
+        if (alvo && alvo.tipo === 'entrada') await bloquearSeNotaComRateio(alvo.estoque_nota_id, 'exclusão de itens');
         const { error: e1 } = await sb.from('estoque_movimentacoes').delete().eq('id', d.movId);
         if (e1) throw e1;
+        if (alvo && (alvo.tipo === 'saida' || alvo.estoque_nota_id)) await sincronizarRateioPorMovimento(alvo);
         const { data: reprocessados, error: e2 } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId });
         if (e2) throw e2;
         const pulados = (reprocessados || []).filter(r => r.pulado_motivo);
         return { pulados: pulados.map(p => p.nome) };
     }
     if (acao === 'editarMovimentacao') {
-        const { data: antiga, error: eSel } = await sb.from('estoque_movimentacoes').select('produto_id,tipo,qtd,almoxarifado_id').eq('id', d.movId).single();
+        const { data: antiga, error: eSel } = await sb.from('estoque_movimentacoes').select('produto_id,tipo,qtd,valor_unit,almoxarifado_id,estoque_nota_id,movimentacao_origem_id').eq('id', d.movId).single();
         if (eSel) throw eSel;
+        // item de ENTRADA de nota com rateio: quantidade e valor ficam travados (o rateio já foi calculado em cima deles)
+        if (antiga.tipo === 'entrada' && antiga.estoque_nota_id && (Number(d.novaQtd) !== Number(antiga.qtd) || (d.novoValorUnit != null && Number(d.novoValorUnit) !== Number(antiga.valor_unit)))) {
+            await bloquearSeNotaComRateio(antiga.estoque_nota_id, 'alterar quantidade ou valor dos itens');
+        }
         const sinal = antiga.tipo === 'entrada' ? 1 : -1;
         // reverte o efeito antigo NO ALMOXARIFADO ONDE ELE REALMENTE
         // ESTAVA (nunca deixa cair no gatilho de auto-criação por
@@ -3326,15 +3406,19 @@ async function chamarPost(acao, d) {
         if (d.planoContasId !== undefined) upd.plano_contas_id = d.planoContasId;
         const { error } = await sb.from('estoque_movimentacoes').update(upd).eq('id', d.movId);
         if (error) throw error;
+        // mudou setor/evento/plano/veículo/qtd/valor: refaz o rateio da nota (compra, se for item de entrada; baixa, se for saída)
+        if (antiga.tipo === 'saida' || antiga.estoque_nota_id) await sincronizarRateioPorMovimento(antiga);
         return;
     }
     if (acao === 'removerMovimentacao') {
-        const { data: antiga, error: eSel } = await sb.from('estoque_movimentacoes').select('produto_id,tipo,qtd,almoxarifado_id').eq('id', d.movId).single();
+        const { data: antiga, error: eSel } = await sb.from('estoque_movimentacoes').select('produto_id,tipo,qtd,almoxarifado_id,estoque_nota_id,movimentacao_origem_id').eq('id', d.movId).single();
         if (eSel) throw eSel;
+        if (antiga.tipo === 'entrada') await bloquearSeNotaComRateio(antiga.estoque_nota_id, 'exclusão de itens');
         const sinal = antiga.tipo === 'entrada' ? 1 : -1;
         await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: -sinal * Number(antiga.qtd), p_almoxarifado_id: antiga.almoxarifado_id });
         const { error } = await sb.from('estoque_movimentacoes').delete().eq('id', d.movId);
         if (error) throw error;
+        if (antiga.tipo === 'saida' || antiga.estoque_nota_id) await sincronizarRateioPorMovimento(antiga);
         return;
     }
     if (acao === 'salvarEvento') {
@@ -3528,7 +3612,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
    ============================================================ */
 const AJUDA_ESTOQUE = {
     titulo: 'Estoque — Controle de Estoque & Projetos',
-    ultimaRevisao: '16/10/2026',
+    ultimaRevisao: '19/10/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>O Estoque controla o material físico da unidade (contêiner/esquadria): o que entra
@@ -3696,6 +3780,24 @@ const AJUDA_ESTOQUE = {
                 nas notinhas → entram 20). O botão não aparece em item marcado <strong>Avulso</strong>
                 ou ainda não vinculado a um produto, e só considera notinhas <strong>manuais</strong> (sem XML)
                 que ainda não foram ligadas a outra nota.</li>
+                <li><strong>📊 Rateio automático da nota (compra e baixa direta)</strong>: toda nota de <strong>entrada</strong> gera sozinha o
+                <strong>rateio</strong> (mesma tabela de rateio do Financeiro) em até duas operações. <strong>Compra</strong>: 100% do que foi lançado
+                na entrada, uma linha para cada <strong>Setor + Evento + Plano de contas</strong> (o que faltar no item vem da classificação da nota) —
+                é a que vale para o Financeiro/DRE. <strong>Baixa direta</strong>: toda saída ligada à nota (XML "Registrar como Baixa Direta",
+                baixa direta da nota manual, "Baixar itens dessa nota" e "Dar destinação" a item avulso) gera uma segunda operação, uma linha para cada
+                <strong>Setor + Evento + Plano + Veículo</strong> — é a <em>destinação</em> do material que ficou no estoque (transferência do setor que comprou
+                para o setor requisitante, base do encontro de contas almoxarifado x setores; <strong>não é uma nova despesa</strong>). O percentual é pelo
+                <strong>valor</strong> (soma 100%) e cada linha guarda a <strong>referência da NF de entrada</strong> (número, fornecedor e id da nota) e, quando
+                há veículo, nome/placa e KM. A <strong>Empresa</strong> é a empresa padrão de Financeiro → Parâmetros (sem ela o rateio não é gerado e a tela
+                avisa; o lançamento continua). O rateio aparece no topo da nota e se atualiza sozinho ao incluir, editar ou excluir itens/baixas; excluir a nota
+                apaga o rateio da compra. <strong>A nota de entrada só fica bloqueada</strong> (excluir e mudar quantidade/valor dos itens) <strong>quando existe baixa
+                ligada a ela</strong>; para liberar, desfaça as baixas (o rateio da baixa some junto).</li>
+                <li><strong>🧭 Classificar notas</strong> (botão na guia Notas): lista os rateios de nota — compra e baixa direta — que estão <strong>sem Setor,
+                Plano de contas ou Evento</strong> (comum em notas lançadas antes de esses campos serem obrigatórios). Marque as notas, escolha o que falta e clique
+                em <strong>Aplicar aos marcados</strong>: só os campos <strong>em branco</strong> dos itens da nota são preenchidos (o que já está preenchido não muda)
+                e o rateio é refeito sozinho. Nas notas de compra que já tiveram baixa direta, a coluna <em>Sugestão</em> traz a classificação da baixa
+                (botão <em>Usar</em>, ou <em>Usar sugestões nos marcados</em>). Pode filtrar por tipo, por campo que falta e buscar por NF/fornecedor; "Abrir nota"
+                leva à nota para ajustar item a item.</li>
                 <li><strong>📦 Agregar nota(s) de pedido inteira(s)</strong>: quando a nota definitiva só
                 consolida notas de pedido já lançadas e você <strong>não quer ir item a item</strong>. Fica na
                 importação de XML (acima da tabela de itens) e, na entrada manual, no bloco
@@ -5582,6 +5684,7 @@ async function processarImportacaoNFe(tipo) {
             estoqueNotaId = notaCriada.id;
         }
 
+        iniciarLoteRateio();   // as saídas da baixa direta geram o rateio uma vez só, no fim
         // 2) itens: cria produto se precisar, e a movimentação já ligada à nota
         //    (com nota(s) de pedido agregada(s) inteira(s), os itens da NF-e são IGNORADOS: o estoque já entrou pelas notas de pedido)
         const totalItensAProcessar = agregarInteiras ? 0 : nfeItensParseados.length;
@@ -5755,6 +5858,7 @@ async function processarImportacaoNFe(tipo) {
             });
         }
 
+        await encerrarLoteRateio();
         salvarUltimaClassificacaoEntrada(setorId, evento, planoContasId);
         await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
         atualizarTagContagem();
@@ -5785,6 +5889,7 @@ async function processarImportacaoNFe(tipo) {
         statusEl.textContent = '⚠️ ' + err.message;
     } finally {
         importacaoNFeEmAndamento = false;
+        try { await encerrarLoteRateio(); } catch (_) { /* já avisado */ }
         document.getElementById('btnNfeEntrada').disabled = false;
         document.getElementById('btnNfeBaixa').disabled = false;
         document.getElementById('btnCancelarImportarNFe').disabled = false;
@@ -6170,6 +6275,486 @@ function temPermissaoEstoque(permissao) {
 // grava um registro na sentinela (auditoria global, compartilhada
 // entre módulos) -- não bloqueia a ação principal se falhar, só avisa
 // no console, pra nunca travar o operador por causa de um log
+/* =========================================================================
+   RATEIO DA NOTA DE ENTRADA (unidade_operacao + unidade_rateios, as mesmas tabelas do Financeiro)
+   Cada nota de ENTRADA gera até DUAS operações, sempre refeitas "do zero" a partir dos movimentos:
+   1) COMPRA (origem 'estoque', id_registro_na_origem = id da nota): 100% do que foi lançado na ENTRADA, uma linha por
+      Setor + Evento + Plano de contas (do movimento; se faltar, o da nota). É o que vale para o Financeiro/DRE.
+   2) DESTINAÇÃO / BAIXA DIRETA (origem 'estoque', id_registro_na_origem = 'baixa:<id da nota>'): as SAÍDAS ligadas à nota
+      (XML "Registrar como Baixa Direta", baixa direta da nota manual, "Baixar itens dessa nota", "Dar destinação" a item avulso),
+      uma linha por Setor + Evento + Plano + Veículo. É TRANSFERÊNCIA do setor da compra para o setor requisitante (encontro de
+      contas almoxarifado x setores) — NÃO é uma nova despesa: relatórios/DRE devem tratar id_registro_na_origem 'baixa:...' como transferência.
+   Percentual pelo VALOR (qtd x valor unitário), soma 100%. A referência da NF de entrada (número, fornecedor, id) vai na
+   observação de cada linha. A Empresa vem do Financeiro -> Parâmetros (empresa padrão).
+   Trava: a nota de entrada só fica BLOQUEADA (excluir / mudar quantidade ou valor dos itens) quando existe BAIXA ligada a ela.
+   ========================================================================= */
+// 'origem' de unidade_operacao tem FK para servir_modulos_disponiveis -> as duas operações usam origem 'estoque';
+// o tipo vai no id_registro_na_origem: compra = id da nota; baixa direta = 'baixa:<id da nota>'
+const ORIGEM_RATEIO_ESTOQUE = 'estoque';
+const TIPO_RATEIO_COMPRA = 'compra', TIPO_RATEIO_BAIXA = 'baixa';
+const chaveRateioNota = (notaId, tipo) => (tipo === TIPO_RATEIO_BAIXA ? 'baixa:' : '') + String(notaId);
+let rateioAdiado = null, rateioAdiadoDesde = 0;     // lote: vários movimentos seguidos -> sincroniza uma vez no fim
+function iniciarLoteRateio() { if (!rateioAdiado) { rateioAdiado = new Set(); rateioAdiadoDesde = Date.now(); } }
+async function encerrarLoteRateio() {
+    if (!rateioAdiado) return;
+    const ids = [...rateioAdiado]; rateioAdiado = null;
+    for (const id of ids) await sincronizarRateioNota(id);
+}
+function exibirAvisoRateio(msg) {
+    let el = document.getElementById('avisoRateioEstoque');
+    if (!el) {
+        el = document.createElement('div'); el.id = 'avisoRateioEstoque';
+        el.style.cssText = 'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);max-width:92vw;background:#FFF4D6;color:#7A5200;border:1px solid #E8C35A;border-radius:8px;padding:10px 16px;z-index:5000;box-shadow:0 4px 14px rgba(0,0,0,.2);font-size:.9rem;cursor:pointer;';
+        el.title = 'Clique para fechar';
+        el.addEventListener('click', () => el.remove());
+        document.body.appendChild(el);
+    }
+    el.textContent = '⚠️ ' + msg;
+    clearTimeout(el._t); el._t = setTimeout(() => el.remove(), 15000);
+}
+async function operacaoRateioDaNota(notaId, tipo) {
+    const { data, error } = await sb.from('unidade_operacao').select('id, codigo')
+        .eq('unidade_negocio_id', meuPerfil.unidadeId).eq('origem', ORIGEM_RATEIO_ESTOQUE).eq('id_registro_na_origem', chaveRateioNota(notaId, tipo || TIPO_RATEIO_COMPRA)).order('id').limit(1);
+    if (error) throw error;
+    return (data && data[0]) || null;
+}
+// trava da nota de entrada: só quando existe BAIXA ligada a ela; se a consulta falhar, não bloqueia (a trava é uma proteção, não pode derrubar o resto)
+async function bloquearSeNotaComRateio(notaId, oQueFaz) {
+    if (!notaId) return;
+    let op = null;
+    try { op = await operacaoRateioDaNota(notaId, TIPO_RATEIO_BAIXA); } catch (e) { console.warn('Não consegui conferir o rateio da nota', notaId, e); return; }
+    if (op) throw new Error(`Esta nota de entrada já teve baixa direta (rateio de destinação, operação nº ${op.codigo}) e está BLOQUEADA para ${oQueFaz}. ` +
+        'Para liberar, desfaça antes as baixas (saídas) ligadas a ela — o rateio da baixa é removido junto.');
+}
+async function notaIdDaMovimentacao(mov) {
+    if (!mov) return null;
+    if (mov.estoque_nota_id != null) return Number(mov.estoque_nota_id);
+    if (mov.movimentacao_origem_id != null) {
+        const { data } = await sb.from('estoque_movimentacoes').select('estoque_nota_id').eq('id', mov.movimentacao_origem_id).maybeSingle();
+        return data && data.estoque_nota_id != null ? Number(data.estoque_nota_id) : null;
+    }
+    return null;
+}
+async function sincronizarRateioPorMovimento(mov) {
+    let notaId = null;
+    try { notaId = await notaIdDaMovimentacao(mov); } catch (e) { console.warn(e); }
+    if (notaId != null) await sincronizarRateioNota(notaId);
+}
+async function sincronizarRateioNota(notaId) {
+    if (notaId == null) return;
+    notaId = Number(notaId);
+    if (rateioAdiado && (Date.now() - rateioAdiadoDesde) < 600000) { rateioAdiado.add(notaId); return; }
+    rateioAdiado = null;
+    try { await sincronizarRateioNotaAgora(notaId); }
+    catch (e) {
+        console.error('Rateio da nota:', e);
+        exibirAvisoRateio(`O lançamento foi registrado, mas não consegui atualizar o rateio da nota #${notaId}: ${e.message || e}`);
+    }
+}
+async function apagarRateioDaOperacao(operacao, nota, motivo, origem) {
+    const { error: e1 } = await sb.from('unidade_rateios').delete().eq('operacao_id', operacao.id);
+    if (e1) throw e1;
+    const { error: e2 } = await sb.from('unidade_operacao').delete().eq('id', operacao.id);
+    if (e2) throw e2;
+    const tipo = origem === TIPO_RATEIO_BAIXA ? 'rateio_baixa_direta_removido' : 'rateio_compra_removido';
+    await registrarSentinela(tipo, `Removeu o rateio (operação nº ${operacao.codigo}) da nota de entrada #${nota ? (nota.numero_nf ? 'NF ' + nota.numero_nf + ' / #' : '#') + nota.id : '?'} — ${motivo}`);
+}
+// percentual de cada grupo pelo valor (soma exatamente 100%; total zero = divisão igual)
+function calcularPercentuaisRateio(lista) {
+    const total = lista.reduce((a, g) => a + g.valor, 0);
+    lista.forEach(g => { g.percentual = total > 0 ? Math.round(g.valor / total * 10000) / 100 : Math.round(10000 / lista.length) / 100; });
+    const resto = Math.round((100 - lista.reduce((a, g) => a + g.percentual, 0)) * 100) / 100;
+    if (resto !== 0) { const maior = lista.reduce((a, g) => (g.percentual > a.percentual ? g : a), lista[0]); maior.percentual = Math.round((maior.percentual + resto) * 100) / 100; }
+}
+// cria a operação (ou refaz as linhas da existente); sem linhas, remove a operação
+async function aplicarOperacaoRateio(origem, notaId, operacao, linhas, nota, rotulo) {
+    const unidade = meuPerfil.unidadeId;
+    if (!linhas.length) { if (operacao) await apagarRateioDaOperacao(operacao, nota, `a nota ficou sem ${rotulo}`, origem); return; }
+    let op = operacao;
+    const criou = !op;
+    if (!op) {
+        const { data: maior } = await sb.from('unidade_operacao').select('codigo').eq('unidade_negocio_id', unidade).order('codigo', { ascending: false }).limit(1);
+        const proximo = (maior && maior.length && maior[0].codigo) ? maior[0].codigo + 1 : 1;
+        const { data: nova, error: eOp } = await sb.from('unidade_operacao').insert({ unidade_negocio_id: unidade, codigo: proximo, origem: ORIGEM_RATEIO_ESTOQUE, id_registro_na_origem: chaveRateioNota(notaId, origem) }).select().single();
+        if (eOp) throw eOp;
+        op = nova;
+    } else {
+        const { error: eDel } = await sb.from('unidade_rateios').delete().eq('operacao_id', op.id);
+        if (eDel) throw eDel;
+    }
+    const { error: eRat } = await sb.from('unidade_rateios').insert(linhas.map(l => ({ ...l, operacao_id: op.id })));
+    if (eRat) throw eRat;
+    if (criou) await registrarSentinela(origem === TIPO_RATEIO_BAIXA ? 'rateio_baixa_direta_gerado' : 'rateio_compra_gerado',
+        `Gerou o rateio de ${rotulo} (operação nº ${op.codigo}, ${linhas.length} linha(s)) da nota de entrada #${nota.id}${nota.numero_nf ? ' (NF ' + nota.numero_nf + ')' : ''}`);
+}
+async function sincronizarRateioNotaAgora(notaId) {
+    const unidade = meuPerfil.unidadeId;
+    let { data: nota, error: eNota } = await sb.from('estoque_notas').select('id, tipo, numero_nf, nome_fornecedor, setor_id, evento, plano_contas_id').eq('id', notaId).maybeSingle();
+    if (eNota) {   // sem as colunas de classificação da nota (estoque-notas-rateio.sql ainda não rodou): segue só com os movimentos
+        ({ data: nota, error: eNota } = await sb.from('estoque_notas').select('id, tipo, numero_nf, nome_fornecedor').eq('id', notaId).maybeSingle());
+        if (eNota) throw eNota;
+    }
+    const [opCompra, opBaixa] = await Promise.all([operacaoRateioDaNota(notaId, TIPO_RATEIO_COMPRA), operacaoRateioDaNota(notaId, TIPO_RATEIO_BAIXA)]);
+    if (!nota || nota.tipo === 'saida') {
+        if (opCompra) await apagarRateioDaOperacao(opCompra, nota, nota ? 'a nota não é mais de entrada' : 'a nota foi excluída', TIPO_RATEIO_COMPRA);
+        if (opBaixa) await apagarRateioDaOperacao(opBaixa, nota, nota ? 'a nota não é mais de entrada' : 'a nota foi excluída', TIPO_RATEIO_BAIXA);
+        return;
+    }
+
+    // entradas da nota e as saídas dela: as gravadas direto na nota (XML) e as ligadas aos itens de entrada (nota manual / destinação de avulso)
+    const colSaida = 'id, qtd, valor_unit, setor_id, plano_contas_id, evento, equipamento_veiculo_id, km_troca';
+    const { data: entradas, error: eEnt } = await sb.from('estoque_movimentacoes').select('id, qtd, valor_unit, setor_id, plano_contas_id, evento').eq('estoque_nota_id', notaId).eq('tipo', 'entrada');
+    if (eEnt) throw eEnt;
+    const idsEntradas = (entradas || []).map(m => m.id);
+    const consultas = [sb.from('estoque_movimentacoes').select(colSaida).eq('estoque_nota_id', notaId).eq('tipo', 'saida')];
+    for (let i = 0; i < idsEntradas.length; i += 150) {
+        consultas.push(sb.from('estoque_movimentacoes').select(colSaida).in('movimentacao_origem_id', idsEntradas.slice(i, i + 150)).eq('tipo', 'saida'));
+    }
+    const resultados = await Promise.all(consultas);
+    const saidasPorId = new Map();
+    for (const r of resultados) { if (r.error) throw r.error; (r.data || []).forEach(m => saidasPorId.set(m.id, m)); }
+    const saidas = [...saidasPorId.values()];
+
+    if (!(entradas || []).length && !saidas.length) {
+        if (opCompra) await apagarRateioDaOperacao(opCompra, nota, 'a nota ficou sem itens', TIPO_RATEIO_COMPRA);
+        if (opBaixa) await apagarRateioDaOperacao(opBaixa, nota, 'a nota ficou sem itens', TIPO_RATEIO_BAIXA);
+        return;
+    }
+
+    // Empresa: padrão dos Parâmetros do Financeiro
+    const { data: parametros, error: eParam } = await sb.from('financeiro_parametros').select('empresa_padrao_id').eq('unidade_negocio_id', unidade).maybeSingle();
+    if (eParam) throw eParam;
+    if (!parametros || !parametros.empresa_padrao_id) {
+        exibirAvisoRateio('O lançamento foi registrado, mas o rateio NÃO foi gerado: defina a Empresa padrão em Financeiro → Parâmetros (a linha de rateio exige empresa). Depois, qualquer novo lançamento da nota gera o rateio.');
+        return;
+    }
+    const empresaId = parametros.empresa_padrao_id;
+    const referencia = `Ref. ${nota.numero_nf ? 'NF ' + nota.numero_nf : 'nota'} (nota de entrada #${nota.id}${nota.nome_fornecedor ? ' · ' + nota.nome_fornecedor : ''})`;
+
+    // ---- 1) COMPRA: 100% da entrada, por Setor + Evento + Plano (o que faltar no movimento vem da nota)
+    const gruposCompra = new Map();
+    for (const m of (entradas || [])) {
+        const setorId = m.setor_id || nota.setor_id || null;
+        const planoId = m.plano_contas_id || nota.plano_contas_id || null;
+        const evento = soCodigoEvento(m.evento || nota.evento || '');
+        const chave = [setorId || '', evento, planoId || ''].join('|');
+        let g = gruposCompra.get(chave);
+        if (!g) { g = { setor_id: setorId, plano_de_contas_id: planoId, evento: evento || null, valor: 0 }; gruposCompra.set(chave, g); }
+        g.valor += Number(m.qtd) * Number(m.valor_unit);
+    }
+    const listaCompra = [...gruposCompra.values()];
+    if (listaCompra.length) calcularPercentuaisRateio(listaCompra);
+    const linhasCompra = listaCompra.map(g => ({
+        unidade_negocio_id: unidade, operacao_id: null,
+        setor_id: g.setor_id, plano_de_contas_id: g.plano_de_contas_id, empresa_id: empresaId, pessoa_id: null,
+        evento: g.evento, equipamento_veiculo: null, percentual: g.percentual,
+        observacao: `${referencia} · entrada em estoque (compra)`
+    }));
+    await aplicarOperacaoRateio(TIPO_RATEIO_COMPRA, notaId, opCompra, linhasCompra, nota, 'compra');
+
+    // ---- 2) DESTINAÇÃO / BAIXA DIRETA: por Setor + Evento + Plano + Veículo (percentual pelo valor das saídas)
+    const idsVeic = [...new Set(saidas.map(m => m.equipamento_veiculo_id).filter(v => v != null))];
+    const veiculos = new Map();
+    if (idsVeic.length) {
+        const { data: vs, error: eVeic } = await sb.from('unidade_equipamentos_veiculos').select('id, identificador, nome, placa').in('id', idsVeic);
+        if (eVeic) throw eVeic;
+        (vs || []).forEach(v => veiculos.set(String(v.id), v));
+    }
+    const gruposBaixa = new Map();
+    for (const m of saidas) {
+        const evento = soCodigoEvento(m.evento);
+        const v = m.equipamento_veiculo_id != null ? veiculos.get(String(m.equipamento_veiculo_id)) : null;
+        const codVeic = v ? String(v.identificador || v.id) : (m.equipamento_veiculo_id != null ? String(m.equipamento_veiculo_id) : '');
+        const chave = [m.setor_id || '', evento, m.plano_contas_id || '', codVeic].join('|');
+        let g = gruposBaixa.get(chave);
+        if (!g) { g = { setor_id: m.setor_id || null, plano_de_contas_id: m.plano_contas_id || null, evento: evento || null, equipamento_veiculo: codVeic || null, veiculo: v, valor: 0, km: null }; gruposBaixa.set(chave, g); }
+        g.valor += Number(m.qtd) * Number(m.valor_unit);
+        if (m.km_troca != null && (g.km == null || Number(m.km_troca) > g.km)) g.km = Number(m.km_troca);
+    }
+    const listaBaixa = [...gruposBaixa.values()];
+    if (listaBaixa.length) calcularPercentuaisRateio(listaBaixa);
+    const linhasBaixa = listaBaixa.map(g => ({
+        unidade_negocio_id: unidade, operacao_id: null,
+        setor_id: g.setor_id, plano_de_contas_id: g.plano_de_contas_id, empresa_id: empresaId, pessoa_id: null,
+        evento: g.evento, equipamento_veiculo: g.equipamento_veiculo, percentual: g.percentual,
+        observacao: referencia + ' · baixa direta' + (g.veiculo ? ` · Veículo: ${g.veiculo.nome || ''}${g.veiculo.placa ? ' (' + g.veiculo.placa + ')' : ''}` : '') + (g.km != null ? ` · KM ${g.km}` : '')
+    }));
+    await aplicarOperacaoRateio(TIPO_RATEIO_BAIXA, notaId, opBaixa, linhasBaixa, nota, 'baixa direta');
+}
+// bloco informativo no modal da nota de entrada (compra e, se houver, baixa direta)
+async function atualizarInfoRateioNota(notaId) {
+    const bloco = document.getElementById('blocoRateioNota');
+    if (!bloco) return;
+    bloco.style.display = 'none';
+    if (notaTipoEmEdicao === 'saida') return;
+    try {
+        const [opCompra, opBaixa] = await Promise.all([operacaoRateioDaNota(notaId, TIPO_RATEIO_COMPRA), operacaoRateioDaNota(notaId, TIPO_RATEIO_BAIXA)]);
+        if (!opCompra && !opBaixa) return;
+        if (!catalogosBaixa || !catalogosBaixa.setores) { try { catalogosBaixa = await chamarGet('listarCatalogosBaixa'); } catch (e) { /* mostra só os ids */ } }
+        const setor = id => { const x = ((catalogosBaixa && catalogosBaixa.setores) || []).find(s => String(s.id) === String(id)); return x ? x.nome : (id ? '#' + id : '—'); };
+        const plano = id => { const x = ((catalogosBaixa && catalogosBaixa.planoContas) || []).find(c => String(c.id) === String(id)); return x ? `${x.codigo || ''} ${x.descricao || ''}`.trim() : (id ? '#' + id : '—'); };
+        const esc = t => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+        const falta = '<span style="color:#B3261E; font-weight:600;">— falta</span>';
+        const montar = async (op, titulo) => {
+            if (!op) return '';
+            const { data: linhas, error } = await sb.from('unidade_rateios').select('*').eq('operacao_id', op.id).order('id');
+            if (error) throw error;
+            const incompleta = (linhas || []).some(l => !l.setor_id || !l.plano_de_contas_id || !l.evento);
+            return `<div style="margin:8px 0 4px; font-weight:600;">${titulo} — operação nº ${esc(op.codigo)}</div>` +
+                '<table style="width:100%; border-collapse:collapse; font-size:.85rem;"><thead><tr style="text-align:left; color:#555;"><th>Setor</th><th>Plano de contas</th><th>Evento</th><th>Veículo</th><th style="text-align:right;">%</th></tr></thead><tbody>' +
+                (linhas || []).map(l => `<tr style="border-top:1px solid #D6E9D6;"><td>${l.setor_id ? esc(setor(l.setor_id)) : falta}</td><td>${l.plano_de_contas_id ? esc(plano(l.plano_de_contas_id)) : falta}</td><td>${l.evento ? esc(l.evento) : falta}</td><td>${esc(l.equipamento_veiculo || '—')}</td><td style="text-align:right;">${Number(l.percentual).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}%</td></tr>`).join('') +
+                '</tbody></table>' +
+                (incompleta ? '<div style="margin-top:6px; padding:6px 10px; background:#FDECEA; color:#7A1C14; border-radius:6px; font-size:.85rem;">⚠️ Falta Setor, Plano de contas ou Evento em alguma linha — o Financeiro e a DRE precisam dos três. Informe nos itens da nota (✏️ Editar) ou na classificação da nota e salve: o rateio se refaz sozinho.</div>' : '');
+        };
+        document.getElementById('listaRateioNota').innerHTML = (await montar(opCompra, '🛒 Compra (entrada em estoque)')) + (await montar(opBaixa, '📤 Baixa direta (destinação)'));
+        document.getElementById('tituloRateioNota').textContent = '📊 Rateio da nota';
+        bloco.style.display = '';
+    } catch (e) { console.warn('Rateio da nota:', e); }
+}
+
+/* =========================================================================
+   CLASSIFICAR NOTAS (Setor / Plano de contas / Evento em branco no rateio)
+   Lê os rateios do estoque (unidade_operacao origem 'estoque' + unidade_rateios), lista os que estão sem Setor, Plano
+   ou Evento e preenche SÓ OS CAMPOS EM BRANCO dos movimentos da nota (entradas para a compra; saídas para a baixa direta)
+   — e, na compra, também o padrão da própria nota —, depois refaz o rateio. Nada que já está preenchido é alterado.
+   ========================================================================= */
+let classifPendencias = [], classifMarcadas = new Set(), classifSel = { setor: null, plano: null, evento: null };
+let classifConfigurado = false, classifLimite = 300, classifOcupado = false;
+const classifFatias = (arr, n) => { const o = []; for (let i = 0; i < arr.length; i += n) o.push(arr.slice(i, i + n)); return o; };
+async function lerTudoPaginado(montar) {
+    const out = [];
+    for (let ini = 0; ; ini += 1000) {
+        const { data, error } = await montar().range(ini, ini + 999);
+        if (error) throw error;
+        out.push(...(data || []));
+        if (!data || data.length < 1000) break;
+    }
+    return out;
+}
+async function carregarPendenciasClassificacao() {
+    const unidade = meuPerfil.unidadeId;
+    const ops = await lerTudoPaginado(() => sb.from('unidade_operacao').select('id, codigo, id_registro_na_origem').eq('unidade_negocio_id', unidade).eq('origem', 'estoque').order('id'));
+    const linhasPorOp = new Map();
+    for (const fatia of classifFatias(ops.map(o => o.id), 100)) {
+        const linhas = await lerTudoPaginado(() => sb.from('unidade_rateios').select('id, operacao_id, setor_id, plano_de_contas_id, evento, percentual').in('operacao_id', fatia).order('id'));
+        linhas.forEach(l => { if (!linhasPorOp.has(l.operacao_id)) linhasPorOp.set(l.operacao_id, []); linhasPorOp.get(l.operacao_id).push(l); });
+    }
+    const itens = [];
+    const porChave = new Map();
+    for (const op of ops) {
+        const chave = String(op.id_registro_na_origem || '');
+        const tipo = chave.startsWith('baixa:') ? 'baixa' : 'compra';
+        const notaId = Number(chave.replace('baixa:', ''));
+        if (!notaId) continue;
+        const linhas = linhasPorOp.get(op.id) || [];
+        const falta = { setor: linhas.some(l => !l.setor_id), plano: linhas.some(l => !l.plano_de_contas_id), evento: linhas.some(l => !l.evento) };
+        const item = { chave: tipo + ':' + notaId, tipo, notaId, op, linhas, falta, sugestao: null, nota: null };
+        porChave.set(item.chave, item);
+        if (falta.setor || falta.plano || falta.evento) itens.push(item);
+    }
+    // sugestão (só compra): a classificação da baixa direta da mesma nota, para os campos que faltam
+    for (const it of itens) {
+        if (it.tipo !== 'compra') continue;
+        const baixa = porChave.get('baixa:' + it.notaId);
+        if (!baixa) continue;
+        const ref = [...baixa.linhas].filter(l => l.setor_id || l.plano_de_contas_id || l.evento).sort((a, b) => Number(b.percentual) - Number(a.percentual))[0];
+        if (!ref) continue;
+        const sug = {};
+        if (it.falta.setor && ref.setor_id) sug.setor_id = ref.setor_id;
+        if (it.falta.plano && ref.plano_de_contas_id) sug.plano_id = ref.plano_de_contas_id;
+        if (it.falta.evento && ref.evento) sug.evento = ref.evento;
+        if (Object.keys(sug).length) it.sugestao = sug;
+    }
+    // dados das notas
+    const notas = new Map();
+    for (const fatia of classifFatias([...new Set(itens.map(i => i.notaId))], 150)) {
+        const { data, error } = await sb.from('estoque_notas').select('id, numero_nf, nome_fornecedor, data_entrada').in('id', fatia);
+        if (error) throw error;
+        (data || []).forEach(n => notas.set(n.id, n));
+    }
+    itens.forEach(i => { i.nota = notas.get(i.notaId) || null; });
+    return itens.sort((a, b) => b.notaId - a.notaId || (a.tipo < b.tipo ? -1 : 1));
+}
+async function movimentosDaNotaPorTipo(notaId, tipo) {
+    const unidade = meuPerfil.unidadeId;
+    const cols = 'id, setor_id, plano_contas_id, evento';
+    const { data: entradas, error: eEnt } = await sb.from('estoque_movimentacoes').select(cols).eq('unidade_negocio_id', unidade).eq('estoque_nota_id', notaId).eq('tipo', 'entrada');
+    if (eEnt) throw eEnt;
+    if (tipo === 'compra') return entradas || [];
+    const porId = new Map();
+    const { data: diretas, error: eDir } = await sb.from('estoque_movimentacoes').select(cols).eq('unidade_negocio_id', unidade).eq('estoque_nota_id', notaId).eq('tipo', 'saida');
+    if (eDir) throw eDir;
+    (diretas || []).forEach(m => porId.set(m.id, m));
+    for (const fatia of classifFatias((entradas || []).map(m => m.id), 150)) {
+        const { data, error } = await sb.from('estoque_movimentacoes').select(cols).eq('unidade_negocio_id', unidade).in('movimentacao_origem_id', fatia).eq('tipo', 'saida');
+        if (error) throw error;
+        (data || []).forEach(m => porId.set(m.id, m));
+    }
+    return [...porId.values()];
+}
+// preenche só o que falta; devolve quantos movimentos foram alterados (somando campos)
+async function aplicarClassificacaoItem(item, v) {
+    const campos = {};
+    if (v.setor_id && item.falta.setor) campos.setor_id = v.setor_id;
+    if (v.plano_id && item.falta.plano) campos.plano_contas_id = v.plano_id;
+    if (v.evento && item.falta.evento) campos.evento = v.evento;
+    if (!Object.keys(campos).length) return 0;
+    const movs = await movimentosDaNotaPorTipo(item.notaId, item.tipo);
+    let alterados = 0;
+    for (const [col, valor] of Object.entries(campos)) {
+        const ids = movs.filter(m => m[col] == null || m[col] === '').map(m => m.id);
+        for (const fatia of classifFatias(ids, 150)) {
+            const { error } = await sb.from('estoque_movimentacoes').update({ [col]: valor }).eq('unidade_negocio_id', meuPerfil.unidadeId).in('id', fatia);
+            if (error) throw error;
+            alterados += fatia.length;
+        }
+    }
+    if (item.tipo === 'compra') {   // o padrão da própria nota (colunas de estoque-notas-rateio.sql; se não existirem, segue sem elas)
+        const { data: nota, error: eN } = await sb.from('estoque_notas').select('id, setor_id, evento, plano_contas_id').eq('id', item.notaId).maybeSingle();
+        if (!eN && nota) {
+            const upd = {};
+            if (campos.setor_id && !nota.setor_id) upd.setor_id = campos.setor_id;
+            if (campos.plano_contas_id && !nota.plano_contas_id) upd.plano_contas_id = campos.plano_contas_id;
+            if (campos.evento && !nota.evento) upd.evento = campos.evento;
+            if (Object.keys(upd).length) await sb.from('estoque_notas').update(upd).eq('id', item.notaId);
+        }
+    }
+    await sincronizarRateioNotaAgora(item.notaId);
+    return alterados;
+}
+function rotuloCampoClassif(item, campo) {
+    const col = { setor: 'setor_id', plano: 'plano_de_contas_id', evento: 'evento' }[campo];
+    const vals = [...new Set(item.linhas.map(l => l[col]).filter(x => x != null && x !== ''))];
+    const faltam = item.linhas.some(l => l[col] == null || l[col] === '');
+    const nome = x => {
+        if (campo === 'setor') { const s = ((catalogosBaixa && catalogosBaixa.setores) || []).find(y => String(y.id) === String(x)); return s ? s.nome : '#' + x; }
+        if (campo === 'plano') { const c = ((catalogosBaixa && catalogosBaixa.planoContas) || []).find(y => String(y.id) === String(x)); return c ? `${c.codigo} ${c.descricao || ''}`.trim() : '#' + x; }
+        return String(x);
+    };
+    const partes = vals.map(x => escapeHtml(nome(x)));
+    if (faltam) partes.push('<span style="color:#B3261E; font-weight:600;">— falta</span>');
+    return partes.join('<br>');
+}
+function textoSugestaoClassif(sug) {
+    if (!sug) return '<span style="color:#9aa0a6;">—</span>';
+    const p = [];
+    if (sug.setor_id) { const s = ((catalogosBaixa && catalogosBaixa.setores) || []).find(y => String(y.id) === String(sug.setor_id)); p.push('Setor: ' + (s ? s.nome : '#' + sug.setor_id)); }
+    if (sug.plano_id) { const c = ((catalogosBaixa && catalogosBaixa.planoContas) || []).find(y => String(y.id) === String(sug.plano_id)); p.push('Plano: ' + (c ? c.codigo : '#' + sug.plano_id)); }
+    if (sug.evento) p.push('Evento: ' + sug.evento);
+    return escapeHtml(p.join(' · '));
+}
+function classifFiltradas() {
+    const tipo = document.getElementById('classifFiltroTipo').value;
+    const falta = document.getElementById('classifFiltroFalta').value;
+    const termo = document.getElementById('classifFiltroBusca').value.trim().toUpperCase();
+    return classifPendencias.filter(i => {
+        if (tipo && i.tipo !== tipo) return false;
+        if (falta && !i.falta[falta]) return false;
+        if (termo) {
+            const texto = `${i.nota ? (i.nota.numero_nf || '') + ' ' + (i.nota.nome_fornecedor || '') : ''} ${i.notaId}`.toUpperCase();
+            if (!texto.includes(termo)) return false;
+        }
+        return true;
+    });
+}
+function renderClassifNotas() {
+    const lista = classifFiltradas();
+    const corpo = document.getElementById('corpoClassifNotas');
+    document.getElementById('classifContagem').textContent = `${lista.length} pendência(s)${classifPendencias.length !== lista.length ? ' (de ' + classifPendencias.length + ')' : ''} · ${classifMarcadas.size} marcada(s)`;
+    document.getElementById('vazioClassifNotas').style.display = lista.length ? 'none' : '';
+    corpo.innerHTML = lista.slice(0, classifLimite).map(i => {
+        const n = i.nota || {};
+        const data = n.data_entrada ? String(n.data_entrada).slice(0, 10).split('-').reverse().join('/') : '';
+        return `<tr>
+            <td><input type="checkbox" data-classif-marca="${escapeHtml(i.chave)}" ${classifMarcadas.has(i.chave) ? 'checked' : ''}></td>
+            <td><strong>${n.numero_nf ? 'NF ' + escapeHtml(n.numero_nf) : 'nota'}</strong> <span style="color:#6b7280;">#${i.notaId}</span><br><span style="font-size:.9em; color:#555;">${escapeHtml(n.nome_fornecedor || '')}${data ? ' · ' + data : ''}</span></td>
+            <td>${i.tipo === 'compra' ? '🛒 Compra' : '📤 Baixa direta'}<br><span style="font-size:.9em; color:#6b7280;">operação nº ${escapeHtml(i.op.codigo)}</span></td>
+            <td>${rotuloCampoClassif(i, 'setor')}</td><td>${rotuloCampoClassif(i, 'plano')}</td><td>${rotuloCampoClassif(i, 'evento')}</td>
+            <td>${textoSugestaoClassif(i.sugestao)}</td>
+            <td style="white-space:nowrap;">${i.sugestao ? `<button class="btn btn-azul btn-pequeno" data-classif-sug="${escapeHtml(i.chave)}">💡 Usar</button> ` : ''}<button class="btn btn-cinza btn-pequeno" data-classif-abrir="${i.notaId}">Abrir nota</button></td>
+        </tr>`;
+    }).join('') + (lista.length > classifLimite ? `<tr><td colspan="8" style="text-align:center;"><a href="#" id="classifMostrarMais">Mostrar mais ${Math.min(300, lista.length - classifLimite)} de ${lista.length - classifLimite} restantes</a></td></tr>` : '');
+}
+function statusClassif(msg, erro) {
+    const el = document.getElementById('statusClassifNotas');
+    el.style.color = erro ? 'var(--danger)' : '';
+    el.textContent = msg || '';
+}
+async function recarregarClassifNotas(msgFinal) {
+    statusClassif('Carregando pendências...');
+    try {
+        classifPendencias = await carregarPendenciasClassificacao();
+        const existentes = new Set(classifPendencias.map(i => i.chave));
+        [...classifMarcadas].forEach(k => { if (!existentes.has(k)) classifMarcadas.delete(k); });
+        renderClassifNotas();
+        statusClassif(msgFinal || '');
+    } catch (e) { statusClassif('Erro ao carregar: ' + (e.message || e), true); }
+}
+async function aplicarClassifEmLote(pares, rotulo) {
+    // pares: [{ item, valores }]
+    if (classifOcupado) return;
+    if (!temPermissaoEstoque('notas_entrada')) { alert('Sem permissão para classificar notas.'); return; }
+    if (!pares.length) { statusClassif('Nada a aplicar: marque notas e escolha o que preencher (só campos em branco são preenchidos).', true); return; }
+    if (!confirm(`${rotulo}\n\nVai preencher os campos em branco de ${pares.length} rateio(s) de nota. O que já está preenchido não muda. Continuar?`)) return;
+    classifOcupado = true;
+    let ok = 0, movs = 0; const falhas = []; const notasOk = [];
+    try {
+        for (let i = 0; i < pares.length; i++) {
+            statusClassif(`Aplicando ${i + 1} de ${pares.length}...`);
+            try { movs += await aplicarClassificacaoItem(pares[i].item, pares[i].valores); ok++; notasOk.push(pares[i].item.notaId); }
+            catch (e) { falhas.push(`#${pares[i].item.notaId}: ${e.message || e}`); }
+        }
+        await registrarSentinela('classificacao_notas_em_lote', `Preencheu setor/plano/evento em branco de ${ok} rateio(s) de nota (${movs} movimento(s)); notas: ${[...new Set(notasOk)].slice(0, 40).join(', ')}${notasOk.length > 40 ? '…' : ''}`);
+        await recarregarClassifNotas(`✓ ${ok} rateio(s) atualizado(s) (${movs} movimento(s) preenchido(s)).` + (falhas.length ? ` ${falhas.length} falha(s): ${falhas.slice(0, 3).join(' | ')}` : ''));
+        if (falhas.length) document.getElementById('statusClassifNotas').style.color = 'var(--danger)';
+        carregarMovimentacoes().catch(() => {});
+    } finally { classifOcupado = false; }
+}
+async function abrirModalClassificarNotas() {
+    if (!catalogosBaixa || !catalogosBaixa.setores || !catalogosBaixa.setores.length) { try { catalogosBaixa = await chamarGet('listarCatalogosBaixa'); } catch (e) { /* segue com o que houver */ } }
+    if (!classifConfigurado) {
+        classifConfigurado = true;
+        configurarBuscaListaGenerica('classifSetorBusca', 'classifSetorResultados', 'classifSetorSelecionado', () => (catalogosBaixa.setores || []), item => { classifSel.setor = item; });
+        configurarBuscaPlanoContas('classifPlanoBusca', 'classifPlanoResultados', 'classifPlanoSelecionado', p => { classifSel.plano = p; });
+        configurarBuscaEvento('classifEventoBusca', 'classifEventoResultados', 'classifEventoSelecionado', ev => { classifSel.evento = ev; });
+        ['classifFiltroTipo', 'classifFiltroFalta'].forEach(id => document.getElementById(id).addEventListener('change', renderClassifNotas));
+        document.getElementById('classifFiltroBusca').addEventListener('input', renderClassifNotas);
+        document.getElementById('btnFecharClassificarNotas').addEventListener('click', () => document.getElementById('modalClassificarNotas').classList.remove('aberto'));
+        document.getElementById('btnMarcarTodosClassif').addEventListener('click', () => { classifFiltradas().forEach(i => classifMarcadas.add(i.chave)); renderClassifNotas(); });
+        document.getElementById('btnLimparMarcasClassif').addEventListener('click', () => { classifMarcadas.clear(); renderClassifNotas(); });
+        document.getElementById('btnAplicarClassif').addEventListener('click', () => {
+            if (!classifSel.setor && !classifSel.plano && !classifSel.evento) { statusClassif('Escolha o Setor, o Plano de contas ou o Evento a aplicar.', true); return; }
+            const v = { setor_id: classifSel.setor ? classifSel.setor.id : null, plano_id: classifSel.plano ? classifSel.plano.id : null, evento: classifSel.evento ? classifSel.evento.codigo : null };
+            const pares = classifPendencias.filter(i => classifMarcadas.has(i.chave) && ((v.setor_id && i.falta.setor) || (v.plano_id && i.falta.plano) || (v.evento && i.falta.evento))).map(item => ({ item, valores: v }));
+            aplicarClassifEmLote(pares, 'Aplicar a classificação escolhida aos marcados.');
+        });
+        document.getElementById('btnUsarSugestoesClassif').addEventListener('click', () => {
+            const pares = classifPendencias.filter(i => classifMarcadas.has(i.chave) && i.sugestao).map(item => ({ item, valores: item.sugestao }));
+            aplicarClassifEmLote(pares, 'Usar a sugestão (classificação da baixa direta) nos marcados.');
+        });
+        document.getElementById('corpoClassifNotas').addEventListener('click', (e) => {
+            const mais = e.target.closest('#classifMostrarMais');
+            if (mais) { e.preventDefault(); classifLimite += 300; renderClassifNotas(); return; }
+            const sug = e.target.closest('[data-classif-sug]');
+            if (sug) { const item = classifPendencias.find(i => i.chave === sug.dataset.classifSug); if (item && item.sugestao) aplicarClassifEmLote([{ item, valores: item.sugestao }], 'Usar a sugestão desta nota.'); return; }
+            const abrir = e.target.closest('[data-classif-abrir]');
+            if (abrir) { document.getElementById('modalClassificarNotas').classList.remove('aberto'); abrirNotaEntradaExistente(Number(abrir.dataset.classifAbrir)); return; }
+        });
+        document.getElementById('corpoClassifNotas').addEventListener('change', (e) => {
+            const cb = e.target.closest('[data-classif-marca]');
+            if (!cb) return;
+            if (cb.checked) classifMarcadas.add(cb.dataset.classifMarca); else classifMarcadas.delete(cb.dataset.classifMarca);
+            document.getElementById('classifContagem').textContent = document.getElementById('classifContagem').textContent.replace(/\d+ marcada\(s\)/, classifMarcadas.size + ' marcada(s)');
+        });
+    }
+    classifSel = { setor: null, plano: null, evento: null };
+    ['classifSetorSelecionado', 'classifPlanoSelecionado', 'classifEventoSelecionado'].forEach(id => { document.getElementById(id).innerHTML = ''; });
+    classifMarcadas = new Set(); classifLimite = 300;
+    document.getElementById('modalClassificarNotas').classList.add('aberto');
+    await recarregarClassifNotas();
+}
+document.getElementById('btnClassificarNotas').addEventListener('click', abrirModalClassificarNotas);
+
 async function registrarSentinela(tipoAcao, descricao) {
     try {
         const { error } = await sb.from('servir_sentinela').insert({
@@ -6247,6 +6832,8 @@ function aplicarPermissoesNaInterface() {
     if (btnImportarNFe) btnImportarNFe.style.display = temPermissaoEstoque('notas_entrada') ? '' : 'none';
     const btnAbrirProtocolo = document.getElementById('btnAbrirProtocolo');
     if (btnAbrirProtocolo) btnAbrirProtocolo.style.display = temPermissaoEstoque('protocolo') ? '' : 'none';
+    const btnClassificarNotas = document.getElementById('btnClassificarNotas');
+    if (btnClassificarNotas) btnClassificarNotas.style.display = temPermissaoEstoque('notas_entrada') ? '' : 'none';
     // setor e subsetor: só administrador ou principal (a trava de verdade é o trigger do banco — setores-cadastro-restrito.sql)
     document.querySelectorAll('.btn-cad-rapido').forEach(b => {
         const soAdmin = b.dataset.tipoCad === 'setor' || b.dataset.tipoCad === 'subsetor';
@@ -10424,6 +11011,10 @@ async function abrirNotaEntradaExistente(notaId) {
 async function aplicarRateioNotaManual() {
     if (!notaEmEdicaoId || !itensNotaAtual || !itensNotaAtual.length) return;
     const statusEl = document.getElementById('statusRateioNotaManual');
+    // desconto/frete mudam o valor dos itens de entrada: com baixa ligada à nota (rateio de destinação), fica bloqueado
+    let travadaPorBaixa = false;
+    try { await bloquearSeNotaComRateio(notaEmEdicaoId, 'alterar desconto/frete (muda o valor dos itens)'); }
+    catch (e) { travadaPorBaixa = e.message || String(e); }
     const desconto = parseFloat(document.getElementById('notaValorDesconto').value) || 0;
     const frete = parseFloat(document.getElementById('notaValorFrete').value) || 0;
     const ajusteTotal = frete - desconto;
@@ -10435,6 +11026,7 @@ async function aplicarRateioNotaManual() {
         for (const item of itensNotaAtual) {
             const valorOriginal = Number(item.valor_unit_original ?? item.valor_unit);
             if (Math.abs(valorOriginal - Number(item.valor_unit)) > 0.001) {
+                if (travadaPorBaixa) { if (statusEl) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = travadaPorBaixa; } return; }
                 await sb.from('estoque_movimentacoes').update({ valor_unit: valorOriginal }).eq('id', item.id);
                 produtosAfetados.add(item.produto_id);
             }
@@ -10443,6 +11035,7 @@ async function aplicarRateioNotaManual() {
             for (const produtoId of produtosAfetados) {
                 await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId, p_produto_id: produtoId });
             }
+            await sincronizarRateioNota(notaEmEdicaoId);   // valor dos itens de entrada mudou: refaz o rateio da compra
             await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
             await carregarItensETitulosDaNota(notaEmEdicaoId);
         }
@@ -10456,6 +11049,15 @@ async function aplicarRateioNotaManual() {
         return;
     }
 
+    if (travadaPorBaixa) {
+        // só bloqueia se de fato mudaria algum valor
+        const mudaria = itensNotaAtual.some(item => {
+            const vo = Number(item.valor_unit_original ?? item.valor_unit);
+            const nv = Number(item.qtd) > 0 ? Math.round(((Number(item.qtd) * vo) + ajusteTotal * ((Number(item.qtd) * vo) / totalProdutos)) / Number(item.qtd) * 100) / 100 : vo;
+            return Math.abs(nv - Number(item.valor_unit)) > 0.001;
+        });
+        if (mudaria) { if (statusEl) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = travadaPorBaixa; } return; }
+    }
     if (statusEl) { statusEl.style.color = ''; statusEl.textContent = 'Aplicando rateio de desconto/frete aos itens...'; }
 
     const produtosAfetados = new Set();
@@ -10480,6 +11082,7 @@ async function aplicarRateioNotaManual() {
         }
 
         if (produtosAfetados.size) {
+            await sincronizarRateioNota(notaEmEdicaoId);   // valor dos itens de entrada mudou: refaz o rateio da compra
             await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
             await carregarItensETitulosDaNota(notaEmEdicaoId);
         }
@@ -10570,6 +11173,7 @@ async function carregarItensETitulosDaNota(notaId) {
     ]);
     pedidosAgregadosAtual = agregados || [];
     renderizarPedidosAgregados();
+    atualizarInfoRateioNota(notaId);
     // uma nota de entrada pode ter item avulso que já foi destinado
     // (Baixa Direta) -- a saída gerada fica ligada ao MESMO
     // estoque_nota_id da entrada, mas não é "item da nota" no sentido
@@ -11038,6 +11642,8 @@ document.getElementById('btnRegistrarBaixaDiretaNota').addEventListener('click',
         somas.forEach(s => { jaBaixadoPorOrigem[s.movimentacao_origem_id] = (jaBaixadoPorOrigem[s.movimentacao_origem_id] || 0) + Number(s.qtd); });
 
         let qtdRegistrada = 0;
+        iniciarLoteRateio();
+        try {
         for (const item of itensEntrada) {
             const jaBaixado = jaBaixadoPorOrigem[item.id] || 0;
             const disponivel = Number(item.qtd) - jaBaixado;
@@ -11057,6 +11663,7 @@ document.getElementById('btnRegistrarBaixaDiretaNota').addEventListener('click',
             });
             qtdRegistrada++;
         }
+        } finally { await encerrarLoteRateio(); }
 
         if (qtdRegistrada === 0) {
             statusEl.className = 'status-msg erro';
@@ -11752,6 +12359,8 @@ document.getElementById('btnConfirmarBaixaItensNota').addEventListener('click', 
     statusEl.className = '';
     statusEl.textContent = 'Registrando...';
     try {
+        iniciarLoteRateio();
+        try {
         for (const linha of linhasValidas) {
             await chamarPost('registrarMovimentacaoBaixaNota', {
                 movimentacao: {
@@ -11769,6 +12378,7 @@ document.getElementById('btnConfirmarBaixaItensNota').addEventListener('click', 
                 }
             });
         }
+        } finally { await encerrarLoteRateio(); }
         statusEl.className = 'status-msg sucesso';
         statusEl.textContent = '✅ Baixa registrada com sucesso.';
         await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
