@@ -225,6 +225,9 @@
   // 'lanc' = empresa do lançamento (coluna EMPRESA). Só existe a escolha se o arquivo trouxer as duas colunas.
   let modoEmp = 'conta', temEmpConta = false, ultimosTextos = null;
   try { if(localStorage.getItem('extratos_modo_empresa_v1') === 'lanc') modoEmp = 'lanc'; } catch(e){}
+  // contas de passagem (caixas_fechados.csv, coluna ACOMPANHA_SALDO = false) ficam fora da lista, a não ser que se peça para mostrar
+  let mostrarPassagem = false;
+  try { mostrarPassagem = localStorage.getItem('extratos_mostrar_passagem_v1') === '1'; } catch(e){}
   const planoTxt = (L) => (L.pc || L.pn) ? (L.pc + (L.pc && L.pn ? ' · ' : '') + L.pn) : '';
   let manuais = {}; try { manuais = JSON.parse(localStorage.getItem('extratos_saldos_manuais_v1') || '{}'); } catch(e){}
   const salvarManuais = () => { try { localStorage.setItem('extratos_saldos_manuais_v1', JSON.stringify(manuais)); } catch(e){} };
@@ -233,11 +236,13 @@
   function montar(textos){
     ultimosTextos = textos;
     // nomes das contas (caixas_fechados): EMPRESA + CAI_COD -> conta (e, só pelo código do caixa, pra quando o agrupamento for pela empresa do lançamento)
-    const nomes = new Map(), nomesPorCaixa = new Map(), empPorCaixaArq = new Map();
+    const nomes = new Map(), nomesPorCaixa = new Map(), empPorCaixaArq = new Map(), acompanha = new Map();
     if(textos[ARQ.contas]){
       const t = lerCsv(textos[ARQ.contas]); const iE = t.cab.indexOf('empresa'), iC = t.cab.indexOf('cai_cod'), iN = t.cab.indexOf('conta');
+      const iA = t.cab.indexOf('acompanha_saldo');
       if(iE >= 0 && iC >= 0 && iN >= 0) t.linhas.forEach(l => {
         const cod = String(l[iC]).trim(), nm = (l[iN] || '').trim();
+        if(iA >= 0){ const v = semAcento(l[iA]); acompanha.set(cod, !(v === 'false' || v === 'falso' || v === '0' || v === 'n' || v === 'no' || v === 'nao' || v === 'f')); }
         nomes.set(chaveConta(l[iE], l[iC]), nm);
         if(!nomesPorCaixa.has(cod)) nomesPorCaixa.set(cod, nm);
         if(!empPorCaixaArq.has(cod)) empPorCaixaArq.set(cod, String(l[iE]).toUpperCase().trim());
@@ -270,7 +275,7 @@
     const novo = new Map(); let invalidas = 0;
     const obter = (emp, cx, ec) => {
       const k = chaveConta(emp, cx); let c = novo.get(k);
-      if(!c){ c = { key: k, emp: String(emp).toUpperCase().trim(), empConta: ec, cx: String(cx).trim(), nome: nomes.get(k) || nomes.get(chaveConta(ec, cx)) || nomesPorCaixa.get(String(cx).trim()) || ('Caixa ' + String(cx).trim()), rows: [], calc: null }; novo.set(k, c); }
+      if(!c){ c = { key: k, emp: String(emp).toUpperCase().trim(), empConta: ec, cx: String(cx).trim(), nome: nomes.get(k) || nomes.get(chaveConta(ec, cx)) || nomesPorCaixa.get(String(cx).trim()) || ('Caixa ' + String(cx).trim()), acompanha: acompanha.has(String(cx).trim()) ? acompanha.get(String(cx).trim()) : true, rows: [], calc: null }; novo.set(k, c); }
       return c;
     };
     for(const l of t.linhas){
@@ -280,17 +285,29 @@
       if(!/^\d{4}-\d{2}-\d{2}$/.test(dia)){ invalidas++; continue; }      // linha com colunas deslocadas/data ilegível: não entra no saldo (e é avisada)
       // linha de abertura (ex.: 31/12/2024, HISTORICO "SALDO ANTERIOR"/"SALDO INICIAL"): vira o saldo inicial da conta, não um lançamento
       // (vai sempre para a empresa dona da conta, mesmo agrupando pela empresa do lançamento)
-      if(/^\s*saldo\s+(anterior|inicial)\b/i.test(semAcento(hist))){ const dono = obter(iEmpC >= 0 ? ec : eL, cx, ec); const v = num(l[iE]) - num(l[iS]); dono.abertura = { v: (dono.abertura ? dono.abertura.v : 0) + v, d: dia }; continue; }
+      if(/^\s*saldo\s+(anterior|inicial)\b/i.test(semAcento(hist))){ const dono = obter(iEmpC >= 0 ? ec : eL, cx, ec); const v = num(l[iE]) - num(l[iS]), ab = dono.abertura; if(!ab || dia > ab.d) dono.abertura = { v, d: dia }; else if(dia === ab.d) ab.v += v; continue; }
       c.rows.push({ d: dia, h: hist, e: num(l[iE]), s: num(l[iS]), q: parseInt(l[iQ], 10) || 0, pc: iPc >= 0 ? String(l[iPc] || '').trim() : '', pn: iPn >= 0 ? String(l[iPn] || '').trim() : '' });
     }
     contas = novo; linhasInvalidas = invalidas;
     // ordem cronológica: por data e, dentro do mesmo dia, pela sequência (assim um lançamento retroativo, que no banco
     // recebe número alto, cai no dia certo e os meses/saldos não se misturam)
     contas.forEach(c => { c.rows.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : a.q - b.q)); });
+    // Linha "Saldo Inicial"/"Saldo Anterior": se a data é ANTERIOR ao 1º lançamento da conta, é o saldo de abertura (vale como está). Se cai
+    // no meio do histórico (ex.: o saldo do último fechamento), é o saldo NO FIM daquele dia: a abertura é calculada voltando os lançamentos
+    // até essa data (todas as empresas da conta, mesmo agrupando pela empresa do lançamento), e o saldo seguinte parte dele.
+    contas.forEach(c => {
+      if(!c.abertura) return;
+      const daConta = [...contas.values()].filter(x => x.cx === c.cx);
+      let primeira = ''; daConta.forEach(x => { if(x.rows.length && (!primeira || x.rows[0].d < primeira)) primeira = x.rows[0].d; });
+      if(!primeira || c.abertura.d <= primeira) return;
+      let mov = 0; daConta.forEach(x => x.rows.forEach(r => { if(r.d <= c.abertura.d) mov += r.e - r.s; }));
+      c.abertura = { v: c.abertura.v - mov, d: c.abertura.d, ancora: true, informado: c.abertura.v };
+    });
   }
 
   function saldoInicialDe(c){
     if(Object.prototype.hasOwnProperty.call(manuais, c.key)) return { v: manuais[c.key], fonte: 'informado neste aparelho' };
+    if(c.abertura && c.abertura.ancora) return { v: c.abertura.v, fonte: 'saldo de ' + fmt(c.abertura.informado) + ' em ' + fmtDia(c.abertura.d) + ' (linha de saldo do arquivo); o saldo inicial foi calculado voltando os lançamentos até essa data' };
     if(c.abertura) return { v: c.abertura.v, fonte: 'linha “SALDO ANTERIOR” do arquivo de lançamentos, de ' + fmtDia(c.abertura.d) };
     if(saldosIni.has(c.key)) return { v: saldosIni.get(c.key), fonte: 'arquivo saldos_iniciais.csv' };
     if(c.empConta && c.emp !== c.empConta) return { v: 0, fonte: 'empresa do lançamento — o saldo inicial fica na empresa dona da conta (' + c.empConta + ')' };
@@ -422,7 +439,16 @@
         ? 'Cada conta é dividida pela empresa que fez o lançamento; o saldo inicial fica na empresa dona da conta.'
         : 'Cada conta aparece inteira, na empresa em que ela está cadastrada (padrão).'));
     }
-    [...contas.values()].forEach(c => { if(!porEmp.has(c.emp)) porEmp.set(c.emp, []); porEmp.get(c.emp).push(c); });
+    const todas = [...contas.values()], nPassagem = todas.filter(c => !c.acompanha).length;
+    if(nPassagem){
+      const lb = el('label', 'sub'); lb.style.cssText = 'display:flex;gap:6px;align-items:center;margin:6px 0 10px;cursor:pointer';
+      const ck = el('input'); ck.type = 'checkbox'; ck.checked = mostrarPassagem;
+      ck.addEventListener('change', () => { mostrarPassagem = ck.checked; try { localStorage.setItem('extratos_mostrar_passagem_v1', mostrarPassagem ? '1' : '0'); } catch(e){} renderContas(); });
+      lb.appendChild(ck); lb.appendChild(document.createTextNode('Mostrar contas de passagem (' + nPassagem + ' fora do acompanhamento de saldo)'));
+      box.appendChild(lb);
+    }
+    todas.filter(c => c.acompanha || mostrarPassagem).forEach(c => { if(!porEmp.has(c.emp)) porEmp.set(c.emp, []); porEmp.get(c.emp).push(c); });
+    if(!porEmp.size) box.appendChild(el('div', 'vazio', 'Nenhuma conta para mostrar.'));
     [...porEmp.keys()].sort().forEach(emp => {
       const g = el('section', 'grupo'); g.appendChild(el('h2', '', emp));
       const grade = el('div', 'grade');
@@ -432,6 +458,7 @@
         const nm = el('div', 'nome', c.nome); nm.appendChild(el('small', '', 'Caixa #' + c.cx)); card.appendChild(nm);
         card.appendChild(spanValor(calc.saldoAtual, 'saldo')); card.lastChild.style.display = 'block';
         card.appendChild(el('div', 'meta', c.rows.length.toLocaleString('pt-BR') + ' lançamentos · último em ' + (calc.ultima ? fmtDia(calc.ultima) : '—')));
+        if(!c.acompanha) card.appendChild(el('div', 'meta', 'Conta de passagem'));
         if(c.empConta && c.emp !== c.empConta) card.appendChild(el('div', 'meta', 'Conta cadastrada em ' + c.empConta));
         else if(!calc.ini.fonte) card.appendChild(el('div', 'meta', '⚠ saldo inicial não informado'));
         card.addEventListener('click', () => ir({ c: c.key }));

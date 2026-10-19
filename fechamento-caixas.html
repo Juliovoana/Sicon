@@ -86,14 +86,19 @@
   .linha .dias{ font-weight:700; }
   .selo{ display:inline-flex; align-items:center; gap:6px; border-radius:999px; padding:4px 10px; font-size:.8rem; font-weight:700; white-space:nowrap; }
   .selo.ok{ background:var(--ok-bg); color:var(--ok); } .selo.warn{ background:var(--warn-bg); color:var(--warn); } .selo.bad{ background:var(--bad-bg); color:var(--bad); }
+  .com-saldo .linha, .com-saldo .cab-linha{ grid-template-columns:minmax(150px,2fr) 70px 150px 130px 90px 130px; }
+  .linha .saldo{ text-align:right; font-weight:700; font-variant-numeric:tabular-nums; }
+  .linha .saldo.neg{ color:var(--bad); }
+  .cab-linha .th-saldo{ text-align:right; }
   .cab-linha{ display:grid; grid-template-columns:minmax(150px,2fr) 70px 150px 90px 130px; gap:10px; padding:0 14px 6px; color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; }
   @media (max-width:720px){
     .pagina{ padding:12px; }
     .cab-linha{ display:none; }
-    .linha{ grid-template-columns:1fr auto; row-gap:6px; }
+    .linha, .com-saldo .linha{ grid-template-columns:1fr auto; row-gap:6px; }
+    .linha .saldo{ text-align:left; }
     .linha .conta{ grid-column:1; font-size:1.02rem; }
     .linha .estado{ grid-column:2; grid-row:1; justify-self:end; }
-    .linha .cx, .linha .data, .linha .dias{ grid-column:1 / -1; display:flex; gap:6px; align-items:baseline; font-size:.9rem; }
+    .linha .cx, .linha .data, .linha .dias, .linha .saldo{ grid-column:1 / -1; display:flex; gap:6px; align-items:baseline; font-size:.9rem; }
     .linha .rot{ display:inline; }
     .linha .data small{ display:inline; }
   }
@@ -197,6 +202,7 @@
       <option value="recentes">Fechadas há menos tempo</option>
     </select>
   </div>
+  <label class="contagem" id="lblPassagem" style="display:none;gap:6px;align-items:center;cursor:pointer"><input type="checkbox" id="chkPassagem"><span id="txtPassagem"></span></label>
   <p class="contagem" id="contagem"></p>
 
   <div id="lista"></div>
@@ -294,6 +300,13 @@
   let registros = [];          // [{empresa, conta, caixa, data(Date|null), dias(number|null), situacao}]
   let origemInfo = '';         // texto do rodapé (de onde vieram os dados)
   let filtroEmpresa = 'todas', filtroSit = 'todas', termo = '', ordem = 'atraso';
+  // contas de passagem (ACOMPANHA_SALDO = false no caixas_fechados.csv) ficam fora da tela, a não ser que se peça para mostrar
+  let mostrarPassagem = false;
+  try { mostrarPassagem = localStorage.getItem('fechamento_mostrar_passagem_v1') === '1'; } catch(e){}
+  const semAc = (x) => String(x == null ? '' : x).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  // sem a coluna, ou com a célula em branco, a conta acompanha o saldo (padrão = true)
+  const acompanhaSaldo = (v) => !['false', 'falso', '0', 'n', 'no', 'nao', 'f'].includes(semAc(v));
+  const base = () => registros.filter(r => r.acompanha || mostrarPassagem);
   let timer = null;
 
   function situacaoDe(dias){
@@ -304,6 +317,18 @@
   }
   const ROTULO = { ok: '● Em dia', warn: '▲ Atenção', bad: '✖ Atrasado' };
 
+  // saldo da conta no fim do dia do último fechamento — coluna opcional (SALDO_FECHAMENTO); aceita 45938,77 / 45938.77 / 1.234,56
+  const COLUNAS_SALDO = ['saldo_fechamento', 'saldo_no_fechamento', 'saldo_ultimo_fechamento', 'saldo_fechado', 'saldo'];
+  function lerSaldo(l){
+    for(const c of COLUNAS_SALDO){
+      if(!(c in l)) continue;
+      let t = String(l[c] == null ? '' : l[c]).trim(); if(!t) return null;
+      if(t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+      const n = parseFloat(t); return isNaN(n) ? null : n;
+    }
+    return null;
+  }
+  const fmtSaldo = (n) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   function montarRegistros(linhas){
     const h = hoje0();
     return linhas.map(l => {
@@ -311,10 +336,13 @@
       const dias = data ? Math.max(0, diasEntre(data, h)) : null;
       return {
         empresa: (l.empresa || '—').toUpperCase(), conta: l.conta || '—', caixa: l.cai_cod || l.caixa || '',
-        data, dias, situacao: situacaoDe(dias),
+        data, dias, situacao: situacaoDe(dias), acompanha: acompanhaSaldo(l.acompanha_saldo),
+        saldo: lerSaldo(l),
       };
     }).filter(r => r.conta !== '—' || r.data);
   }
+  // o arquivo traz a coluna de saldo? (basta uma conta com valor — sem ela a tela fica como sempre foi)
+  const temColunaSaldo = () => registros.some(r => r.saldo !== null);
 
   // ===================== desenho =====================
   function aviso(tipo, texto){
@@ -323,12 +351,12 @@
     a.className = 'aviso ' + tipo; a.textContent = texto; a.hidden = false;
   }
 
-  function empresas(){ return [...new Set(registros.map(r => r.empresa))].sort(); }
+  function empresas(){ return [...new Set(base().map(r => r.empresa))].sort(); }
 
   function desenharResumo(){
     const box = $('resumo'); box.textContent = '';
     empresas().forEach(emp => {
-      const rs = registros.filter(r => r.empresa === emp);
+      const rs = base().filter(r => r.empresa === emp);
       const bad = rs.filter(r => r.situacao === 'bad').length, warn = rs.filter(r => r.situacao === 'warn').length, ok = rs.filter(r => r.situacao === 'ok').length;
       const comData = rs.filter(r => r.data);
       const velho = comData.length ? comData.reduce((a, b) => (a.data < b.data ? a : b)) : null;
@@ -364,21 +392,22 @@
       box.appendChild(v); $('contagem').textContent = ''; return;
     }
     const t = semAcento(termo);
-    const visiveis = registros.filter(r =>
+    const todasBase = base();
+    const visiveis = todasBase.filter(r =>
       (filtroEmpresa === 'todas' || r.empresa === filtroEmpresa) &&
       (filtroSit === 'todas' || r.situacao === filtroSit) &&
       (!t || semAcento(r.conta + ' ' + r.empresa + ' ' + r.caixa).includes(t)));
-    $('contagem').textContent = visiveis.length === registros.length ? 'Exibindo todas as ' + registros.length + ' contas' : 'Exibindo ' + visiveis.length + ' de ' + registros.length + ' contas';
+    $('contagem').textContent = visiveis.length === todasBase.length ? 'Exibindo todas as ' + todasBase.length + ' contas' : 'Exibindo ' + visiveis.length + ' de ' + todasBase.length + ' contas';
     if(!visiveis.length){ box.appendChild(el('div', 'vazio', 'Nenhuma conta com esses filtros.')); return; }
 
     empresas().forEach(emp => {
       const doGrupo = ordenar(visiveis.filter(r => r.empresa === emp));
       if(!doGrupo.length) return;
-      const g = el('section', 'grupo');
+      const g = el('section', 'grupo' + (temColunaSaldo() ? ' com-saldo' : ''));
       const h2 = el('h2', '', emp); h2.appendChild(el('span', 'qtd', doGrupo.length + (doGrupo.length === 1 ? ' conta' : ' contas')));
       g.appendChild(h2);
       const cab = el('div', 'cab-linha');
-      ['Conta', 'Caixa', 'Último fechamento', 'Há', 'Situação'].forEach(x => cab.appendChild(el('span', '', x)));
+      (temColunaSaldo() ? ['Conta', 'Caixa', 'Último fechamento', 'Saldo no fechamento', 'Há', 'Situação'] : ['Conta', 'Caixa', 'Último fechamento', 'Há', 'Situação']).forEach(x => cab.appendChild(el('span', x === 'Saldo no fechamento' ? 'th-saldo' : '', x)));
       g.appendChild(cab);
       doGrupo.forEach(r => {
         const li = el('div', 'linha ' + r.situacao);
@@ -387,11 +416,17 @@
           const a = el('a', 'link-extrato', r.conta); a.href = 'extratos-contas.html#c=' + encodeURIComponent(r.empresa + ':' + r.caixa).replace(/%3A/g, ':'); a.title = 'Ver extrato mês a mês';
           nomeConta.appendChild(a);
         } else nomeConta.textContent = r.conta;
+        if(!r.acompanha) nomeConta.appendChild(el('small', '', ' · conta de passagem'));
         li.appendChild(nomeConta);
         const cx = el('div', 'cx'); cx.appendChild(el('span', 'rot', 'Caixa ')); cx.appendChild(el('span', '', r.caixa ? '#' + r.caixa : '—')); li.appendChild(cx);
         const dt = el('div', 'data');
         if(r.data){ dt.appendChild(el('span', '', fmtData(r.data))); dt.appendChild(el('small', '', fmtDiaSemana(r.data))); } else dt.appendChild(el('span', '', 'sem fechamento'));
         li.appendChild(dt);
+        if(temColunaSaldo()){
+          const sd = el('div', 'saldo' + (r.saldo !== null && Math.round(r.saldo * 100) < 0 ? ' neg' : ''));
+          sd.appendChild(el('span', 'rot', 'Saldo no fechamento: ')); sd.appendChild(el('span', '', r.saldo === null ? '—' : 'R$ ' + fmtSaldo(r.saldo)));
+          li.appendChild(sd);
+        }
         const dd = el('div', 'dias');
         dd.appendChild(el('span', 'rot', 'Há '));
         dd.appendChild(el('span', '', r.dias === null ? '—' : (r.dias === 0 ? 'hoje' : r.dias + (r.dias === 1 ? ' dia' : ' dias'))));
@@ -404,6 +439,9 @@
   }
 
   function desenhar(){
+    const nPassagem = registros.filter(r => !r.acompanha).length;
+    $('lblPassagem').style.display = nPassagem ? 'flex' : 'none'; $('chkPassagem').checked = mostrarPassagem;
+    $('txtPassagem').textContent = 'Mostrar contas de passagem (' + nPassagem + ' fora do acompanhamento de saldo)';
     desenharResumo(); desenharLista();
     $('rodape').textContent = origemInfo;
     document.querySelectorAll('#chipsSituacao .chip').forEach(c => c.classList.toggle('ativo', c.dataset.sit === filtroSit));
@@ -417,7 +455,7 @@
       return false;
     }
     registros = montarRegistros(linhas);
-    if(filtroEmpresa !== 'todas' && !registros.some(r => r.empresa === filtroEmpresa)) filtroEmpresa = 'todas';
+    if(filtroEmpresa !== 'todas' && !base().some(r => r.empresa === filtroEmpresa)) filtroEmpresa = 'todas';
     origemInfo = origem;
     desenhar();
     return true;
@@ -492,6 +530,7 @@
   });
   $('busca').addEventListener('input', (e) => { termo = e.target.value; desenharLista(); });
   $('ordem').addEventListener('change', (e) => { ordem = e.target.value; desenharLista(); });
+  $('chkPassagem').addEventListener('change', (e) => { mostrarPassagem = e.target.checked; try { localStorage.setItem('fechamento_mostrar_passagem_v1', mostrarPassagem ? '1' : '0'); } catch(err){} if(filtroEmpresa !== 'todas' && !base().some(r => r.empresa === filtroEmpresa)) filtroEmpresa = 'todas'; desenhar(); });
   $('chipsSituacao').addEventListener('click', (e) => { const b = e.target.closest('.chip'); if(!b) return; filtroSit = b.dataset.sit; desenhar(); });
 
   function preencherCfg(){
