@@ -220,18 +220,28 @@
   // ===================== dados =====================
   let contas = new Map();        // 'EMPRESA:CAIXA' -> {emp, cx, nome, rows, calc}
   let saldosIni = new Map();     // 'EMPRESA:CAIXA' -> número (arquivo)
-  let statusColeta = null, origemInfo = '', linhasInvalidas = 0, temPlano = false;
+  let statusColeta = null, origemInfo = '', linhasInvalidas = 0, temPlano = false, temPlanoCod = false, temPlanoNome = false;
+  // empresa que agrupa as contas na lista: 'conta' (padrão) = empresa em que a conta está cadastrada (coluna EMPRESA_CONTA);
+  // 'lanc' = empresa do lançamento (coluna EMPRESA). Só existe a escolha se o arquivo trouxer as duas colunas.
+  let modoEmp = 'conta', temEmpConta = false, ultimosTextos = null;
+  try { if(localStorage.getItem('extratos_modo_empresa_v1') === 'lanc') modoEmp = 'lanc'; } catch(e){}
   const planoTxt = (L) => (L.pc || L.pn) ? (L.pc + (L.pc && L.pn ? ' · ' : '') + L.pn) : '';
   let manuais = {}; try { manuais = JSON.parse(localStorage.getItem('extratos_saldos_manuais_v1') || '{}'); } catch(e){}
   const salvarManuais = () => { try { localStorage.setItem('extratos_saldos_manuais_v1', JSON.stringify(manuais)); } catch(e){} };
   const chaveConta = (emp, cx) => String(emp).toUpperCase().trim() + ':' + String(cx).trim();
 
   function montar(textos){
-    // nomes das contas (caixas_fechados): EMPRESA + CAI_COD -> conta
-    const nomes = new Map();
+    ultimosTextos = textos;
+    // nomes das contas (caixas_fechados): EMPRESA + CAI_COD -> conta (e, só pelo código do caixa, pra quando o agrupamento for pela empresa do lançamento)
+    const nomes = new Map(), nomesPorCaixa = new Map(), empPorCaixaArq = new Map();
     if(textos[ARQ.contas]){
       const t = lerCsv(textos[ARQ.contas]); const iE = t.cab.indexOf('empresa'), iC = t.cab.indexOf('cai_cod'), iN = t.cab.indexOf('conta');
-      if(iE >= 0 && iC >= 0 && iN >= 0) t.linhas.forEach(l => nomes.set(chaveConta(l[iE], l[iC]), (l[iN] || '').trim()));
+      if(iE >= 0 && iC >= 0 && iN >= 0) t.linhas.forEach(l => {
+        const cod = String(l[iC]).trim(), nm = (l[iN] || '').trim();
+        nomes.set(chaveConta(l[iE], l[iC]), nm);
+        if(!nomesPorCaixa.has(cod)) nomesPorCaixa.set(cod, nm);
+        if(!empPorCaixaArq.has(cod)) empPorCaixaArq.set(cod, String(l[iE]).toUpperCase().trim());
+      });
     }
     saldosIni = new Map();
     if(textos[ARQ.saldos]){
@@ -240,19 +250,37 @@
     }
     const t = lerCsv(textos[ARQ.lanc]);
     const ix = (n) => t.cab.indexOf(n);
-    const iCx = ix('caixa'), iD = ix('data'), iH = ix('historico'), iE = ix('entrada'), iS = ix('saida'), iQ = ix('sequencia'), iEmp = ix('empresa');
-    // plano de contas (opcional): CODCTA e NOMECTA -- o arquivo antigo, sem essas colunas, continua funcionando igual
-    const iPc = ix('codcta'), iPn = ix('nomecta'); temPlano = iPc >= 0 || iPn >= 0;
-    if([iCx, iD, iE, iS, iQ, iEmp].some(i => i < 0)) throw new Error('O arquivo de lançamentos precisa ter as colunas CAIXA, DATA, ENTRADA, SAIDA, SEQUENCIA e EMPRESA.');
+    const iCx = ix('caixa'), iD = ix('data'), iH = ix('historico'), iE = ix('entrada'), iS = ix('saida'), iQ = ix('sequencia');
+    // EMPRESA = empresa do lançamento; EMPRESA_CONTA = empresa em que a conta está cadastrada (as duas são opcionais, mas precisa de pelo menos uma)
+    const iEmpL = ix('empresa'), iEmpC = ix('empresa_conta');
+    // plano de contas (opcional): código e nome — aceita PLANO_CONTAS / NOME_PLANO_CONTAS e também CODCTA / NOMECTA; o que não vier simplesmente não aparece
+    const iPc = [ix('plano_contas'), ix('codcta')].find(i => i >= 0) ?? -1, iPn = [ix('nome_plano_contas'), ix('nomecta')].find(i => i >= 0) ?? -1;
+    temPlanoCod = iPc >= 0; temPlanoNome = iPn >= 0; temPlano = temPlanoCod || temPlanoNome;
+    if([iCx, iD, iE, iS, iQ].some(i => i < 0) || (iEmpL < 0 && iEmpC < 0)) throw new Error('O arquivo de lançamentos precisa ter as colunas CAIXA, DATA, ENTRADA, SAIDA, SEQUENCIA e EMPRESA (ou EMPRESA_CONTA).');
+    temEmpConta = iEmpL >= 0 && iEmpC >= 0;
+    const txt = (l, i) => i >= 0 ? String(l[i] == null ? '' : l[i]).toUpperCase().trim() : '';
+    // empresa da conta de cada caixa: a que mais aparece em EMPRESA_CONTA; sem ela, a do caixas_fechados; sem as duas, a do lançamento
+    const freq = new Map(), freqL = new Map();
+    const conta = (mp, cx, e) => { if(!e) return; if(!mp.has(cx)) mp.set(cx, new Map()); const m = mp.get(cx); m.set(e, (m.get(e) || 0) + 1); };
+    const maisFrequente = (mp, cx) => { const m = mp.get(cx); let melhor = '', n = 0; if(m) m.forEach((q, e) => { if(q > n){ n = q; melhor = e; } }); return melhor; };
+    for(const l of t.linhas){ const cx = String(l[iCx]).trim(); conta(freq, cx, txt(l, iEmpC)); conta(freqL, cx, txt(l, iEmpL)); }
+    // (caixa sem nenhuma empresa de conta no arquivo nem no caixas_fechados: fica inteira na empresa que mais a movimenta)
+    const empDaConta = (cx, empLanc) => maisFrequente(freq, cx) || empPorCaixaArq.get(cx) || maisFrequente(freqL, cx) || empLanc;
+    const porLanc = temEmpConta && modoEmp === 'lanc';
     const novo = new Map(); let invalidas = 0;
+    const obter = (emp, cx, ec) => {
+      const k = chaveConta(emp, cx); let c = novo.get(k);
+      if(!c){ c = { key: k, emp: String(emp).toUpperCase().trim(), empConta: ec, cx: String(cx).trim(), nome: nomes.get(k) || nomes.get(chaveConta(ec, cx)) || nomesPorCaixa.get(String(cx).trim()) || ('Caixa ' + String(cx).trim()), rows: [], calc: null }; novo.set(k, c); }
+      return c;
+    };
     for(const l of t.linhas){
-      const k = chaveConta(l[iEmp], l[iCx]);
-      let c = novo.get(k);
-      if(!c){ c = { key: k, emp: String(l[iEmp]).toUpperCase().trim(), cx: String(l[iCx]).trim(), nome: nomes.get(k) || ('Caixa ' + String(l[iCx]).trim()), rows: [], calc: null }; novo.set(k, c); }
+      const cx = String(l[iCx]).trim(), eL = txt(l, iEmpL), ec = empDaConta(cx, eL || txt(l, iEmpC));
+      const c = obter(porLanc ? (eL || ec) : (iEmpC >= 0 ? ec : eL), cx, ec);
       const dia = isoData(l[iD]), hist = iH >= 0 ? l[iH] : '';
       if(!/^\d{4}-\d{2}-\d{2}$/.test(dia)){ invalidas++; continue; }      // linha com colunas deslocadas/data ilegível: não entra no saldo (e é avisada)
       // linha de abertura (ex.: 31/12/2024, HISTORICO "SALDO ANTERIOR"/"SALDO INICIAL"): vira o saldo inicial da conta, não um lançamento
-      if(/^\s*saldo\s+(anterior|inicial)\b/i.test(semAcento(hist))){ const v = num(l[iE]) - num(l[iS]); c.abertura = { v: (c.abertura ? c.abertura.v : 0) + v, d: dia }; continue; }
+      // (vai sempre para a empresa dona da conta, mesmo agrupando pela empresa do lançamento)
+      if(/^\s*saldo\s+(anterior|inicial)\b/i.test(semAcento(hist))){ const dono = obter(iEmpC >= 0 ? ec : eL, cx, ec); const v = num(l[iE]) - num(l[iS]); dono.abertura = { v: (dono.abertura ? dono.abertura.v : 0) + v, d: dia }; continue; }
       c.rows.push({ d: dia, h: hist, e: num(l[iE]), s: num(l[iS]), q: parseInt(l[iQ], 10) || 0, pc: iPc >= 0 ? String(l[iPc] || '').trim() : '', pn: iPn >= 0 ? String(l[iPn] || '').trim() : '' });
     }
     contas = novo; linhasInvalidas = invalidas;
@@ -265,6 +293,7 @@
     if(Object.prototype.hasOwnProperty.call(manuais, c.key)) return { v: manuais[c.key], fonte: 'informado neste aparelho' };
     if(c.abertura) return { v: c.abertura.v, fonte: 'linha “SALDO ANTERIOR” do arquivo de lançamentos, de ' + fmtDia(c.abertura.d) };
     if(saldosIni.has(c.key)) return { v: saldosIni.get(c.key), fonte: 'arquivo saldos_iniciais.csv' };
+    if(c.empConta && c.emp !== c.empConta) return { v: 0, fonte: 'empresa do lançamento — o saldo inicial fica na empresa dona da conta (' + c.empConta + ')' };
     return { v: 0, fonte: null };
   }
 
@@ -322,7 +351,7 @@
   function aplicar(textos, origem){
     montar(textos); origemInfo = origem; statusColeta = textos[ARQ.status] || null; render();
     if(!linhasInvalidas) aviso('', '');
-    else aviso('erro', linhasInvalidas + ' linha(s) do arquivo de lançamentos têm data inválida e foram ignoradas — confira a ordem das colunas na consulta (CAIXA, DATA, HISTORICO, ENTRADA, SAIDA, EMPRESA, SEQUENCIA). Os saldos podem estar incompletos.');
+    else aviso('erro', linhasInvalidas + ' linha(s) do arquivo de lançamentos têm data inválida e foram ignoradas — confira a ordem das colunas na consulta (CAIXA, DATA, HISTORICO, ENTRADA, SAIDA, EMPRESA, SEQUENCIA, …). Os saldos podem estar incompletos.');
   }
 
   function avisoColeta(statusTexto, arquivoAtualizado){
@@ -348,7 +377,7 @@
   }
 
   // ===================== navegação =====================
-  const rota = () => { const p = new URLSearchParams(location.hash.replace(/^#/, '')); return { c: p.get('c') || '', m: p.get('m') || '', v: p.get('v') === 'det' ? 'det' : 'dia', d: p.get('d') || '' }; };
+  const rota = () => { const p = new URLSearchParams(location.hash.replace(/^#/, '')); return { c: p.get('c') || '', m: p.get('m') || '', v: p.get('v') === 'det' ? 'det' : p.get('v') === 'conc' ? 'conc' : 'dia', d: p.get('d') || '' }; };
   const ir = (o) => { const p = new URLSearchParams(); if(o.c) p.set('c', o.c); if(o.m) p.set('m', o.m); if(o.m && o.v) p.set('v', o.v); if(o.d) p.set('d', o.d); location.hash = p.toString(); };
   window.addEventListener('hashchange', render);
 
@@ -374,9 +403,25 @@
   }
 
   // ---- 1) lista de contas ----
+  function trocarModoEmp(m){
+    if(m === modoEmp || !ultimosTextos) return;
+    modoEmp = m; try { localStorage.setItem('extratos_modo_empresa_v1', m); } catch(e){}
+    montar(ultimosTextos);
+    try { history.replaceState(null, '', location.pathname + location.search); } catch(e){ location.hash = ''; }
+    render();
+  }
+
   function renderContas(){
     renderNav({}, null, null);
     const box = el('div', ''); const porEmp = new Map();
+    if(temEmpConta){
+      const sel = el('div', 'abas'); sel.appendChild(el('span', 'sub', 'Agrupar por:')); sel.lastChild.style.alignSelf = 'center';
+      [['conta', 'Empresa da conta'], ['lanc', 'Empresa do lançamento']].forEach(([k, rot]) => { const b = el('button', 'aba' + (modoEmp === k ? ' ativo' : ''), rot); b.type = 'button'; b.addEventListener('click', () => trocarModoEmp(k)); sel.appendChild(b); });
+      box.appendChild(sel);
+      box.appendChild(el('p', 'sub', modoEmp === 'lanc'
+        ? 'Cada conta é dividida pela empresa que fez o lançamento; o saldo inicial fica na empresa dona da conta.'
+        : 'Cada conta aparece inteira, na empresa em que ela está cadastrada (padrão).'));
+    }
     [...contas.values()].forEach(c => { if(!porEmp.has(c.emp)) porEmp.set(c.emp, []); porEmp.get(c.emp).push(c); });
     [...porEmp.keys()].sort().forEach(emp => {
       const g = el('section', 'grupo'); g.appendChild(el('h2', '', emp));
@@ -387,7 +432,8 @@
         const nm = el('div', 'nome', c.nome); nm.appendChild(el('small', '', 'Caixa #' + c.cx)); card.appendChild(nm);
         card.appendChild(spanValor(calc.saldoAtual, 'saldo')); card.lastChild.style.display = 'block';
         card.appendChild(el('div', 'meta', c.rows.length.toLocaleString('pt-BR') + ' lançamentos · último em ' + (calc.ultima ? fmtDia(calc.ultima) : '—')));
-        if(!calc.ini.fonte) card.appendChild(el('div', 'meta', '⚠ saldo inicial não informado'));
+        if(c.empConta && c.emp !== c.empConta) card.appendChild(el('div', 'meta', 'Conta cadastrada em ' + c.empConta));
+        else if(!calc.ini.fonte) card.appendChild(el('div', 'meta', '⚠ saldo inicial não informado'));
         card.addEventListener('click', () => ir({ c: c.key }));
         grade.appendChild(card);
       });
@@ -407,7 +453,7 @@
     const box = el('div', '');
     const topo = el('div', 'barra');
     const t = el('div', ''); t.style.flex = '1'; const h = el('h2', '', c.nome); h.style.margin = '0'; t.appendChild(h);
-    t.appendChild(el('div', 'sub', c.emp + ' · Caixa #' + c.cx + ' · ' + c.rows.length.toLocaleString('pt-BR') + ' lançamentos')); topo.appendChild(t);
+    t.appendChild(el('div', 'sub', c.emp + (c.empConta && c.emp !== c.empConta ? ' (conta de ' + c.empConta + ')' : '') + ' · Caixa #' + c.cx + ' · ' + c.rows.length.toLocaleString('pt-BR') + ' lançamentos')); topo.appendChild(t);
     const bi = el('button', 'btn sec', '⇅ Ordem'); bi.addEventListener('click', () => { ordemDesc = !ordemDesc; render(); }); topo.appendChild(bi);
     const bp = el('button', 'btn', '📄 PDF do resumo mensal'); bp.addEventListener('click', () => gerarPdf('mensal', c, calc)); topo.appendChild(bp);
     box.appendChild(topo);
@@ -441,6 +487,9 @@
   }
 
   // ---- 3) mês: dia a dia / detalhado ----
+  // título da coluna do plano de contas conforme o que o arquivo trouxe (código, nome ou os dois)
+  const rotuloPlano = () => temPlanoCod && temPlanoNome ? 'Plano de contas' : temPlanoCod ? 'Cód. plano de contas' : 'Conta orçamentária';
+
   function renderMes(c, calc, mes, r){
     const box = el('div', '');
     const topo = el('div', 'barra'); const t = el('div', ''); t.style.flex = '1';
@@ -449,12 +498,14 @@
     const bA = el('button', 'btn sec', '‹'); bA.disabled = !ant; bA.title = 'Mês anterior'; bA.addEventListener('click', () => ir({ c: c.key, m: ant.ym, v: r.v }));
     const bP = el('button', 'btn sec', '›'); bP.disabled = !prox; bP.title = 'Próximo mês'; bP.addEventListener('click', () => ir({ c: c.key, m: prox.ym, v: r.v }));
     topo.appendChild(bA); topo.appendChild(bP);
-    const bpdf = el('button', 'btn', '📄 PDF ' + (r.v === 'det' ? 'detalhado' : 'dia a dia')); bpdf.addEventListener('click', () => gerarPdf(r.v === 'det' ? 'detalhado' : 'dias', c, calc, mes)); topo.appendChild(bpdf);
+    if(r.v === 'conc' && !temPlano) r = { ...r, v: 'det' };       // o arquivo não traz o plano de contas: só o detalhado simples
+    const conc = r.v === 'conc';
+    const bpdf = el('button', 'btn', '📄 PDF ' + (conc ? 'detalhado conciliado' : r.v === 'det' ? 'detalhado' : 'dia a dia')); bpdf.addEventListener('click', () => gerarPdf(conc ? 'conciliado' : r.v === 'det' ? 'detalhado' : 'dias', c, calc, mes)); topo.appendChild(bpdf);
     box.appendChild(topo);
     box.appendChild(kpis([['Saldo anterior', mes.ant], ['Entradas', mes.ent, 'pos'], ['Saídas', mes.sai], ['Saldo atual', mes.atu], ['Lançamentos', mes.n.toLocaleString('pt-BR')]]));
 
     const abas = el('div', 'abas');
-    [['dia', 'Dia a dia'], ['det', 'Detalhado']].forEach(([k, rot]) => { const b = el('button', 'aba' + (r.v === k ? ' ativo' : ''), rot); b.addEventListener('click', () => { limiteLinhas = 300; ir({ c: c.key, m: mes.ym, v: k }); }); abas.appendChild(b); });
+    [['dia', 'Dia a dia'], ['det', 'Detalhado'], ...(temPlano ? [['conc', 'Detalhado conciliado']] : [])].forEach(([k, rot]) => { const b = el('button', 'aba' + (r.v === k ? ' ativo' : ''), rot); b.addEventListener('click', () => { limiteLinhas = 300; ir({ c: c.key, m: mes.ym, v: k }); }); abas.appendChild(b); });
     box.appendChild(abas);
 
     if(r.v === 'dia'){
@@ -474,7 +525,7 @@
       box.appendChild(el('p', 'sub', 'Toque num dia para ver os lançamentos dele.'));
     } else {
       const barra = el('div', 'barra');
-      const busca = el('input'); busca.type = 'search'; busca.placeholder = temPlano ? 'Buscar no histórico, plano de contas ou valor…' : 'Buscar no histórico ou valor…'; busca.value = termoBusca;
+      const busca = el('input'); busca.type = 'search'; busca.placeholder = conc ? 'Buscar no histórico, plano de contas ou valor…' : 'Buscar no histórico ou valor…'; busca.value = termoBusca;
       busca.addEventListener('input', () => { termoBusca = busca.value; limiteLinhas = 300; desenharDetalhe(); }); barra.appendChild(busca);
       // exportação: leva o que está filtrado na tela (todas as linhas do filtro, não só as 300 exibidas)
       const bx = el('button', 'btn sec', '⬇ Excel'); bx.title = 'Baixar planilha Excel (.xlsx) do que está na tela'; bx.addEventListener('click', () => exportarDetalhe('xlsx', c, calc, mes, r)); barra.appendChild(bx);
@@ -489,21 +540,21 @@
         const t = semAcento(termoBusca); const out = [];
         for(let i = mes.i0; i <= mes.i1; i++){
           const L = c.rows[i]; if(r.d && L.d !== r.d) continue;
-          if(t && !(semAcento(L.h).includes(t) || semAcento(planoTxt(L)).includes(t) || fmt(L.e).includes(t) || fmt(L.s).includes(t))) continue;
+          if(t && !(semAcento(L.h).includes(t) || (conc && semAcento(planoTxt(L)).includes(t)) || fmt(L.e).includes(t) || fmt(L.s).includes(t))) continue;
           out.push(i);
         }
         const caixa = el('div', 'tabela-box rolagem'), tb = el('table'), th = el('thead'), trh = el('tr');
-        (temPlano ? ['Data', 'Histórico', 'Plano de contas', 'Entrada', 'Saída', 'Saldo'] : ['Data', 'Histórico', 'Entrada', 'Saída', 'Saldo']).forEach(x => trh.appendChild(el('th', x === 'Plano de contas' ? 'txt' : '', x))); th.appendChild(trh); tb.appendChild(th);
+        (conc ? ['Data', 'Histórico', rotuloPlano(), 'Entrada', 'Saída', 'Saldo'] : ['Data', 'Histórico', 'Entrada', 'Saída', 'Saldo']).forEach(x => trh.appendChild(el('th', x === rotuloPlano() ? 'txt' : '', x))); th.appendChild(trh); tb.appendChild(th);
         const body = el('tbody');
         out.slice(0, limiteLinhas).forEach(i => {
           const L = c.rows[i], tr = el('tr'); tr.appendChild(el('td', '', fmtDia(L.d))); tr.appendChild(el('td', 'hist', L.h));
-          if(temPlano) tr.appendChild(el('td', 'hist', planoTxt(L)));
+          if(conc) tr.appendChild(el('td', 'hist', planoTxt(L)));
           const te = el('td'); if(arred(L.e) !== 0) te.appendChild(spanValor(L.e, 'pos')); tr.appendChild(te);
           const ts = el('td'); if(arred(L.s) !== 0) ts.appendChild(spanValor(L.s)); tr.appendChild(ts);
           const tsa = el('td'); tsa.appendChild(spanValor(calc.saldos[i])); tr.appendChild(tsa); body.appendChild(tr);
         });
         tb.appendChild(body);
-        if(t || r.d){ const tf = el('tfoot'), trf = el('tr'); trf.appendChild(el('td', '', 'Filtro')); trf.appendChild(el('td', '', out.length + ' lançamento(s)')); if(temPlano) trf.appendChild(el('td'));
+        if(t || r.d){ const tf = el('tfoot'), trf = el('tr'); trf.appendChild(el('td', '', 'Filtro')); trf.appendChild(el('td', '', out.length + ' lançamento(s)')); if(conc) trf.appendChild(el('td'));
           const te = out.reduce((a, i) => a + c.rows[i].e, 0), ts = out.reduce((a, i) => a + c.rows[i].s, 0);
           const a = el('td'); a.appendChild(spanValor(te)); trf.appendChild(a); const b = el('td'); b.appendChild(spanValor(ts)); trf.appendChild(b); trf.appendChild(el('td')); tf.appendChild(trf); tb.appendChild(tf); }
         caixa.appendChild(tb);
@@ -522,11 +573,11 @@
   const prepararXlsx = () => libXlsx || (libXlsx = (window.XLSX ? Promise.resolve() : carregarScript('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js')).catch(e => { libXlsx = null; throw new Error('Não consegui carregar a biblioteca do Excel (internet?). Use o CSV.'); }));
 
   // linhas do detalhado conforme o filtro atual (dia e/ou busca): [{d, h, e, s, saldo}]
-  function linhasDoDetalhe(c, calc, mes, r){
+  function linhasDoDetalhe(c, calc, mes, r, conc){
     const t = semAcento(termoBusca), out = [];
     for(let i = mes.i0; i <= mes.i1; i++){
       const L = c.rows[i]; if(r.d && L.d !== r.d) continue;
-      if(t && !(semAcento(L.h).includes(t) || semAcento(planoTxt(L)).includes(t) || fmt(L.e).includes(t) || fmt(L.s).includes(t))) continue;
+      if(t && !(semAcento(L.h).includes(t) || (conc && semAcento(planoTxt(L)).includes(t)) || fmt(L.e).includes(t) || fmt(L.s).includes(t))) continue;
       out.push({ d: L.d, h: L.h, pc: L.pc, pn: L.pn, e: arred(L.e), s: arred(L.s), saldo: arred(calc.saldos[i]) });
     }
     return out;
@@ -535,13 +586,17 @@
   async function exportarDetalhe(formato, c, calc, mes, r){
     try {
       aviso('', '');
-      const linhas = linhasDoDetalhe(c, calc, mes, r);
+      // no "Detalhado conciliado" o código e/ou o nome do plano de contas (o que o arquivo trouxe) entram logo depois do histórico
+      const conc = r.v === 'conc' && temPlano, inclPc = conc && temPlanoCod, inclPn = conc && temPlanoNome;
+      const inclEC = temEmpConta && modoEmp === 'lanc';       // agrupado pela empresa do lançamento: mostra também a empresa dona da conta
+      const linhas = linhasDoDetalhe(c, calc, mes, r, conc);
       const filtrado = !!(r.d || termoBusca.trim());
-      const base = (c.emp + '-' + c.nome + '-' + mes.ym + (r.d ? '-dia' + r.d.slice(8) : '') + (termoBusca.trim() ? '-filtrado' : '')).replace(/[^\w.-]+/g, '_');
+      const base = (c.emp + '-' + c.nome + '-' + mes.ym + (conc ? '-conciliado' : '') + (r.d ? '-dia' + r.d.slice(8) : '') + (termoBusca.trim() ? '-filtrado' : '')).replace(/[^\w.-]+/g, '_');
       // empresa e conta/banco vão como COLUNAS em todas as linhas (facilita filtrar/somar e juntar vários extratos)
-      // com plano de contas no arquivo, CODCTA e NOMECTA entram logo depois do histórico (pra contabilidade conferir a classificação)
-      const cab = temPlano ? ['EMPRESA', 'CONTA', 'CAIXA', 'DATA', 'HISTORICO', 'CODCTA', 'NOMECTA', 'ENTRADA', 'SAIDA', 'SALDO'] : ['EMPRESA', 'CONTA', 'CAIXA', 'DATA', 'HISTORICO', 'ENTRADA', 'SAIDA', 'SALDO'];
-      const colsNum = temPlano ? ['H', 'I', 'J'] : ['F', 'G', 'H'], ultimaCol = temPlano ? 'J' : 'H';
+      const cab = ['EMPRESA', ...(inclEC ? ['EMPRESA_CONTA'] : []), 'CONTA', 'CAIXA', 'DATA', 'HISTORICO', ...(inclPc ? ['CODCTA'] : []), ...(inclPn ? ['NOMECTA'] : []), 'ENTRADA', 'SAIDA', 'SALDO'];
+      const colL = (k) => String.fromCharCode(65 + k), nPre = 5 + (inclEC ? 1 : 0), nPl = (inclPc ? 1 : 0) + (inclPn ? 1 : 0);
+      const colData = colL(nPre - 2), colsNum = [colL(nPre + nPl), colL(nPre + nPl + 1), colL(nPre + nPl + 2)], ultimaCol = colsNum[2];
+      const planoCels = (l) => [...(inclPc ? [l.pc || ''] : []), ...(inclPn ? [l.pn || ''] : [])];
       // com o mês inteiro (sem filtro) a 1ª linha é o saldo anterior, pra fechar com o PDF/extrato
       const abertura = filtrado ? null : { d: mes.ym + '-01', h: 'SALDO ANTERIOR', e: null, s: null, saldo: arred(mes.ant) };
 
@@ -549,7 +604,7 @@
         const q = (v) => { v = String(v == null ? '' : v); return /[;"\r\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
         const n = (v) => v === null || v === 0 ? '' : v.toFixed(2).replace('.', ',');
         const todas = abertura ? [abertura, ...linhas] : linhas;
-        const txt = [cab.join(';')].concat(todas.map(l => [c.emp, c.nome, c.cx, fmtDia(l.d), l.h, ...(temPlano ? [l.pc || '', l.pn || ''] : []), n(l.e), n(l.s), l.saldo.toFixed(2).replace('.', ',')].map(q).join(';'))).join('\r\n') + '\r\n';
+        const txt = [cab.join(';')].concat(todas.map(l => [c.emp, ...(inclEC ? [c.empConta] : []), c.nome, c.cx, fmtDia(l.d), l.h, ...planoCels(l), n(l.e), n(l.s), l.saldo.toFixed(2).replace('.', ',')].map(q).join(';'))).join('\r\n') + '\r\n';
         baixarBlob(new Blob(['﻿', txt], { type: 'text/csv;charset=utf-8' }), base + '.csv');
         aviso('', ''); return;
       }
@@ -557,14 +612,14 @@
       await prepararXlsx();
       const X = window.XLSX;
       const todas = abertura ? [abertura, ...linhas] : linhas;
-      const aoa = [cab, ...todas.map(l => [c.emp, c.nome, Number(c.cx) || c.cx, l.d, l.h, ...(temPlano ? [l.pc || '', l.pn || ''] : []), l.e || null, l.s || null, l.saldo])];
+      const aoa = [cab, ...todas.map(l => [c.emp, ...(inclEC ? [c.empConta] : []), c.nome, Number(c.cx) || c.cx, l.d, l.h, ...planoCels(l), l.e || null, l.s || null, l.saldo])];
       const ws = X.utils.aoa_to_sheet(aoa);       // cabeçalho na linha 1; dados a partir da 2
       for(let i = 0; i < todas.length; i++){
         const linha = i + 2;
-        const cd = ws['D' + linha]; if(cd){ cd.t = 'n'; cd.v = serialExcel(todas[i].d); cd.z = 'dd/mm/yyyy'; }
+        const cd = ws[colData + linha]; if(cd){ cd.t = 'n'; cd.v = serialExcel(todas[i].d); cd.z = 'dd/mm/yyyy'; }
         colsNum.forEach(col => { const cc = ws[col + linha]; if(cc && cc.t === 'n') cc.z = '#,##0.00;[Red]-#,##0.00'; });
       }
-      ws['!cols'] = [{ wch: 14 }, { wch: 24 }, { wch: 7 }, { wch: 12 }, { wch: 52 }, ...(temPlano ? [{ wch: 11 }, { wch: 34 }] : []), { wch: 15 }, { wch: 15 }, { wch: 16 }];
+      ws['!cols'] = [{ wch: 14 }, ...(inclEC ? [{ wch: 14 }] : []), { wch: 24 }, { wch: 7 }, { wch: 12 }, { wch: 52 }, ...(inclPc ? [{ wch: 11 }] : []), ...(inclPn ? [{ wch: 34 }] : []), { wch: 15 }, { wch: 15 }, { wch: 16 }];
       ws['!autofilter'] = { ref: 'A1:' + ultimaCol + aoa.length };
       const resumo = [
         ['Empresa', c.emp], ['Conta', c.nome], ['Caixa', c.cx], ['Mês', cap(nomeMes(mes.ym))], [],
@@ -597,7 +652,7 @@
       const W = doc.internal.pageSize.getWidth(), M = 12;
       let titulo = 'Caixa CC  ' + c.nome, sub, nomeArq;
       if(tipo === 'mensal'){ sub = 'Resumo mensal — ' + c.emp; nomeArq = 'resumo-mensal-' + c.nome; }
-      else { sub = cap(nomeMes(mes.ym)) + ' — ' + c.emp + (tipo === 'dias' ? ' — saldos dia a dia' : ' — lançamentos'); nomeArq = c.nome + '-' + mes.ym + (tipo === 'dias' ? '-dias' : ''); }
+      else { sub = cap(nomeMes(mes.ym)) + ' — ' + c.emp + (tipo === 'dias' ? ' — saldos dia a dia' : tipo === 'conciliado' ? ' — lançamentos conciliados' : ' — lançamentos'); nomeArq = c.nome + '-' + mes.ym + (tipo === 'dias' ? '-dias' : tipo === 'conciliado' ? '-conciliado' : ''); }
       nomeArq = nomeArq.replace(/[^\w.-]+/g, '_') + '.pdf';
       doc.setFont('helvetica', 'bold'); doc.setFontSize(15); doc.text(titulo, M, 16);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90); doc.text(sub, M, 22);
@@ -606,12 +661,13 @@
       doc.setTextColor(0);
       const R = { halign: 'right' };
       let head, body, foot, colStyles;
-      if(tipo === 'detalhado'){
-        // com plano de contas no arquivo, entra a coluna PLANO DE CONTAS (código · nome) depois do histórico
-        head = [temPlano ? ['CAIXA', 'DATA', 'HISTÓRICO', 'PLANO DE CONTAS', 'ENTRADA', 'SAÍDA', 'SALDO'] : ['CAIXA', 'DATA', 'HISTÓRICO', 'ENTRADA', 'SAÍDA', 'SALDO']];
-        body = []; for(let i = mes.i0; i <= mes.i1; i++){ const L = c.rows[i]; body.push([c.cx, fmtDia(L.d), L.h, ...(temPlano ? [planoTxt(L)] : []), arred(L.e) ? fmt(L.e) : '', arred(L.s) ? fmt(L.s) : '', fmt(calc.saldos[i])]); }
-        foot = [temPlano ? ['', '', 'TOTAL DO MÊS', '', fmt(mes.ent), fmt(mes.sai), fmt(mes.atu)] : ['', '', 'TOTAL DO MÊS', fmt(mes.ent), fmt(mes.sai), fmt(mes.atu)]];
-        colStyles = temPlano
+      const comPlano = tipo === 'conciliado' && temPlano;
+      if(tipo === 'detalhado' || tipo === 'conciliado'){
+        // conciliado: entra a coluna PLANO DE CONTAS (código · nome, o que o arquivo trouxe) depois do histórico
+        head = [comPlano ? ['CAIXA', 'DATA', 'HISTÓRICO', rotuloPlano().toUpperCase(), 'ENTRADA', 'SAÍDA', 'SALDO'] : ['CAIXA', 'DATA', 'HISTÓRICO', 'ENTRADA', 'SAÍDA', 'SALDO']];
+        body = []; for(let i = mes.i0; i <= mes.i1; i++){ const L = c.rows[i]; body.push([c.cx, fmtDia(L.d), L.h, ...(comPlano ? [planoTxt(L)] : []), arred(L.e) ? fmt(L.e) : '', arred(L.s) ? fmt(L.s) : '', fmt(calc.saldos[i])]); }
+        foot = [comPlano ? ['', '', 'TOTAL DO MÊS', '', fmt(mes.ent), fmt(mes.sai), fmt(mes.atu)] : ['', '', 'TOTAL DO MÊS', fmt(mes.ent), fmt(mes.sai), fmt(mes.atu)]];
+        colStyles = comPlano
           ? { 0: { cellWidth: 10 }, 1: { cellWidth: 19 }, 3: { cellWidth: 34 }, 4: { ...R, cellWidth: 21 }, 5: { ...R, cellWidth: 20 }, 6: { ...R, cellWidth: 23 } }
           : { 0: { cellWidth: 12 }, 1: { cellWidth: 22 }, 3: { ...R, cellWidth: 24 }, 4: { ...R, cellWidth: 22 }, 5: { ...R, cellWidth: 26 } };
       } else {
@@ -624,7 +680,7 @@
         styles: { fontSize: 8, cellPadding: 1.4, lineColor: [210, 215, 212], lineWidth: 0.1, overflow: 'linebreak' },
         headStyles: { fillColor: [31, 111, 74], textColor: 255, halign: 'left' }, footStyles: { fillColor: [227, 241, 234], textColor: 0, fontStyle: 'bold' },
         columnStyles: colStyles, showFoot: 'lastPage',
-        didParseCell: (d) => { const i0 = tipo === 'detalhado' ? (temPlano ? 4 : 3) : 1; if(d.section !== 'head' && d.column.index >= i0 && String(d.cell.raw).startsWith('-')) d.cell.styles.textColor = [179, 38, 30]; if(d.section === 'head' && d.column.index >= i0) d.cell.styles.halign = 'right'; if(d.section === 'foot' && d.column.index >= i0) d.cell.styles.halign = 'right'; } });
+        didParseCell: (d) => { const i0 = (tipo === 'detalhado' || tipo === 'conciliado') ? (comPlano ? 4 : 3) : 1; if(d.section !== 'head' && d.column.index >= i0 && String(d.cell.raw).startsWith('-')) d.cell.styles.textColor = [179, 38, 30]; if(d.section === 'head' && d.column.index >= i0) d.cell.styles.halign = 'right'; if(d.section === 'foot' && d.column.index >= i0) d.cell.styles.halign = 'right'; } });
       const n = doc.getNumberOfPages(), gerado = 'Gerado em ' + new Date().toLocaleString('pt-BR'), H = doc.internal.pageSize.getHeight();
       for(let p = 1; p <= n; p++){ doc.setPage(p); doc.setFontSize(8); doc.setTextColor(120); doc.text(gerado, M, H - 7); doc.text('Página ' + p + ' de ' + n, W - M, H - 7, { align: 'right' }); }
       pdfAtual = { blob: doc.output('blob'), nome: nomeArq };
