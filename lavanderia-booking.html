@@ -201,7 +201,7 @@
         </div>
         <div class="filtros-itens">
           <input type="search" id="buscaItensRol" placeholder="Buscar item por parte do nome ou do código" autocomplete="off" aria-label="Buscar item">
-          <label class="chk-so-cliente" id="wrapSoCliente" style="display:none;"><input type="checkbox" id="chkSoCliente"> Mostrar só os itens com preço combinado</label>
+          <label class="chk-so-cliente" id="wrapSoCliente" style="display:none;"><input type="checkbox" id="chkSoCliente"> <span>Mostrar só os itens com preço combinado para mim <small id="avisoSemPrecoCombinado" style="display:none; font-weight:500; color:var(--muted);">(você ainda não tem itens com preço combinado)</small></span></label>
         </div>
         <div class="contagem-itens" id="contagemItens"></div>
         <div class="lista-itens-rol" id="listaItensRol"></div>
@@ -474,9 +474,15 @@
 
     // filtro: "só os itens com preço combinado" + busca por qualquer parte do nome ou do código (todas as palavras digitadas)
     const temItensDoCliente = itensOrdenados.some(i => precosEspeciaisPorItem[i.id] !== undefined);
-    document.getElementById('wrapSoCliente').style.display = temItensDoCliente ? 'flex' : 'none';
-    const aplicarSoCliente = soItensDoCliente && temItensDoCliente;
+    // a caixa sempre aparece; sem nenhum preço combinado ela fica desabilitada e explica o motivo
+    document.getElementById('wrapSoCliente').style.display = 'flex';
+    document.getElementById('chkSoCliente').disabled = !temItensDoCliente;
+    document.getElementById('wrapSoCliente').style.opacity = temItensDoCliente ? '' : '.6';
+    document.getElementById('avisoSemPrecoCombinado').style.display = temItensDoCliente ? 'none' : 'inline';
     const palavras = semAcento(termoBuscaItens).split(/\s+/).filter(Boolean);
+    // buscando, o filtro "só preço combinado" fica de lado e a busca olha toda a tabela de itens
+    const aplicarSoCliente = soItensDoCliente && temItensDoCliente && !palavras.length;
+    const buscandoEmTodos = soItensDoCliente && temItensDoCliente && palavras.length > 0;
     const visiveis = itensOrdenados.filter(item => {
       if(aplicarSoCliente && precosEspeciaisPorItem[item.id] === undefined) return false;
       if(!palavras.length) return true;
@@ -485,7 +491,8 @@
     });
     const marcadosFora = itensOrdenados.reduce((acc, item) => acc + (visiveis.includes(item) ? 0 : (quantidadesPorItem[item.id] || 0)), 0);
     const contagem = document.getElementById('contagemItens');
-    contagem.textContent = (visiveis.length === itensOrdenados.length ? '' : `Mostrando ${visiveis.length} de ${itensOrdenados.length} itens.`) +
+    contagem.textContent = (buscandoEmTodos ? 'Buscando em todos os itens (o filtro de preço combinado fica de lado enquanto você busca). ' : '') +
+      (visiveis.length === itensOrdenados.length ? '' : `Mostrando ${visiveis.length} de ${itensOrdenados.length} itens.`) +
       (marcadosFora ? ` ${marcadosFora} peça(s) marcada(s) em itens que estão fora deste filtro.` : '');
     if(!visiveis.length){
       lista.innerHTML = '<p style="font-size:.85rem; color:var(--muted); padding:12px;">Nenhum item encontrado com esse filtro.</p>';
