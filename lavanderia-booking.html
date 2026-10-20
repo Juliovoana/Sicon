@@ -110,6 +110,14 @@
   .pendente-row .desc .erro{ color:var(--danger); }
   .btn-secundario{ display:inline-block; margin-top:14px; background:var(--surface); border:1.5px solid var(--border); color:var(--ink); font-weight:600; font-size:.9rem; padding:12px 20px; border-radius:10px; cursor:pointer; font-family:inherit; }
 
+  /* busca e filtro da lista de itens */
+  .filtros-itens{ display:flex; align-items:center; gap:10px 16px; flex-wrap:wrap; margin-bottom:8px; }
+  .filtros-itens input[type=search]{ flex:1 1 220px; min-width:180px; padding:10px 14px; border-radius:10px; border:1.5px solid var(--border-forte); background:var(--campo-bg); color:var(--ink); font-family:'Inter', sans-serif; font-size:.9rem; outline:none; }
+  .filtros-itens input[type=search]:focus{ border-color:var(--brand-2); background:var(--surface); box-shadow:0 0 0 3px var(--brand-soft); }
+  .chk-so-cliente{ display:flex; align-items:center; gap:8px; font-size:.84rem; font-weight:600; color:var(--brand-2); cursor:pointer; user-select:none; }
+  .chk-so-cliente input{ width:18px; height:18px; accent-color:var(--brand); cursor:pointer; }
+  .contagem-itens{ font-size:.76rem; color:var(--muted); margin:0 2px 8px; min-height:1em; }
+
   /* itens fora da lista */
   .bloco-avulsos{ margin-top:18px; padding-top:16px; border-top:1px dashed var(--border); }
   .dica-avulso{ font-size:.8rem; color:var(--muted); line-height:1.45; margin:-4px 0 10px; }
@@ -191,6 +199,11 @@
             <option value="nome_desc">Descrição Z→A</option>
           </select>
         </div>
+        <div class="filtros-itens">
+          <input type="search" id="buscaItensRol" placeholder="Buscar item por parte do nome ou do código" autocomplete="off" aria-label="Buscar item">
+          <label class="chk-so-cliente" id="wrapSoCliente" style="display:none;"><input type="checkbox" id="chkSoCliente"> Mostrar só os itens com preço combinado</label>
+        </div>
+        <div class="contagem-itens" id="contagemItens"></div>
         <div class="lista-itens-rol" id="listaItensRol"></div>
 
         <div class="bloco-avulsos">
@@ -249,6 +262,10 @@
   let todosItensCatalogo = [];
   let precosEspeciaisPorItem = {}; // { item_id: valor } — só os itens com preço diferenciado pra esse cliente
   let ordemAtual = 'padrao';
+  let termoBuscaItens = '';
+  let soItensDoCliente = false;
+  const K_SO_CLIENTE = 'lav_so_cliente_v1_';
+  const semAcento = (t) => String(t == null ? '' : t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const quantidadesPorItem = {};
   let avulsos = [];                 // itens fora da lista: [{ id, descricao, quantidade }]
   let corTema = '#1B4332';
@@ -385,6 +402,8 @@
     todosItensCatalogo = d.itens || [];
     precosEspeciaisPorItem = d.precos || {};
     aplicarPersonalizacao(d.personalizacao);
+    soItensDoCliente = !!lsGet(K_SO_CLIENTE + clienteId, false);
+    document.getElementById('chkSoCliente').checked = soItensDoCliente;
     renderListaItensRol();
     atualizarResumoTotalPecas();
     atualizarManifesto();
@@ -453,7 +472,27 @@
 
     const itensOrdenados = ordenarCatalogo();
 
-    lista.innerHTML = itensOrdenados.map(item => {
+    // filtro: "só os itens com preço combinado" + busca por qualquer parte do nome ou do código (todas as palavras digitadas)
+    const temItensDoCliente = itensOrdenados.some(i => precosEspeciaisPorItem[i.id] !== undefined);
+    document.getElementById('wrapSoCliente').style.display = temItensDoCliente ? 'flex' : 'none';
+    const aplicarSoCliente = soItensDoCliente && temItensDoCliente;
+    const palavras = semAcento(termoBuscaItens).split(/\s+/).filter(Boolean);
+    const visiveis = itensOrdenados.filter(item => {
+      if(aplicarSoCliente && precosEspeciaisPorItem[item.id] === undefined) return false;
+      if(!palavras.length) return true;
+      const alvo = semAcento((item.codigo || '') + ' ' + item.nome);
+      return palavras.every(p => alvo.includes(p));
+    });
+    const marcadosFora = itensOrdenados.reduce((acc, item) => acc + (visiveis.includes(item) ? 0 : (quantidadesPorItem[item.id] || 0)), 0);
+    const contagem = document.getElementById('contagemItens');
+    contagem.textContent = (visiveis.length === itensOrdenados.length ? '' : `Mostrando ${visiveis.length} de ${itensOrdenados.length} itens.`) +
+      (marcadosFora ? ` ${marcadosFora} peça(s) marcada(s) em itens que estão fora deste filtro.` : '');
+    if(!visiveis.length){
+      lista.innerHTML = '<p style="font-size:.85rem; color:var(--muted); padding:12px;">Nenhum item encontrado com esse filtro.</p>';
+      return;
+    }
+
+    lista.innerHTML = visiveis.map(item => {
       const qtdAtual = quantidadesPorItem[item.id] || 0;
       const temPrecoEspecial = precosEspeciaisPorItem[item.id] !== undefined;
       const valor = valorAplicavel(item);
@@ -494,6 +533,15 @@
 
   document.getElementById('ordenacaoItens').addEventListener('change', (e) => {
     ordemAtual = e.target.value;
+    renderListaItensRol();
+  });
+  document.getElementById('buscaItensRol').addEventListener('input', (e) => {
+    termoBuscaItens = e.target.value;
+    renderListaItensRol();
+  });
+  document.getElementById('chkSoCliente').addEventListener('change', (e) => {
+    soItensDoCliente = e.target.checked;
+    if(clienteId) lsSet(K_SO_CLIENTE + clienteId, soItensDoCliente);
     renderListaItensRol();
   });
 
