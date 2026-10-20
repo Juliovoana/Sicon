@@ -286,6 +286,17 @@
   .spinner{ width:32px; height:32px; border:3px solid var(--border); border-top-color:var(--brand); border-radius:50%; animation:spin .8s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
 </style>
+<script>
+/* Aviso padrão quando o banco recusa a ação por falta de permissão (RLS) */
+(function(){
+  var MSG_SEM_PERMISSAO = '🔒 Usuário sem permissão para esta ação. Fale com o administrador da unidade.';
+  var alertOriginal = window.alert.bind(window);
+  window.alert = function(m){
+    if (/row-level security|permission denied/i.test(String(m))) m = MSG_SEM_PERMISSAO;
+    alertOriginal(m);
+  };
+})();
+</script>
 </head>
 <body>
 
@@ -1418,7 +1429,7 @@
         <div class="avatar-circle">${iniciais}</div>
         <div class="reserva-info">
           <span class="principal">${nomeCliente}${n.numero_rool ? ' · rool ' + n.numero_rool : ''}</span>
-          <span class="meta">${qtdItens} ite${qtdItens === 1 ? 'm' : 'ns'}${n.setor ? ' · ' + n.setor : ''}</span>
+          <span class="meta">${qtdItens} ite${qtdItens === 1 ? 'm' : 'ns'}${n.setor ? ' · ' + n.setor : ''}${itensForaDaLista(n.observacoes) ? ' · <strong style="color:var(--accent-ink);">⚠ itens fora da lista</strong>' : ''}</span>
         </div>
         <div class="reserva-right">
           <span class="reserva-valor mono">${formatarMoeda(n.valor_total)}</span>
@@ -1700,6 +1711,14 @@
   // Nota atualmente aberta no popup de lançamento de itens
   let notaItensModalId = null;
 
+  // O formulário do cliente manda os itens que não estão na lista dele dentro das observações: "... | ITENS FORA DA LISTA: 2x Lençol queen; 1x Cortina"
+  const MARCA_AVULSOS = 'ITENS FORA DA LISTA:';
+  function itensForaDaLista(obs){
+    const i = String(obs || '').indexOf(MARCA_AVULSOS);
+    if(i < 0) return '';
+    return String(obs).slice(i + MARCA_AVULSOS.length).split(' | ')[0].trim();
+  }
+
   function buscarPrecoParaClienteItem(clienteId, itemId){
     const especial = todosPrecos.find(p => p.ativo && p.cliente_id === clienteId && p.item_id === itemId);
     if(especial) return Number(especial.valor);
@@ -1750,10 +1769,12 @@
     return arr;
   }
 
-  function gerarLinhaItemNotaModal(l){
+  function gerarLinhaItemNotaModal(l, clienteId){
+    const precoCliente = buscarPrecoParaClienteItem(clienteId, l.item_id);
+    const difere = Math.abs(Number(l.valor_unitario) - precoCliente) > 0.004;
     return `
       <div class="item-nota-edit" data-id="${l.id}">
-        <span class="item-nota-nome" title="${l.lavanderia_itens?.nome || ''}">${l.lavanderia_itens?.nome || '—'}</span>
+        <span class="item-nota-nome" title="${l.lavanderia_itens?.nome || ''}">${l.lavanderia_itens?.nome || '—'}${difere ? `<small style="display:block; color:var(--accent-ink); font-weight:600;" title="Preço que o cliente tem cadastrado (preço especial ou, se não houver, o de tabela)">preço do cliente: ${formatarMoeda(precoCliente)}</small>` : ''}</span>
         <input type="number" step="0.01" class="linha-qtd" value="${l.quantidade}">
         <input type="number" step="0.01" class="linha-valor-unit" value="${l.valor_unitario}">
         <input type="number" step="0.001" class="linha-peso" value="${l.peso_medio ?? ''}">
@@ -1836,7 +1857,11 @@
     notaCacheModalItens = n;
     const linhas = ordenarItensNota(n.lavanderia_itens_nota || [], ordemItensModal);
     const body = document.getElementById('modalItensNotaBody');
+    const foraLista = itensForaDaLista(n.observacoes);
+    const qtdDifere = (n.lavanderia_itens_nota || []).filter(l => Math.abs(Number(l.valor_unitario) - buscarPrecoParaClienteItem(n.cliente_id, l.item_id)) > 0.004).length;
     body.innerHTML = `
+      ${foraLista ? `<div style="background:#FFF4DC; border:1px solid #F2D9A0; color:var(--accent-ink); border-radius:10px; padding:10px 14px; font-size:.84rem; margin-bottom:12px; line-height:1.45;"><strong>⚠ O cliente informou itens fora da lista:</strong> ${foraLista.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))}<br><span style="font-size:.78rem;">Eles não entram nas linhas abaixo: confira com o cliente e lance (ou cadastre o item) se for cobrar.</span></div>` : ''}
+      ${qtdDifere ? `<div style="background:var(--brand-soft); border-radius:10px; padding:10px 14px; font-size:.84rem; margin-bottom:12px; display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap;"><span>${qtdDifere} linha(s) com valor diferente do <strong>preço do cliente</strong>.</span><button type="button" class="btn-novo" id="btnAplicarPrecosCliente" style="padding:7px 12px;">↺ Aplicar preços do cliente</button></div>` : ''}
       <div class="lancamento-rapido-item">
         <div class="field-group campo-codigo"><label>Código</label><input type="text" id="qr_codigo_item" placeholder="Digite e Enter" autocomplete="off"></div>
         <div class="field-group campo-descricao"><label>Descrição</label><input type="text" id="qr_descricao_item" readonly placeholder="—"></div>
@@ -1855,7 +1880,7 @@
         </select>
       </div>
       <div class="item-nota-head"><span>Item</span><span>Qtd</span><span>Vlr unit.</span><span>Peso (kg)</span><span>Total</span><span></span></div>
-      <div id="listaItensNotaModal">${linhas.length ? linhas.map(l => gerarLinhaItemNotaModal(l)).join('') : '<p style="font-size:.82rem; color:var(--muted); padding:6px 2px;">Nenhum item lançado ainda.</p>'}</div>
+      <div id="listaItensNotaModal">${linhas.length ? linhas.map(l => gerarLinhaItemNotaModal(l, n.cliente_id)).join('') : '<p style="font-size:.82rem; color:var(--muted); padding:6px 2px;">Nenhum item lançado ainda.</p>'}</div>
 
       <div class="drawer-section" style="margin-top:16px;">
         <div class="drawer-section-title">Desconto e prazos</div>
@@ -1875,12 +1900,28 @@
     `;
     vincularEventosLinhasModal();
     vincularEventosDescontoEDatasModal();
+    const btnAplicar = document.getElementById('btnAplicarPrecosCliente');
+    if(btnAplicar) btnAplicar.addEventListener('click', aplicarPrecosDoClienteNaNota);
 
     document.getElementById('selectOrdemItensNota').addEventListener('change', (e) => {
       ordemItensModal = e.target.value;
       renderModalItensNotaBody(notaCacheModalItens);
       vincularLancamentoRapidoModal(notaCacheModalItens.cliente_id);
     });
+  }
+
+  // Troca o valor unitário de todas as linhas pelo preço do cliente (preço especial; se não houver, o de tabela). Mesmo update da edição manual da linha.
+  async function aplicarPrecosDoClienteNaNota(){
+    const n = notaCacheModalItens; if(!n) return;
+    const difs = (n.lavanderia_itens_nota || []).map(l => ({ l, preco: buscarPrecoParaClienteItem(n.cliente_id, l.item_id) }))
+      .filter(x => Math.abs(Number(x.l.valor_unitario) - x.preco) > 0.004);
+    if(!difs.length){ alert('Todas as linhas já estão com o preço do cliente.'); return; }
+    if(!confirm(`Trocar o valor unitário de ${difs.length} linha(s) pelo preço do cliente? Valores digitados à mão nessas linhas serão substituídos.`)) return;
+    for(const { l, preco } of difs){
+      const { error } = await sb.from('lavanderia_itens_nota').update({ valor_unitario: preco }).eq('id', l.id);
+      if(error){ alert('Erro ao atualizar preço: ' + error.message); break; }
+    }
+    await recarregarNotaNoModal();
   }
 
   async function recarregarNotaNoModal(){
