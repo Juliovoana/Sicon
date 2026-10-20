@@ -1719,6 +1719,28 @@
     return String(obs).slice(i + MARCA_AVULSOS.length).split(' | ')[0].trim();
   }
 
+  // lista estruturada: "3x Lençol queen; 1x Cortina" -> [{ qtd:3, desc:'Lençol queen', texto:'3x Lençol queen' }, ...]
+  function parseAvulsos(obs){
+    const lista = itensForaDaLista(obs);
+    if(!lista) return [];
+    return lista.split(';').map(t => t.trim()).filter(Boolean).map(t => {
+      const m = t.match(/^(\d+)\s*x\s+(.+)$/i);
+      return m ? { qtd: Number(m[1]), desc: m[2].trim(), texto: t } : { qtd: 1, desc: t, texto: t };
+    });
+  }
+  // devolve a observação sem os avulsos já tratados (e registra o que foi feito: "AGREGADO: ..." / "IGNORADO: ...")
+  function observacoesAposAvulso(obs, restantes, registroTipo, registroTexto){
+    const partes = String(obs || '').split(' | '); const out = []; let registrado = false;
+    partes.forEach(p => {
+      if(p.indexOf(MARCA_AVULSOS) === 0){ if(restantes.length) out.push(MARCA_AVULSOS + ' ' + restantes.map(a => a.texto).join('; ')); }
+      else if(p.indexOf(registroTipo + ':') === 0){ out.push(p + '; ' + registroTexto); registrado = true; }
+      else if(p) out.push(p);
+    });
+    if(!registrado) out.push(registroTipo + ': ' + registroTexto);
+    return out.join(' | ');
+  }
+  const escHtml = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
   function buscarPrecoParaClienteItem(clienteId, itemId){
     const especial = todosPrecos.find(p => p.ativo && p.cliente_id === clienteId && p.item_id === itemId);
     if(especial) return Number(especial.valor);
@@ -1857,19 +1879,29 @@
     notaCacheModalItens = n;
     const linhas = ordenarItensNota(n.lavanderia_itens_nota || [], ordemItensModal);
     const body = document.getElementById('modalItensNotaBody');
-    const foraLista = itensForaDaLista(n.observacoes);
+    const avulsosPendentes = parseAvulsos(n.observacoes);
     const qtdDifere = (n.lavanderia_itens_nota || []).filter(l => Math.abs(Number(l.valor_unitario) - buscarPrecoParaClienteItem(n.cliente_id, l.item_id)) > 0.004).length;
     body.innerHTML = `
-      ${foraLista ? `<div style="background:#FFF4DC; border:1px solid #F2D9A0; color:var(--accent-ink); border-radius:10px; padding:10px 14px; font-size:.84rem; margin-bottom:12px; line-height:1.45;"><strong>⚠ O cliente informou itens fora da lista:</strong> ${foraLista.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]))}<br><span style="font-size:.78rem;">Eles não entram nas linhas abaixo: confira com o cliente e lance (ou cadastre o item) se for cobrar.</span></div>` : ''}
+      ${avulsosPendentes.length ? `<div id="painelAvulsosNota" style="background:#FFF4DC; border:1px solid #F2D9A0; color:var(--accent-ink); border-radius:10px; padding:10px 14px; font-size:.84rem; margin-bottom:12px; line-height:1.45;">
+        <strong>⚠ O cliente informou itens fora da lista.</strong> Agregue cada um a um item já cadastrado (digite o código ou o nome) para lançar na nota, ou ignore.
+        <datalist id="dlItensAtivosAvulso">${todosItens.filter(i => i.ativo).map(i => `<option value="${escHtml(i.codigo || i.nome)}" label="${escHtml(i.nome)}"></option>`).join('')}</datalist>
+        ${avulsosPendentes.map((a, idx) => `
+          <div class="avulso-agregar-linha" data-idx="${idx}" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:8px; padding-top:8px; border-top:1px solid #F2D9A0;">
+            <span style="flex:1 1 160px; min-width:140px; color:var(--ink);"><strong>${a.qtd}x</strong> ${escHtml(a.desc)}</span>
+            <input type="text" class="avulso-item-busca" list="dlItensAtivosAvulso" placeholder="Código ou nome do item" autocomplete="off" style="flex:1 1 170px; min-width:140px; padding:7px 10px; border-radius:8px; border:1.5px solid var(--border);">
+            <button type="button" class="btn-novo avulso-btn-agregar" style="padding:7px 12px;">Agregar</button>
+            <button type="button" class="avulso-btn-ignorar" style="padding:7px 10px; border-radius:8px; border:1.5px solid var(--border); background:var(--surface); cursor:pointer;" title="Não lançar este item">Ignorar</button>
+          </div>`).join('')}
+      </div>` : ''}
       ${qtdDifere ? `<div style="background:var(--brand-soft); border-radius:10px; padding:10px 14px; font-size:.84rem; margin-bottom:12px; display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap;"><span>${qtdDifere} linha(s) com valor diferente do <strong>preço do cliente</strong>.</span><button type="button" class="btn-novo" id="btnAplicarPrecosCliente" style="padding:7px 12px;">↺ Aplicar preços do cliente</button></div>` : ''}
       <div class="lancamento-rapido-item">
-        <div class="field-group campo-codigo"><label>Código</label><input type="text" id="qr_codigo_item" placeholder="Digite e Enter" autocomplete="off"></div>
+        <div class="field-group campo-codigo"><label>Código</label><input type="text" id="qr_codigo_item" placeholder="Digite e Enter ou Tab" autocomplete="off"></div>
         <div class="field-group campo-descricao"><label>Descrição</label><input type="text" id="qr_descricao_item" readonly placeholder="—"></div>
         <div class="field-group campo-qtd"><label>Qtd</label><input type="number" id="qr_quantidade_item" value="1" step="0.01"></div>
         <div class="field-group campo-valor-unit"><label>Vlr Unit.</label><input type="number" id="qr_valor_unit_item" step="0.01"></div>
         <button type="button" class="btn-novo" id="btnConfirmarItemRapido">OK</button>
       </div>
-      <p class="dica-lancamento-rapido" id="dicaLancamentoRapido">Digite o código do item e pressione Enter.</p>
+      <p class="dica-lancamento-rapido" id="dicaLancamentoRapido">Digite o código do item e pressione Enter ou Tab.</p>
       <div class="ordenar-itens-nota">
         <label for="selectOrdemItensNota">Ordenar por</label>
         <select id="selectOrdemItensNota">
@@ -1902,11 +1934,46 @@
     vincularEventosDescontoEDatasModal();
     const btnAplicar = document.getElementById('btnAplicarPrecosCliente');
     if(btnAplicar) btnAplicar.addEventListener('click', aplicarPrecosDoClienteNaNota);
+    vincularAvulsosNoModal(n, avulsosPendentes);
 
     document.getElementById('selectOrdemItensNota').addEventListener('change', (e) => {
       ordemItensModal = e.target.value;
       renderModalItensNotaBody(notaCacheModalItens);
       vincularLancamentoRapidoModal(notaCacheModalItens.cliente_id);
+    });
+  }
+
+  // Item fora da lista pedido pelo cliente: agrega a um item cadastrado (vira linha da nota com o preço do cliente) ou ignora
+  function vincularAvulsosNoModal(n, avulsos){
+    document.querySelectorAll('#painelAvulsosNota .avulso-agregar-linha').forEach(linhaEl => {
+      const a = avulsos[Number(linhaEl.dataset.idx)];
+      const input = linhaEl.querySelector('.avulso-item-busca');
+      const restantes = () => avulsos.filter(x => x !== a);
+
+      const agregar = async () => {
+        const item = buscarItemPorCodigoOuNome(input.value);
+        if(!item){ alert('Item não encontrado. Digite o código ou o nome de um item cadastrado.'); input.focus(); return; }
+        const preco = buscarPrecoParaClienteItem(n.cliente_id, item.id);
+        if(!confirm(`Lançar ${a.qtd}x "${a.desc}" como ${item.nome} (R$ ${preco.toFixed(2).replace('.', ',')} cada) nesta nota?`)) return;
+        const { error } = await sb.from('lavanderia_itens_nota').insert({
+          unidade_negocio_id: agenciaId, nota_id: n.id, item_id: item.id, quantidade: a.qtd, valor_unitario: preco, peso_medio: item.peso_medio ?? null
+        });
+        if(error){ alert('Erro ao adicionar item: ' + error.message); return; }
+        const novaObs = observacoesAposAvulso(n.observacoes, restantes(), 'AGREGADO', `${a.qtd}x ${a.desc} → ${item.nome}`);
+        const { error: eObs } = await sb.from('lavanderia_notas').update({ observacoes: novaObs }).eq('id', n.id);
+        if(eObs) alert('O item foi lançado, mas não consegui atualizar as observações: ' + eObs.message);
+        await recarregarNotaNoModal();
+      };
+      const ignorar = async () => {
+        if(!confirm(`Ignorar "${a.qtd}x ${a.desc}"? Ele não será lançado na nota.`)) return;
+        const novaObs = observacoesAposAvulso(n.observacoes, restantes(), 'IGNORADO', `${a.qtd}x ${a.desc}`);
+        const { error } = await sb.from('lavanderia_notas').update({ observacoes: novaObs }).eq('id', n.id);
+        if(error){ alert('Erro ao atualizar a nota: ' + error.message); return; }
+        await recarregarNotaNoModal();
+      };
+      linhaEl.querySelector('.avulso-btn-agregar').addEventListener('click', agregar);
+      linhaEl.querySelector('.avulso-btn-ignorar').addEventListener('click', ignorar);
+      input.addEventListener('keydown', (e) => { if(e.key === 'Enter'){ e.preventDefault(); agregar(); } });
     });
   }
 
@@ -2005,7 +2072,7 @@
       inputQtd.value = 1;
       inputValorUnit.value = '';
       itemLocalizado = null;
-      dica.textContent = 'Digite o código do item e pressione Enter.';
+      dica.textContent = 'Digite o código do item e pressione Enter ou Tab.';
       dica.style.color = 'var(--muted)';
 
       await recarregarNotaNoModal();
@@ -2014,7 +2081,8 @@
 
     inputCodigo.addEventListener('input', () => { itemLocalizado = null; });
     inputCodigo.addEventListener('keydown', (e) => {
-      if(e.key === 'Enter'){
+      // Enter e Tab (com algo digitado) fazem a mesma coisa: localizar o item e ir para a quantidade
+      if(e.key === 'Enter' || (e.key === 'Tab' && !e.shiftKey && inputCodigo.value.trim())){
         e.preventDefault();
         if(localizarItem()){ inputQtd.focus(); inputQtd.select(); }
       }
