@@ -1191,6 +1191,41 @@
     </div>
 
     <div class="caixa">
+        <h4 style="margin-top:0;">🏢 Relatório por Setor <span class="subtitulo" style="font-weight:normal;">(só SAÍDAS — o que cada setor retirou do estoque; sem escolher setor, traz todos, agrupados com subtotal)</span></h4>
+        <div class="grade col2">
+            <div class="campo" style="position:relative;">
+                <label>Setor (opcional)</label>
+                <input type="text" id="relSetorBusca" placeholder="Todos — digite parte do nome..." autocomplete="off">
+                <div id="relSetorResultados" class="dropdown-busca-evento"></div>
+                <div id="relSetorSelecionado" style="margin-top:6px; font-size:0.9em;"></div>
+            </div>
+            <div class="campo" style="position:relative;">
+                <label>Subsetor (opcional)</label>
+                <input type="text" id="relSetorSubsetorBusca" placeholder="Todos — digite parte do nome..." autocomplete="off">
+                <div id="relSetorSubsetorResultados" class="dropdown-busca-evento"></div>
+                <div id="relSetorSubsetorSelecionado" style="margin-top:6px; font-size:0.9em;"></div>
+            </div>
+        </div>
+        <div class="grade col2" style="margin-top:8px;">
+            <div class="campo"><label>Data início (opcional)</label><input type="date" id="relSetorDataInicio"></div>
+            <div class="campo"><label>Data fim (opcional)</label><input type="date" id="relSetorDataFim"></div>
+        </div>
+        <div class="campo" style="margin-top:8px;">
+            <label>Filtrar por produto/item avulso (nome ou parte do nome, opcional)</label>
+            <input type="text" id="relSetorFiltroNome" placeholder="Ex: brita, cimento...">
+        </div>
+        <div class="linha-ferramentas-relatorio">
+            <select id="relSetorFormato">
+                <option value="pdf">PDF</option>
+                <option value="xlsx">Excel</option>
+            </select>
+            <button class="btn-icone" id="relSetorVer" title="Visualizar">👁️</button>
+            <button class="btn-icone" id="relSetorCompartilhar" title="Compartilhar">📤</button>
+            <button class="btn-icone" id="relSetorSalvar" title="Salvar">💾</button>
+        </div>
+    </div>
+
+    <div class="caixa">
         <h4 style="margin-top:0;">🏗️ Relatório por Projeto</h4>
         <div class="campo">
             <select id="relProjetoSelect"><option value="">-- selecione um projeto --</option></select>
@@ -2614,6 +2649,9 @@ async function chamarGet(acao, filtros) {
         if (filtros.fornecedor) query = query.or(`fornecedor_nome.ilike.%${filtros.fornecedor}%,fornecedor_cnpj.ilike.%${filtros.fornecedor}%`);
         if (filtros.avulsoNome) query = query.ilike('descricao_avulsa', `%${filtros.avulsoNome}%`);
         if (filtros.responsavel) query = query.ilike('responsavel', `%${filtros.responsavel}%`);
+        if (filtros.setorId) query = query.eq('setor_id', filtros.setorId);
+        if (filtros.subsetorId) query = query.eq('subsetor_id', filtros.subsetorId);
+        if (filtros.tipo) query = query.eq('tipo', filtros.tipo);
         if (filtros.dataInicio) query = query.gte('data', filtros.dataInicio);
         if (filtros.dataFim) query = query.lte('data', filtros.dataFim);
         if (filtros.itensAvulsos) {
@@ -3612,7 +3650,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
    ============================================================ */
 const AJUDA_ESTOQUE = {
     titulo: 'Estoque — Controle de Estoque & Projetos',
-    ultimaRevisao: '19/10/2026',
+    ultimaRevisao: '21/10/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>O Estoque controla o material físico da unidade (contêiner/esquadria): o que entra
@@ -3919,6 +3957,12 @@ const AJUDA_ESTOQUE = {
                 <li><strong>Por Responsável</strong>: lista as saídas em nome de uma pessoa, num
                 período opcional — útil pra fechar conta com terceirizado que retira material do
                 almoxarifado (o valor retirado entra no encontro de contas do serviço prestado).</li>
+                <li><strong>Por Setor</strong>: lista as <strong>saídas</strong> (só retirada, não entrada/compra)
+                de um setor — ou de todos, agrupados por setor com subtotal e um resumo no topo do PDF —,
+                com filtro opcional de subsetor, período e nome do item. O setor/subsetor é o que foi
+                informado na saída; retirada antiga sem setor aparece em "Sem setor informado". Se o
+                filtro passar de 5.000 saídas o app avisa que o relatório pode ficar incompleto (escolha
+                um setor ou reduza o período).</li>
                 <li>Todos saem em <strong>PDF ou Excel</strong>, com opções de Visualizar, Compartilhar
                 ou Salvar.</li>
                 <li><strong>🔄 Reprocessar Estoque</strong>: recalcula o saldo de cada produto (estoque
@@ -3965,6 +4009,10 @@ document.getElementById('btnFecharModalAjuda').addEventListener('click', () => d
 
 function popularRelatoriosSelects() {
     popularSelectProjetos(document.getElementById('relProjetoSelect'));
+    // setores/subsetores do "Relatório por Setor" vêm do catálogo de baixa
+    if (!catalogosBaixa || !catalogosBaixa.setores || !catalogosBaixa.setores.length) {
+        chamarGet('listarCatalogosBaixa').then(c => { catalogosBaixa = c; }).catch(e => console.warn('catálogos indisponíveis nos relatórios:', e));
+    }
     const tags = [...new Set(movimentacoes.map(m => m.tag).filter(Boolean))].sort();
     document.getElementById('relListaTags').innerHTML = tags.map(t => `<option value="${escapeHtml(t)}"></option>`).join('');
     const responsaveis = [...new Set(movimentacoes.map(m => m.responsavel).filter(Boolean))].sort();
@@ -9506,7 +9554,9 @@ function mapearMovimentacaoFiltrada(m) {
         observacao: m.observacao || '', responsavel: m.responsavel || '', projetoId: m.projeto_id || null,
         nfNumero: m.nf_numero || '', fornecedorCnpj: m.fornecedor_cnpj || '', fornecedorNome: m.fornecedor_nome || '',
         almoxarifadoId: m.almoxarifado_id != null ? Number(m.almoxarifado_id) : null,
-        descricaoAvulsa: m.descricao_avulsa || null
+        descricaoAvulsa: m.descricao_avulsa || null,
+        setorId: m.setor_id != null ? m.setor_id : null,
+        subsetorId: m.subsetor_id != null ? m.subsetor_id : null
     };
 }
 
@@ -9781,6 +9831,181 @@ async function executarRelatorioResponsavel(acao) {
 document.getElementById('relResponsavelVer').addEventListener('click', () => executarRelatorioResponsavel('ver'));
 document.getElementById('relResponsavelCompartilhar').addEventListener('click', () => executarRelatorioResponsavel('compartilhar'));
 document.getElementById('relResponsavelSalvar').addEventListener('click', () => executarRelatorioResponsavel('salvar'));
+
+/* ---------- módulo: por Setor (só saídas, agrupado Setor › Subsetor) ---------- */
+let setorSelecionadoRelSetor = null;
+let subsetorSelecionadoRelSetor = null;
+const buscaRelSetor = configurarBuscaListaGenerica(
+    'relSetorBusca', 'relSetorResultados', 'relSetorSelecionado',
+    () => catalogosBaixa.setores || [],
+    (item) => {
+        setorSelecionadoRelSetor = item;
+        // trocou o setor: o subsetor escolhido antes pode não pertencer ao novo
+        subsetorSelecionadoRelSetor = null;
+        document.getElementById('relSetorSubsetorBusca').value = '';
+        buscaRelSetorSubsetor.selecionar(null);
+    }
+);
+const buscaRelSetorSubsetor = configurarBuscaListaGenerica(
+    'relSetorSubsetorBusca', 'relSetorSubsetorResultados', 'relSetorSubsetorSelecionado',
+    () => setorSelecionadoRelSetor
+        ? (catalogosBaixa.subsetores || []).filter(s => String(s.setor_id) === String(setorSelecionadoRelSetor.id))
+        : (catalogosBaixa.subsetores || []),
+    (item) => { subsetorSelecionadoRelSetor = item; }
+);
+
+async function movimentacoesPorSetor(setorId, subsetorId, dataInicio, dataFim) {
+    const dados = await chamarGet('listarMovimentacoesFiltradas', { tipo: 'saida', setorId, subsetorId, dataInicio, dataFim });
+    return {
+        limitou: (dados || []).length >= 5000,
+        lista: (dados || [])
+            .filter(m => m.tipo === 'saida')
+            .map(mapearMovimentacaoFiltrada)
+            .sort((a, b) => (a.data || '').localeCompare(b.data || ''))
+    };
+}
+
+function nomeSetorRel(id) {
+    if (id == null) return 'Sem setor informado';
+    const s = (catalogosBaixa.setores || []).find(x => String(x.id) === String(id));
+    return s ? s.nome : '#' + id;
+}
+function nomeSubsetorRel(id) {
+    if (id == null) return '';
+    const s = (catalogosBaixa.subsetores || []).find(x => String(x.id) === String(id));
+    return s ? s.nome : '#' + id;
+}
+function nomeLinhaRel(l) {
+    return l.prod ? l.prod.nome : (l.m.descricaoAvulsa ? l.m.descricaoAvulsa + ' (avulso)' : '#' + l.m.produtoId);
+}
+
+// agrupa por setor (ordem alfabética; "Sem setor informado" por último) e soma
+function agruparLinhasPorSetor(linhas) {
+    const mapa = new Map();
+    linhas.forEach(l => {
+        const chave = l.m.setorId == null ? '__sem__' : String(l.m.setorId);
+        if (!mapa.has(chave)) mapa.set(chave, { nome: nomeSetorRel(l.m.setorId), linhas: [], total: 0 });
+        const g = mapa.get(chave);
+        g.linhas.push(l);
+        g.total += l.subtotal;
+    });
+    return [...mapa.entries()]
+        .sort((a, b) => (a[0] === '__sem__') - (b[0] === '__sem__') || a[1].nome.localeCompare(b[1].nome, 'pt-BR'))
+        .map(([, g]) => g);
+}
+
+function construirPdfPorSetor(subtitulo, grupos) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape' });
+    doc.setFontSize(16);
+    doc.text('Relatório por Setor — Saídas', 14, 16);
+    doc.setFontSize(10);
+    doc.text(subtitulo, 14, 23);
+    doc.text(`Relatório emitido em: ${hojeISO()}`, 14, 29);
+
+    const totalGeral = grupos.reduce((s, g) => s + g.total, 0);
+    let y = 35;
+    if (grupos.length > 1) {
+        doc.autoTable({
+            startY: y,
+            head: [['Setor', 'Lançamentos', 'Total (R$)']],
+            body: grupos.map(g => [g.nome, String(g.linhas.length), formatarMoeda(g.total)]),
+            styles: { fontSize: 9 },
+            headStyles: { fillColor: [21, 101, 192] },
+            columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' } },
+            tableWidth: 140
+        });
+        y = doc.lastAutoTable.finalY + 8;
+    }
+
+    const corpo = [];
+    grupos.forEach(g => {
+        corpo.push([{ content: g.nome, colSpan: 8, styles: { fillColor: [227, 236, 248], fontStyle: 'bold', textColor: [21, 60, 120] } }]);
+        g.linhas.forEach(l => corpo.push([
+            l.m.data, nomeLinhaRel(l), nomeSubsetorRel(l.m.subsetorId) || '-', l.m.evento || '-',
+            Number(l.m.qtd).toLocaleString('pt-BR'), formatarMoeda(l.m.valorUnit), formatarMoeda(l.subtotal), l.m.responsavel || '-'
+        ]));
+        corpo.push([
+            { content: `Subtotal — ${g.nome}`, colSpan: 6, styles: { halign: 'right', fontStyle: 'bold' } },
+            { content: formatarMoeda(g.total), styles: { fontStyle: 'bold' } },
+            ''
+        ]);
+    });
+    doc.autoTable({
+        startY: y,
+        head: [['Data', 'Produto', 'Subsetor', 'Evento', 'Qtd', 'Valor Unit.', 'Subtotal', 'Responsável']],
+        body: corpo,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [21, 101, 192] },
+        columnStyles: { 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' } }
+    });
+    const finalY = doc.lastAutoTable.finalY || y;
+    doc.setFontSize(11);
+    doc.text(`Total geral (R$): ${formatarMoeda(totalGeral)}`, 14, finalY + 10);
+    return doc;
+}
+
+function construirDadosExcelPorSetor(grupos) {
+    const colunas = ['Setor', 'Subsetor', 'Data', 'Produto', 'Evento', 'Qtd', 'Valor Unit.', 'Subtotal', 'Responsável', 'Observação'];
+    const dados = [];
+    grupos.forEach(g => g.linhas.forEach(l => dados.push({
+        'Setor': g.nome,
+        'Subsetor': nomeSubsetorRel(l.m.subsetorId),
+        'Data': l.m.data,
+        'Produto': nomeLinhaRel(l),
+        'Evento': l.m.evento || '',
+        'Qtd': l.m.qtd,
+        'Valor Unit.': l.m.valorUnit,
+        'Subtotal': l.subtotal,
+        'Responsável': l.m.responsavel || '',
+        'Observação': l.m.observacao || ''
+    })));
+    const total = grupos.reduce((s, g) => s + g.total, 0);
+    dados.push({});
+    dados.push({ 'Produto': 'TOTAL (R$):', 'Subtotal': total });
+    dados._colunas = colunas;
+    return dados;
+}
+
+async function executarRelatorioSetor(acao) {
+    if (!catalogosBaixa || !catalogosBaixa.setores || !catalogosBaixa.setores.length) {
+        try { catalogosBaixa = await chamarGet('listarCatalogosBaixa'); } catch (e) { /* segue: mostra só os ids */ }
+    }
+    const dataInicio = document.getElementById('relSetorDataInicio').value || null;
+    const dataFim = document.getElementById('relSetorDataFim').value || null;
+    if (dataInicio && dataFim && dataInicio > dataFim) { alert('A data de início é depois da data fim.'); return; }
+    const { limitou, lista } = await movimentacoesPorSetor(
+        setorSelecionadoRelSetor ? setorSelecionadoRelSetor.id : null,
+        subsetorSelecionadoRelSetor ? subsetorSelecionadoRelSetor.id : null,
+        dataInicio, dataFim
+    );
+    if (limitou && !confirm('Este filtro tem 5.000 ou mais saídas — o relatório pode estar INCOMPLETO. Escolha um setor ou reduza o período para ter certeza do total.\n\nGerar mesmo assim?')) return;
+    let linhas = construirLinhasMovimentacoes(lista);
+    if (!linhas.length) { alert('Nenhuma retirada (saída) encontrada para esse filtro. Esse relatório não lista entrada/compra, só o que foi retirado do estoque.'); return; }
+    const filtroNome = document.getElementById('relSetorFiltroNome').value.trim().toLowerCase();
+    if (filtroNome) {
+        linhas = linhas.filter(l => nomeLinhaRel(l).toLowerCase().includes(filtroNome));
+        if (!linhas.length) { alert(`Nenhum item com "${filtroNome}" no nome foi encontrado nessas retiradas.`); return; }
+    }
+    const grupos = agruparLinhasPorSetor(linhas);
+    const formato = document.getElementById('relSetorFormato').value;
+    const partes = [
+        setorSelecionadoRelSetor ? `Setor: ${setorSelecionadoRelSetor.nome}` : 'Todos os setores',
+        subsetorSelecionadoRelSetor ? `Subsetor: ${subsetorSelecionadoRelSetor.nome}` : null,
+        (dataInicio || dataFim) ? `período: ${dataInicio ? formatarData(dataInicio) : 'início'} a ${dataFim ? formatarData(dataFim) : 'hoje'}` : null,
+        filtroNome ? `item: "${filtroNome}"` : null
+    ].filter(Boolean);
+    const subtitulo = partes.join(' — ');
+    const nomeBase = `relatorio-setor-${slugArquivo(setorSelecionadoRelSetor ? setorSelecionadoRelSetor.nome : 'todos')}`;
+    if (formato === 'pdf') {
+        executarAcaoPdf(acao, construirPdfPorSetor(subtitulo, grupos), `${nomeBase}.pdf`);
+    } else {
+        executarAcaoExcel(acao, construirDadosExcelPorSetor(grupos), 'Relatório', `${nomeBase}.xlsx`, 'Relatório por Setor — Saídas');
+    }
+}
+document.getElementById('relSetorVer').addEventListener('click', () => executarRelatorioSetor('ver'));
+document.getElementById('relSetorCompartilhar').addEventListener('click', () => executarRelatorioSetor('compartilhar'));
+document.getElementById('relSetorSalvar').addEventListener('click', () => executarRelatorioSetor('salvar'));
 
 /* ---------- módulo: por Projeto ---------- */
 function executarRelatorioProjeto(acao) {
