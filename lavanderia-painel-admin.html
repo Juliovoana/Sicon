@@ -294,7 +294,7 @@
   .seletor-agencia-card{ background:var(--surface); width:100%; max-width:400px; border-radius:16px; padding:28px; box-shadow:var(--shadow-lg); text-align:center; }
   .seletor-agencia-card h3{ font-size:1.2rem; font-weight:700; margin-bottom:8px; }
   .seletor-agencia-card p{ font-size:.85rem; color:var(--muted); margin-bottom:22px; line-height:1.5; }
-  .lista-seletor-agencia{ display:flex; flex-direction:column; gap:10px; }
+  .lista-seletor-agencia{ display:flex; flex-direction:column; gap:10px; max-height:min(55vh, 460px); overflow-y:auto; padding:2px 6px 2px 2px; }
   .opcao-agencia{ display:flex; align-items:center; padding:14px 16px; border-radius:12px; border:1.5px solid var(--border); background:var(--surface); cursor:pointer; text-align:left; font-size:.95rem; font-weight:600; color:var(--ink); transition:border-color .15s, background .15s; }
   .opcao-agencia:hover{ border-color:var(--brand-2); background:var(--brand-soft); }
   .opcao-agencia.selected{ border-color:var(--brand); background:var(--brand-soft); }
@@ -537,6 +537,13 @@
                 <input type="text" id="filtroNotaNumero" placeholder="Ex: 232959" autocomplete="off">
               </div>
               <div class="filtro-campo">
+                <label>Período por</label>
+                <select id="filtroNotaCampoData">
+                  <option value="cobranca" selected>Data da cobrança</option>
+                  <option value="nota">Data da nota</option>
+                </select>
+              </div>
+              <div class="filtro-campo">
                 <label>De</label>
                 <input type="date" id="filtroNotaDe">
               </div>
@@ -544,7 +551,8 @@
                 <label>Até</label>
                 <input type="date" id="filtroNotaAte">
               </div>
-              <button class="btn-novo" id="btnNovaNota" style="margin-left:auto; align-self:flex-end;">+ Nova nota</button>
+              <button class="btn-novo" id="btnRelatoriosNotas" style="margin-left:auto; align-self:flex-end; background:var(--surface); color:var(--brand); border:1.5px solid var(--brand);">Relatórios</button>
+              <button class="btn-novo" id="btnNovaNota" style="align-self:flex-end;">+ Nova nota</button>
             </div>
             <div id="resumoNotasFiltro" class="resumo-notas-filtro" style="display:none;"></div>
             <div id="avisoNotasPeriodo" style="display:none; margin:-8px 0 14px; padding:9px 14px; border-radius:10px; background:var(--accent-soft, #FFF4DC); color:var(--accent-ink, #7A5200); font-size:.8rem;"></div>
@@ -731,6 +739,85 @@
     </div>
   </div>
 
+<div id="modalRelatoriosOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:2900; align-items:flex-start; justify-content:center; padding:20px 12px; overflow-y:auto;">
+  <div style="background:var(--surface); border-radius:14px; padding:20px 22px; max-width:820px; width:100%; box-shadow:0 12px 40px rgba(0,0,0,.25); margin:auto;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+      <h3 style="margin:0; font-size:1.1rem;">Relatórios de notas</h3>
+      <button class="drawer-close" id="btnFecharRelatorios" title="Fechar">✕</button>
+    </div>
+    <p style="font-size:.8rem; color:var(--muted); margin:0 0 12px;">Os filtros da aba Notas já vêm preenchidos. Só entram notas que tenham a data escolhida em <strong>Período por</strong>. Notas canceladas ficam de fora, a menos que você escolha o status "Cancelada".</p>
+    <div class="filtros-notas">
+      <div class="filtro-campo">
+        <label>Período por</label>
+        <select id="relCampoData"><option value="cobranca" selected>Data da cobrança</option><option value="nota">Data da nota (emissão)</option></select>
+      </div>
+      <div class="filtro-campo"><label>De <span style="color:var(--danger);">*</span></label><input type="date" id="relDe"></div>
+      <div class="filtro-campo"><label>Até <span style="color:var(--danger);">*</span></label><input type="date" id="relAte"></div>
+      <div class="filtro-campo">
+        <label>Cliente</label>
+        <div class="busca-sel" style="min-width:250px;">
+          <input type="hidden" id="rel_cliente_id" value="">
+          <input type="text" id="rel_cliente_id_busca" autocomplete="off" placeholder="Todos — digite parte do nome ou código" style="width:100%;">
+          <div class="resultados-busca" id="rel_cliente_id_res" style="display:none;"></div>
+        </div>
+      </div>
+      <div class="filtro-campo"><label>Setor</label><input type="text" id="relSetor" placeholder="Ex: ala 21"></div>
+      <div class="filtro-campo">
+        <label>Status</label>
+        <select id="relStatus">
+          <option value="">Todos, exceto cancelada</option>
+          <option value="aberta">Aberta</option>
+          <option value="pronta">Pronta</option>
+          <option value="entregue">Entregue</option>
+          <option value="cancelada">Cancelada</option>
+        </select>
+      </div>
+    </div>
+    <div id="relLista" style="margin-top:8px; border-top:1px solid var(--border);">
+      <div class="rel-item" data-rel="resumidas"><div><strong>Notas resumidas</strong><small>Uma linha por nota: emissão, vencimento, total, desconto e valor a pagar. <em>Exige cliente.</em></small></div><button class="btn-novo" data-gerar="resumidas">PDF</button></div>
+      <div class="rel-item" data-rel="setor"><div><strong>Notas resumidas por setor</strong><small>Total por setor, com subtotal de cada cliente e total geral.</small></div><button class="btn-novo" data-gerar="setor">PDF</button></div>
+      <div class="rel-item" data-rel="cobranca"><div><strong>Notas resumidas por data de cobrança</strong><small>Notas agrupadas por vencimento, com subtotal de cada data.</small></div><button class="btn-novo" data-gerar="cobranca">PDF</button></div>
+      <div class="rel-item" data-rel="detalhadas"><div><strong>Notas detalhadas</strong><small>Cada nota com seus itens, desconto, valor a pagar e observações. <em>Exige cliente.</em></small></div><button class="btn-novo" data-gerar="detalhadas">PDF</button></div>
+      <div class="rel-item" data-rel="recibo"><div><strong>Recibo</strong><small>Recibo do total do período, com valor por extenso. <em>Exige cliente.</em></small><span style="display:block; margin-top:4px;"><label style="font-size:.76rem; color:var(--muted);">Cidade do recibo <input type="text" id="relCidade" placeholder="Ex: Porto Seguro" style="padding:4px 8px; border:1px solid var(--border); border-radius:6px; font-size:.8rem;"></label></span></div><button class="btn-novo" data-gerar="recibo">PDF</button></div>
+      <div class="rel-item" data-rel="cruzado"><div><strong>Conferência cruzada por item × dia</strong><small>Itens em linhas, dias de emissão em colunas, quantidade na célula, com valor unitário e total em R$.</small></div><button class="btn-novo" data-gerar="cruzado">Visualizar / Excel</button></div>
+    </div>
+    <div id="relMensagem" style="font-size:.82rem; color:var(--muted); margin-top:10px; min-height:1.2em;"></div>
+  </div>
+</div>
+<style>
+  .rel-item{ display:flex; align-items:center; justify-content:space-between; gap:14px; padding:12px 2px; border-bottom:1px solid var(--border); }
+  .rel-item small{ display:block; font-size:.76rem; color:var(--muted); margin-top:2px; font-weight:400; }
+</style>
+<div id="modalCruzadoOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:3000; align-items:center; justify-content:center; padding:12px;">
+  <div style="background:var(--surface); border-radius:14px; padding:16px 18px; width:98vw; max-width:1400px; max-height:94vh; display:flex; flex-direction:column; box-shadow:0 12px 40px rgba(0,0,0,.25);">
+    <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; flex-wrap:wrap;">
+      <div><h3 style="margin:0; font-size:1.05rem;">Conferência cruzada por item × dia</h3><span id="cruzadoResumo" style="font-size:.8rem; color:var(--muted);"></span></div>
+      <div style="display:flex; gap:8px;"><button class="btn-novo" id="btnCruzadoBaixar">Baixar Excel</button><button class="btn-novo" id="btnCruzadoFechar" style="background:var(--surface); color:var(--ink); border:1.5px solid var(--border);">Fechar</button></div>
+    </div>
+    <div style="overflow:auto; border:1px solid var(--border); border-radius:8px;" id="cruzadoWrap"></div>
+  </div>
+</div>
+<style>
+  #cruzadoWrap table{ border-collapse:collapse; font-size:.78rem; width:max-content; min-width:100%; }
+  #cruzadoWrap th, #cruzadoWrap td{ border:1px solid #888; padding:3px 7px; white-space:nowrap; }
+  #cruzadoWrap th{ background:#e4e7ea; position:sticky; top:0; z-index:1; text-align:center; }
+  #cruzadoWrap td.num{ text-align:right; font-variant-numeric:tabular-nums; }
+  #cruzadoWrap td.qtd{ text-align:center; }
+  #cruzadoWrap tr.total td{ background:#e4e7ea; font-weight:700; }
+  #cruzadoWrap tbody tr:nth-child(even):not(.total) td{ background:#f6f7f8; }
+</style>
+<div id="modalPdfRelOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:3000; align-items:center; justify-content:center; padding:16px;">
+  <div style="background:var(--surface); border-radius:14px; padding:22px; max-width:420px; width:100%; box-shadow:0 12px 40px rgba(0,0,0,.25);">
+    <h3 id="modalPdfRelTitulo" style="margin:0 0 6px; font-size:1.05rem;">Relatório pronto</h3>
+    <p id="modalPdfRelResumo" style="font-size:.84rem; color:var(--muted); margin:0 0 16px;"></p>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn-novo" id="btnPdfRelVer">Visualizar</button>
+      <button class="btn-novo" id="btnPdfRelBaixar">Baixar</button>
+      <button class="btn-novo" id="btnPdfRelCompartilhar">Compartilhar</button>
+      <button class="btn-novo" id="btnPdfRelFechar" style="background:var(--surface); color:var(--ink); border:1.5px solid var(--border);">Fechar</button>
+    </div>
+  </div>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script>
   // =================================================================
@@ -1385,7 +1472,7 @@
   // A LISTA usa um select leve (sem as linhas de itens: embutir ~8 itens de cada uma de 1000 notas estourava o tempo do banco).
   // A nota COMPLETA (com itens) só é buscada ao abrir o popup/gaveta, por obterNota().
   const NOTAS_SELECT_LISTA = `
-        id, numero_rool, cliente_id, status, setor, data_nota, observacoes, valor_total,
+        id, numero_rool, cliente_id, status, setor, data_nota, data_cobranca, observacoes, valor_total,
         lavanderia_clientes ( id, nome )
       `;
   const NOTAS_SELECT = `
@@ -1411,7 +1498,8 @@
       setor: limparTermoBusca(document.getElementById('filtroNotaSetor').value),
       numero: limparTermoBusca(document.getElementById('filtroNotaNumero').value),
       de: document.getElementById('filtroNotaDe').value,
-      ate: document.getElementById('filtroNotaAte').value
+      ate: document.getElementById('filtroNotaAte').value,
+      campoData: document.getElementById('filtroNotaCampoData').value === 'cobranca' ? 'data_cobranca' : 'data_nota'
     };
   }
 
@@ -1420,8 +1508,14 @@
     if(f.numero){
       q = q.ilike('numero_rool', '%' + f.numero + '%');                 // buscar pelo número ignora o período
     } else {
-      if(f.de) q = q.or('data_nota.gte.' + f.de + ',data_nota.is.null');
-      if(f.ate) q = q.or('data_nota.lt.' + somarDia(f.ate, 1) + ',data_nota.is.null');
+      if(f.campoData === 'data_cobranca' || f.estrito){
+        // por data da cobrança (e nos relatórios): exato, nota sem a data escolhida não entra
+        if(f.de) q = q.gte(f.campoData, f.de);
+        if(f.ate) q = q.lt(f.campoData, somarDia(f.ate, 1));
+      } else {
+        if(f.de) q = q.or('data_nota.gte.' + f.de + ',data_nota.is.null');
+        if(f.ate) q = q.or('data_nota.lt.' + somarDia(f.ate, 1) + ',data_nota.is.null');
+      }
     }
     if(f.cliente) q = q.eq('cliente_id', f.cliente);
     if(f.status) q = q.eq('status', f.status);
@@ -1496,7 +1590,7 @@
     const minhaVez = ++seqCarregarNotas;
     const f = filtrosNotasAtuais();
     let q = aplicarFiltrosNotas(sb.from('lavanderia_notas').select(NOTAS_SELECT_LISTA).eq('unidade_negocio_id', agenciaId), f);
-    const { data, error } = await q.order('data_nota', { ascending: false }).order('id', { ascending: false }).limit(NOTAS_LIMITE);
+    const { data, error } = await q.order(f.campoData, { ascending: false, nullsFirst: false }).order('id', { ascending: false }).limit(NOTAS_LIMITE);
     if(minhaVez !== seqCarregarNotas) return;                           // chegou uma resposta mais nova: descarta esta
     if(error){ alert('Erro ao carregar notas: ' + error.message); return; }
     todasNotas = data || [];
@@ -1719,6 +1813,7 @@
     ligarBuscaSelecao('cp_destino', cfgClientes({ aoEscolher: () => { cpIniciarSelecao(); renderCopiarPrecos(); }, aoDigitar: () => { cpIniciarSelecao(); renderCopiarPrecos(); } }));
     // filtro de notas: inclui clientes inativos (podem ter notas antigas)
     ligarBuscaSelecao('filtroNotaCliente', cfgClientes({ getLista: () => todosClientes }));
+    ligarBuscaSelecao('rel_cliente_id', cfgClientes({ getLista: () => todosClientes }));
     ligarBuscaSelecao('buscaClienteLista', cfgClientes({
       getLista: () => todosClientes, manterTexto: true, limparAposEscolher: true,
       aoDigitar: () => renderListaClientes(),
@@ -1735,16 +1830,21 @@
     const numeroF = document.getElementById('filtroNotaNumero').value.trim().toLowerCase();
     const deF = numeroF ? '' : document.getElementById('filtroNotaDe').value;
     const ateF = numeroF ? '' : document.getElementById('filtroNotaAte').value;
+    const campoData = document.getElementById('filtroNotaCampoData').value === 'cobranca' ? 'data_cobranca' : 'data_nota';
 
     const filtradas = todasNotas.filter(n => {
       if(clienteF && n.cliente_id !== clienteF) return false;
       if(statusF && n.status !== statusF) return false;
       if(setorF && !(n.setor || '').toLowerCase().includes(setorF)) return false;
       if(numeroF && !String(n.numero_rool || '').toLowerCase().includes(numeroF)) return false;
-      if(deF && n.data_nota && n.data_nota.slice(0,10) < deF) return false;
-      if(ateF && n.data_nota && n.data_nota.slice(0,10) > ateF) return false;
+      const d = n[campoData] ? String(n[campoData]).slice(0, 10) : null;
+      if(campoData === 'data_cobranca'){
+        if((deF || ateF) && !d) return false;
+      }
+      if(deF && d && d < deF) return false;
+      if(ateF && d && d > ateF) return false;
       return true;
-    }).sort((a, b) => String(b.data_nota || '').localeCompare(String(a.data_nota || '')));
+    }).sort((a, b) => String(b[campoData] || '').localeCompare(String(a[campoData] || '')));
 
     const lista = document.getElementById('listaNotas');
     if(filtradas.length === 0){ lista.innerHTML = '<div class="vazio">Nenhuma nota encontrada.</div>'; return; }
@@ -1770,7 +1870,7 @@
         <div class="avatar-circle">${iniciais}</div>
         <div class="reserva-info">
           <span class="principal">${nomeCliente}${n.numero_rool ? ' · rool ' + n.numero_rool : ''}</span>
-          <span class="meta">${[n.setor, itensForaDaLista(n.observacoes) ? '<strong style="color:var(--accent-ink);">⚠ itens fora da lista</strong>' : ''].filter(Boolean).join(' · ') || '&nbsp;'}</span>
+          <span class="meta">${[n.setor, n.data_cobranca ? 'cobrança ' + formatarDataInput(n.data_cobranca).split('-').reverse().join('/') : '<strong style="color:var(--danger);">⚠ sem data de cobrança</strong>', itensForaDaLista(n.observacoes) ? '<strong style="color:var(--accent-ink);">⚠ itens fora da lista</strong>' : ''].filter(Boolean).join(' · ') || '&nbsp;'}</span>
         </div>
         <div class="reserva-right">
           <span class="reserva-valor mono">${formatarMoeda(n.valor_total)}</span>
@@ -1790,7 +1890,7 @@
     });
   }
 
-  ['filtroNotaCliente', 'filtroNotaStatus', 'filtroNotaSetor', 'filtroNotaNumero', 'filtroNotaDe', 'filtroNotaAte'].forEach(id => {
+  ['filtroNotaCliente', 'filtroNotaStatus', 'filtroNotaSetor', 'filtroNotaNumero', 'filtroNotaCampoData', 'filtroNotaDe', 'filtroNotaAte'].forEach(id => {
     document.getElementById(id).addEventListener('input', agendarRecarregarNotas);
     document.getElementById(id).addEventListener('change', agendarRecarregarNotas);
   });
@@ -1802,7 +1902,8 @@
     ha30dias.setDate(hoje.getDate() - 7);
     const iso = d => d.toISOString().slice(0, 10);
     document.getElementById('filtroNotaDe').value = iso(ha30dias);
-    document.getElementById('filtroNotaAte').value = iso(hoje);
+    // por data da cobrança (padrão): vai até o fim do mês, porque a cobrança sugerida de uma nota nova cai no dia 15 ou no último dia do mês
+    document.getElementById('filtroNotaAte').value = iso(new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0));
   })();
 
   // =================================================================
@@ -2336,7 +2437,16 @@
     document.getElementById('qr_desconto_percentual').addEventListener('change', salvarDescontoEDatasModal);
     document.getElementById('qr_desconto_valor').addEventListener('change', salvarDescontoEDatasModal);
     document.getElementById('qr_data_entrega').addEventListener('change', salvarDescontoEDatasModal);
-    document.getElementById('qr_data_cobranca').addEventListener('change', salvarDescontoEDatasModal);
+    document.getElementById('qr_data_cobranca').addEventListener('change', async (e) => {
+      if(!e.target.value){
+        alert('A data de cobrança é obrigatória.');
+        e.target.value = formatarDataInput(notaCacheModalItens && notaCacheModalItens.data_cobranca);
+        if(!e.target.value) e.target.style.borderColor = 'var(--danger)';
+        return;
+      }
+      e.target.style.borderColor = '';
+      await salvarDescontoEDatasModal();
+    });
   }
 
   function renderModalItensNotaBody(n){
@@ -2390,7 +2500,7 @@
         </div>
         <div class="field-row">
           <div class="field-group"><label>Data de entrega</label><input type="date" id="qr_data_entrega" value="${formatarDataInput(n.data_entrega)}"></div>
-          <div class="field-group"><label>Data de cobrança</label><input type="date" id="qr_data_cobranca" value="${formatarDataInput(n.data_cobranca)}"></div>
+          <div class="field-group"><label>Data de cobrança <span style="color:var(--danger);">*</span></label><input type="date" id="qr_data_cobranca" required value="${formatarDataInput(n.data_cobranca)}" ${n.data_cobranca ? '' : 'style="border-color:var(--danger);"'}></div>
         </div>
       </div>
     `;
@@ -2476,8 +2586,13 @@
 
   async function abrirModalLancamentoItens(notaId){
     notaItensModalId = notaId;
-    const n = await obterNota(notaId);
+    let n = await obterNota(notaId);
     if(!n) return;
+    if(!n.data_cobranca && n.data_nota && n.status !== 'cancelada'){
+      const padrao = cobrancaPadrao(n.data_nota);
+      const { error: erroPadrao } = padrao ? await sb.from('lavanderia_notas').update({ data_cobranca: padrao }).eq('id', notaId) : { error: null };
+      if(!erroPadrao && padrao){ await carregarNotas(); n = (await obterNota(notaId, true)) || n; }
+    }
     document.getElementById('modalItensNotaTitulo').textContent =
       'Itens da nota — ' + (rotuloClienteId(n.cliente_id, n.lavanderia_clientes?.nome) || 'sem cliente') + (n.numero_rool ? ' · rool ' + n.numero_rool : '');
     renderModalItensNotaBody(n);
@@ -2487,7 +2602,16 @@
   }
 
   document.getElementById('btnFecharModalItensNota').addEventListener('click', () => modalItensNotaOverlay.classList.remove('show'));
-  document.getElementById('btnConcluirLancamentoItens').addEventListener('click', () => modalItensNotaOverlay.classList.remove('show'));
+  document.getElementById('btnConcluirLancamentoItens').addEventListener('click', () => {
+    const campo = document.getElementById('qr_data_cobranca');
+    if(campo && !campo.value){
+      alert('Informe a data de cobrança antes de concluir (obrigatória).');
+      campo.style.borderColor = 'var(--danger)';
+      campo.focus();
+      return;
+    }
+    modalItensNotaOverlay.classList.remove('show');
+  });
 
   // Lançamento rápido: digita o código, Enter localiza o item e pula pra
   // quantidade; Enter na quantidade grava direto no banco, atualiza a
@@ -2600,6 +2724,13 @@
     inputCodigo.focus();
   }
 
+  // Data de cobrança padrão (regra quinzenal do sistema antigo): emissão do dia 1 ao 15 cobra no dia 15; do 16 em diante, no último dia do mês.
+  function cobrancaPadrao(dataNotaIso){
+    const p = String(dataNotaIso || '').slice(0, 10).split('-').map(Number);
+    if(p.length !== 3 || !p[0] || !p[1] || !p[2]) return '';
+    return p[2] <= 15 ? dataIso(p[0], p[1] - 1, 15) : dataIso(p[0], p[1] - 1, new Date(p[0], p[1], 0).getDate());
+  }
+
   function formatarDataInput(valor){
     if(!valor) return '';
     return valor.slice(0, 10);
@@ -2634,6 +2765,13 @@
   }
 
   async function mudarStatusNota(novoStatus){
+    if(novoStatus === 'pronta' || novoStatus === 'entregue'){
+      const atual = await obterNota(notaSelecionadaId);
+      if(atual && !atual.data_cobranca){
+        alert('Informe a data de cobrança antes de avançar a nota (em "Lançar / editar itens" → Desconto e prazos).');
+        return;
+      }
+    }
     const { error } = await sb.from('lavanderia_notas').update({ status: novoStatus }).eq('id', notaSelecionadaId);
     if(error){ alert('Erro: ' + error.message); return; }
     await carregarNotas();
@@ -2656,11 +2794,15 @@
           <div class="field-group"><label>Número do rool (livre, opcional)</label><input type="text" id="n_numero_rool" placeholder="Ex: 18"></div>
           <div class="field-group"><label>Setor / local de retirada</label><input type="text" id="n_setor" placeholder="Ex: ala 21, restaurante"></div>
           <div class="field-group"><label>Data da nota</label><input type="date" id="n_data_nota" value="${new Date().toISOString().slice(0,10)}"></div>
+          <div class="field-group"><label>Data de cobrança <span style="color:var(--danger);">* (sugerida pelo sistema, pode mudar)</span></label><input type="date" id="n_data_cobranca" required value="${cobrancaPadrao(new Date().toISOString().slice(0,10))}"></div>
         </div>
         <p style="font-size:.8rem; color:var(--muted); padding:0 2px;">Depois de criar a nota, você poderá adicionar os itens lavados.</p>
       `;
       document.getElementById('drawerNotaActions').innerHTML = `<button class="btn-acao btn-salvar" id="btnCriarNota" style="flex:2;">Criar nota</button>`;
       ligarBuscaSelecao('n_cliente_id', cfgClientes());
+      const campoCobranca = document.getElementById('n_data_cobranca');
+      campoCobranca.addEventListener('input', () => { campoCobranca.dataset.manual = '1'; });
+      document.getElementById('n_data_nota').addEventListener('change', (e) => { if(!campoCobranca.dataset.manual) campoCobranca.value = cobrancaPadrao(e.target.value); });
       document.getElementById('btnCriarNota').addEventListener('click', criarNotaInicial);
       drawerNotaOverlay.classList.add('show');
       return;
@@ -2760,6 +2902,8 @@
     try{
       const clienteId = document.getElementById('n_cliente_id').value;
       if(!clienteId){ throw new Error('Selecione o cliente.'); }
+      const dataCobranca = document.getElementById('n_data_cobranca').value;
+      if(!dataCobranca){ document.getElementById('n_data_cobranca').focus(); throw new Error('Informe a data de cobrança (obrigatória).'); }
 
       const payload = {
         unidade_negocio_id: agenciaId,
@@ -2767,6 +2911,7 @@
         numero_rool: document.getElementById('n_numero_rool').value.trim() || null,
         setor: document.getElementById('n_setor').value.trim() || null,
         data_nota: document.getElementById('n_data_nota').value || new Date().toISOString().slice(0,10),
+        data_cobranca: dataCobranca,
         status: 'aberta'
       };
 
@@ -2828,6 +2973,537 @@
       btn.textContent = 'Salvar';
     }
   }
+
+  // =================================================================
+  // RELATÓRIOS — popup aberto pelo botão "Relatórios" da aba Notas
+  // (modelos do sistema antigo: resumidas, por setor, por data de cobrança, detalhadas, recibo e cruzado em Excel)
+  // =================================================================
+  const fmtNumRel = v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtDataRel = (iso, longo) => { const p = String(iso || '').slice(0, 10).split('-'); return p.length === 3 ? p[2] + '/' + p[1] + '/' + (longo ? p[0] : p[0].slice(2)) : ''; };
+  const DIAS_REL = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+  const MESES_REL = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const dataExtensoRel = d => DIAS_REL[d.getDay()] + ', ' + d.getDate() + ' de ' + MESES_REL[d.getMonth()] + ' de ' + d.getFullYear();
+  const totalBrutoNota = n => (n.subtotal == null ? Number(n.valor_total) : Number(n.subtotal)) || 0;
+  const descontoNota = n => Math.max(0, Math.round((totalBrutoNota(n) - (Number(n.valor_total) || 0)) * 100) / 100);
+  const rotuloPdfCliente = (id, nome) => { const c = todosClientes.find(x => x.id === id); return c ? ((c.codigo_externo ? c.codigo_externo + '  ' : '') + c.nome) : (nome || ''); };
+
+  function extensoRel(valor){
+    const UN = ['zero', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove'];
+    const D19 = ['dez', 'onze', 'doze', 'treze', 'quatorze', 'quinze', 'dezesseis', 'dezessete', 'dezoito', 'dezenove'];
+    const DEZ = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa'];
+    const CEM = ['', 'cento', 'duzentos', 'trezentos', 'quatrocentos', 'quinhentos', 'seiscentos', 'setecentos', 'oitocentos', 'novecentos'];
+    const ate99 = n => n < 10 ? UN[n] : n < 20 ? D19[n - 10] : DEZ[Math.floor(n / 10)] + (n % 10 ? ' e ' + UN[n % 10] : '');
+    const ate999 = n => { if(n === 100) return 'cem'; const c = Math.floor(n / 100), r = n % 100; return !c ? ate99(r) : CEM[c] + (r ? ' e ' + ate99(r) : ''); };
+    const inteiro = n => {
+      if(n === 0) return 'zero';
+      const mi = Math.floor(n / 1e6), mil = Math.floor((n % 1e6) / 1000), r = n % 1000, partes = [];
+      if(mi) partes.push({ txt: mi === 1 ? 'um milhão' : ate999(mi) + ' milhões', val: mi * 1e6 });
+      if(mil) partes.push({ txt: mil === 1 ? 'mil' : ate999(mil) + ' mil', val: mil * 1000 });
+      if(r) partes.push({ txt: ate999(r), val: r });
+      return partes.map((p, i) => i === 0 ? p.txt : ((i === partes.length - 1 && (p.val < 100 || p.val % 100 === 0)) ? ' e ' : ' ') + p.txt).join('');
+    };
+    const arred = Math.round(valor * 100) / 100, int = Math.floor(arred), cent = Math.round((arred - int) * 100);
+    let txt = inteiro(int) + (int === 1 ? ' real' : (int >= 1e6 && int % 1e6 === 0 ? ' de reais' : ' reais'));
+    if(cent > 0) txt += ' e ' + inteiro(cent) + (cent === 1 ? ' centavo' : ' centavos');
+    return txt;
+  }
+
+  function carregarScriptRel(src){
+    return new Promise((ok, falha) => {
+      if(document.querySelector('script[src="' + src + '"]')) return ok();
+      const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => falha(new Error('Não consegui carregar ' + src));
+      document.head.appendChild(s);
+    });
+  }
+  async function garantirPdfLibs(){
+    if(!(window.jspdf && window.jspdf.jsPDF)) await carregarScriptRel('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    if(!(window.jspdf && window.jspdf.jsPDF.API.autoTable)) await carregarScriptRel('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+  }
+
+  // ---------- popup: abrir/fechar e filtros ----------
+  function abrirPopupRelatorios(){
+    const fa = filtrosNotasAtuais();
+    document.getElementById('relCampoData').value = 'cobranca';   // padrão dos relatórios: sempre a data da cobrança
+    const hoje = new Date();
+    const ini = dataIso(hoje.getFullYear(), hoje.getMonth(), 1), fim = dataIso(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+    document.getElementById('relDe').value = fa.de || ini;
+    document.getElementById('relAte').value = fa.ate || fim;
+    const cli = fa.cliente ? todosClientes.find(c => c.id === fa.cliente) : null;
+    if(buscasSel['rel_cliente_id']) definirBuscaSelecao('rel_cliente_id', cli || null);
+    document.getElementById('relSetor').value = fa.setor || '';
+    document.getElementById('relStatus').value = fa.status || '';
+    try{ document.getElementById('relCidade').value = localStorage.getItem('lav_cidade_recibo_' + agenciaId) || ''; } catch(e){ /* sem storage */ }
+    document.getElementById('relMensagem').textContent = '';
+    document.getElementById('modalRelatoriosOverlay').style.display = 'flex';
+  }
+  document.getElementById('btnRelatoriosNotas').addEventListener('click', abrirPopupRelatorios);
+  document.getElementById('btnFecharRelatorios').addEventListener('click', () => { document.getElementById('modalRelatoriosOverlay').style.display = 'none'; });
+
+  function lerFiltrosRel(){
+    return {
+      campoData: document.getElementById('relCampoData').value === 'cobranca' ? 'data_cobranca' : 'data_nota', estrito: true, numero: '',
+      de: document.getElementById('relDe').value, ate: document.getElementById('relAte').value,
+      cliente: document.getElementById('rel_cliente_id').value, status: document.getElementById('relStatus').value,
+      setor: limparTermoBusca(document.getElementById('relSetor').value)
+    };
+  }
+
+  // ---------- dados ----------
+  async function buscarNotasRelatorio(f){
+    const todas = [];
+    for(let pagina = 0; pagina < 40; pagina++){
+      let q = aplicarFiltrosNotas(sb.from('lavanderia_notas')
+        .select('id, numero_rool, cliente_id, status, setor, observacoes, data_nota, data_cobranca, peso_total, subtotal, valor_total, desconto_percentual, usa_desconto_percentual, lavanderia_clientes ( nome )')
+        .eq('unidade_negocio_id', agenciaId), f);
+      if(!f.status) q = q.neq('status', 'cancelada');
+      const { data, error } = await q.order('data_nota', { ascending: true }).order('numero_rool', { ascending: true }).order('id', { ascending: true })
+        .range(pagina * 1000, pagina * 1000 + 999);
+      if(error) throw new Error(error.message);
+      todas.push(...(data || []));
+      if(!data || data.length < 1000) return { notas: todas, truncou: false };
+    }
+    return { notas: todas, truncou: true };
+  }
+
+  // linhas de itens das notas, em lotes (embutir itens em 1000 notas estoura o tempo do banco)
+  async function buscarLinhasNotas(ids){
+    const mapa = new Map();
+    ids.forEach(id => mapa.set(id, []));
+    const lotes = [];
+    for(let i = 0; i < ids.length; i += 40) lotes.push(ids.slice(i, i + 40));
+    const lerLote = async (lote) => {
+      for(let pagina = 0; pagina < 20; pagina++){
+        const { data, error } = await sb.from('lavanderia_itens_nota')
+          .select('id, nota_id, item_id, quantidade, valor_unitario, valor_total, created_at, lavanderia_itens ( nome, codigo )')
+          .in('nota_id', lote).order('created_at', { ascending: true }).order('id', { ascending: true })
+          .range(pagina * 1000, pagina * 1000 + 999);
+        if(error) throw new Error(error.message);
+        (data || []).forEach(l => { if(mapa.has(l.nota_id)) mapa.get(l.nota_id).push(l); });
+        if(!data || data.length < 1000) break;
+      }
+    };
+    for(let i = 0; i < lotes.length; i += 4) await Promise.all(lotes.slice(i, i + 4).map(lerLote));
+    return mapa;
+  }
+
+  let unidadeRelCache = null;
+  async function buscarUnidadeRel(){
+    if(unidadeRelCache && unidadeRelCache.id === agenciaId) return unidadeRelCache;
+    let u = {};
+    try{
+      const { data } = await sb.from('servir_unidades_negocio').select('*').eq('id', agenciaId).maybeSingle();
+      u = data || {};
+    } catch(e){ /* usa só o nome */ }
+    unidadeRelCache = { id: agenciaId, nome: u.nome || agenciaNome || '', endereco: u.endereco || '', telefone: u.telefone || '', cidade: u.cidade || '', logo_url: u.logo_url || '' };
+    return unidadeRelCache;
+  }
+
+  // ---------- logo da unidade nos PDFs ----------
+  // baixa o logo cadastrado na unidade, redesenha em canvas (máx. 400 px) e devolve PNG + proporção; null se não houver/falhar
+  let logoRelAtual = null, logoRelCache = null;
+  async function prepararLogoRel(){
+    const u = await buscarUnidadeRel();
+    if(!u.logo_url) return null;
+    if(logoRelCache && logoRelCache.url === u.logo_url) return logoRelCache.dados;
+    let dados = null;
+    try{
+      const resp = await fetch(u.logo_url, { cache: 'force-cache' });
+      if(!resp.ok) throw new Error('HTTP ' + resp.status);
+      const blob = await resp.blob();
+      const img = await new Promise((ok, falha) => { const i = new Image(); const url = URL.createObjectURL(blob); i.onload = () => { URL.revokeObjectURL(url); ok(i); }; i.onerror = () => falha(new Error('imagem inválida')); i.src = url; });
+      const esc = Math.min(1, 400 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.max(1, Math.round(img.width * esc)); c.height = Math.max(1, Math.round(img.height * esc));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      dados = { png: c.toDataURL('image/png'), prop: c.width / c.height };
+    } catch(e){ console.warn('Logo da unidade não pôde ser usado nos PDFs:', e.message || e); }
+    logoRelCache = { url: u.logo_url, dados };
+    return dados;
+  }
+  // desenha no canto superior esquerdo, cabendo na caixa maxW x maxH (mm), sem deformar
+  function desenharLogoRel(doc, x, y, maxW, maxH){
+    if(!logoRelAtual) return;
+    let h = maxH, w = h * logoRelAtual.prop;
+    if(w > maxW){ w = maxW; h = w / logoRelAtual.prop; }
+    try{ doc.addImage(logoRelAtual.png, 'PNG', x, y, w, h); } catch(e){ /* segue sem o logo */ }
+  }
+
+  // ---------- PDF: partes comuns ----------
+  function textoPeriodoRel(f){ return 'ENTRE ' + fmtDataRel(f.de, true) + ' E ' + fmtDataRel(f.ate, true) + (f.campoData === 'data_cobranca' ? '  (cobrança)' : ''); }
+  function textoClienteRel(f, notas){
+    if(!f.cliente) return 'TODOS OS CLIENTES';
+    const n = notas.find(x => x.cliente_id === f.cliente);
+    return 'CLIENTE  ' + rotuloPdfCliente(f.cliente, n && n.lavanderia_clientes && n.lavanderia_clientes.nome);
+  }
+  function cabecalhoRel(doc, titulo, f, notas){
+    const larg = doc.internal.pageSize.getWidth();
+    desenharLogoRel(doc, 10, 6, 40, 15);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(17); doc.setTextColor(74, 127, 196);
+    doc.text(titulo, larg / 2, 15, { align: 'center' });
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(30);
+    doc.text(textoClienteRel(f, notas), 10, 25);
+    doc.text(textoPeriodoRel(f), larg - 10, 25, { align: 'right' });
+    const filtros = [];
+    if(f.setor) filtros.push('Setor: ' + f.setor);
+    filtros.push(f.status ? 'Status: ' + (mapaStatusLabel[f.status] || f.status) : 'Exceto canceladas');
+    doc.setFontSize(7.5); doc.setTextColor(110);
+    doc.text((agenciaNome || '') + '  ·  ' + filtros.join('  ·  '), 10, 29);
+    return 32;
+  }
+  function rodapeRel(doc){
+    const larg = doc.internal.pageSize.getWidth(), alt = doc.internal.pageSize.getHeight(), paginas = doc.getNumberOfPages();
+    for(let i = 1; i <= paginas; i++){
+      doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(110);
+      doc.text(dataExtensoRel(new Date()), 10, alt - 7);
+      doc.text('Página ' + i + ' de ' + paginas, larg - 10, alt - 7, { align: 'right' });
+    }
+  }
+  const estiloCinza = { fillColor: [205, 200, 192], fontStyle: 'bold' };
+  const estiloAzul = { fillColor: [196, 208, 222], fontStyle: 'bold' };
+  function tabelaRel(doc, startY, head, body, columnStyles){
+    doc.autoTable({
+      startY, margin: { left: 10, right: 10, bottom: 14 }, head: [head], body, theme: 'plain',
+      styles: { fontSize: 8, cellPadding: { top: 1.6, bottom: 1.6, left: 1.5, right: 1.5 }, textColor: 30, overflow: 'ellipsize' },
+      headStyles: { fontStyle: 'bold', fillColor: [255, 255, 255], textColor: 0, lineWidth: { bottom: 0.4 }, lineColor: [0, 0, 0] },
+      alternateRowStyles: { fillColor: [242, 242, 242] }, columnStyles,
+      didParseCell: (d) => { if(d.section === 'head' && columnStyles[d.column.index] && columnStyles[d.column.index].halign === 'right') d.cell.styles.halign = 'right'; }
+    });
+  }
+  const nomeNovoDoc = (opcoes) => new window.jspdf.jsPDF(Object.assign({ unit: 'mm', format: 'a4' }, opcoes || {}));
+  const celula = (content, extra, extraStyles) => Object.assign({ content: String(content) }, extra || {}, { styles: extraStyles || {} });
+
+  // ---------- 1) Notas resumidas ----------
+  function pdfResumidas(f, notas){
+    const doc = nomeNovoDoc();
+    const y = cabecalhoRel(doc, 'NOTAS RESUMIDAS', f, notas);
+    const corpo = notas.map(n => [n.numero_rool || '', fmtDataRel(n.data_nota, true), fmtDataRel(n.data_cobranca, true), n.setor || '', fmtNumRel(totalBrutoNota(n)), fmtNumRel(descontoNota(n)), fmtNumRel(n.valor_total)]);
+    const tot = notas.reduce((a, n) => ({ bruto: a.bruto + totalBrutoNota(n), desc: a.desc + descontoNota(n), valor: a.valor + (Number(n.valor_total) || 0) }), { bruto: 0, desc: 0, valor: 0 });
+    const pct = tot.bruto > 0 ? tot.desc / tot.bruto * 100 : 0;
+    corpo.push([celula(notas.length + ' NOTAS', { colSpan: 4 }, estiloCinza), celula(fmtNumRel(tot.bruto), {}, Object.assign({ halign: 'right' }, estiloCinza)), celula(fmtNumRel(tot.desc), {}, Object.assign({ halign: 'right' }, estiloCinza)), celula(fmtNumRel(tot.valor), {}, Object.assign({ halign: 'right' }, estiloCinza))]);
+    corpo.push([celula(notas.length + ' NOTAS  ·  desconto médio ' + fmtNumRel(pct) + '%', { colSpan: 4 }, estiloAzul), celula(fmtNumRel(tot.bruto), {}, Object.assign({ halign: 'right' }, estiloAzul)), celula(fmtNumRel(tot.desc), {}, Object.assign({ halign: 'right' }, estiloAzul)), celula(fmtNumRel(tot.valor), {}, Object.assign({ halign: 'right' }, estiloAzul))]);
+    tabelaRel(doc, y, ['NOTA', 'EMISSÃO', 'VENCIMENTO', 'SETOR', 'TOTAL', 'DESCONTO VALOR', 'VALOR A PAGAR'],
+      corpo, { 0: { cellWidth: 20 }, 1: { cellWidth: 24 }, 2: { cellWidth: 26 }, 4: { cellWidth: 28, halign: 'right' }, 5: { cellWidth: 30, halign: 'right' }, 6: { cellWidth: 32, halign: 'right' } });
+    rodapeRel(doc);
+    return doc;
+  }
+
+  // ---------- 2) Notas resumidas por setor (agrupa por cliente: subtotal de cada um + total geral) ----------
+  function pdfPorSetor(f, notas){
+    const doc = nomeNovoDoc();
+    const y = cabecalhoRel(doc, 'NOTAS RESUMIDAS POR SETOR', f, notas);
+    const porCliente = new Map();
+    notas.forEach(n => { const k = n.cliente_id; if(!porCliente.has(k)) porCliente.set(k, []); porCliente.get(k).push(n); });
+    const clientes = [...porCliente.entries()].map(([id, lista]) => ({ id, nome: rotuloPdfCliente(id, lista[0].lavanderia_clientes && lista[0].lavanderia_clientes.nome), lista }))
+      .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    const soma = (lista) => lista.reduce((a, n) => ({ bruto: a.bruto + totalBrutoNota(n), desc: a.desc + descontoNota(n), valor: a.valor + (Number(n.valor_total) || 0) }), { bruto: 0, desc: 0, valor: 0 });
+    const linhaTot = (rotulo, lista, estilo) => { const s = soma(lista); return [celula(rotulo, { colSpan: 2 }, estilo), celula(fmtNumRel(s.bruto), {}, Object.assign({ halign: 'right' }, estilo)), celula(fmtNumRel(s.desc), {}, Object.assign({ halign: 'right' }, estilo)), celula(fmtNumRel(s.valor), {}, Object.assign({ halign: 'right' }, estilo))]; };
+    const corpo = [];
+    clientes.forEach(c => {
+      if(clientes.length > 1) corpo.push([celula(c.nome, { colSpan: 5 }, { fontStyle: 'bold', fillColor: [255, 255, 255], textColor: [74, 127, 196] })]);
+      const porSetor = new Map();
+      c.lista.forEach(n => { const k = (n.setor || '').trim(); if(!porSetor.has(k)) porSetor.set(k, []); porSetor.get(k).push(n); });
+      [...porSetor.entries()].sort((a, b) => (a[0] === '') - (b[0] === '') || a[0].localeCompare(b[0], 'pt-BR')).forEach(([setor, lista]) => {
+        const s = soma(lista);
+        corpo.push([setor || '(sem setor)', String(lista.length), fmtNumRel(s.bruto), fmtNumRel(s.desc), fmtNumRel(s.valor)]);
+      });
+      corpo.push(linhaTot(c.lista.length + ' NOTA(S)', c.lista, estiloCinza));
+    });
+    if(clientes.length > 1 || true) corpo.push(linhaTot(notas.length + ' NOTA(S)' + (clientes.length > 1 ? ' — TOTAL GERAL' : ''), notas, estiloAzul));
+    tabelaRel(doc, y, ['SETOR', 'NOTAS', 'TOTAL', 'DESCONTO VALOR', 'VALOR A PAGAR'], corpo, { 1: { cellWidth: 22, halign: 'right' }, 2: { cellWidth: 36, halign: 'right' }, 3: { cellWidth: 36, halign: 'right' }, 4: { cellWidth: 38, halign: 'right' } });
+    rodapeRel(doc);
+    return doc;
+  }
+
+  // ---------- 3) Notas resumidas por data de cobrança ----------
+  function pdfPorCobranca(f, notas){
+    const doc = nomeNovoDoc();
+    const y = cabecalhoRel(doc, 'NOTAS RESUMIDAS DT COBRANÇA', f, notas);
+    const ordenadas = notas.slice().sort((a, b) => String(a.data_cobranca || '9999').localeCompare(String(b.data_cobranca || '9999')) || String(a.data_nota || '').localeCompare(String(b.data_nota || '')) || String(a.numero_rool || '').localeCompare(String(b.numero_rool || '')));
+    const grupos = [];
+    ordenadas.forEach(n => {
+      const d = n.data_cobranca ? String(n.data_cobranca).slice(0, 10) : '';
+      let g = grupos[grupos.length - 1];
+      if(!g || g.data !== d){ g = { data: d, notas: [] }; grupos.push(g); }
+      g.notas.push(n);
+    });
+    const soma = (lista) => lista.reduce((a, n) => ({ bruto: a.bruto + totalBrutoNota(n), desc: a.desc + descontoNota(n), valor: a.valor + (Number(n.valor_total) || 0), kg: a.kg + (Number(n.peso_total) || 0) }), { bruto: 0, desc: 0, valor: 0, kg: 0 });
+    const linhaTot = (rotulo, lista, estilo) => { const s = soma(lista); return [
+      celula(rotulo, { colSpan: 3 }, estilo),
+      celula('Total ' + fmtNumRel(s.bruto) + '  ·  Desc. ' + fmtNumRel(s.desc), { colSpan: 2 }, Object.assign({ halign: 'right' }, estilo)),
+      celula(fmtNumRel(s.kg) + ' KG', {}, Object.assign({ halign: 'right' }, estilo)),
+      celula(fmtNumRel(s.valor), {}, Object.assign({ halign: 'right' }, estilo))]; };
+    const corpo = [];
+    grupos.forEach(g => {
+      g.notas.forEach(n => {
+        const peso = Number(n.peso_total) || 0;
+        corpo.push([n.numero_rool || '', fmtDataRel(n.data_nota), rotuloPdfCliente(n.cliente_id, n.lavanderia_clientes && n.lavanderia_clientes.nome), g.data ? fmtDataRel(g.data) : '-', n.setor || '', peso > 0 ? fmtNumRel(peso) + ' KG' : '-', fmtNumRel(n.valor_total)]);
+      });
+      corpo.push(linhaTot(g.notas.length + ' NOTA(S)   ' + (g.data ? fmtDataRel(g.data, true) : 'SEM DATA DE COBRANÇA'), g.notas, estiloCinza));
+    });
+    corpo.push(linhaTot(notas.length + ' NOTA(S) — TOTAL GERAL', notas, estiloAzul));
+    tabelaRel(doc, y, ['NOTA', 'EMISSÃO', 'CLIENTE', 'COBRANÇA', 'SETOR', 'TOTAL KG', 'VALOR A PAGAR'], corpo,
+      { 0: { cellWidth: 17 }, 1: { cellWidth: 18 }, 3: { cellWidth: 20 }, 4: { cellWidth: 26 }, 5: { cellWidth: 24, halign: 'right' }, 6: { cellWidth: 27, halign: 'right' } });
+    rodapeRel(doc);
+    return doc;
+  }
+
+  // ---------- 4) Notas detalhadas ----------
+  function pdfDetalhadas(f, notas, linhasPorNota, unidade){
+    const doc = nomeNovoDoc();
+    const W = 210, H = 297, mL = 10, mR = 200, limite = H - 16;
+    let y = 0;
+    const tracejado = (yy) => { doc.setDrawColor(120); doc.setLineWidth(0.15); doc.setLineDashPattern([0.4, 0.8], 0); doc.line(mL, yy, mR, yy); doc.setLineDashPattern([], 0); };
+    const cabPagina = () => {
+      desenharLogoRel(doc, mL, 6, 55, 18);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(40);
+      doc.text((unidade.nome || '').toUpperCase(), mR, 12, { align: 'right' });
+      if(unidade.endereco) doc.text(String(unidade.endereco).toUpperCase(), mR, 17, { align: 'right' });
+      if(unidade.telefone) doc.text('FONES: ' + unidade.telefone, mR, 22, { align: 'right' });
+      tracejado(25.5);
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.text(textoClienteRel(f, notas), mL, 30);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(textoPeriodoRel(f), mR, 30, { align: 'right' });
+      tracejado(32);
+      y = 37;
+    };
+    cabPagina();
+    let somaPagar = 0, somaBruto = 0;
+    notas.forEach(n => {
+      const linhas = linhasPorNota.get(n.id) || [];
+      const obs = String(n.observacoes || '').trim();
+      const obsLinhas = obs ? doc.splitTextToSize(obs, 160) : [];
+      const altura = 7 + linhas.length * 4.2 + 6 + 6 + (obsLinhas.length ? 2 + obsLinhas.length * 4 : 0) + 6;
+      if(y + altura > limite && y > 45){ doc.addPage(); cabPagina(); }
+      tracejado(y); y += 4.5;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(30);
+      doc.text('SETOR' + (n.setor ? ': ' + n.setor : ''), mL, y);
+      doc.text('NOTA ' + (n.numero_rool || ''), 92, y);
+      doc.setFont('helvetica', 'normal');
+      doc.text('EMISSÃO: ' + fmtDataRel(n.data_nota, true), 124, y);
+      doc.text('VENCIMENTO: ' + (n.data_cobranca ? fmtDataRel(n.data_cobranca, true) : '-'), mR, y, { align: 'right' });
+      y += 5;
+      doc.setFontSize(8.5);
+      let qtdTotal = 0;
+      linhas.forEach(l => {
+        if(y > limite){ doc.addPage(); cabPagina(); }
+        const qtd = Number(l.quantidade) || 0; qtdTotal += qtd;
+        const it = l.lavanderia_itens || {};
+        doc.text(String(it.codigo || ''), mL + 8, y, { align: 'right' });
+        doc.text(String(it.nome || '(item sem cadastro)').toUpperCase().slice(0, 40), mL + 12, y);
+        doc.text(String(qtd % 1 ? qtd.toFixed(2).replace('.', ',') : qtd), 132, y, { align: 'right' });
+        doc.text(fmtNumRel(l.valor_unitario), 162, y, { align: 'right' });
+        doc.text(fmtNumRel(l.valor_total != null ? l.valor_total : qtd * (Number(l.valor_unitario) || 0)), mR, y, { align: 'right' });
+        y += 4.2;
+      });
+      tracejado(y - 1.5); y += 2.5;
+      doc.setFont('helvetica', 'bold');
+      doc.text(String(qtdTotal % 1 ? qtdTotal.toFixed(2).replace('.', ',') : qtdTotal), 132, y, { align: 'right' });
+      doc.text('TOTAL', 172, y, { align: 'right' });
+      doc.text(fmtNumRel(totalBrutoNota(n)), mR, y, { align: 'right' });
+      y += 5.5;
+      const pct = n.usa_desconto_percentual === false ? 0 : (Number(n.desconto_percentual) || 0);
+      doc.text('DESCONTO PERCENTUAL', mL, y); doc.text(fmtNumRel(pct) + '%', mL + 42, y);
+      doc.text('DESCONTO VALOR', 80, y); doc.text(fmtNumRel(descontoNota(n)), 112, y);
+      doc.text('VALOR A PAGAR', 150, y, { align: 'right' }); doc.text(fmtNumRel(n.valor_total), mR, y, { align: 'right' });
+      y += 5;
+      if(obsLinhas.length){
+        doc.setFont('helvetica', 'bold'); doc.text('OBS', mL, y);
+        doc.setFont('helvetica', 'normal');
+        obsLinhas.forEach(t => { doc.text(String(t), mL + 14, y); y += 4; });
+        y += 1;
+      }
+      y += 3;
+      somaPagar += Number(n.valor_total) || 0; somaBruto += totalBrutoNota(n);
+    });
+    if(y + 12 > limite){ doc.addPage(); cabPagina(); }
+    tracejado(y); y += 5;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+    doc.text('TOTAL PAGAR  ' + fmtNumRel(somaPagar), mL, y);
+    doc.text('TOTAL NOTA(S)  ' + fmtNumRel(somaBruto) + '  (' + notas.length + ' nota(s))', mR, y, { align: 'right' });
+    rodapeRel(doc);
+    return doc;
+  }
+
+  // ---------- 5) Recibo ----------
+  function pdfRecibo(f, notas, unidade, cidade){
+    const doc = nomeNovoDoc();
+    const mL = 10, mR = 200;
+    desenharLogoRel(doc, mL, 6, 55, 20);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(40);
+    doc.text((unidade.nome || '').toUpperCase(), mR, 12, { align: 'right' });
+    if(unidade.endereco) doc.text(String(unidade.endereco).toUpperCase(), mR, 17, { align: 'right' });
+    if(unidade.telefone) doc.text('FONES: ' + unidade.telefone, mR, 22, { align: 'right' });
+    doc.setDrawColor(0); doc.setLineWidth(0.3); doc.rect(mL, 30, mR - mL, 12);
+    doc.setFont('times', 'bold'); doc.setFontSize(22); doc.setTextColor(0);
+    doc.text('RECIBO', (mL + mR) / 2, 39, { align: 'center' });
+    const total = notas.reduce((s, n) => s + (Number(n.valor_total) || 0), 0);
+    doc.setFontSize(24); doc.text('R$ ' + fmtNumRel(total), mR - 4, 56, { align: 'right' });
+    const nomeCli = (todosClientes.find(c => c.id === f.cliente) || {}).nome || (notas[0].lavanderia_clientes && notas[0].lavanderia_clientes.nome) || '';
+    const caixa = (yy, texto) => { doc.setDrawColor(225, 215, 185); doc.setLineWidth(0.2); doc.rect(mL, yy, mR - mL, 8); doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(30, 40, 60); doc.text(texto, mL + 1.5, yy + 5.6); };
+    caixa(60, 'Recebemos de : ' + nomeCli);
+    const ext = '(' + extensoRel(total) + ' )';
+    const linhasExt = doc.splitTextToSize('a importância de : ' + ext, mR - mL - 3);
+    doc.setDrawColor(225, 215, 185); doc.rect(mL, 70, mR - mL, 3 + linhasExt.length * 5);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.setTextColor(30, 40, 60);
+    linhasExt.forEach((t, i) => doc.text(t, mL + 1.5, 75 + i * 5));
+    const y3 = 70 + 3 + linhasExt.length * 5 + 3;
+    caixa(y3, 'Referente a serviço de lavanderia  entre ' + fmtDataRel(f.de, true) + '  e  ' + fmtDataRel(f.ate, true));
+    const hoje = new Date();
+    doc.setFontSize(11); doc.setTextColor(40);
+    doc.text((cidade ? cidade + ' ' : '') + hoje.getDate() + ' ' + MESES_REL[hoje.getMonth()] + ' ' + hoje.getFullYear(), 125, y3 + 32, { align: 'center' });
+    doc.setDrawColor(0); doc.setLineWidth(0.3); doc.line(115, y3 + 55, 195, y3 + 55);
+    doc.setTextColor(74, 127, 196); doc.setFontSize(10); doc.text('Assinatura', 155, y3 + 61, { align: 'center' });
+    rodapeRel(doc);
+    return doc;
+  }
+
+  // ---------- 6) Conferência cruzada por item x dia (visualiza na tela e baixa em Excel com bordas) ----------
+  function montarCruzado(f, notas, linhasPorNota){
+    const datas = [...new Set(notas.map(n => String(n.data_nota || '').slice(0, 10)).filter(Boolean))].sort();
+    const mapa = new Map();
+    notas.forEach(n => {
+      const dia = String(n.data_nota || '').slice(0, 10);
+      const cliente = (n.lavanderia_clientes && n.lavanderia_clientes.nome) || '';
+      (linhasPorNota.get(n.id) || []).forEach(l => {
+        const it = l.lavanderia_itens || {};
+        const vu = Number(l.valor_unitario) || 0;
+        const chave = [cliente, n.setor || '', it.codigo || l.item_id, vu].join('|');
+        let r = mapa.get(chave);
+        if(!r){ r = { cliente, setor: n.setor || '', cod: it.codigo || '', item: it.nome || '(item sem cadastro)', vu, total: 0, dias: {} }; mapa.set(chave, r); }
+        const qtd = Number(l.quantidade) || 0;
+        r.dias[dia] = (r.dias[dia] || 0) + qtd;
+        r.total += l.valor_total != null ? Number(l.valor_total) : qtd * vu;
+      });
+    });
+    const itens = [...mapa.values()].sort((a, b) => a.cliente.localeCompare(b.cliente, 'pt-BR') || a.setor.localeCompare(b.setor, 'pt-BR') || a.item.localeCompare(b.item, 'pt-BR'));
+    const cab = ['NOMECLIENTE', 'SETOR', 'CODITEM', 'ITEM', 'VLR_UNIT', 'TOTAL'].concat(datas.map(d => fmtDataRel(d)));
+    const linhas = itens.map(r => [r.cliente, r.setor, r.cod, r.item, r.vu, Math.round(r.total * 100) / 100].concat(datas.map(d => r.dias[d] || '')));
+    const total = ['TOTAL', '', '', '', '', Math.round(itens.reduce((s, r) => s + r.total, 0) * 100) / 100].concat(datas.map(d => itens.reduce((s, r) => s + (r.dias[d] || 0), 0)));
+    return { f, cab, linhas, total, datas, nNotas: notas.length };
+  }
+
+  let cruzadoAtual = null;
+  function mostrarCruzado(c){
+    cruzadoAtual = c;
+    const celulaHtml = (v, i) => i === 4 || i === 5 ? '<td class="num">R$ ' + fmtNumRel(v) + '</td>' : (i >= 6 ? '<td class="qtd">' + (v === '' ? '' : v) + '</td>' : '<td>' + escHtml(String(v)) + '</td>');
+    const linhaHtml = (r, cls) => '<tr' + (cls ? ' class="' + cls + '"' : '') + '>' + r.map((v, i) => (cls === 'total' && (i === 4 || i === 5) && v === '') ? '<td></td>' : celulaHtml(v, i)).join('') + '</tr>';
+    document.getElementById('cruzadoWrap').innerHTML = '<table><thead><tr>' + c.cab.map(h => '<th>' + escHtml(h) + '</th>').join('') + '</tr></thead><tbody>' + c.linhas.map(r => linhaHtml(r)).join('') + linhaHtml(c.total, 'total') + '</tbody></table>';
+    document.getElementById('cruzadoResumo').textContent = c.linhas.length + ' linha(s) de item · ' + c.datas.length + ' dia(s) · ' + c.nNotas + ' nota(s) · período ' + fmtDataRel(c.f.de, true) + ' a ' + fmtDataRel(c.f.ate, true);
+    document.getElementById('modalCruzadoOverlay').style.display = 'flex';
+  }
+  document.getElementById('btnCruzadoFechar').addEventListener('click', () => { document.getElementById('modalCruzadoOverlay').style.display = 'none'; });
+
+  // Excel com bordas: o SheetJS gratuito não grava estilo, então usa o ExcelJS
+  async function baixarCruzadoExcel(){
+    if(!cruzadoAtual) return;
+    const btn = document.getElementById('btnCruzadoBaixar'); btn.disabled = true;
+    try{
+      await carregarScriptRel('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js');
+      const c = cruzadoAtual;
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Cruzado', { views: [{ state: 'frozen', xSplit: 4, ySplit: 1 }] });
+      ws.addRow(c.cab);
+      c.linhas.forEach(r => ws.addRow(r));
+      ws.addRow(c.total);
+      const lado = { style: 'thin', color: { argb: 'FF000000' } };
+      const moeda = '"R$" #,##0.00';
+      ws.eachRow((row, nl) => {
+        const ehCab = nl === 1, ehTotal = nl === ws.rowCount;
+        row.eachCell({ includeEmpty: true }, (cell, nc) => {
+          if(nc > c.cab.length) return;
+          cell.border = { top: lado, left: lado, bottom: lado, right: lado };
+          if(ehCab || ehTotal){ cell.font = { bold: true }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE4E7EA' } }; }
+          if(ehCab) cell.alignment = { horizontal: 'center', vertical: 'middle' };
+          else if(nc === 5 || nc === 6){ if(typeof cell.value === 'number') cell.numFmt = moeda; cell.alignment = { horizontal: 'right' }; }
+          else if(nc > 6) cell.alignment = { horizontal: 'center' };
+        });
+      });
+      [18, 10, 9, 28, 12, 14].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+      for(let i = 7; i <= c.cab.length; i++) ws.getColumn(i).width = 9;
+      const buf = await wb.xlsx.writeBuffer();
+      const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+      const a = document.createElement('a'); a.href = url; a.download = 'conferencia_cruzada_por_item_' + c.f.de + '_a_' + c.f.ate + '.xlsx';
+      document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch(e){ alert('Não consegui gerar o Excel: ' + (e.message || e)); }
+    finally { btn.disabled = false; }
+  }
+  document.getElementById('btnCruzadoBaixar').addEventListener('click', baixarCruzadoExcel);
+
+  // ---------- saída do PDF: Visualizar / Baixar / Compartilhar ----------
+  let pdfRelAtual = null;
+  function mostrarPopupPdfRel(doc, nome, resumo){
+    pdfRelAtual = { doc, nome, blob: doc.output('blob') };
+    document.getElementById('modalPdfRelResumo').textContent = resumo;
+    document.getElementById('modalPdfRelOverlay').style.display = 'flex';
+  }
+  document.getElementById('btnPdfRelFechar').addEventListener('click', () => { document.getElementById('modalPdfRelOverlay').style.display = 'none'; });
+  document.getElementById('btnPdfRelVer').addEventListener('click', () => { if(pdfRelAtual) window.open(URL.createObjectURL(pdfRelAtual.blob), '_blank'); });
+  document.getElementById('btnPdfRelBaixar').addEventListener('click', () => { if(pdfRelAtual) pdfRelAtual.doc.save(pdfRelAtual.nome); });
+  document.getElementById('btnPdfRelCompartilhar').addEventListener('click', async () => {
+    if(!pdfRelAtual) return;
+    const arquivo = new File([pdfRelAtual.blob], pdfRelAtual.nome, { type: 'application/pdf' });
+    if(navigator.canShare && navigator.canShare({ files: [arquivo] })){
+      try{ await navigator.share({ files: [arquivo], title: pdfRelAtual.nome }); } catch(e){ /* cancelado */ }
+    } else {
+      alert('Este aparelho não compartilha arquivo direto — o PDF será baixado.');
+      pdfRelAtual.doc.save(pdfRelAtual.nome);
+    }
+  });
+
+  const EXIGE_CLIENTE_REL = { resumidas: 'Notas resumidas', detalhadas: 'Notas detalhadas', recibo: 'Recibo' };
+  async function gerarRelatorio(tipo){
+    const msg = document.getElementById('relMensagem');
+    const botoes = document.querySelectorAll('#relLista [data-gerar]');
+    const f = lerFiltrosRel();
+    if(!f.de || !f.ate){ msg.textContent = 'Informe o período (de e até).'; return; }
+    if(f.de > f.ate){ msg.textContent = 'A data inicial é depois da final.'; return; }
+    if(EXIGE_CLIENTE_REL[tipo] && !f.cliente){ msg.textContent = EXIGE_CLIENTE_REL[tipo] + ' exige escolher o cliente.'; return; }
+    botoes.forEach(b => { b.disabled = true; });
+    try{
+      msg.textContent = 'Buscando notas…';
+      const { notas, truncou } = await buscarNotasRelatorio(f);
+      if(!notas.length){ msg.textContent = 'Nenhuma nota com ' + (f.campoData === 'data_cobranca' ? 'data de cobrança' : 'data de emissão') + ' neste período e filtro.'; return; }
+      if(truncou && !confirm('O filtro tem 40.000 notas ou mais — o relatório vai sair incompleto. Reduza o período. Gerar mesmo assim?')){ msg.textContent = ''; return; }
+      if(tipo === 'detalhadas' && notas.length > 1500 && !confirm(notas.length + ' notas — o PDF detalhado será grande e demorado. Continuar?')){ msg.textContent = ''; return; }
+      const total = notas.reduce((s, n) => s + (Number(n.valor_total) || 0), 0);
+      const sufixo = f.de + '-a-' + f.ate;
+      if(tipo === 'cruzado'){
+        msg.textContent = 'Buscando os itens das notas…';
+        const linhas = await buscarLinhasNotas(notas.map(n => n.id));
+        const c = montarCruzado(f, notas, linhas);
+        msg.textContent = c.linhas.length + ' linha(s) de item, ' + c.datas.length + ' dia(s), ' + notas.length + ' nota(s).';
+        mostrarCruzado(c);
+        return;
+      }
+      msg.textContent = 'Montando o PDF…';
+      await garantirPdfLibs();
+      logoRelAtual = await prepararLogoRel();
+      let doc, nome, resumo = notas.length + ' nota(s) · total R$ ' + fmtNumRel(total);
+      if(tipo === 'resumidas'){ doc = pdfResumidas(f, notas); nome = 'notas-resumidas-' + sufixo + '.pdf'; }
+      else if(tipo === 'setor'){ doc = pdfPorSetor(f, notas); nome = 'notas-resumidas-por-setor-' + sufixo + '.pdf'; }
+      else if(tipo === 'cobranca'){ doc = pdfPorCobranca(f, notas); nome = 'notas-resumidas-dt-cobranca-' + sufixo + '.pdf'; }
+      else if(tipo === 'detalhadas'){
+        msg.textContent = 'Buscando os itens das ' + notas.length + ' notas…';
+        const linhas = await buscarLinhasNotas(notas.map(n => n.id));
+        doc = pdfDetalhadas(f, notas, linhas, await buscarUnidadeRel()); nome = 'notas-detalhadas-' + sufixo + '.pdf';
+      }
+      else if(tipo === 'recibo'){
+        const cidade = document.getElementById('relCidade').value.trim();
+        try{ localStorage.setItem('lav_cidade_recibo_' + agenciaId, cidade); } catch(e){ /* sem storage */ }
+        const u = await buscarUnidadeRel();
+        doc = pdfRecibo(f, notas, u, cidade || u.cidade); nome = 'recibo-' + sufixo + '.pdf';
+        resumo = 'Recibo de R$ ' + fmtNumRel(total) + ' (' + notas.length + ' nota(s))';
+      }
+      msg.textContent = notas.length + ' nota(s) no relatório.';
+      mostrarPopupPdfRel(doc, nome, resumo);
+    } catch(erro){
+      msg.textContent = 'Erro: ' + (erro.message || erro);
+    } finally {
+      botoes.forEach(b => { b.disabled = false; });
+    }
+  }
+  document.getElementById('relLista').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-gerar]');
+    if(b) gerarRelatorio(b.dataset.gerar);
+  });
 
   document.getElementById('btnNovaNota').addEventListener('click', () => abrirDrawerNota(null));
   document.getElementById('btnFecharDrawerNota').addEventListener('click', () => drawerNotaOverlay.classList.remove('show'));
