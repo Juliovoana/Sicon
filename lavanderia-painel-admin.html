@@ -1377,6 +1377,12 @@
   // As notas NÃO são mais carregadas todas de uma vez (a unidade pode ter dezenas de milhares): só as do filtro da aba Notas
   // (período, cliente, status, setor ou nº do rol), no máximo NOTAS_LIMITE. O dashboard tem consultas próprias e leves.
   const NOTAS_LIMITE = 1000;
+  // A LISTA usa um select leve (sem as linhas de itens: embutir ~8 itens de cada uma de 1000 notas estourava o tempo do banco).
+  // A nota COMPLETA (com itens) só é buscada ao abrir o popup/gaveta, por obterNota().
+  const NOTAS_SELECT_LISTA = `
+        id, numero_rool, cliente_id, status, setor, data_nota, observacoes, valor_total,
+        lavanderia_clientes ( id, nome )
+      `;
   const NOTAS_SELECT = `
         id, numero_rool, cliente_id, status, relavagem, setor, data_nota, data_entrega, data_cobranca,
         observacoes, forma_pagamento, subtotal, desconto_percentual, desconto_valor, usa_desconto_percentual,
@@ -1408,7 +1414,7 @@
   async function carregarNotas(idsExtras){
     const minhaVez = ++seqCarregarNotas;
     const f = filtrosNotasAtuais();
-    let q = sb.from('lavanderia_notas').select(NOTAS_SELECT).eq('unidade_negocio_id', agenciaId);
+    let q = sb.from('lavanderia_notas').select(NOTAS_SELECT_LISTA).eq('unidade_negocio_id', agenciaId);
     if(f.numero){
       q = q.ilike('numero_rool', '%' + f.numero + '%');                 // buscar pelo número ignora o período
     } else {
@@ -1423,9 +1429,6 @@
     if(error){ alert('Erro ao carregar notas: ' + error.message); return; }
     todasNotas = data || [];
     const limitou = todasNotas.length >= NOTAS_LIMITE;
-    // notas abertas em popup/gaveta (ou recém-criadas) precisam existir na memória mesmo fora do filtro
-    const precisa = [...new Set([...(idsExtras || []), notaItensModalId, notaSelecionadaId].filter(Boolean))].filter(id => !todasNotas.some(n => n.id === id));
-    for(const id of precisa) await obterNota(id);
     const aviso = document.getElementById('avisoNotasPeriodo');
     if(aviso){
       aviso.style.display = limitou ? 'block' : 'none';
@@ -1435,12 +1438,12 @@
   }
 
   // devolve a nota da memória ou, se ela está fora do filtro atual, busca só ela (e guarda na memória)
-  async function obterNota(id){
-    let n = todasNotas.find(x => x.id === id);
-    if(n) return n;
+  async function obterNota(id, forcar){
+    const i = todasNotas.findIndex(x => x.id === id);
+    if(i >= 0 && !forcar && Array.isArray(todasNotas[i].lavanderia_itens_nota)) return todasNotas[i];
     const { data, error } = await sb.from('lavanderia_notas').select(NOTAS_SELECT).eq('id', id).eq('unidade_negocio_id', agenciaId).maybeSingle();
-    if(error || !data) return null;
-    todasNotas.push(data);
+    if(error || !data) return i >= 0 ? todasNotas[i] : null;
+    if(i >= 0) todasNotas[i] = data; else todasNotas.push(data);
     return data;
   }
 
@@ -1676,7 +1679,6 @@
     filtradas.forEach(n => {
       const nomeCliente = rotuloClienteId(n.cliente_id, n.lavanderia_clientes?.nome) || 'Sem cliente';
       const iniciais = nomeCliente.split(' ').filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join('') || '?';
-      const qtdItens = (n.lavanderia_itens_nota || []).length;
 
       let blocoDataMini;
       if(n.data_nota){
@@ -1694,7 +1696,7 @@
         <div class="avatar-circle">${iniciais}</div>
         <div class="reserva-info">
           <span class="principal">${nomeCliente}${n.numero_rool ? ' · rool ' + n.numero_rool : ''}</span>
-          <span class="meta">${qtdItens} ite${qtdItens === 1 ? 'm' : 'ns'}${n.setor ? ' · ' + n.setor : ''}${itensForaDaLista(n.observacoes) ? ' · <strong style="color:var(--accent-ink);">⚠ itens fora da lista</strong>' : ''}</span>
+          <span class="meta">${[n.setor, itensForaDaLista(n.observacoes) ? '<strong style="color:var(--accent-ink);">⚠ itens fora da lista</strong>' : ''].filter(Boolean).join(' · ') || '&nbsp;'}</span>
         </div>
         <div class="reserva-right">
           <span class="reserva-valor mono">${formatarMoeda(n.valor_total)}</span>
@@ -1719,11 +1721,11 @@
     document.getElementById(id).addEventListener('change', agendarRecarregarNotas);
   });
 
-  // período padrão do filtro: últimos 30 dias
+  // período padrão do filtro: últimos 7 dias
   (function initPeriodoNotas(){
     const hoje = new Date();
     const ha30dias = new Date();
-    ha30dias.setDate(hoje.getDate() - 30);
+    ha30dias.setDate(hoje.getDate() - 7);
     const iso = d => d.toISOString().slice(0, 10);
     document.getElementById('filtroNotaDe').value = iso(ha30dias);
     document.getElementById('filtroNotaAte').value = iso(hoje);
@@ -2240,10 +2242,10 @@
     const { error } = await sb.from('lavanderia_notas').update(payload).eq('id', notaItensModalId);
     if(error){ alert('Erro ao salvar desconto/datas: ' + error.message); return; }
     await carregarNotas();
-    const n = todasNotas.find(x => x.id === notaItensModalId);
+    const n = await obterNota(notaItensModalId, true);
     if(n) atualizarResumoModalItens(n);
     if(notaSelecionadaId === notaItensModalId){
-      const nAtual = todasNotas.find(x => x.id === notaSelecionadaId);
+      const nAtual = await obterNota(notaSelecionadaId);
       if(nAtual) atualizarResumoItensNoDrawer(nAtual);
     }
   }
@@ -2381,7 +2383,7 @@
 
   async function recarregarNotaNoModal(){
     await carregarNotas();
-    const n = todasNotas.find(x => x.id === notaItensModalId);
+    const n = await obterNota(notaItensModalId, true);
     if(!n){ modalItensNotaOverlay.classList.remove('show'); return; }
     renderModalItensNotaBody(n);
     vincularLancamentoRapidoModal(n.cliente_id);
