@@ -178,6 +178,9 @@
   .status-tag.pronta::before{ background:#7C8EA0; }
   .status-tag.entregue{ background:var(--success-soft); color:var(--brand-2); }
   .status-tag.entregue::before{ background:var(--brand-2); }
+  .resumo-notas-filtro{ display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 22px; margin:0 0 14px; padding:12px 16px; border-radius:12px; background:var(--surface, #fff); border:1px solid var(--border, #E3E8E5); font-size:.86rem; color:var(--muted, #5B6B63); }
+  .resumo-notas-filtro .item strong{ font-size:1.15rem; color:var(--ink, #1B2B24); font-variant-numeric:tabular-nums; }
+  .resumo-notas-filtro .nota-rodape{ font-size:.76rem; flex-basis:100%; }
   .status-tag.cancelada{ background:var(--danger-soft); color:var(--danger); }
   .status-tag.cancelada::before{ background:var(--danger); }
 
@@ -543,6 +546,7 @@
               </div>
               <button class="btn-novo" id="btnNovaNota" style="margin-left:auto; align-self:flex-end;">+ Nova nota</button>
             </div>
+            <div id="resumoNotasFiltro" class="resumo-notas-filtro" style="display:none;"></div>
             <div id="avisoNotasPeriodo" style="display:none; margin:-8px 0 14px; padding:9px 14px; border-radius:10px; background:var(--accent-soft, #FFF4DC); color:var(--accent-ink, #7A5200); font-size:.8rem;"></div>
             <div class="lista-reservas" id="listaNotas"></div>
           </div>
@@ -1106,6 +1110,7 @@
   });
 
   function formatarMoeda(v){ return 'R$ ' + Number(v || 0).toFixed(2).replace('.', ','); }
+  function formatarMoedaMilhar(v){ return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
 
   // =================================================================
   // CARREGAMENTO DE DADOS
@@ -1410,11 +1415,8 @@
     };
   }
 
-  let seqCarregarNotas = 0;
-  async function carregarNotas(idsExtras){
-    const minhaVez = ++seqCarregarNotas;
-    const f = filtrosNotasAtuais();
-    let q = sb.from('lavanderia_notas').select(NOTAS_SELECT_LISTA).eq('unidade_negocio_id', agenciaId);
+  // mesmos filtros para a lista e para os totais (assim os dois nunca divergem)
+  function aplicarFiltrosNotas(q, f){
     if(f.numero){
       q = q.ilike('numero_rool', '%' + f.numero + '%');                 // buscar pelo número ignora o período
     } else {
@@ -1424,11 +1426,83 @@
     if(f.cliente) q = q.eq('cliente_id', f.cliente);
     if(f.status) q = q.eq('status', f.status);
     if(f.setor) q = q.ilike('setor', '%' + f.setor + '%');
+    return q;
+  }
+
+  // Totais do filtro (todas as notas do filtro, não só as 1000 da lista). O banco não permite soma direta (PostgREST sem
+  // agregação), então: abaixo do limite soma a própria lista; acima, conta no servidor e soma lendo só valor_total/status em páginas.
+  // Notas canceladas contam no número de notas, mas não entram no valor (a menos que o filtro de status seja "Cancelada").
+  function renderResumoNotasFiltro(r, f){
+    const el = document.getElementById('resumoNotasFiltro');
+    if(!el) return;
+    el.style.display = 'flex';
+    if(!r){ el.innerHTML = '<span class="item">Calculando totais do filtro…</span>'; return; }
+    if(r.erro){ el.innerHTML = '<span class="item">Não consegui calcular os totais do filtro agora.</span>'; return; }
+    const qtdLabel = r.qtd === 1 ? 'nota' : 'notas';
+    const ticket = r.qtdValor > 0 ? r.centavos / 100 / r.qtdValor : 0;
+    let rodape = '';
+    if(r.canceladas > 0 && f.status !== 'cancelada') rodape = r.canceladas + (r.canceladas === 1 ? ' nota cancelada não entra' : ' notas canceladas não entram') + ' no valor.';
+    el.innerHTML =
+      '<span class="item"><strong>' + r.qtd.toLocaleString('pt-BR') + '</strong> ' + qtdLabel + ' no filtro</span>' +
+      '<span class="item">Valor total: <strong>' + formatarMoedaMilhar(r.centavos / 100) + '</strong></span>' +
+      '<span class="item">Ticket médio: <strong style="font-size:.95rem;">' + formatarMoedaMilhar(ticket) + '</strong></span>' +
+      (rodape ? '<span class="nota-rodape">' + rodape + '</span>' : '');
+  }
+
+  function somarNotasLocal(lista, f){
+    let centavos = 0, qtdValor = 0, canceladas = 0;
+    lista.forEach(n => {
+      const cancelada = n.status === 'cancelada';
+      if(cancelada) canceladas++;
+      if(cancelada && f.status !== 'cancelada') return;
+      centavos += Math.round((Number(n.valor_total) || 0) * 100);
+      qtdValor++;
+    });
+    return { qtd: lista.length, centavos, qtdValor, canceladas };
+  }
+
+  async function carregarTotaisNotas(f, minhaVez){
+    const base = () => aplicarFiltrosNotas(sb.from('lavanderia_notas').select('id', { count: 'exact', head: true }).eq('unidade_negocio_id', agenciaId), f);
+    try{
+      const { count, error } = await base();
+      if(error) throw error;
+      const total = count || 0;
+      const paginas = Math.ceil(total / 1000);
+      let centavos = 0, qtdValor = 0, canceladas = 0;
+      for(let ini = 0; ini < paginas; ini += 5){
+        const lote = [];
+        for(let p = ini; p < Math.min(ini + 5, paginas); p++){
+          lote.push(aplicarFiltrosNotas(sb.from('lavanderia_notas').select('valor_total, status').eq('unidade_negocio_id', agenciaId), f)
+            .order('id').range(p * 1000, p * 1000 + 999));
+        }
+        const respostas = await Promise.all(lote);
+        if(minhaVez !== seqCarregarNotas) return;                       // o filtro mudou enquanto somava: descarta
+        respostas.forEach(r => {
+          if(r.error) throw r.error;
+          const parcial = somarNotasLocal(r.data || [], f);
+          centavos += parcial.centavos; qtdValor += parcial.qtdValor; canceladas += parcial.canceladas;
+        });
+      }
+      if(minhaVez !== seqCarregarNotas) return;
+      renderResumoNotasFiltro({ qtd: total, centavos, qtdValor, canceladas }, f);
+    } catch(erro){
+      console.warn('Totais do filtro de notas:', erro.message || erro);
+      if(minhaVez === seqCarregarNotas) renderResumoNotasFiltro({ erro: true }, f);
+    }
+  }
+
+  let seqCarregarNotas = 0;
+  async function carregarNotas(idsExtras){
+    const minhaVez = ++seqCarregarNotas;
+    const f = filtrosNotasAtuais();
+    let q = aplicarFiltrosNotas(sb.from('lavanderia_notas').select(NOTAS_SELECT_LISTA).eq('unidade_negocio_id', agenciaId), f);
     const { data, error } = await q.order('data_nota', { ascending: false }).order('id', { ascending: false }).limit(NOTAS_LIMITE);
     if(minhaVez !== seqCarregarNotas) return;                           // chegou uma resposta mais nova: descarta esta
     if(error){ alert('Erro ao carregar notas: ' + error.message); return; }
     todasNotas = data || [];
     const limitou = todasNotas.length >= NOTAS_LIMITE;
+    if(limitou){ renderResumoNotasFiltro(null, f); carregarTotaisNotas(f, minhaVez); }
+    else renderResumoNotasFiltro(somarNotasLocal(todasNotas, f), f);
     const aviso = document.getElementById('avisoNotasPeriodo');
     if(aviso){
       aviso.style.display = limitou ? 'block' : 'none';
