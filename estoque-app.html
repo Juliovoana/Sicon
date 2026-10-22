@@ -891,6 +891,23 @@
 
 <!-- ===================== ABA RELATÓRIOS ===================== -->
 <div class="conteudo-aba" id="aba-cadastrosgerais">
+    <div class="caixa" id="caixaParametrosLembrar">
+        <h4 style="margin:0;">Parâmetros de digitação</h4>
+        <p class="subtitulo" style="margin-top:4px;">Escolha o que o sistema <strong>lembra da última digitação</strong> nesta unidade (Requisição Rápida e lançamento de notas/XML).
+            Desmarcado, o campo vem sempre em branco — evita repetir sem querer o valor do lançamento anterior.
+            O <strong>Almoxarifado</strong> é sempre lembrado (almoxarifado padrão); <strong>Tag, Subsetor, Veículo e KM</strong> nunca são lembrados.</p>
+        <div style="display:flex; flex-wrap:wrap; gap:8px 22px; margin:10px 0;">
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="paramLembrarSetor"> Lembrar <strong>Setor</strong></label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="paramLembrarEvento"> Lembrar <strong>Evento</strong></label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer;"><input type="checkbox" id="paramLembrarPlano"> Lembrar <strong>Plano de Contas</strong></label>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <button class="btn btn-verde btn-pequeno" id="btnSalvarParametrosLembrar">Salvar parâmetros</button>
+            <span class="status-msg" id="statusParametrosLembrar"></span>
+        </div>
+        <p class="subtitulo" id="avisoRestricaoParametros" style="margin-top:6px;">Só o Principal ou Administradores podem alterar estes parâmetros.</p>
+    </div>
+
     <div class="caixa">
         <div style="display:flex; justify-content:space-between; align-items:center;">
             <h4 style="margin:0;">Almoxarifados</h4>
@@ -3610,7 +3627,7 @@ async function carregarEventos() {
 async function carregarTudo() {
     document.getElementById('tagContagem').textContent = 'carregando dados do Supabase...';
     try {
-        await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarProjetos(), carregarEventos(), carregarTiposProjeto()]);
+        await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarProjetos(), carregarEventos(), carregarTiposProjeto(), carregarParametrosLembrar()]);
     } catch (err) {
         console.error(err);
         document.getElementById('tagContagem').textContent = '⚠️ Não foi possível carregar os dados. Confira a URL/chave do Supabase.';
@@ -3650,7 +3667,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
    ============================================================ */
 const AJUDA_ESTOQUE = {
     titulo: 'Estoque — Controle de Estoque & Projetos',
-    ultimaRevisao: '21/10/2026',
+    ultimaRevisao: '22/10/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>O Estoque controla o material físico da unidade (contêiner/esquadria): o que entra
@@ -3796,7 +3813,10 @@ const AJUDA_ESTOQUE = {
                 itens, valores) — gera os títulos de pagamento correspondentes no Financeiro.</li>
                 <li><strong>+ Nova requisição</strong>: saída avulsa de estoque <strong>sem</strong>
                 vínculo com projeto (ex.: manutenção de veículo/equipamento) — permite registrar
-                KM/horímetro pra próxima troca.</li>
+                KM/horímetro pra próxima troca. <strong>Ao clicar em Salvar Requisição, o formulário volta em branco</strong> pra
+                a próxima (só o almoxarifado padrão permanece) e a tela mostra o número da NF salva; pra acrescentar itens a uma NF já
+                salva, abra-a em Notas → Abrir (o cabeçalho — setor, evento, plano de contas, subsetor, veículo, KM e responsável — também
+                não vem pré-preenchido; escolha de novo a cada lote de itens).</li>
                 <li><strong>＋ Produto (ao lado do 🔄 no campo Produto da entrada manual)</strong>: cadastra um produto novo sem sair da nota —
                 nome, unidade, valor, <strong>grupo</strong> e <strong>almoxarifado</strong> (o do item já vem marcado) — e já o seleciona no item.
                 O estoque inicial é 0; a quantidade entra pela própria nota. Antes só dava digitar um nome novo, e o produto nascia sem escolha
@@ -3905,6 +3925,12 @@ const AJUDA_ESTOQUE = {
         { id: 'cadastrosgerais', titulo: 'Cadastros', corpo: `
             <p>Listas base usadas nos formulários de estoque e requisição:</p>
             <ul>
+                <li><strong>Parâmetros de digitação</strong> (topo da tela) — escolhe, por unidade, o que o sistema
+                <strong>lembra da última digitação</strong>: Setor, Evento e Plano de Contas (na Requisição Rápida e no lançamento de
+                notas/XML). Desmarcado, o campo vem sempre em branco (e, na nota manual, volta em branco a cada item lançado) — evita
+                repetir sem querer o valor anterior. O <strong>Almoxarifado</strong> é sempre lembrado (almoxarifado padrão); Tag,
+                Subsetor, Veículo e KM nunca são lembrados. Só o Principal ou Administradores alteram; sem nada configurado, a unidade
+                continua lembrando tudo, como antes.</li>
                 <li><strong>Almoxarifados</strong> — só o Principal ou Administradores podem criar/editar.</li>
                 <li><strong>Setores e Subsetores</strong> — só o Principal ou Administradores cadastram, editam ou excluem
                 (inclusive o "＋ cadastrar" dentro dos formulários). É um cadastro compartilhado com Financeiro, Eventos, Obras,
@@ -11794,7 +11820,19 @@ document.getElementById('btnAdicionarItemNota').addEventListener('click', async 
         if (ehAvulso) atualizarModoAvulsoItemNota();   // modo avulso continua ligado (vários avulsos seguidos); só repõe o aviso
         // Almoxarifado/Setor/Evento/Plano de Contas ficam como estavam de
         // propósito -- é comum lançar vários itens seguidos pro mesmo
-        // destino na mesma nota
+        // destino na mesma nota. Exceção: o que a unidade desligou em
+        // Cadastros → Parâmetros de digitação volta em branco a cada item.
+        if (!parametrosLembrar.setor) { setorSelecionadoNotaItem = null; buscaNotaItemSetor.selecionar(null); }
+        if (!parametrosLembrar.evento) {
+            eventoSelecionadoNotaItem = null;
+            document.getElementById('notaItemEventoSelecionado').innerHTML = '';
+            document.getElementById('notaItemEventoBusca').value = '';
+        }
+        if (!parametrosLembrar.planoContas) {
+            planoContasSelecionadoNotaItem = null;
+            document.getElementById('notaItemPlanoContasSelecionado').innerHTML = '';
+            document.getElementById('notaItemPlanoContasBusca').value = '';
+        }
 
         await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
         await carregarItensETitulosDaNota(notaEmEdicaoId);
@@ -12147,20 +12185,75 @@ function salvarAlmoxarifadoTrabalho(id) {
 function chaveClassificacaoEntrada(campo) { return `entrada_ultimo_${campo}_${meuPerfil.unidadeId}`; }
 function salvarUltimaClassificacaoEntrada(setorId, evento, planoContasId) {
     try {
-        localStorage.setItem(chaveClassificacaoEntrada('setor'), setorId != null ? String(setorId) : '');
-        localStorage.setItem(chaveClassificacaoEntrada('evento'), evento || '');
-        localStorage.setItem(chaveClassificacaoEntrada('planocontas'), planoContasId != null ? String(planoContasId) : '');
+        // só guarda o que a unidade escolheu lembrar (Cadastros → Parâmetros de digitação)
+        localStorage.setItem(chaveClassificacaoEntrada('setor'), parametrosLembrar.setor && setorId != null ? String(setorId) : '');
+        localStorage.setItem(chaveClassificacaoEntrada('evento'), parametrosLembrar.evento ? (evento || '') : '');
+        localStorage.setItem(chaveClassificacaoEntrada('planocontas'), parametrosLembrar.planoContas && planoContasId != null ? String(planoContasId) : '');
     } catch (e) { /* não persiste entre sessões, mas não trava o uso */ }
 }
 function obterUltimaClassificacaoEntrada() {
     try {
         return {
-            setorId: localStorage.getItem(chaveClassificacaoEntrada('setor')) || '',
-            evento: localStorage.getItem(chaveClassificacaoEntrada('evento')) || '',
-            planoContasId: localStorage.getItem(chaveClassificacaoEntrada('planocontas')) || ''
+            setorId: parametrosLembrar.setor ? (localStorage.getItem(chaveClassificacaoEntrada('setor')) || '') : '',
+            evento: parametrosLembrar.evento ? (localStorage.getItem(chaveClassificacaoEntrada('evento')) || '') : '',
+            planoContasId: parametrosLembrar.planoContas ? (localStorage.getItem(chaveClassificacaoEntrada('planocontas')) || '') : ''
         };
     } catch (e) { return { setorId: '', evento: '', planoContasId: '' }; }
 }
+
+// =====================================================================
+// PARÂMETROS DE DIGITAÇÃO (por unidade) -- quais campos o sistema lembra
+// da última digitação. Tabela estoque_parametros (estoque-parametros-lembrar.sql);
+// sem a tabela ou sem linha, vale o comportamento de sempre (lembra tudo).
+// O Requisição Rápida (estoque-requisicao-rapida.html) lê a mesma tabela.
+// =====================================================================
+var parametrosLembrar = { setor: true, evento: true, planoContas: true };
+async function carregarParametrosLembrar() {
+    try {
+        const { data, error } = await sb.from('estoque_parametros')
+            .select('lembrar_setor, lembrar_evento, lembrar_plano_contas')
+            .eq('unidade_negocio_id', meuPerfil.unidadeId).maybeSingle();
+        if (error || !data) { parametrosLembrar = { setor: true, evento: true, planoContas: true }; return; }
+        parametrosLembrar = { setor: data.lembrar_setor !== false, evento: data.lembrar_evento !== false, planoContas: data.lembrar_plano_contas !== false };
+    } catch (e) { parametrosLembrar = { setor: true, evento: true, planoContas: true }; }
+}
+function renderizarParametrosLembrar() {
+    const pode = ehAdministradorOuPrincipal();
+    document.getElementById('paramLembrarSetor').checked = parametrosLembrar.setor;
+    document.getElementById('paramLembrarEvento').checked = parametrosLembrar.evento;
+    document.getElementById('paramLembrarPlano').checked = parametrosLembrar.planoContas;
+    ['paramLembrarSetor', 'paramLembrarEvento', 'paramLembrarPlano'].forEach(id => { document.getElementById(id).disabled = !pode; });
+    document.getElementById('btnSalvarParametrosLembrar').style.display = pode ? '' : 'none';
+    document.getElementById('avisoRestricaoParametros').style.display = pode ? 'none' : '';
+}
+document.getElementById('btnSalvarParametrosLembrar').addEventListener('click', async () => {
+    const st = document.getElementById('statusParametrosLembrar');
+    if (!ehAdministradorOuPrincipal()) { st.className = 'status-msg erro'; st.textContent = 'Só o Principal ou Administradores podem alterar.'; return; }
+    const novo = {
+        setor: document.getElementById('paramLembrarSetor').checked,
+        evento: document.getElementById('paramLembrarEvento').checked,
+        planoContas: document.getElementById('paramLembrarPlano').checked
+    };
+    const btn = document.getElementById('btnSalvarParametrosLembrar');
+    btn.disabled = true; st.className = 'status-msg'; st.textContent = 'Salvando...';
+    try {
+        const { error } = await sb.from('estoque_parametros').upsert({
+            unidade_negocio_id: meuPerfil.unidadeId,
+            lembrar_setor: novo.setor, lembrar_evento: novo.evento, lembrar_plano_contas: novo.planoContas,
+            atualizado_em: new Date().toISOString(), atualizado_por: meuPerfil.userId
+        }, { onConflict: 'unidade_negocio_id' });
+        if (error) {
+            const semTabela = /does not exist|could not find|schema cache|relation/i.test(error.message || '');
+            throw new Error(semTabela ? 'Falta rodar o SQL estoque-parametros-lembrar.sql no Supabase.' : error.message);
+        }
+        parametrosLembrar = novo;
+        const lista = x => x ? 'lembra' : 'não lembra';
+        registrarSentinela('parametros_lembrar_alterados', `Setor: ${lista(novo.setor)}; Evento: ${lista(novo.evento)}; Plano de Contas: ${lista(novo.planoContas)}`);
+        st.className = 'status-msg sucesso'; st.textContent = '✓ Parâmetros salvos. Vale para a próxima vez que cada tela for aberta.';
+    } catch (err) {
+        st.className = 'status-msg erro'; st.textContent = 'Erro: ' + err.message;
+    } finally { btn.disabled = false; }
+});
 
 async function carregarSaldosAlmoxarifado() {
     const lista = await chamarGet('listarSaldoAlmoxarifado');
@@ -12691,49 +12784,37 @@ async function abrirModalRequisicaoCompleta(notaIdExistente) {
     }
 }
 
+// volta em branco os campos do cabeçalho da requisição de saída; o almoxarifado permanece
+function limparCabecalhoReqCompleta() {
+    document.getElementById('reqCompletaData').value = hojeISO();
+    document.getElementById('reqCompletaKm').value = '';
+    document.getElementById('reqCompletaKmProximaTroca').value = '';
+    document.getElementById('reqCompletaDataProximaTroca').value = '';
+    document.getElementById('reqCompletaEventoBusca').value = '';
+    document.getElementById('reqCompletaEventoSelecionado').innerHTML = '';
+    eventoSelecionadoReqCompleta = null;
+    document.getElementById('reqCompletaResponsavel').value = '';
+    document.getElementById('reqCompletaTag').value = '';
+    document.getElementById('reqCompletaSetorBusca').value = '';
+    setorSelecionadoReqCompleta = null; buscaReqCompletaSetor.selecionar(null);
+    document.getElementById('reqCompletaSubsetorBusca').value = '';
+    subsetorSelecionadoReqCompleta = null; buscaReqCompletaSubsetor.selecionar(null);
+    document.getElementById('reqCompletaVeiculoBusca').value = '';
+    veiculoSelecionadoReqCompleta = null; buscaReqCompletaVeiculo.selecionar(null);
+    document.getElementById('reqCompletaPlanoContasBusca').value = '';
+    document.getElementById('reqCompletaPlanoContasSelecionado').innerHTML = '';
+    planoContasSelecionadoReqCompleta = null;
+}
+
 async function carregarItensJaLancadosReq(notaId) {
     const corpo = document.getElementById('corpoItensJaLancadosReq');
     corpo.innerHTML = '<tr><td colspan="8" class="vazio">Carregando...</td></tr>';
     const { data, error } = await sb.from('estoque_movimentacoes').select('*').eq('estoque_nota_id', notaId).order('id');
     if (error) { corpo.innerHTML = `<tr><td colspan="8" class="vazio">Erro: ${escapeHtml(error.message)}</td></tr>`; return; }
 
-    // pré-preenche o cabeçalho com os valores do ÚLTIMO item lançado —
-    // evita ter que escolher setor/subsetor/veículo/evento/plano de
-    // contas de novo a cada produto que for adicionando
-    if (data && data.length > 0) {
-        const ultimo = data[data.length - 1];
-        setorSelecionadoReqCompleta = ultimo.setor_id
-            ? (catalogosBaixa.setores || []).find(s => String(s.id) === String(ultimo.setor_id)) || null : null;
-        buscaReqCompletaSetor.selecionar(setorSelecionadoReqCompleta);
-        subsetorSelecionadoReqCompleta = ultimo.subsetor_id
-            ? (catalogosBaixa.subsetores || []).find(s => String(s.id) === String(ultimo.subsetor_id)) || null : null;
-        buscaReqCompletaSubsetor.selecionar(subsetorSelecionadoReqCompleta);
-        veiculoSelecionadoReqCompleta = ultimo.equipamento_veiculo_id
-            ? (catalogosBaixa.veiculos || []).find(v => String(v.id) === String(ultimo.equipamento_veiculo_id)) || null : null;
-        buscaReqCompletaVeiculo.selecionar(veiculoSelecionadoReqCompleta);
-        document.getElementById('reqCompletaKm').value = ultimo.km_troca || '';
-        document.getElementById('reqCompletaKmProximaTroca').value = ultimo.km_proxima_troca || '';
-        document.getElementById('reqCompletaDataProximaTroca').value = ultimo.dt_proxima_troca ? String(ultimo.dt_proxima_troca).slice(0, 10) : '';
-        document.getElementById('reqCompletaResponsavel').value = ultimo.responsavel || '';
-
-        planoContasSelecionadoReqCompleta = preencherPlanoContasSelecionadoUI('reqCompletaPlanoContasSelecionado', ultimo.plano_contas_id);
-        if (planoContasSelecionadoReqCompleta) {
-            document.getElementById('reqCompletaPlanoContasSelecionado').querySelector('[data-limpar-planocontas]').addEventListener('click', (e) => {
-                e.preventDefault();
-                planoContasSelecionadoReqCompleta = null;
-                document.getElementById('reqCompletaPlanoContasSelecionado').innerHTML = '';
-            });
-        }
-
-        eventoSelecionadoReqCompleta = preencherEventoSelecionadoUI('reqCompletaEventoSelecionado', ultimo.evento || '');
-        if (eventoSelecionadoReqCompleta) {
-            document.getElementById('reqCompletaEventoSelecionado').querySelector('[data-limpar-evento]').addEventListener('click', (e) => {
-                e.preventDefault();
-                eventoSelecionadoReqCompleta = null;
-                document.getElementById('reqCompletaEventoSelecionado').innerHTML = '';
-            });
-        }
-    }
+    // O cabeçalho (setor, subsetor, veículo, KM, plano de contas, evento, responsável) NÃO é mais pré-preenchido com os
+    // dados do último item lançado (pedido do usuário, 22/10/2026): a unidade não quer que o sistema "lembre" esses
+    // campos para não repetir valor por engano. Cada lote de itens escolhe de novo.
 
     corpo.innerHTML = (data || []).map(m => {
         const prod = produtos.find(p => p.id === m.produto_id);
@@ -13044,27 +13125,24 @@ document.getElementById('btnConfirmarRequisicaoCompleta').addEventListener('clic
         renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
 
         if (notaRequisicaoEmEdicaoId) {
-            // já estava editando uma requisição existente: fica aberto,
-            // limpa só a lista de itens ainda-não-salvos e atualiza os
-            // já lançados, pra dar pra continuar adicionando mais
+            // já estava editando uma requisição existente: fica aberta (dá pra continuar adicionando), mas os
+            // campos do cabeçalho voltam em branco; só o almoxarifado permanece
             itensReqCompleta = [];
             renderizarItensReqCompleta();
+            limparCabecalhoReqCompleta();
             await carregarItensJaLancadosReq(notaRequisicaoEmEdicaoId);
             document.getElementById('reqCompletaProdutoBusca').focus();
+            statusEl.className = 'status-msg sucesso';
+            statusEl.textContent = '✅ Itens salvos com sucesso.';
         } else {
-            // requisição nova recém-criada: agora vira uma edição, pra
-            // poder continuar adicionando sem reabrir do zero
-            notaRequisicaoEmEdicaoId = notaId;
-            document.getElementById('tituloRequisicaoCompleta').textContent = `Editando requisição — NF #${notaId}`;
-            document.getElementById('subtituloRequisicaoCompleta').textContent = 'Veja os itens já lançados abaixo, ou adicione mais produtos à mesma requisição.';
-            document.getElementById('btnRemoverRequisicaoCompleta').style.display = '';
-            document.getElementById('blocoItensJaLancadosReq').style.display = 'block';
-            itensReqCompleta = [];
-            renderizarItensReqCompleta();
-            await carregarItensJaLancadosReq(notaId);
+            // requisição nova: salva e já abre outra em branco (só o almoxarifado padrão permanece). Para acrescentar
+            // itens a esta NF depois: Notas → Abrir.
+            await abrirModalRequisicaoCompleta(null);
+            statusEl.className = 'status-msg sucesso';
+            statusEl.textContent = `✅ Requisição salva (NF #${notaId}). Formulário limpo para a próxima.`;
             document.getElementById('reqCompletaProdutoBusca').focus();
         }
-        setTimeout(() => { statusEl.textContent = ''; }, 2000);
+        setTimeout(() => { statusEl.textContent = ''; }, 4000);
     } catch (err) {
         statusEl.className = 'status-msg erro';
         statusEl.textContent = '⚠️ ' + err.message;
@@ -13083,6 +13161,8 @@ let cadGenericoIdAtual = null;
 
 async function carregarCadastrosGerais() {
     catalogosBaixa = await chamarGet('listarCatalogosBaixa');
+    await carregarParametrosLembrar();
+    renderizarParametrosLembrar();
     const podeGerenciarAlmoxarifado = ehAdministradorOuPrincipal();
     document.getElementById('btnNovoAlmoxarifadoCad').style.display = podeGerenciarAlmoxarifado ? '' : 'none';
     document.getElementById('avisoRestricaoAlmoxarifado').style.display = podeGerenciarAlmoxarifado ? 'none' : '';

@@ -628,7 +628,7 @@ const REQ_ATENDER_URL = new URLSearchParams(window.location.search).get('atender
 // ---------------------------------------------------------------
 const AJUDA_REQRAPIDA = {
     titulo: 'Requisição Rápida',
-    ultimaRevisao: '16/10/2026',
+    ultimaRevisao: '22/10/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>App de requisição de material e serviço/abastecimento do almoxarifado --
@@ -649,8 +649,10 @@ const AJUDA_REQRAPIDA = {
                 <strong>＋ cadastrar setor</strong> ao lado do campo e cria na hora; os demais pedem a um administrador.</li>
                 <li><strong>Almoxarifado, Setor e Evento são obrigatórios.</strong> Evento é
                 sempre uma escolha ativa (busca por código/descrição) -- o app <strong>lembra
-                o último almoxarifado, setor e evento escolhidos</strong> nesse aparelho e já
-                preenche na próxima requisição (continua editável, é só trocar se for outro).</li>
+                o último almoxarifado (sempre) e, conforme a unidade, também o último setor, evento e plano de
+                contas</strong> escolhidos nesse aparelho e já preenche na próxima requisição (continua editável, é só
+                trocar se for outro). Quem decide se Setor, Evento e Plano de Contas são lembrados é o Principal/Administrador,
+                no Estoque → Cadastros → <em>Parâmetros de digitação</em>; desligado, esses campos vêm sempre em branco.</li>
                 <li><strong>Plano de Contas padrão</strong> (opcional) se aplica a todo item
                 novo adicionado depois de preenchido, mas dá pra trocar item por item na
                 lista antes de enviar.</li>
@@ -787,6 +789,8 @@ let meuPerfil = { unidadeId: null, unidadeNome: '', ehPrincipal: false, papel: n
 // "Aprovadores" (só o principal muda). Default true até carregar de
 // verdade, pra manter o comportamento já existente enquanto não sabemos.
 let parametroRequisicao = { exigeAprovacao: true };
+// o que a unidade escolheu lembrar da última requisição (estoque-app → Cadastros → Parâmetros de digitação); sem tabela/linha = lembra tudo
+let parametroLembrar = { setor: true, evento: true, planoContas: true };
 let vinculosGlobais = [];
 let almoxarifados = [];
 let setores = [];
@@ -1078,6 +1082,14 @@ async function iniciarApp() {
     parametroRequisicao.exigeAprovacao = parametro ? !!parametro.exige_aprovacao : true;
     document.getElementById('checkExigeAprovacaoReq').checked = parametroRequisicao.exigeAprovacao;
 
+    try {
+        const { data: paramLembrar, error: erroLembrar } = await sb.from('estoque_parametros')
+            .select('lembrar_setor, lembrar_evento, lembrar_plano_contas').eq('unidade_negocio_id', meuPerfil.unidadeId).maybeSingle();
+        if (!erroLembrar && paramLembrar) {
+            parametroLembrar = { setor: paramLembrar.lembrar_setor !== false, evento: paramLembrar.lembrar_evento !== false, planoContas: paramLembrar.lembrar_plano_contas !== false };
+        }
+    } catch (e) { /* sem a tabela: segue lembrando tudo, como antes */ }
+
     document.getElementById('campoSolicitante').value = meuPerfil.email;
 
     const [{ data: dadosAlmox }, { data: dadosSetores }, { data: dadosEventos }, { data: dadosVeiculos }, { data: dadosFornecedores }, { data: dadosPlanoContas }] = await Promise.all([
@@ -1150,7 +1162,7 @@ function salvarUltimaEscolha() {
     try {
         localStorage.setItem(chaveUltimaEscolha(), JSON.stringify({
             almoxarifadoId: document.getElementById('campoAlmoxarifado').value || null,
-            setorId: document.getElementById('campoSetor').value || null,
+            setorId: parametroLembrar.setor ? (document.getElementById('campoSetor').value || null) : null,
             // Evento passou a ser lembrado também (pedido do usuário) --
             // antes era excluído de propósito daqui, porque em empresas
             // de evento o campo precisa nascer em branco (controle real,
@@ -1161,7 +1173,7 @@ function salvarUltimaEscolha() {
             // lembrar o último economiza trabalho. Por ora, sem diferenciar
             // o tipo de empresa, lembra sempre -- continua editável/trocável
             // na hora, então quem precisa escolher de novo consegue.
-            evento: eventoSelecionado ? eventoSelecionado.codigo : null
+            evento: parametroLembrar.evento && eventoSelecionado ? eventoSelecionado.codigo : null
         }));
     } catch (e) { /* se não conseguir salvar, só não lembra da próxima vez -- não trava o uso */ }
 }
@@ -1175,10 +1187,10 @@ function aplicarUltimaEscolhaSalva() {
         if (salvo.almoxarifadoId && almoxarifados.some(a => String(a.id) === String(salvo.almoxarifadoId))) {
             document.getElementById('campoAlmoxarifado').value = salvo.almoxarifadoId;
         }
-        if (salvo.setorId && setores.some(s => String(s.id) === String(salvo.setorId))) {
+        if (parametroLembrar.setor && salvo.setorId && setores.some(s => String(s.id) === String(salvo.setorId))) {
             document.getElementById('campoSetor').value = salvo.setorId;
         }
-        if (salvo.evento) {
+        if (parametroLembrar.evento && salvo.evento) {
             const encontrado = eventos.find(ev => ev.codigo === salvo.evento);
             if (encontrado) {
                 eventoSelecionado = encontrado;
@@ -1266,11 +1278,12 @@ function chaveUltimoPlanoContas() {
 }
 function salvarUltimoPlanoContasEscolhido() {
     try {
-        if (planoContasSelecionado) localStorage.setItem(chaveUltimoPlanoContas(), String(planoContasSelecionado.id));
+        if (planoContasSelecionado && parametroLembrar.planoContas) localStorage.setItem(chaveUltimoPlanoContas(), String(planoContasSelecionado.id));
         else localStorage.removeItem(chaveUltimoPlanoContas());
     } catch (e) { /* se não conseguir salvar, só não lembra da próxima vez -- não trava o uso */ }
 }
 function aplicarUltimoPlanoContasSalvo() {
+    if (!parametroLembrar.planoContas) return;
     try {
         const salvo = localStorage.getItem(chaveUltimoPlanoContas());
         if (!salvo) return;
@@ -2129,6 +2142,10 @@ document.getElementById('btnEnviarRequisicao').addEventListener('click', async (
         document.getElementById('campoBuscaEvento').value = '';
         document.getElementById('campoNumeroExterno').value = '';
         document.getElementById('campoObservacaoReq').value = '';
+        // o que a unidade não quer lembrar volta em branco já na próxima requisição (Almoxarifado fica sempre)
+        if (!parametroLembrar.setor) document.getElementById('campoSetor').value = '';
+        if (!parametroLembrar.evento) { eventoSelecionado = null; document.getElementById('eventoSelecionadoTexto').textContent = ''; }
+        if (!parametroLembrar.planoContas) { planoContasSelecionado = null; document.getElementById('planoContasSelecionadoTexto').textContent = ''; }
         salvarUltimaEscolha();
         statusEl.className = 'status-msg';
         statusEl.style.color = 'var(--brand-2)';
