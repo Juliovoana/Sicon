@@ -111,6 +111,13 @@
         box-shadow: 0 4px 14px rgba(0,0,0,0.15);
     }
     .dropdown-busca-evento.aberto { display: block; }
+    /* lista flutuante das buscas por LINHA da grade "Baixar itens da nota" (position:fixed para não ser cortada pela tabela) */
+    #ddBaixaLinha { position: fixed; z-index: 1300; background: #fff; border: 1px solid #ddd; border-radius: 6px; max-height: 260px;
+        overflow-y: auto; display: none; box-shadow: 0 4px 14px rgba(0,0,0,0.2); min-width: 280px; }
+    #ddBaixaLinha.aberto { display: block; }
+    #ddBaixaLinha .item-resultado { cursor: pointer; }
+    #ddBaixaLinha .item-resultado.ativo { background: #e3f0ff; }
+    .baixa-cb { text-overflow: ellipsis; }
 
     /* os containers de resultado de busca abaixo não tinham NENHUM CSS
        próprio — a classe "aberto" era adicionada/removida no JS, mas
@@ -3667,7 +3674,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
    ============================================================ */
 const AJUDA_ESTOQUE = {
     titulo: 'Estoque — Controle de Estoque & Projetos',
-    ultimaRevisao: '22/10/2026',
+    ultimaRevisao: '23/10/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>O Estoque controla o material físico da unidade (contêiner/esquadria): o que entra
@@ -3838,6 +3845,12 @@ const AJUDA_ESTOQUE = {
                 nas notinhas → entram 20). O botão não aparece em item marcado <strong>Avulso</strong>
                 ou ainda não vinculado a um produto, e só considera notinhas <strong>manuais</strong> (sem XML)
                 que ainda não foram ligadas a outra nota.</li>
+                <li><strong>🔎 Buscas de Almoxarifado, Setor, Subsetor, Veículo, Evento e Plano de contas</strong>: em todo campo de busca (inclusive
+                nas <strong>linhas</strong> do "Baixar itens dessa nota", que antes eram listas de escolha) dá para digitar o <strong>código</strong> ou
+                <strong>parte do nome</strong>, sem se preocupar com acento nem com a ordem das palavras (ex.: "locacao gerador" acha
+                "01.01.06 Receita de Locação Gerador"); com o campo vazio, ao clicar, aparecem os primeiros da lista. Na linha, escolha com o clique ou
+                com ↑ ↓ + Enter; texto digitado sem escolher da lista é descartado ao sair, e apagar o campo limpa o valor. Trocar o Setor da linha
+                limpa o Subsetor se ele não for desse setor.</li>
                 <li><strong>📊 Rateio automático da nota (compra e baixa direta)</strong>: toda nota de <strong>entrada</strong> gera sozinha o
                 <strong>rateio</strong> (mesma tabela de rateio do Financeiro) em até duas operações. <strong>Compra</strong>: 100% do que foi lançado
                 na entrada, uma linha para cada <strong>Setor + Evento + Plano de contas</strong> (o que faltar no item vem da classificação da nota) —
@@ -7335,6 +7348,17 @@ function proximoCodigoPlano(prefixo, codigosExistentes, largura) {
     return prefixo ? prefixo + '.' + prox : prox;
 }
 
+// Busca padrão: ignora acento/caixa e aceita VÁRIAS palavras em qualquer ordem ("locacao gerador" acha "01.01.06 Receita de
+// Locação Gerador"). Vale para Plano de contas, Evento e as buscas genéricas (Almoxarifado/Setor/Subsetor/Veículo), que passam
+// a casar também pelo CÓDIGO.
+function normBusca(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase(); }
+function casaBusca(texto, termo) {
+    const palavras = normBusca(termo).split(/\s+/).filter(Boolean);
+    if (!palavras.length) return true;
+    const alvo = normBusca(texto);
+    return palavras.every(p => alvo.includes(p));
+}
+
 // busca de plano de contas reutilizável, mesmo padrão da busca de
 // evento — já vem ordenada por código (catalogosBaixa.planoContas
 // chega ordenada do banco)
@@ -7347,8 +7371,7 @@ function configurarBuscaPlanoContas(idBusca, idResultados, idSelecionadoTexto, a
     function renderizarResultados(termo) {
         const lista = termo
             ? catalogosBaixa.planoContas.filter(p =>
-                p.codigo.toUpperCase().includes(termo) || p.descricao.toUpperCase().includes(termo)
-                || caminhoPlanoContas(p.codigo).toUpperCase().includes(termo)
+                casaBusca(p.codigo + ' ' + p.descricao + ' ' + caminhoPlanoContas(p.codigo), termo)
               ).slice(0, 30)
             : catalogosBaixa.planoContas.slice(0, 20);
         elResultados.innerHTML = lista.length
@@ -7449,7 +7472,8 @@ function configurarBuscaListaGenerica(idBusca, idResultados, idSelecionadoTexto,
     const elResultados = document.getElementById(idResultados);
     function textoItem(item) {
         const extra = campoExtra && item[campoExtra] ? ' — ' + escapeHtml(item[campoExtra]) : '';
-        return escapeHtml(item.nome) + extra;
+        const cod = item.codigo != null && String(item.codigo).trim() !== '' ? '<span class="cod">' + escapeHtml(item.codigo) + '</span> — ' : '';
+        return cod + escapeHtml(item.nome) + extra;
     }
     function ligarRemover(elSel, item) {
         elSel.innerHTML = `Selecionado: <strong>${textoItem(item)}</strong> <a href="#" data-limpar style="color:#b00020; font-size:.85em;">(remover)</a>`;
@@ -7464,10 +7488,9 @@ function configurarBuscaListaGenerica(idBusca, idResultados, idSelecionadoTexto,
     // digitado -- com termo, filtra normalmente
     function renderizarResultados(termo) {
         const lista = termo
-            ? getLista().filter(item => {
-                const texto = (item.nome + ' ' + (campoExtra && item[campoExtra] ? item[campoExtra] : '')).toUpperCase();
-                return texto.includes(termo);
-              }).slice(0, 30)
+            ? getLista().filter(item => casaBusca(
+                [item.codigo, item.nome, campoExtra && item[campoExtra], item.identificador].filter(x => x != null && x !== '').join(' '), termo
+              )).slice(0, 30)
             : getLista().slice(0, 20);
         elResultados.innerHTML = lista.length ? '' : '<div class="item-resultado">Nenhum resultado encontrado.</div>';
         elResultados.classList.add('aberto');
@@ -7863,13 +7886,9 @@ configurarBuscaPlanoContas('destAvulsoPlanoContasBusca', 'destAvulsoPlanoContasR
 });
 
 function buscarEventos(termo) {
-    termo = (termo || '').trim().toUpperCase();
+    termo = (termo || '').trim();
     if (!termo) return eventos.slice(0, 30);
-    const palavras = termo.split(/\s+/).filter(Boolean);
-    return eventos.filter(ev => {
-        const texto = (ev.codigo + ' ' + ev.descricao).toUpperCase();
-        return palavras.every(p => texto.includes(p));
-    }).slice(0, 30);
+    return eventos.filter(ev => casaBusca(ev.codigo + ' ' + ev.descricao, termo)).slice(0, 30);
 }
 
 function renderizarResultadosEvento(termo) {
@@ -12537,13 +12556,164 @@ function popularSelectsCatalogosBaixa() {
     buscaBaixaItensNotaAlmoxarifado.selecionar(almoxarifadoSelecionadoBaixaCabecalho);
 }
 
+/* ---------- buscas por LINHA da grade "Baixar itens da nota" ----------
+   Almoxarifado/Setor/Subsetor/Veículo/Evento/Plano de contas eram <select> (ou texto com código exato); viram campo de busca:
+   digitar CÓDIGO ou parte do nome (sem acento, várias palavras), campo vazio lista os primeiros, escolher por clique/Enter. */
+const CB_BAIXA = {
+    almoxarifado: { campo: 'almoxarifadoId', larg: 110 },
+    setor:        { campo: 'setorId',        larg: 125 },
+    subsetor:     { campo: 'subsetorId',     larg: 125 },
+    veiculo:      { campo: 'veiculoId',      larg: 125 },
+    planocontas:  { campo: 'planoContasId',  larg: 150 },
+    evento:       { campo: 'evento',         larg: 140 }
+};
+function listaCbBaixa(tipo, linha, todos) {
+    switch (tipo) {
+        case 'almoxarifado': return catalogosBaixa.almoxarifados || [];
+        case 'setor': return catalogosBaixa.setores || [];
+        case 'subsetor': {
+            const s = catalogosBaixa.subsetores || [];
+            return (!todos && linha && linha.setorId) ? s.filter(x => String(x.setor_id) === String(linha.setorId)) : s;
+        }
+        case 'veiculo': return catalogosBaixa.veiculos || [];
+        case 'planocontas': return catalogosBaixa.planoContas || [];
+        case 'evento': return eventos || [];
+    }
+    return [];
+}
+function rotuloCbBaixa(tipo, x) {
+    if (!x) return '';
+    const cod = x.codigo != null && String(x.codigo).trim() !== '' ? x.codigo + ' — ' : '';
+    if (tipo === 'planocontas') return x.codigo + ' — ' + x.descricao;
+    if (tipo === 'evento') return x.codigo + (x.descricao ? ' — ' + x.descricao : '');
+    if (tipo === 'veiculo') return x.nome + (x.placa ? ' — ' + x.placa : '');
+    if (tipo === 'setor' || tipo === 'subsetor') return cod + x.nome;
+    return x.nome;
+}
+function textoBuscaCbBaixa(tipo, x) {
+    if (tipo === 'planocontas') return x.codigo + ' ' + x.descricao + ' ' + caminhoPlanoContas(x.codigo);
+    if (tipo === 'evento') return x.codigo + ' ' + x.descricao;
+    return [x.codigo, x.nome, x.placa, x.identificador].filter(v => v != null && v !== '').join(' ');
+}
+function itemCbBaixaDaLinha(tipo, linha) {
+    const valor = linha[CB_BAIXA[tipo].campo];
+    if (valor === '' || valor == null) return null;
+    if (tipo === 'evento') return (eventos || []).find(e => String(e.codigo).toUpperCase() === String(valor).toUpperCase()) || { codigo: valor, descricao: '' };
+    return listaCbBaixa(tipo, linha, true).find(x => String(x.id) === String(valor)) || null;
+}
+function buscarCbBaixa(tipo, linha, termo) {
+    const termoLimpo = (termo || '').trim();
+    if (tipo === 'evento') return buscarEventos(termoLimpo);
+    const lista = listaCbBaixa(tipo, linha, false);
+    return termoLimpo ? lista.filter(x => casaBusca(textoBuscaCbBaixa(tipo, x), termoLimpo)).slice(0, 30) : lista.slice(0, 20);
+}
+function htmlCbBaixa(tipo, linha) {
+    const rot = rotuloCbBaixa(tipo, itemCbBaixaDaLinha(tipo, linha));
+    return `<input type="text" class="baixa-cb" data-cb="${tipo}" style="width:${CB_BAIXA[tipo].larg}px;" value="${escapeHtml(rot)}" title="${escapeHtml(rot)}" placeholder="-" autocomplete="off">`;
+}
+const ddBaixaLinha = document.createElement('div');
+ddBaixaLinha.id = 'ddBaixaLinha';
+document.body.appendChild(ddBaixaLinha);
+let cbBaixaAtivo = null;      // { input, linha, tipo, itens, idx }
+function fecharDdBaixaLinha() { ddBaixaLinha.classList.remove('aberto'); ddBaixaLinha.innerHTML = ''; cbBaixaAtivo = null; }
+function linhaDoInputCbBaixa(input) {
+    const tr = input.closest('tr');
+    return tr ? itensBaixaAtual.find(l => l.linhaId === Number(tr.dataset.linha)) : null;
+}
+function desenharDdBaixaLinha(termo) {
+    const A = cbBaixaAtivo; if (!A) return;
+    A.itens = buscarCbBaixa(A.tipo, A.linha, termo); A.idx = A.itens.length ? 0 : -1;
+    ddBaixaLinha.innerHTML = A.itens.length ? '' : '<div class="item-resultado">Nenhum resultado encontrado.</div>';
+    A.itens.forEach((x, i) => {
+        const d = document.createElement('div');
+        d.className = 'item-resultado' + (i === 0 ? ' ativo' : '');
+        d.dataset.i = i;
+        d.innerHTML = `<div class="info-resultado">${escapeHtml(rotuloCbBaixa(A.tipo, x))}</div>`;
+        ddBaixaLinha.appendChild(d);
+    });
+    const r = A.input.getBoundingClientRect();
+    ddBaixaLinha.style.minWidth = Math.max(r.width, 300) + 'px';
+    ddBaixaLinha.classList.add('aberto');
+    const alto = Math.min(260, ddBaixaLinha.scrollHeight);
+    const abaixo = r.bottom + alto + 8 <= window.innerHeight;
+    ddBaixaLinha.style.left = Math.max(4, Math.min(r.left, window.innerWidth - ddBaixaLinha.offsetWidth - 4)) + 'px';
+    ddBaixaLinha.style.top = (abaixo ? r.bottom + 2 : Math.max(4, r.top - alto - 2)) + 'px';
+}
+function escolherCbBaixa(item) {
+    const A = cbBaixaAtivo; if (!A) return;
+    const { input, linha, tipo } = A, campo = CB_BAIXA[tipo].campo;
+    linha[campo] = tipo === 'evento' ? item.codigo : String(item.id);
+    if (tipo === 'setor' && linha.subsetorId) {
+        // trocou o setor: o subsetor escolhido antes pode não pertencer ao novo
+        const sub = (catalogosBaixa.subsetores || []).find(s => String(s.id) === String(linha.subsetorId));
+        if (!sub || String(sub.setor_id) !== String(item.id)) {
+            linha.subsetorId = '';
+            const i2 = input.closest('tr').querySelector('[data-cb="subsetor"]'); if (i2) { i2.value = ''; i2.title = ''; }
+        }
+    }
+    const rot = rotuloCbBaixa(tipo, item);
+    input.value = rot; input.title = rot; input.dataset.sujo = '';
+    fecharDdBaixaLinha();
+}
+function restaurarCbBaixa(input) {
+    const linha = linhaDoInputCbBaixa(input); if (!linha) return;
+    const tipo = input.dataset.cb, campo = CB_BAIXA[tipo].campo;
+    if (input.value.trim() === '') { linha[campo] = ''; input.title = ''; input.dataset.sujo = ''; return; }   // apagou = sem valor
+    if (input.dataset.sujo === '1') {                                                                           // texto sem escolher é descartado
+        const rot = rotuloCbBaixa(tipo, itemCbBaixaDaLinha(tipo, linha));
+        input.value = rot; input.title = rot; input.dataset.sujo = '';
+    }
+}
+(function ligarBuscasLinhaBaixa() {
+    const corpo = document.getElementById('corpoBaixaItensNota');
+    const abrir = (input, termo) => {
+        const linha = linhaDoInputCbBaixa(input); if (!linha) return;
+        cbBaixaAtivo = { input, linha, tipo: input.dataset.cb, itens: [], idx: -1 };
+        desenharDdBaixaLinha(termo);
+    };
+    corpo.addEventListener('focusin', (e) => {
+        const input = e.target.closest('input.baixa-cb'); if (!input) return;
+        input.select();
+        if (!input.value.trim()) abrir(input, '');
+    });
+    corpo.addEventListener('click', (e) => {
+        const input = e.target.closest('input.baixa-cb'); if (!input) return;
+        if (!input.value.trim() && !(cbBaixaAtivo && cbBaixaAtivo.input === input)) abrir(input, '');
+    });
+    corpo.addEventListener('input', (e) => {
+        const input = e.target.closest('input.baixa-cb'); if (!input) return;
+        input.dataset.sujo = '1';
+        abrir(input, input.value);
+    });
+    corpo.addEventListener('keydown', (e) => {
+        const input = e.target.closest('input.baixa-cb'); if (!input) return;
+        const A = cbBaixaAtivo;
+        if (e.key === 'Escape') { fecharDdBaixaLinha(); restaurarCbBaixa(input); return; }
+        if (!A || A.input !== input || !A.itens.length) return;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            A.idx = (A.idx + (e.key === 'ArrowDown' ? 1 : -1) + A.itens.length) % A.itens.length;
+            [...ddBaixaLinha.querySelectorAll('.item-resultado')].forEach((d, i) => d.classList.toggle('ativo', i === A.idx));
+            const ativo = ddBaixaLinha.querySelector('.item-resultado.ativo'); if (ativo) ativo.scrollIntoView({ block: 'nearest' });
+        } else if (e.key === 'Enter') {
+            e.preventDefault(); escolherCbBaixa(A.itens[A.idx >= 0 ? A.idx : 0]);
+        }
+    });
+    corpo.addEventListener('focusout', (e) => {
+        const input = e.target.closest('input.baixa-cb'); if (!input) return;
+        setTimeout(() => { if (!cbBaixaAtivo || cbBaixaAtivo.input !== input) restaurarCbBaixa(input); else { fecharDdBaixaLinha(); restaurarCbBaixa(input); } }, 180);
+    });
+    ddBaixaLinha.addEventListener('mousedown', (e) => {
+        e.preventDefault();                                   // antes do blur do campo
+        const d = e.target.closest('.item-resultado[data-i]'); if (!d || !cbBaixaAtivo) return;
+        escolherCbBaixa(cbBaixaAtivo.itens[Number(d.dataset.i)]);
+    });
+    window.addEventListener('scroll', (e) => { if (cbBaixaAtivo && !ddBaixaLinha.contains(e.target)) fecharDdBaixaLinha(); }, true);
+})();
+
 function renderGridBaixa() {
     const corpo = document.getElementById('corpoBaixaItensNota');
-    const optAlmoxarifado = '<option value="">-- selecione --</option>' + (catalogosBaixa.almoxarifados || []).map(a => `<option value="${a.id}">${escapeHtml(a.nome)}</option>`).join('');
-    const optSetor = '<option value="">-</option>' + catalogosBaixa.setores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
-    const optSubsetor = '<option value="">-</option>' + catalogosBaixa.subsetores.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
-    const optVeiculo = '<option value="">-</option>' + catalogosBaixa.veiculos.map(v => `<option value="${v.id}">${escapeHtml(v.nome)}${v.placa ? ' — ' + escapeHtml(v.placa) : ''}</option>`).join('');
-    const optPlanoContas = '<option value="">-</option>' + catalogosBaixa.planoContas.map(p => `<option value="${p.id}">${escapeHtml(p.codigo)}</option>`).join('');
+    fecharDdBaixaLinha();
 
     corpo.innerHTML = itensBaixaAtual.map(linha => `
         <tr data-linha="${linha.linhaId}">
@@ -12556,54 +12726,31 @@ function renderGridBaixa() {
                     <button type="button" class="btn btn-cinza btn-pequeno baixa-usar-tudo" title="Preenche com toda a quantidade disponível nessa linha (${linha.qtdDisponivelTotal})">🎯 Tudo</button>
                 </div>
             </td>
-            <td><select class="baixa-almoxarifado" style="width:110px;">${optAlmoxarifado}</select></td>
-            <td><select class="baixa-setor" style="width:110px;">${optSetor}</select></td>
-            <td><select class="baixa-subsetor" style="width:110px;">${optSubsetor}</select></td>
-            <td><select class="baixa-veiculo" style="width:110px;">${optVeiculo}</select></td>
+            <td>${htmlCbBaixa('almoxarifado', linha)}</td>
+            <td>${htmlCbBaixa('setor', linha)}</td>
+            <td>${htmlCbBaixa('subsetor', linha)}</td>
+            <td>${htmlCbBaixa('veiculo', linha)}</td>
             <td><input type="number" step="1" style="width:60px;" class="baixa-km" value="${linha.km}"></td>
             <td><input type="number" step="1" style="width:60px;" class="baixa-kmprox" value="${linha.kmProximaTroca}"></td>
             <td><input type="date" style="width:130px;" class="baixa-dtprox" value="${linha.dtProximaTroca}"></td>
-            <td><input type="text" style="width:90px;" class="baixa-evento" value="${escapeHtml(linha.evento)}"></td>
-            <td><select class="baixa-planocontas" style="width:90px;">${optPlanoContas}</select></td>
+            <td>${htmlCbBaixa('evento', linha)}</td>
+            <td>${htmlCbBaixa('planocontas', linha)}</td>
             <td class="center"><button type="button" class="btn btn-cinza btn-pequeno baixa-dividir">✂️ Dividir</button></td>
         </tr>
     `).join('');
 
-    // aplica os valores atuais (select via innerHTML não fixa o "selected" certo com id dinâmico, então seta por JS)
     corpo.querySelectorAll('tr').forEach(tr => {
         const linhaId = Number(tr.dataset.linha);
         const linha = itensBaixaAtual.find(l => l.linhaId === linhaId);
-        tr.querySelector('.baixa-almoxarifado').value = linha.almoxarifadoId || '';
-        tr.querySelector('.baixa-setor').value = linha.setorId;
-        tr.querySelector('.baixa-subsetor').value = linha.subsetorId;
-        tr.querySelector('.baixa-veiculo').value = linha.veiculoId;
-        tr.querySelector('.baixa-planocontas').value = linha.planoContasId;
 
         tr.querySelector('.baixa-qtd').addEventListener('change', (e) => { linha.qtdABaixar = parseFloat(e.target.value) || 0; });
         tr.querySelector('.baixa-usar-tudo').addEventListener('click', () => {
             linha.qtdABaixar = linha.qtdDisponivelTotal;
             tr.querySelector('.baixa-qtd').value = linha.qtdDisponivelTotal;
         });
-        tr.querySelector('.baixa-almoxarifado').addEventListener('change', (e) => { linha.almoxarifadoId = e.target.value; });
-        tr.querySelector('.baixa-setor').addEventListener('change', (e) => { linha.setorId = e.target.value; });
-        tr.querySelector('.baixa-subsetor').addEventListener('change', (e) => { linha.subsetorId = e.target.value; });
-        tr.querySelector('.baixa-veiculo').addEventListener('change', (e) => { linha.veiculoId = e.target.value; });
         tr.querySelector('.baixa-km').addEventListener('change', (e) => { linha.km = e.target.value; });
         tr.querySelector('.baixa-kmprox').addEventListener('change', (e) => { linha.kmProximaTroca = e.target.value; });
         tr.querySelector('.baixa-dtprox').addEventListener('change', (e) => { linha.dtProximaTroca = e.target.value; });
-        tr.querySelector('.baixa-evento').addEventListener('change', (e) => {
-            const valorDigitado = e.target.value.trim().toUpperCase();
-            if (!valorDigitado) { linha.evento = ''; e.target.value = ''; return; }
-            const eventoEncontrado = eventos.find(ev => ev.codigo.toUpperCase() === valorDigitado);
-            if (!eventoEncontrado) {
-                alert(`Não existe nenhum evento com o código "${valorDigitado}". Cadastre esse evento primeiro (aba Projetos → "+ Novo evento"), ou digite um código já existente.`);
-                e.target.value = linha.evento; // volta pro valor anterior
-                return;
-            }
-            linha.evento = eventoEncontrado.codigo;
-            e.target.value = eventoEncontrado.codigo;
-        });
-        tr.querySelector('.baixa-planocontas').addEventListener('change', (e) => { linha.planoContasId = e.target.value; });
 
         tr.querySelector('.baixa-dividir').addEventListener('click', () => {
             const disponivelNaLinha = Number(linha.qtdABaixar);

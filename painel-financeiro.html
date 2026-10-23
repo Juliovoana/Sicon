@@ -131,6 +131,14 @@
   .resumo-kpis{ display:flex; gap:14px; flex-wrap:wrap; font-size:.9rem; color:var(--muted); margin:4px 0 0; }
   .resumo-kpis b{ color:var(--ink); }
   .dica-clique{ color:var(--muted); font-size:.78rem; margin:-6px 0 8px; }
+  .sub-titulo{ margin:16px 0 8px; font-size:.82rem; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:700; }
+  .alerta-fluxo{ border-radius:var(--radius); padding:10px 14px; margin-bottom:12px; font-size:.92rem; background:var(--bad-bg); color:var(--neg); border:1px solid var(--neg); }
+  .alerta-fluxo.ok{ background:var(--brand-soft); color:var(--ink); border-color:var(--line); }
+  .campo-mini{ display:inline-flex; gap:6px; align-items:center; font-size:.85rem; color:var(--muted); }
+  .campo-mini input, .campo-mini select{ border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; padding:6px 9px; font-size:.88rem; }
+  .campo-mini input{ width:130px; text-align:right; }
+  tr.linha-atraso td{ background:var(--bad-bg); }
+  tr.linha-hoje td{ font-weight:700; }
   @media (max-width:640px){
     .pagina{ padding:12px; }
     th, td{ padding:7px 7px; font-size:.82rem; }
@@ -148,6 +156,7 @@
     <div class="acoes">
       <a class="btn-ic" href="fechamento-caixas.html" title="Fechamento de caixas" aria-label="Fechamento de caixas">✔</a>
       <a class="btn-ic" href="extratos-contas.html" title="Extratos das contas" aria-label="Extratos das contas">☰</a>
+      <a class="btn-ic" href="analise-cruzada.html" title="Análise cruzada por setor e por mês (Excel)" aria-label="Análise cruzada">▦</a>
       <label class="btn-ic" for="arquivosCsv" title="Abrir CSV deste computador (dados_mov_caixa.csv e, se quiser, plano_contas.csv)" aria-label="Importar CSV">📂</label>
       <input type="file" id="arquivosCsv" accept=".csv,text/csv" multiple>
       <button class="btn-ic" id="btnAtualizar" title="Atualizar" aria-label="Atualizar"><span>⟳</span></button>
@@ -186,6 +195,8 @@
       <button class="aba" data-aba="contas" type="button">Contas</button>
       <button class="aba" data-aba="empresas" type="button">Empresas</button>
       <button class="aba" data-aba="setores" id="abaSetores" type="button" hidden>Setores</button>
+      <button class="aba" data-aba="titulos" id="abaTitulos" type="button" hidden>A pagar e receber</button>
+      <button class="aba" data-aba="fluxo" id="abaFluxo" type="button">Fluxo de caixa</button>
       <button class="aba" data-aba="lanc" type="button">Lançamentos</button>
       <div class="ver" id="ver" title="Vale para todos os gráficos e indicadores (também dá para clicar na legenda de um gráfico)">
         <span class="sub">Mostrar:</span>
@@ -276,7 +287,7 @@
   // ===================== preferências do aparelho =====================
   const lerLS = (k, padrao) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : padrao; } catch(e){ return padrao; } };
   const gravarLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
-  const K_FILTROS = 'pf_filtros_v1', K_NOMES = 'pf_nomes_grupos_v1';
+  const K_FILTROS = 'pf_filtros_v1', K_NOMES = 'pf_nomes_grupos_v1', K_SALDO = 'pf_saldo_inicial_v1';
   let nomesLocais = lerLS(K_NOMES, {});
 
   // ===================== cache (IndexedDB) =====================
@@ -314,6 +325,8 @@
   let qualidade = {};
   let setores = new Map();         // cod -> {cod, nome, n, rec, desp}  (coluna SETOR / DESCRICAO_SETOR, opcional)
   let temSetor = false;
+  let titulos = [];                // contas a pagar/receber EM ABERTO (QUITADO = A): { tp:'R'|'D', v, venc, emp, st, pc, cl, h }
+  let temTitulos = false;          // o arquivo traz QUITADO, VALOR_VENCIMENTO e DATA_VENCIMENTO
   let statusColeta = null, origemInfo = '';
   let F = null;                    // resultado do filtro atual
 
@@ -336,14 +349,36 @@
     const ix = (n) => t.cab.indexOf(n);
     const I = { tipo: ix('tipo'), data: ix('data'), cod: ix('cod_conta'), conta: ix('nome_conta_caixa'), contra: ix('cod_cta_transferencia'),
       rec: ix('receita'), desp: ix('despesa'), hist: ix('historico'), plano: ix('codcta'), nplano: ix('nomecta'), cli: ix('cliente'),
-      setor: ix('setor'), dset: ix('descricao_setor'), emp: ix('empresa'), razao: ix('empresaa_razao_social') >= 0 ? ix('empresaa_razao_social') : ix('empresa_razao_social') };
+      setor: ix('setor'), dset: ix('descricao_setor'), emp: ix('empresa'), razao: ix('empresaa_razao_social') >= 0 ? ix('empresaa_razao_social') : ix('empresa_razao_social'),
+      quit: ix('quitado'), vv: ix('valor_vencimento'), dv: ix('data_vencimento') };
     const falta = ['tipo', 'data', 'conta', 'rec', 'desp', 'plano', 'emp'].filter(k => I[k] < 0);
     if(falta.length) throw new Error('O arquivo de movimentação precisa ter as colunas TIPO, DATA, NOME_CONTA_CAIXA, RECEITA, DESPESA, CODCTA e EMPRESA (faltando: ' + falta.join(', ') + ').');
 
     const L = [], ci = new Map(), cpc = new Map(), em = new Map(), pl = new Map(), sts = new Map(); const comSetor = I.setor >= 0;
-    const q = { total: t.linhas.length, dataInvalida: 0, dataFutura: 0, semPlano: 0, semEmpresa: 0, semConta: 0, semSetor: 0, ate: '', de: '' };
+    const q = { total: t.linhas.length, dataInvalida: 0, dataFutura: 0, semPlano: 0, semEmpresa: 0, semConta: 0, semSetor: 0, ate: '', de: '',
+      titulos: 0, tituloSemVenc: 0, tituloZero: 0, vencSuspeito: 0, vencLiqInvalido: 0 };
     const limite = somaDias(hoje(), 90);
+    const temTit = I.quit >= 0 && I.vv >= 0 && I.dv >= 0; const TT = [];
+    const venc5 = somaDias(hoje(), 1825);
     for(const l of t.linhas){
+      // título EM ABERTO (QUITADO = A): não é movimento de caixa — vai para a lista de contas a pagar/receber
+      if(temTit && String(l[I.quit] || '').trim().toUpperCase() === 'A'){
+        const tp = String(l[I.tipo] || '').trim().toUpperCase(), venc = isoData(l[I.dv]), val = num(l[I.vv]);
+        if(!venc){ q.tituloSemVenc++; continue; }
+        if(val <= 0 || (tp !== 'R' && tp !== 'D')){ q.tituloZero++; continue; }
+        let ec = String(l[I.emp] || '').trim(); const rz = I.razao >= 0 ? String(l[I.razao] || '').trim() : '';
+        if(!ec || ec === '0') ec = '0';
+        let sc = comSetor ? String(l[I.setor] || '').trim() : ''; if(comSetor && (!sc || sc === '0')) sc = '0';
+        const pcT = normPlano(l[I.plano]);
+        TT.push({ tp, v: val, venc, emp: ec, st: sc, pc: pcT, cl: I.cli >= 0 ? String(l[I.cli] || '').trim() : '', h: I.hist >= 0 ? l[I.hist] : '' });
+        q.titulos++; if(venc > venc5) q.vencSuspeito++;
+        if(!em.has(ec)) em.set(ec, { cod: ec, razao: rz, nome: '', n: 0, rec: 0, desp: 0 }); else if(rz && !em.get(ec).razao) em.get(ec).razao = rz;
+        if(comSetor && !sts.has(sc)) sts.set(sc, { cod: sc, nome: '', n: 0, rec: 0, desp: 0 });
+        if(comSetor && I.dset >= 0){ const dn = String(l[I.dset] || '').trim(); const o = sts.get(sc); if(dn && !o.nome) o.nome = dn; }
+        if(!pl.has(pcT)) pl.set(pcT, { cod: pcT, n1: pcT.slice(0, 2), n2: pcT.slice(0, 5), nomeDados: '', nomes: new Map(), n: 0 });
+        const nn0 = String(l[I.nplano] || '').trim(); if(nn0){ const po = pl.get(pcT); po.nomes.set(nn0, (po.nomes.get(nn0) || 0) + 1); }
+        continue;
+      }
       const d = isoData(l[I.data]);
       if(!d){ q.dataInvalida++; continue; }
       if(d > limite){ q.dataFutura++; continue; }                 // data absurda (ex.: 2029): fora da análise, só avisada
@@ -356,7 +391,11 @@
       const r = num(l[I.rec]), s = num(l[I.desp]);
       let scod = comSetor ? String(l[I.setor] || '').trim() : ''; if(comSetor && (!scod || scod === '0')){ scod = '0'; q.semSetor++; }
       const row = { st: scod, d, ym: d.slice(0, 7), tp, ct: conta, cx: I.contra >= 0 ? String(l[I.contra] || '').trim() : '', r, s,
-        h: I.hist >= 0 ? l[I.hist] : '', pc, emp: ecod, cl: I.cli >= 0 ? String(l[I.cli] || '').trim() : '' };
+        h: I.hist >= 0 ? l[I.hist] : '', pc, emp: ecod, cl: I.cli >= 0 ? String(l[I.cli] || '').trim() : '', venc: '', vv: 0 };
+      if(temTit){                                      // vencimento original e valor do título, para a pontualidade (só se a data for plausível)
+        const vd = isoData(l[I.dv]), vvv = num(l[I.vv]);
+        if(vd){ const dif = dnum(vd) - dnum(d); if(dif <= 730 && dif >= -1825){ row.venc = vd; row.vv = vvv; } else q.vencLiqInvalido++; }
+      }
       L.push(row);
       if(!q.de || d < q.de) q.de = d; if(!q.ate || d > q.ate) q.ate = d;
       let c = ci.get(conta); if(!c){ c = { nome: conta, cod: cc, n: 0, rec: 0, desp: 0 }; ci.set(conta, c); }
@@ -381,6 +420,7 @@
     }
     sts.forEach(o => { if(!o.nome) o.nome = o.cod === '0' ? 'Sem setor' : 'Setor ' + o.cod; });
     setores = sts; temSetor = comSetor;
+    titulos = TT; temTitulos = temTit;
     linhas = L; contasInfo = ci; contaPorCod = cpc; empresas = em; planos = pl; qualidade = q;
   }
 
@@ -455,7 +495,7 @@
       lb.appendChild(c); lb.appendChild(document.createTextNode(e.nome)); const n = el('span', 'n', e.n.toLocaleString('pt-BR') + ' lanç.'); n.title = e.razao; lb.appendChild(n); le.appendChild(lb);
     });
     // setores (só quando o arquivo traz SETOR)
-    $('pSet').hidden = !temSetor; $('abaSetores').hidden = !temSetor;
+    $('pSet').hidden = !temSetor; $('abaSetores').hidden = !temSetor; $('abaTitulos').hidden = !temTitulos;
     const ls = $('listaSet'); ls.replaceChildren();
     if(temSetor) [...setores.values()].sort((a, b) => (b.rec + b.desp) - (a.rec + a.desp)).forEach(o => {
       const lb = el('label'); const c = el('input'); c.type = 'checkbox'; c.checked = !FIL.setOff.has(o.cod); c.dataset.set = o.cod;
@@ -659,10 +699,11 @@
     atualizarBotoesVer();
     const c = $('conteudo'); c.replaceChildren();
     for(const k of Object.keys(instancias)){ instancias[k].destroy(); delete instancias[k]; }
-    if(!F.rows.length){ c.appendChild(el('div', 'vazio', 'Nenhum lançamento com os filtros atuais.')); return; }
+    if(!F.rows.length && abaAtual !== 'titulos' && abaAtual !== 'fluxo'){ c.appendChild(el('div', 'vazio', 'Nenhum lançamento com os filtros atuais.')); return; }
+    if(abaAtual === 'titulos' && !temTitulos){ abaAtual = 'geral'; return render(); }
     if(abaAtual !== 'lanc' && !VER.r && !VER.s){ c.appendChild(el('div', 'vazio', 'Receitas e Despesas estão desligadas — ligue pelo menos uma em "Mostrar".')); return; }
-    if(abaAtual !== 'lanc') c.appendChild(el('div', 'dica-clique', '💡 Passe o mouse numa barra para ver os principais pagadores e fornecedores dela; clique para abrir o resumo e conferir os maiores lançamentos.'));
-    ({ geral: renderGeral, plano: renderPlano, contas: renderContas, empresas: renderEmpresas, setores: renderSetores, lanc: renderLanc })[abaAtual](c);
+    if(abaAtual !== 'lanc' && abaAtual !== 'titulos' && abaAtual !== 'fluxo') c.appendChild(el('div', 'dica-clique', '💡 Passe o mouse numa barra para ver os principais pagadores e fornecedores dela; clique para abrir o resumo e conferir os maiores lançamentos.'));
+    ({ geral: renderGeral, plano: renderPlano, contas: renderContas, empresas: renderEmpresas, setores: renderSetores, titulos: renderTitulos, fluxo: renderFluxo, lanc: renderLanc })[abaAtual](c);
     prepararGraficos().then(() => { (renderGraficos[abaAtual] || (() => {}))(); }).catch(() => {
       document.querySelectorAll('.graf .area').forEach(a => { a.replaceChildren(el('div', 'sub', 'Não consegui carregar a biblioteca de gráficos (precisa de internet). As tabelas continuam funcionando.')); });
     });
@@ -948,6 +989,240 @@
       (ds, i) => ({ patch: { st: top[ds].k, ym: meses[i] }, titulo: (modo === 'r' ? 'Receitas' : modo === 's' ? 'Despesas' : 'Resultado') + ' — ' + nomeSetor(top[ds].k) + ' — ' + nomeMes(meses[i]), lado: modo === 'r' || modo === 's' ? modo : 'rs' }));
   };
 
+  // ---------- datas (em dias inteiros, sem fuso) ----------
+  const dnum = (iso) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 86400000;
+  const doNum = (n) => new Date(n * 86400000).toISOString().slice(0, 10);
+  const diasAte = (iso) => Math.round(dnum(iso) - dnum(hoje()));          // negativo = já venceu
+
+  // ---------- contas a pagar e receber (títulos em aberto: QUITADO = A) ----------
+  const FAIXAS = [['v90', 'Vencidos há +90 dias'], ['v60', 'Vencidos 61–90 dias'], ['v30', 'Vencidos 31–60 dias'], ['v1', 'Vencidos 1–30 dias'], ['h7', 'Vence em 0–7 dias'],
+    ['h30', 'Vence em 8–30 dias'], ['h60', 'Vence em 31–60 dias'], ['h90', 'Vence em 61–90 dias'], ['h91', 'Vence em +90 dias'], ['sus', 'Data suspeita (+5 anos)']];
+  const nomeFaixa = (k) => (FAIXAS.find(f => f[0] === k) || [k, k])[1];
+  function faixaDe(dias, venc){
+    if(venc > somaDias(hoje(), 1825)) return 'sus';
+    return dias <= -91 ? 'v90' : dias <= -61 ? 'v60' : dias <= -31 ? 'v30' : dias <= -1 ? 'v1' : dias <= 7 ? 'h7' : dias <= 30 ? 'h30' : dias <= 60 ? 'h60' : dias <= 90 ? 'h90' : 'h91';
+  }
+  // empresas, setores e plano de contas valem aqui; Período e Contas não (o título em aberto ainda não passou por nenhuma conta)
+  function titulosFiltrados(){
+    const out = [];
+    for(const t of titulos){
+      if(FIL.empOff.has(t.emp)) continue; if(temSetor && FIL.setOff.has(t.st)) continue; if(FIL.plaOff.has(t.pc)) continue;
+      t.dias = diasAte(t.venc); t.fx = faixaDe(t.dias, t.venc); out.push(t);
+    }
+    return out;
+  }
+  const somaV = (a) => a.reduce((s, t) => s + t.v, 0);
+  const dT = { faixa: '', lado: '', busca: '' }; let limiteT = 300;
+  const textoSituacao = (t) => t.fx === 'sus' ? 'data suspeita' : t.dias < 0 ? (-t.dias) + ' dia(s) em atraso' : t.dias === 0 ? 'vence hoje' : 'em ' + t.dias + ' dia(s)';
+
+  // pontualidade dos já liquidados (período e filtros da tela): atraso = data do pagamento depois do vencimento
+  function pontualidade(rows){
+    const o = { R: { n: 0, v: 0, atr: 0, vAtr: 0, dias: 0, acres: 0, desc: 0 }, D: { n: 0, v: 0, atr: 0, vAtr: 0, dias: 0, acres: 0, desc: 0 } };
+    for(const x of rows){
+      if(!x.venc) continue; const lado = x.r > 0 ? 'R' : x.s > 0 ? 'D' : ''; if(!lado) continue;
+      const val = lado === 'R' ? x.r : x.s, a = o[lado]; a.n++; a.v += val;
+      const atraso = dnum(x.d) - dnum(x.venc); if(atraso > 0){ a.atr++; a.vAtr += val; a.dias += atraso; }
+      if(x.vv > 0){ const dif = val - x.vv; if(dif > 0.005) a.acres += dif; else if(dif < -0.005) a.desc -= dif; }
+    }
+    return o;
+  }
+
+  function renderTitulos(c){
+    const T = titulosFiltrados(); const rec = T.filter(t => t.tp === 'R'), pag = T.filter(t => t.tp === 'D');
+    const vencidos = (a) => a.filter(t => t.dias < 0 && t.fx !== 'sus'), em7 = (a) => a.filter(t => t.dias >= 0 && t.dias <= 7 && t.fx !== 'sus');
+    c.appendChild(el('div', 'sub', 'Títulos em aberto (QUITADO = A). Valem aqui os filtros de Empresas, Setores e Plano de contas; Período e Contas não se aplicam. Referência: hoje, ' + fmtDia(hoje()) + '.'));
+    const k = el('div', 'kpis'); k.style.marginTop = '8px';
+    if(VER.r){ k.appendChild(kpi('A receber em aberto (' + rec.length.toLocaleString('pt-BR') + ')', fmtR(somaV(rec)), 'pos')); k.appendChild(kpi('Vencido a receber', fmtR(somaV(vencidos(rec))), vencidos(rec).length ? 'neg' : '')); k.appendChild(kpi('A receber em 7 dias', fmtR(somaV(em7(rec))))); }
+    if(VER.s){ k.appendChild(kpi('A pagar em aberto (' + pag.length.toLocaleString('pt-BR') + ')', fmtR(somaV(pag)), 'neg')); k.appendChild(kpi('Vencido a pagar', fmtR(somaV(vencidos(pag))), vencidos(pag).length ? 'neg' : '')); k.appendChild(kpi('A pagar em 7 dias', fmtR(somaV(em7(pag))))); }
+    if(VER.r && VER.s){ const sl = somaV(rec) - somaV(pag); k.appendChild(kpi('A receber − a pagar', fmtR(sl), sl < 0 ? 'neg' : 'pos')); }
+    c.appendChild(k);
+    if(!T.length){ c.appendChild(el('div', 'vazio', 'Nenhum título em aberto com os filtros atuais.')); return; }
+    const g = el('div', 'grade2'); g.appendChild(caixaGraf('Contas em aberto por vencimento (clique numa barra para listar)', 'gTitFaixa', true)); c.appendChild(g);
+
+    // maiores clientes / fornecedores em aberto
+    const topo = (arr, titulo, cls) => {
+      const mp = new Map(); arr.forEach(t => { const nome = contraparte(t); let o = mp.get(nome); if(!o){ o = { nome, v: 0, n: 0, venc: t.venc }; mp.set(nome, o); } o.v += t.v; o.n++; if(t.venc < o.venc) o.venc = t.venc; });
+      const lista = [...mp.values()].sort((a, b) => b.v - a.v).slice(0, 10); const box = el('div', 'tabela-box'); const rol = el('div', 'rolagem'); const tab = el('table');
+      tab.innerHTML = '<thead><tr><th class="txt">' + titulo + '</th><th>Em aberto</th><th>Títulos</th><th>Venc. mais antigo</th></tr></thead>'; const tb = el('tbody');
+      lista.forEach(o => { const tr = el('tr', 'clicavel'); tr.appendChild(el('td', 'txt nome', o.nome)); tr.appendChild(el('td', cls, fmt(o.v))); tr.appendChild(el('td', '', String(o.n))); tr.appendChild(el('td', o.venc < hoje() ? 'neg' : '', fmtDia(o.venc)));
+        tr.addEventListener('click', () => { dT.busca = o.nome; dT.lado = arr[0].tp; dT.faixa = ''; limiteT = 300; render(); const b = $('boxTit'); if(b) b.scrollIntoView({ behavior: 'smooth' }); }); tb.appendChild(tr); });
+      tab.appendChild(tb); rol.appendChild(tab); box.appendChild(rol); return box;
+    };
+    const g2 = el('div', 'grade2');
+    if(VER.r && rec.length) g2.appendChild(topo(rec, 'Maiores a receber (cliente)', 'pos'));
+    if(VER.s && pag.length) g2.appendChild(topo(pag, 'Maiores a pagar (fornecedor)', 'neg'));
+    c.appendChild(g2);
+
+    // lista
+    c.appendChild(el('div', 'sub-titulo', 'Títulos em aberto'));
+    const tb = el('div', 'toolbar');
+    const busca = el('input', 'busca'); busca.type = 'search'; busca.placeholder = 'Buscar cliente/fornecedor, histórico ou plano…'; busca.value = dT.busca;
+    let tm; busca.addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(() => { dT.busca = busca.value; limiteT = 300; renderTabelaTit(); }, 250); }); tb.appendChild(busca);
+    const seg = el('div', 'seg'); [['', 'Todos'], ['R', 'A receber'], ['D', 'A pagar']].forEach(([v, t]) => { const b = el('button', dT.lado === v ? 'ativo' : '', t); b.type = 'button'; b.addEventListener('click', () => { dT.lado = v; limiteT = 300; render(); }); seg.appendChild(b); }); tb.appendChild(seg);
+    if(dT.faixa){ const s2 = el('span', 'chip-f', 'Vencimento: ' + nomeFaixa(dT.faixa)); const x = el('button', '', '×'); x.type = 'button'; x.addEventListener('click', () => { dT.faixa = ''; render(); }); s2.appendChild(x); tb.appendChild(s2); }
+    const bc = el('button', 'btn sec', '⬇ CSV'); bc.type = 'button'; bc.addEventListener('click', () => exportarDados(linhasExportTitulos(), 'contas_em_aberto_' + hoje(), 'csv', 'Contas em aberto')); tb.appendChild(bc);
+    const bx = el('button', 'btn sec', '⬇ Excel'); bx.type = 'button'; bx.addEventListener('click', () => exportarDados(linhasExportTitulos(), 'contas_em_aberto_' + hoje(), 'xlsx', 'Contas em aberto')); tb.appendChild(bx);
+    c.appendChild(tb);
+    const box = el('div', 'tabela-box'); box.id = 'boxTit'; c.appendChild(box); c.appendChild(Object.assign(el('div', 'mais'), { id: 'maisTit' }));
+    renderTabelaTit();
+
+    // pontualidade dos liquidados
+    const P = pontualidade(F.rows);
+    if(P.R.n || P.D.n){
+      c.appendChild(el('div', 'sub-titulo', 'Pontualidade dos já liquidados (período e filtros acima)'));
+      const kp = el('div', 'kpis');
+      const bloco = (a, rotLado, verbo, rotAcr, rotDesc) => {
+        if(!a.n) return;
+        kp.appendChild(kpi(verbo + ' em atraso', fmtPct(a.v ? a.vAtr / a.v * 100 : 0) + ' do valor' + (a.atr ? ' · média ' + Math.round(a.dias / a.atr) + ' dia(s)' : ''), a.vAtr / a.v > 0.2 ? 'neg' : ''));
+        kp.appendChild(kpi(rotAcr, fmtR(a.acres))); kp.appendChild(kpi(rotDesc, fmtR(a.desc)));
+      };
+      if(VER.r) bloco(P.R, 'receber', 'Recebido', 'Juros e multas recebidos', 'Descontos concedidos');
+      if(VER.s) bloco(P.D, 'pagar', 'Pago', 'Juros e multas pagos', 'Descontos obtidos');
+      c.appendChild(kp);
+    }
+  }
+  function titulosDaLista(){
+    const termo = semAcento(dT.busca);
+    return titulosFiltrados().filter(t => (!dT.lado || t.tp === dT.lado) && (dT.lado || (t.tp === 'R' ? VER.r : VER.s)) && (!dT.faixa || t.fx === dT.faixa)
+      && (!termo || semAcento(t.h + ' ' + t.cl + ' ' + contraparte(t) + ' ' + nomeNo(t.pc) + ' ' + t.pc).includes(termo))).sort((a, b) => (a.venc < b.venc ? -1 : a.venc > b.venc ? 1 : b.v - a.v));
+  }
+  function renderTabelaTit(){
+    const L = titulosDaLista(); const box = $('boxTit'); if(!box) return; box.replaceChildren();
+    const rol = el('div', 'rolagem'); const tab = el('table');
+    tab.innerHTML = '<thead><tr><th>Vencimento</th><th class="txt">Situação</th><th class="txt">Tipo</th><th class="txt">Cliente / fornecedor</th><th class="txt">Histórico</th><th class="txt">Plano</th><th class="txt">Empresa</th>' + (temSetor ? '<th class="txt">Setor</th>' : '') + '<th>Valor</th></tr></thead>';
+    const tbody = el('tbody');
+    L.slice(0, limiteT).forEach(t => {
+      const tr = el('tr', t.dias < 0 && t.fx !== 'sus' ? 'linha-atraso' : t.dias === 0 ? 'linha-hoje' : ''); tr.appendChild(el('td', '', fmtDia(t.venc)));
+      tr.appendChild(el('td', 'txt' + (t.dias < 0 ? ' neg' : ''), textoSituacao(t))); tr.appendChild(el('td', 'txt', t.tp === 'R' ? 'A receber' : 'A pagar')); tr.appendChild(el('td', 'txt nome', contraparte(t)));
+      tr.appendChild(el('td', 'hist', t.h)); tr.appendChild(el('td', 'txt', t.pc + (nomeNo(t.pc) ? ' · ' + nomeNo(t.pc) : ''))); tr.appendChild(el('td', 'txt', e2nome(t.emp)));
+      if(temSetor) tr.appendChild(el('td', 'txt', nomeSetor(t.st))); tr.appendChild(el('td', t.tp === 'R' ? 'pos' : 'neg', fmt(t.v))); tbody.appendChild(tr);
+    });
+    tab.appendChild(tbody); const tf = el('tfoot'); const trf = el('tr'); const t1 = el('td', '', L.length.toLocaleString('pt-BR') + ' título(s)'); t1.colSpan = 7 + (temSetor ? 1 : 0); trf.appendChild(t1);
+    const sr = somaV(L.filter(t => t.tp === 'R')), sp = somaV(L.filter(t => t.tp === 'D')); trf.appendChild(el('td', '', dT.lado === 'R' ? fmt(sr) : dT.lado === 'D' ? fmt(sp) : 'Rec. ' + fmt(sr) + ' / Pag. ' + fmt(sp))); tf.appendChild(trf); tab.appendChild(tf);
+    rol.appendChild(tab); box.appendChild(rol);
+    const mais = $('maisTit'); mais.replaceChildren();
+    if(L.length > limiteT){ const b = el('button', 'btn sec', 'Mostrar mais (' + Math.min(300, L.length - limiteT) + ')'); b.type = 'button'; b.addEventListener('click', () => { limiteT += 300; renderTabelaTit(); }); mais.appendChild(b); }
+  }
+  const linhasExportTitulos = () => titulosDaLista().map(t => ({ Vencimento: fmtDia(t.venc), Situação: textoSituacao(t), Tipo: t.tp === 'R' ? 'A receber' : 'A pagar', 'Cliente / fornecedor': contraparte(t), 'Histórico': t.h,
+    'Cód. plano': t.pc, 'Nome do plano': nomeNo(t.pc), Empresa: e2nome(t.emp), ...(temSetor ? { Setor: nomeSetor(t.st) } : {}), Valor: t.v }));
+  renderGraficos.titulos = () => {
+    const T = titulosFiltrados(); const rec = new Map(), pag = new Map();
+    T.forEach(t => { const m = t.tp === 'R' ? rec : pag; m.set(t.fx, (m.get(t.fx) || 0) + t.v); });
+    const usadas = FAIXAS.filter(f => rec.has(f[0]) || pag.has(f[0]));
+    desenhar('gTitFaixa', { type: 'bar', data: { labels: usadas.map(f => f[1]), datasets: [
+      { label: 'A receber', data: usadas.map(f => rec.get(f[0]) || 0), backgroundColor: cssVar('--pos'), hidden: !VER.r }, { label: 'A pagar', data: usadas.map(f => pag.get(f[0]) || 0), backgroundColor: cssVar('--neg'), hidden: !VER.s }] },
+      options: { scales: { y: eixoR }, plugins: { tooltip: tooltipR },
+        onClick: (e, els) => { if(!els.length) return; dT.faixa = usadas[els[0].index][0]; dT.lado = els[0].datasetIndex === 0 ? 'R' : 'D'; limiteT = 300; render(); const b = $('boxTit'); if(b) b.scrollIntoView({ behavior: 'smooth' }); },
+        onHover: (e, els) => { if(e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; } } });
+  };
+
+  // ---------- fluxo de caixa: realizado (QUITADO = Q) + previsto (títulos em aberto por vencimento) ----------
+  const FLUXO = { vis: 'mes', hor: 90, saldo: lerLS(K_SALDO, 0) };
+  const chavePeriodo = (iso, vis) => { if(vis === 'dia') return iso; if(vis === 'mes') return iso.slice(0, 7); const n = dnum(iso), dow = (new Date(n * 86400000).getUTCDay() + 6) % 7; return doNum(n - dow); };   // semana começa na segunda
+  const proxPeriodo = (ch, vis) => { if(vis === 'dia') return doNum(dnum(ch) + 1); if(vis === 'sem') return doNum(dnum(ch) + 7); let a = +ch.slice(0, 4), m = +ch.slice(5, 7) + 1; if(m > 12){ m = 1; a++; } return a + '-' + String(m).padStart(2, '0'); };
+  const rotuloPeriodo = (ch, vis) => vis === 'mes' ? nomeMes(ch) : vis === 'sem' ? 'sem. ' + fmtDia(ch).slice(0, 5) : fmtDia(ch).slice(0, 5);
+  function montarFluxo(){
+    const h = hoje(); const T = titulosFiltrados(); const fimH = somaDias(h, FLUXO.hor);
+    const incluiHoje = !F.ate || F.ate >= h;                    // o filtro de período inclui hoje? só então faz sentido projetar
+    let minD = '', maxD = ''; F.rows.forEach(x => { if(!minD || x.d < minD) minD = x.d; if(!maxD || x.d > maxD) maxD = x.d; });
+    const ini = F.de || minD || h; const fim = incluiHoje ? (maxD > fimH ? maxD : fimH) : (F.ate || maxD || h);
+    let vis = FLUXO.vis, aviso = '';
+    const contar = (v) => { let n = 0, ch = chavePeriodo(ini, v); const ultimo = chavePeriodo(fim, v); while(ch <= ultimo && n < 2000){ n++; ch = proxPeriodo(ch, v); } return n; };
+    if(vis === 'dia' && contar('dia') > 200){ vis = 'sem'; aviso = 'Visão diária limitada a ~200 dias: mostrando por semana. Reduza o período para ver por dia.'; }
+    if(vis === 'sem' && contar('sem') > 260){ vis = 'mes'; aviso = 'Muitas semanas no período: mostrando por mês.'; }
+    const mp = new Map(); const get = (ch) => { let o = mp.get(ch); if(!o){ o = { ch, er: 0, sr: 0, ep: 0, sp: 0 }; mp.set(ch, o); } return o; };
+    F.rows.forEach(x => { const o = get(chavePeriodo(x.d, vis)); o.er += x.r; o.sr += x.s; });
+    const atr = { ep: 0, sp: 0, n: 0 }; let alem = 0, susp = 0;
+    if(incluiHoje) T.forEach(t => {
+      if(t.fx === 'sus'){ susp++; return; }
+      if(t.venc < h){ if(t.tp === 'R') atr.ep += t.v; else atr.sp += t.v; atr.n++; return; }
+      if(t.venc > fimH){ alem++; return; }
+      const o = get(chavePeriodo(t.venc, vis)); if(t.tp === 'R') o.ep += t.v; else o.sp += t.v;
+    });
+    const chIni = chavePeriodo(ini, vis), chFim = chavePeriodo(fim, vis), chHoje = chavePeriodo(h, vis);
+    const periodos = []; let ch = chIni;
+    for(let n = 0; ch <= chFim && n < 2000; n++){
+      if(incluiHoje && ch === chHoje && atr.n) periodos.push({ ch: 'ATR', rot: 'Em atraso', er: 0, sr: 0, ep: atr.ep, sp: atr.sp, atraso: true });
+      const o = mp.get(ch) || { ch, er: 0, sr: 0, ep: 0, sp: 0 }; periodos.push(Object.assign({}, o, { rot: rotuloPeriodo(ch, vis), atual: incluiHoje && ch === chHoje }));
+      ch = proxPeriodo(ch, vis);
+    }
+    if(incluiHoje && atr.n && !periodos.some(p => p.atraso)) periodos.unshift({ ch: 'ATR', rot: 'Em atraso', er: 0, sr: 0, ep: atr.ep, sp: atr.sp, atraso: true });
+    let acc = Number(FLUXO.saldo) || 0;
+    periodos.forEach(p => { p.liq = p.er - p.sr + p.ep - p.sp; acc += p.liq; p.acc = acc; });
+    return { periodos, vis, aviso, incluiHoje, alem, susp, atr, chHoje };
+  }
+  function renderFluxo(c){
+    const tb = el('div', 'toolbar');
+    const seg = el('div', 'seg'); [['mes', 'Mensal'], ['sem', 'Semanal'], ['dia', 'Diário']].forEach(([v, t]) => { const b = el('button', FLUXO.vis === v ? 'ativo' : '', t); b.type = 'button'; b.addEventListener('click', () => { FLUXO.vis = v; render(); }); seg.appendChild(b); }); tb.appendChild(seg);
+    if(temTitulos){
+      const lh = el('label', 'campo-mini', 'Previsão: '); const sel = el('select'); [[30, 'próximos 30 dias'], [60, 'próximos 60 dias'], [90, 'próximos 90 dias'], [180, 'próximos 6 meses'], [365, 'próximos 12 meses']].forEach(([v, t]) => { const o = el('option', '', t); o.value = v; if(FLUXO.hor === v) o.selected = true; sel.appendChild(o); });
+      sel.addEventListener('change', () => { FLUXO.hor = +sel.value; render(); }); lh.appendChild(sel); tb.appendChild(lh);
+    }
+    const ls = el('label', 'campo-mini', 'Saldo inicial: R$ '); const inp = el('input'); inp.type = 'text'; inp.inputMode = 'decimal'; inp.value = FLUXO.saldo ? String(FLUXO.saldo).replace('.', ',') : '';
+    inp.placeholder = '0,00'; inp.title = 'Saldo das contas no início do período mostrado (opcional). Fica salvo neste aparelho.';
+    inp.addEventListener('change', () => { FLUXO.saldo = num(inp.value); gravarLS(K_SALDO, FLUXO.saldo); render(); }); ls.appendChild(inp); tb.appendChild(ls);
+    c.appendChild(tb);
+
+    const M = montarFluxo(); const P = M.periodos;
+    if(!P.length){ c.appendChild(el('div', 'vazio', 'Sem dados para o período e filtros escolhidos.')); return; }
+    if(M.aviso) c.appendChild(el('div', 'sub', M.aviso));
+    if(!temTitulos) c.appendChild(el('div', 'sub', 'Só o realizado: para a previsão, o arquivo precisa trazer QUITADO, VALOR_VENCIMENTO e DATA_VENCIMENTO (contas a pagar e a receber em aberto).'));
+    else if(!M.incluiHoje) c.appendChild(el('div', 'sub', 'O período escolhido não inclui hoje — sem previsão. Escolha um período que termine hoje ou depois (ex.: Últimos 3 meses).'));
+
+    const fut = P.filter(p => p.atraso || p.atual || p.ch > M.chHoje);
+    const tEp = fut.reduce((s, p) => s + p.ep, 0), tSp = fut.reduce((s, p) => s + p.sp, 0);
+    const k = el('div', 'kpis');
+    if(VER.r){ k.appendChild(kpi('Entradas realizadas', fmtR(P.reduce((s, p) => s + p.er, 0)), 'pos')); if(M.incluiHoje && temTitulos) k.appendChild(kpi('A receber previsto', fmtR(tEp), 'pos')); }
+    if(VER.s){ k.appendChild(kpi('Saídas realizadas', fmtR(P.reduce((s, p) => s + p.sr, 0)), 'neg')); if(M.incluiHoje && temTitulos) k.appendChild(kpi('A pagar previsto', fmtR(tSp), 'neg')); }
+    const final = P[P.length - 1].acc; k.appendChild(kpi(M.incluiHoje && temTitulos ? 'Saldo projetado no fim' : 'Saldo acumulado no fim', fmtR(final), final < 0 ? 'neg' : 'pos'));
+    if(M.atr.n) k.appendChild(kpi('Em atraso (receber − pagar)', fmtR(M.atr.ep - M.atr.sp), M.atr.ep - M.atr.sp < 0 ? 'neg' : ''));
+    c.appendChild(k);
+    if(M.incluiHoje && temTitulos){
+      const futuros = P.filter(p => !p.atraso && (p.atual || p.ch > M.chHoje)); const pior = futuros.concat(P.filter(p => p.atraso)).reduce((a, p) => (!a || p.acc < a.acc ? p : a), null);
+      if(pior && pior.acc < 0) c.appendChild(el('div', 'alerta-fluxo', '⚠ O saldo projetado fica negativo (' + fmtR(pior.acc) + ') em ' + pior.rot + '. Confira o saldo inicial informado e os vencimentos a pagar.'));
+      else if(pior) c.appendChild(el('div', 'alerta-fluxo ok', 'Menor saldo projetado: ' + fmtR(pior.acc) + ' (' + pior.rot + ').'));
+    }
+    const g = el('div', 'grade2'); g.appendChild(caixaGraf('Fluxo de caixa — realizado e previsto' + (M.vis === 'mes' ? ' por mês' : M.vis === 'sem' ? ' por semana' : ' por dia'), 'gFluxo', true)); c.appendChild(g);
+
+    // tabela
+    const box = el('div', 'tabela-box'); const rol = el('div', 'rolagem'); const tab = el('table');
+    tab.innerHTML = '<thead><tr><th>Período</th><th>Entradas realiz.</th><th>Saídas realiz.</th>' + (temTitulos ? '<th>A receber (prev.)</th><th>A pagar (prev.)</th>' : '') + '<th>Líquido</th><th>Saldo acumulado</th></tr></thead>';
+    const tbody = el('tbody'); const T = { er: 0, sr: 0, ep: 0, sp: 0 };
+    P.forEach(p => {
+      const tr = el('tr', p.atraso ? 'linha-atraso' : p.atual ? 'linha-hoje' : ''); tr.appendChild(el('td', 'txt', p.rot + (p.atual ? ' (hoje)' : '')));
+      tr.appendChild(el('td', 'pos', p.er ? fmt(p.er) : '—')); tr.appendChild(el('td', 'neg', p.sr ? fmt(p.sr) : '—'));
+      if(temTitulos){ tr.appendChild(el('td', 'pos', p.ep ? fmt(p.ep) : '—')); tr.appendChild(el('td', 'neg', p.sp ? fmt(p.sp) : '—')); }
+      tr.appendChild(el('td', p.liq < 0 ? 'neg' : 'pos', fmt(p.liq))); tr.appendChild(el('td', p.acc < 0 ? 'neg' : '', fmt(p.acc))); tbody.appendChild(tr);
+      T.er += p.er; T.sr += p.sr; T.ep += p.ep; T.sp += p.sp;
+    });
+    tab.appendChild(tbody); const tf = el('tfoot'); const trf = el('tr'); trf.appendChild(el('td', '', 'Total')); trf.appendChild(el('td', '', fmt(T.er))); trf.appendChild(el('td', '', fmt(T.sr)));
+    if(temTitulos){ trf.appendChild(el('td', '', fmt(T.ep))); trf.appendChild(el('td', '', fmt(T.sp))); }
+    trf.appendChild(el('td', '', fmt(T.er - T.sr + T.ep - T.sp))); trf.appendChild(el('td', '', fmt(final))); tf.appendChild(trf); tab.appendChild(tf);
+    rol.appendChild(tab); box.appendChild(rol); c.appendChild(box);
+    const tbx = el('div', 'toolbar');
+    const bc = el('button', 'btn sec', '⬇ CSV'); bc.type = 'button'; bc.addEventListener('click', () => exportarDados(linhasExportFluxo(P), 'fluxo_de_caixa_' + hoje(), 'csv', 'Fluxo de caixa')); tbx.appendChild(bc);
+    const bx = el('button', 'btn sec', '⬇ Excel'); bx.type = 'button'; bx.addEventListener('click', () => exportarDados(linhasExportFluxo(P), 'fluxo_de_caixa_' + hoje(), 'xlsx', 'Fluxo de caixa')); tbx.appendChild(bx);
+    c.appendChild(tbx);
+    const notas = ['Realizado = movimentos já liquidados (QUITADO = Q), na data do pagamento/recebimento. Previsto = títulos em aberto (QUITADO = A), na data de vencimento; os já vencidos aparecem na linha "Em atraso".',
+      'Saldo acumulado = saldo inicial informado + entradas − saídas do período. Não é o saldo bancário: para saldos reais use os Extratos. Transferências entre contas marcadas ficam ocultas, como nas outras abas.'];
+    if(M.susp) notas.push(M.susp + ' título(s) com vencimento suspeito (+5 anos) ficaram fora da previsão.'); if(M.alem) notas.push(M.alem + ' título(s) vencem depois do horizonte escolhido.');
+    notas.forEach(t => c.appendChild(el('div', 'sub', t)));
+  }
+  const linhasExportFluxo = (P) => P.map(p => ({ 'Período': p.rot, 'Entradas realizadas': p.er, 'Saídas realizadas': p.sr, ...(temTitulos ? { 'A receber previsto': p.ep, 'A pagar previsto': p.sp } : {}), 'Líquido': p.liq, 'Saldo acumulado': p.acc }));
+  renderGraficos.fluxo = () => {
+    const M = montarFluxo(); const P = M.periodos; if(!P.length) return;
+    const pos = cssVar('--pos'), neg = cssVar('--neg');
+    const ds = [
+      { label: 'Entradas realizadas', data: P.map(p => p.er), backgroundColor: pos, stack: 'e', hidden: !VER.r },
+      { label: 'Entradas previstas', data: P.map(p => p.ep), backgroundColor: pos + '66', borderColor: pos, borderWidth: 1, stack: 'e', hidden: !VER.r || !temTitulos },
+      { label: 'Saídas realizadas', data: P.map(p => -p.sr), backgroundColor: neg, stack: 'e', hidden: !VER.s },
+      { label: 'Saídas previstas', data: P.map(p => -p.sp), backgroundColor: neg + '66', borderColor: neg, borderWidth: 1, stack: 'e', hidden: !VER.s || !temTitulos },
+      { label: 'Saldo acumulado', data: P.map(p => p.acc), type: 'line', borderColor: cssVar('--info'), backgroundColor: cssVar('--info'), tension: .2, pointRadius: P.length > 60 ? 0 : 3, yAxisID: 'y1' }];
+    desenhar('gFluxo', { type: 'bar', data: { labels: P.map(p => p.rot), datasets: ds },
+      options: { interaction: { mode: 'index', intersect: false }, scales: { x: { stacked: true }, y: Object.assign({ stacked: true }, eixoR), y1: Object.assign({ position: 'right', grid: { drawOnChartArea: false } }, eixoR) },
+        plugins: { tooltip: { callbacks: { label: (c) => ' ' + c.dataset.label + ': ' + fmtR(c.dataset.type === 'line' ? c.parsed.y : Math.abs(c.parsed.y)) } } } } });
+  };
+
   // ---------- lançamentos ----------
   function linhasDrill(){
     const termo = semAcento(drill.busca);
@@ -995,15 +1270,15 @@
   function linhasExport(){
     return linhasDrill().map(x => { const e = empresas.get(x.emp) || { nome: x.emp }; return { Data: fmtDia(x.d), Empresa: e.nome, ...(temSetor ? { 'Cód. setor': x.st, Setor: nomeSetor(x.st) } : {}), Conta: x.ct, Tipo: x.tp, 'Cód. plano': x.pc, 'Nome do plano': nomeNo(x.pc), 'Histórico': x.h, Receita: x.r, Despesa: x.s }; });
   }
-  async function exportar(formato){
-    const dados = linhasExport(); if(!dados.length){ alert('Não há lançamentos para exportar com os filtros atuais.'); return; }
-    const base = 'movimentacao_' + (F.de || 'inicio') + '_a_' + (F.ate || 'hoje');
+  const exportar = (formato) => exportarDados(linhasExport(), 'movimentacao_' + (F.de || 'inicio') + '_a_' + (F.ate || 'hoje'), formato, 'Movimentação');
+  async function exportarDados(dados, base, formato, nomeAba){
+    if(!dados.length){ alert('Não há dados para exportar com os filtros atuais.'); return; }
     if(formato === 'csv'){
       const cab = Object.keys(dados[0]); const esc = (v) => { v = String(v == null ? '' : v); return /[";\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
       const linhasTxt = [cab.join(';')].concat(dados.map(o => cab.map(k => (typeof o[k] === 'number' ? String(o[k]).replace('.', ',') : esc(o[k]))).join(';')));
       baixarBlob(new Blob(['﻿' + linhasTxt.join('\r\n')], { type: 'text/csv;charset=utf-8' }), base + '.csv');
     } else {
-      try { await prepararXlsx(); const X = window.XLSX; const wb = X.utils.book_new(); const ws = X.utils.json_to_sheet(dados); ws['!cols'] = [{ wch: 11 }, { wch: 22 }, { wch: 22 }, { wch: 5 }, { wch: 10 }, { wch: 34 }, { wch: 60 }, { wch: 14 }, { wch: 14 }]; X.utils.book_append_sheet(wb, ws, 'Movimentação'); X.writeFile(wb, base + '.xlsx'); }
+      try { await prepararXlsx(); const X = window.XLSX; const wb = X.utils.book_new(); const ws = X.utils.json_to_sheet(dados); ws['!cols'] = Object.keys(dados[0]).map(k => ({ wch: /Hist|Cliente|Nome/.test(k) ? 40 : 16 })); X.utils.book_append_sheet(wb, ws, nomeAba); X.writeFile(wb, base + '.xlsx'); }
       catch(e){ alert('Não consegui gerar o Excel agora (precisa de internet). Use o CSV.'); }
     }
   }
@@ -1029,11 +1304,54 @@
     li(q.total.toLocaleString('pt-BR') + ' linhas no arquivo, de ' + (q.de ? fmtDia(q.de) : '—') + ' a ' + (q.ate ? fmtDia(q.ate) : '—') + '; ' + linhas.length.toLocaleString('pt-BR') + ' usadas.');
     if(q.dataFutura) li(q.dataFutura + ' lançamento(s) com data muito à frente (mais de 90 dias) ficaram de fora — provável erro de digitação da data no Sicon.');
     if(q.dataInvalida) li(q.dataInvalida + ' linha(s) com data ilegível foram ignoradas.');
+    if(temTitulos){
+      const ab = titulos.filter(t => t.tp === 'R'), pg = titulos.filter(t => t.tp === 'D');
+      li(q.titulos.toLocaleString('pt-BR') + ' título(s) em aberto (QUITADO = A): ' + ab.length.toLocaleString('pt-BR') + ' a receber (' + fmtR(somaV(ab)) + ') e ' + pg.length.toLocaleString('pt-BR') + ' a pagar (' + fmtR(somaV(pg)) + '). Não entram nas receitas e despesas — só nas abas A pagar e receber e Fluxo de caixa.');
+      if(q.vencSuspeito) li(q.vencSuspeito + ' título(s) em aberto com vencimento a mais de 5 anos — provável erro de digitação; aparecem em "Data suspeita" e ficam fora da previsão.');
+      if(q.tituloSemVenc || q.tituloZero) li((q.tituloSemVenc + q.tituloZero) + ' título(s) em aberto ignorados (sem vencimento, valor zero ou tipo diferente de R/D).');
+      if(q.vencLiqInvalido) li(q.vencLiqInvalido + ' lançamento(s) liquidados com data de vencimento implausível (ex.: ano digitado errado) ficaram fora da pontualidade.');
+    }
     if(q.semPlano) li(q.semPlano + ' lançamento(s) sem plano de contas (aparecem como "Sem plano de contas").');
     if(temSetor && q.semSetor) li(q.semSetor + ' lançamento(s) sem setor (aparecem como "Sem setor").');
     if(q.semEmpresa) li(q.semEmpresa + ' lançamento(s) sem empresa (aparecem como "Sem empresa").');
     li('Receita e despesa vêm das colunas RECEITA e DESPESA. Contas de passagem (PIX e cartões de crédito) já começam desmarcadas; a escolha fica salva neste aparelho.');
     li('Nomes dos grupos (níveis 1 e 2) não vêm no arquivo: use o ✏️ na aba Plano de contas ou publique um plano_contas.csv (colunas CODIGO e NOME) na pasta do Drive.');
+  }
+
+  // Arquivo grande (acima de ~3 MB) é lido em partes pelo script do Google (acao=parte): o Google recusa ler de uma vez
+  // ("O arquivo ... excede o tamanho de arquivo máximo"). As partes são cortadas em quebra de linha e simplesmente concatenadas.
+  const LIMITE_LEITURA_DIRETA = 3 * 1024 * 1024;
+  const mb = (b) => (b / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' MB';
+  function dicaScriptGoogle(msg){
+    if(/permiss|authoriz|autoriz|external_request/i.test(msg)) return ' — No script do Google, rode a função "autorizar" uma vez (menu Executar) e reimplante (Implantar → Gerenciar implantações → ✏️ → Nova versão).';
+    return '';
+  }
+  async function baixarEmPartes(n, bytes){
+    for(let tentativa = 0; tentativa < 3; tentativa++){
+      let inicio = 0, atualizado = null, mudou = false; const partes = [];
+      while(true){
+        let r;
+        try { r = await chamar('&acao=parte&arquivo=' + encodeURIComponent(n) + '&inicio=' + inicio); }
+        catch(err){ throw new Error(err.message + dicaScriptGoogle(err.message)); }
+        if(r.proximo === undefined) throw new Error('O script do Google está desatualizado e não sabe ler arquivos grandes em partes. Cole a versão nova de google-apps-script-coletor.gs no script, rode "autorizar" e reimplante (Implantar → Gerenciar implantações → ✏️ → Nova versão).');
+        if(atualizado && r.atualizado !== atualizado){ mudou = true; break; }        // o coletor gravou o arquivo no meio da leitura
+        atualizado = r.atualizado; partes.push(r.texto);
+        $('rodape').textContent = 'Baixando ' + n + '… ' + mb(Math.min(r.proximo, r.total)) + ' de ' + mb(r.total || bytes);
+        if(r.proximo >= r.total) break;
+        if(r.proximo <= inicio) throw new Error('A leitura em partes de ' + n + ' não avançou.');
+        inicio = r.proximo;
+      }
+      if(!mudou) return { texto: partes.join(''), atualizado };
+    }
+    throw new Error('O arquivo ' + n + ' mudou várias vezes durante a leitura — tente atualizar de novo em instantes.');
+  }
+  async function baixarArquivo(n, bytes){
+    if(!(bytes > LIMITE_LEITURA_DIRETA)){
+      const r = await chamar('&acao=ler&arquivos=' + encodeURIComponent(n)); const f = r.arquivos[n];
+      if(f && f.texto != null) return { texto: f.texto, atualizado: f.atualizado };
+      if(!(f && (f.grande || /exced|maxim|too large/i.test(f.erro || '')))) return null;   // outro erro: segue sem esse arquivo
+    }
+    return baixarEmPartes(n, bytes);
   }
 
   async function carregar(){
@@ -1043,7 +1361,7 @@
       if(!bd) bd = await abrirBd();
       if(!linhas.length) $('inicio').replaceChildren(el('div', 'vazio', 'Carregando…'));
       const lista = await chamar('&acao=listar');
-      const quando = {}; lista.arquivos.forEach(a => { quando[a.arquivo] = a.atualizado; });
+      const quando = {}, tamanho = {}; lista.arquivos.forEach(a => { quando[a.arquivo] = a.atualizado; tamanho[a.arquivo] = a.bytes; });
       if(!quando[ARQ.mov]) throw new Error('O arquivo ' + ARQ.mov + ' não está na pasta do Drive. Confira se o coletor está gerando esse CSV.');
       const nomes = [ARQ.mov, ARQ.plano, ARQ.status].filter(n => quando[n]);
       const textos = {}, baixar = [];
@@ -1051,7 +1369,7 @@
       if(baixar.length){
         $('rodape').textContent = 'Baixando ' + baixar.join(', ') + '… (o arquivo de movimentação é grande, pode levar alguns segundos)';
         for(const n of baixar){                                  // um por vez: respostas grandes
-          const r = await chamar('&acao=ler&arquivos=' + encodeURIComponent(n)); const f = r.arquivos[n];
+          const f = await baixarArquivo(n, tamanho[n]);
           if(f && f.texto != null){ textos[n] = f.texto; await cachePut(cacheUn + n, { atualizado: quando[n], texto: f.texto }); }
         }
       }
