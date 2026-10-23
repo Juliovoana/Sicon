@@ -1800,7 +1800,7 @@
             <div class="campo"><label>CNPJ do fornecedor</label><input type="text" id="notaFornecedorCnpj"></div>
         </div>
         <div class="grade col4" style="margin-top:10px;">
-            <div class="campo"><label>Valor total da nota (R$)</label><input type="number" step="0.01" id="notaValorTotal" value="0"></div>
+            <div class="campo"><label title="Valor impresso na NF. É ele que vale para o protocolo e para dividir as parcelas.">Valor total da nota (R$) — conforme a NF</label><input type="number" step="0.01" id="notaValorTotal" value="0"></div>
             <div class="campo"><label>Valor desconto (R$)</label><input type="number" step="0.01" id="notaValorDesconto" value="0"></div>
             <div class="campo"><label>Valor frete (R$)</label><input type="number" step="0.01" id="notaValorFrete" value="0"></div>
             <div class="campo"><label>Responsável</label><input type="text" id="notaResponsavel"></div>
@@ -1809,6 +1809,7 @@
             <div class="campo"><label>Chave de acesso (opcional)</label><input type="text" id="notaChaveAcesso"></div>
             <div class="campo" style="align-self:end;"><span class="subtitulo" id="notaValorTotalDica"></span></div>
         </div>
+        <div id="notaConferenciaValores" style="margin-top:8px;"></div>
         <p class="subtitulo" id="statusRateioNotaManual" style="margin-top:4px;"></p>
         <div class="campo" style="margin-top:10px;">
             <label>Observações</label>
@@ -1849,7 +1850,7 @@
                 <h4 style="margin:0;" id="tituloRateioNota">📊 Rateio da nota</h4>
                 <p class="subtitulo" style="margin:6px 0 8px 0;">Gerado automaticamente (percentual pelo valor; empresa = padrão do Financeiro). A <strong>compra</strong> rateia 100% do que foi lançado na entrada;
                     a <strong>baixa direta</strong> mostra para onde o material foi destinado (transferência, não é nova despesa). Se houver baixa, a nota fica <strong>bloqueada</strong>
-                    para exclusão e para mudar quantidade/valor dos itens — desfaça as baixas para liberar.</p>
+                    para exclusão e para mudar quantidade/valor dos itens — use <strong>↩️ Desfazer baixa direta</strong> (abaixo) para liberar.</p>
                 <div id="listaRateioNota"></div>
             </div>
 
@@ -2813,7 +2814,7 @@ async function chamarGet(acao, filtros) {
         // contagem de itens quanto no valor total exibido na lista de Notas
         const { data: itens, error: e1 } = await sb.from('estoque_movimentacoes').select('estoque_nota_id, qtd, valor_unit, tipo').eq('unidade_negocio_id', meuPerfil.unidadeId).not('estoque_nota_id', 'is', null);
         if (e1) throw e1;
-        const { data: titulos, error: e2 } = await sb.from('estoque_titulos_notas').select('estoque_nota_id').eq('unidade_negocio_id', meuPerfil.unidadeId);
+        const { data: titulos, error: e2 } = await sb.from('estoque_titulos_notas').select('estoque_nota_id, valor, status').eq('unidade_negocio_id', meuPerfil.unidadeId);
         if (e2) throw e2;
         return { itens: itens || [], titulos: titulos || [] };
     }
@@ -3845,6 +3846,13 @@ const AJUDA_ESTOQUE = {
                 nas notinhas → entram 20). O botão não aparece em item marcado <strong>Avulso</strong>
                 ou ainda não vinculado a um produto, e só considera notinhas <strong>manuais</strong> (sem XML)
                 que ainda não foram ligadas a outra nota.</li>
+                <li><strong>💲 Valor total da nota (conforme a NF)</strong>: na entrada manual, informe no cabeçalho o valor que está <strong>impresso na NF</strong>.
+                A soma dos itens (quantidade × valor unitário) pode diferir <strong>por centavos</strong>, porque o preço unitário é arredondado em 2 casas — por isso o
+                <strong>valor da nota é a referência</strong>: <em>Dividir valor total em parcelas iguais</em> parcela esse valor (a última parcela absorve o resto),
+                a lista de Notas mostra esse valor e o protocolo o usa. Logo abaixo do cabeçalho há uma <strong>conferência</strong> (nota × itens × títulos): a diferença
+                dos itens é só informativa; se os <strong>títulos</strong> não fecharem com a nota, o botão <strong>⚖️ Ajustar a última parcela</strong> põe a diferença na última
+                parcela em aberto. Alterar o valor total com a nota já salva grava na hora (e fica na Sentinela). Na lista de Notas e no Protocolo, nota sem valor da NF ou com
+                títulos diferentes do valor da nota aparece com <strong>⚠</strong>, e gerar o protocolo com essas notas pede confirmação. Notas importadas por XML já trazem o valor da NF.</li>
                 <li><strong>🔎 Buscas de Almoxarifado, Setor, Subsetor, Veículo, Evento e Plano de contas</strong>: em todo campo de busca (inclusive
                 nas <strong>linhas</strong> do "Baixar itens dessa nota", que antes eram listas de escolha) dá para digitar o <strong>código</strong> ou
                 <strong>parte do nome</strong>, sem se preocupar com acento nem com a ordem das palavras (ex.: "locacao gerador" acha
@@ -3862,7 +3870,7 @@ const AJUDA_ESTOQUE = {
                 há veículo, nome/placa e KM. A <strong>Empresa</strong> é a empresa padrão de Financeiro → Parâmetros (sem ela o rateio não é gerado e a tela
                 avisa; o lançamento continua). O rateio aparece no topo da nota e se atualiza sozinho ao incluir, editar ou excluir itens/baixas; excluir a nota
                 apaga o rateio da compra. <strong>A nota de entrada só fica bloqueada</strong> (excluir e mudar quantidade/valor dos itens) <strong>quando existe baixa
-                ligada a ela</strong>; para liberar, desfaça as baixas (o rateio da baixa some junto).</li>
+                ligada a ela</strong>; para liberar, abra a nota e use <strong>↩️ Desfazer baixa direta</strong> (bloco Rateio da nota): ele lista as saídas ligadas à nota, pede confirmação, apaga todas, devolve a quantidade ao estoque, recalcula estoque e preço médio, remove o rateio da baixa e registra na auditoria. Item avulso destinado volta a ficar Pendente na guia de avulsos. Depois disso a nota pode ser editada ou removida normalmente.</li>
                 <li><strong>🧭 Classificar notas</strong> (botão na guia Notas): lista os rateios de nota — compra e baixa direta — que estão <strong>sem Setor,
                 Plano de contas ou Evento</strong> (comum em notas lançadas antes de esses campos serem obrigatórios). Marque as notas, escolha o que falta e clique
                 em <strong>Aplicar aos marcados</strong>: só os campos <strong>em branco</strong> dos itens da nota são preenchidos (o que já está preenchido não muda)
@@ -6411,7 +6419,7 @@ async function bloquearSeNotaComRateio(notaId, oQueFaz) {
     let op = null;
     try { op = await operacaoRateioDaNota(notaId, TIPO_RATEIO_BAIXA); } catch (e) { console.warn('Não consegui conferir o rateio da nota', notaId, e); return; }
     if (op) throw new Error(`Esta nota de entrada já teve baixa direta (rateio de destinação, operação nº ${op.codigo}) e está BLOQUEADA para ${oQueFaz}. ` +
-        'Para liberar, desfaça antes as baixas (saídas) ligadas a ela — o rateio da baixa é removido junto.');
+        'Para liberar, abra a nota de entrada (guia Notas → ✏️ Abrir) e use o botão ↩️ Desfazer baixa direta, no bloco 📊 Rateio da nota — o rateio da baixa é removido junto.');
 }
 async function notaIdDaMovimentacao(mov) {
     if (!mov) return null;
@@ -6575,8 +6583,14 @@ async function atualizarInfoRateioNota(notaId) {
     bloco.style.display = 'none';
     if (notaTipoEmEdicao === 'saida') return;
     try {
-        const [opCompra, opBaixa] = await Promise.all([operacaoRateioDaNota(notaId, TIPO_RATEIO_COMPRA), operacaoRateioDaNota(notaId, TIPO_RATEIO_BAIXA)]);
-        if (!opCompra && !opBaixa) return;
+        const [opCompra, opBaixa] = await Promise.all([
+            operacaoRateioDaNota(notaId, TIPO_RATEIO_COMPRA).catch(() => null),
+            operacaoRateioDaNota(notaId, TIPO_RATEIO_BAIXA).catch(() => null)
+        ]);
+        // saídas ligadas à nota (baixa direta): o botão de desfazer depende delas, não do rateio (que pode não ter sido gerado)
+        let qtdSaidas = 0;
+        try { qtdSaidas = (await saidasDaNotaDeEntrada(notaId)).length; } catch (e) { console.warn('Saídas da nota:', e); }
+        if (!opCompra && !opBaixa && !qtdSaidas) return;
         if (!catalogosBaixa || !catalogosBaixa.setores) { try { catalogosBaixa = await chamarGet('listarCatalogosBaixa'); } catch (e) { /* mostra só os ids */ } }
         const setor = id => { const x = ((catalogosBaixa && catalogosBaixa.setores) || []).find(s => String(s.id) === String(id)); return x ? x.nome : (id ? '#' + id : '—'); };
         const plano = id => { const x = ((catalogosBaixa && catalogosBaixa.planoContas) || []).find(c => String(c.id) === String(id)); return x ? `${x.codigo || ''} ${x.descricao || ''}`.trim() : (id ? '#' + id : '—'); };
@@ -6593,10 +6607,77 @@ async function atualizarInfoRateioNota(notaId) {
                 '</tbody></table>' +
                 (incompleta ? '<div style="margin-top:6px; padding:6px 10px; background:#FDECEA; color:#7A1C14; border-radius:6px; font-size:.85rem;">⚠️ Falta Setor, Plano de contas ou Evento em alguma linha — o Financeiro e a DRE precisam dos três. Informe nos itens da nota (✏️ Editar) ou na classificação da nota e salve: o rateio se refaz sozinho.</div>' : '');
         };
-        document.getElementById('listaRateioNota').innerHTML = (await montar(opCompra, '🛒 Compra (entrada em estoque)')) + (await montar(opBaixa, '📤 Baixa direta (destinação)'));
+        document.getElementById('listaRateioNota').innerHTML = (await montar(opCompra, '🛒 Compra (entrada em estoque)')) + (await montar(opBaixa, '📤 Baixa direta (destinação)')) +
+            ((opBaixa || qtdSaidas) ? `<div style="margin-top:10px;">${qtdSaidas && !opBaixa ? '<p class="subtitulo" style="margin:0 0 6px 0;">Esta nota tem ' + qtdSaidas + ' saída(s) ligada(s) (baixa direta), sem rateio de baixa gerado.</p>' : ''}<button type="button" class="btn btn-vermelho btn-pequeno" id="btnDesfazerBaixaDireta">↩️ Desfazer baixa direta${qtdSaidas ? ' (' + qtdSaidas + ' saída' + (qtdSaidas > 1 ? 's' : '') + ')' : ''}</button> <span class="subtitulo">apaga as saídas ligadas a esta nota e libera a nota para editar/remover</span></div>` : '');
+        const btnDesfazer = document.getElementById('btnDesfazerBaixaDireta');
+        if (btnDesfazer) btnDesfazer.addEventListener('click', () => desfazerBaixaDiretaNota(notaId));
         document.getElementById('tituloRateioNota').textContent = '📊 Rateio da nota';
         bloco.style.display = '';
     } catch (e) { console.warn('Rateio da nota:', e); }
+}
+
+// DESFAZER BAIXA DIRETA: apaga as saídas ligadas à nota de entrada (as gravadas na própria nota — XML — e as ligadas aos itens de entrada —
+// nota manual / destinação de avulso), recalcula estoque/preço médio e refaz o rateio (a operação de baixa some), liberando a nota
+async function saidasDaNotaDeEntrada(notaId) {
+    const cols = 'id, produto_id, descricao_avulsa, qtd, valor_unit, setor_id, equipamento_veiculo_id, almoxarifado_id, data';
+    const { data: entradas, error: eEnt } = await sb.from('estoque_movimentacoes').select('id').eq('estoque_nota_id', notaId).eq('tipo', 'entrada');
+    if (eEnt) throw eEnt;
+    const idsEntradas = (entradas || []).map(m => m.id);
+    const consultas = [sb.from('estoque_movimentacoes').select(cols).eq('estoque_nota_id', notaId).eq('tipo', 'saida')];
+    for (let i = 0; i < idsEntradas.length; i += 150) {
+        consultas.push(sb.from('estoque_movimentacoes').select(cols).in('movimentacao_origem_id', idsEntradas.slice(i, i + 150)).eq('tipo', 'saida'));
+    }
+    const resultados = await Promise.all(consultas);
+    const porId = new Map();
+    for (const r of resultados) { if (r.error) throw r.error; (r.data || []).forEach(m => porId.set(m.id, m)); }
+    return [...porId.values()];
+}
+async function desfazerBaixaDiretaNota(notaId) {
+    notaId = Number(notaId);
+    const btn = document.getElementById('btnDesfazerBaixaDireta');
+    if (btn) btn.disabled = true;
+    try {
+        const saidas = await saidasDaNotaDeEntrada(notaId);
+        const nf = document.getElementById('notaNumeroNf').value.trim();
+        const idNota = nf ? 'NF ' + nf : '#' + notaId;
+        if (!saidas.length) {
+            // nada para apagar: só limpa um rateio de baixa que tenha ficado sem saídas
+            await sincronizarRateioNotaAgora(notaId);
+            alert('Não há saídas ligadas a esta nota. O rateio da baixa foi conferido e atualizado.');
+            await atualizarInfoRateioNota(notaId);
+            return;
+        }
+        const nomeSaida = m => { const p = produtos.find(x => x.id === m.produto_id); return p ? p.nome : (m.descricao_avulsa || ('#' + m.produto_id)); };
+        const linhas = saidas.slice(0, 12).map(m => `• ${Number(m.qtd).toLocaleString('pt-BR')} × ${nomeSaida(m)}${m.setor_id ? ' — ' + (((catalogosBaixa.setores || []).find(s => String(s.id) === String(m.setor_id)) || {}).nome || 'setor #' + m.setor_id) : ''}`);
+        if (saidas.length > 12) linhas.push(`… e mais ${saidas.length - 12} saída(s)`);
+        if (!confirm(`Desfazer a baixa direta da nota ${idNota}?\n\nSerão APAGADAS ${saidas.length} saída(s) ligada(s) a ela:\n${linhas.join('\n')}\n\nA quantidade volta ao estoque, o estoque e o preço médio são recalculados e o rateio da baixa é removido. Não tem como desfazer.`)) return;
+
+        for (let i = 0; i < saidas.length; i += 150) {
+            const ids = saidas.slice(i, i + 150).map(m => m.id);
+            const { data: apagadas, error: eDel } = await sb.from('estoque_movimentacoes').delete().in('id', ids).select('id');
+            if (eDel) throw eDel;
+            if ((apagadas || []).length !== ids.length) throw new Error(`Só ${(apagadas || []).length} de ${ids.length} saída(s) puderam ser apagadas (permissão?). Confira a nota e tente de novo.`);
+        }
+        await sincronizarRateioNotaAgora(notaId);
+        const { data: reprocessados, error: eRep } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId });
+        if (eRep) throw eRep;
+        const pulados = (reprocessados || []).filter(r => r.pulado_motivo);
+        await registrarSentinela('desfazer_baixa_direta_nota',
+            `Desfez a baixa direta da nota ${idNota}${document.getElementById('notaFornecedorNome').value.trim() ? ' — ' + document.getElementById('notaFornecedorNome').value.trim() : ''}: apagou ${saidas.length} saída(s) (${saidas.slice(0, 8).map(m => `${Number(m.qtd)}× ${nomeSaida(m)}`).join('; ')}${saidas.length > 8 ? '; …' : ''})`);
+        await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado(), carregarListaNotasEntrada()]);
+        atualizarTagContagem();
+        renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+        await carregarItensETitulosDaNota(notaId);
+        alert(`Baixa direta desfeita: ${saidas.length} saída(s) apagada(s). A nota está liberada para editar ou remover.` +
+            (pulados.length ? `\n\n${pulados.length} produto(s) não puderam ter o estoque recalculado automaticamente (falta informar "valor do estoque inicial" na tela de editar produto):\n${pulados.map(p => p.nome).join(', ')}` : ''));
+    } catch (err) {
+        console.error(err);
+        alert('Erro ao desfazer a baixa direta: ' + (err.message || err));
+        try { await atualizarInfoRateioNota(notaId); } catch (e) { /* segue */ }
+    } finally {
+        const b = document.getElementById('btnDesfazerBaixaDireta');
+        if (b) b.disabled = false;
+    }
 }
 
 /* =========================================================================
@@ -10658,12 +10739,21 @@ async function carregarNotasPendentesProtocolo(tipo) {
         titulos.forEach(t => {
             somaPorNota[t.estoque_nota_id] = (somaPorNota[t.estoque_nota_id] || 0) + Number(t.valor || 0);
         });
+        protocoloDadosPendentes = { notas: notas || [], somaPorNota };
         renderizarTabelaProtocolo(notas, somaPorNota);
     } catch (e) {
         corpo.innerHTML = `<tr><td colspan="8" class="vazio">Erro ao carregar: ${escapeHtml(e.message)}</td></tr>`;
     }
 }
 
+let protocoloDadosPendentes = { notas: [], somaPorNota: {} };
+// nota cujo valor (NF) não fecha com a soma dos títulos, ou sem valor informado: o financeiro questiona no pagamento
+function divergenciaProtocoloNota(n, somaPorNota) {
+    const valorNota = Math.round(Number(n.valor_total || 0) * 100) / 100, tit = Math.round(Number(somaPorNota[n.id] || 0) * 100) / 100;
+    if (valorNota <= 0) return tit > 0 ? 'sem valor da NF informado' : '';
+    if (tit > 0 && Math.abs(tit - valorNota) >= 0.005) return `títulos ${formatarMoeda(tit)} ≠ nota ${formatarMoeda(valorNota)} (dif. ${formatarMoeda(Math.abs(tit - valorNota))})`;
+    return '';
+}
 function renderizarTabelaProtocolo(notas, somaPorNota) {
     const corpo = document.getElementById('corpoTabelaProtocolo');
     const vazio = document.getElementById('vazioProtocolo');
@@ -10676,18 +10766,21 @@ function renderizarTabelaProtocolo(notas, somaPorNota) {
     }
     vazio.style.display = 'none';
 
-    corpo.innerHTML = notas.map(n => `
-        <tr>
+    corpo.innerHTML = notas.map(n => {
+        const diverge = n.nr_protocolo > 0 ? '' : divergenciaProtocoloNota(n, somaPorNota);
+        return `
+        <tr${diverge ? ' style="background:#fdf0ef;" title="' + escapeHtml(diverge) + '"' : ''}>
             <td class="center"><input type="checkbox" class="protocolo-check" data-nota-id="${n.id}" ${protocoloNotasSelecionadas.has(n.id) ? 'checked' : ''}></td>
             <td>${formatarDataBR(n.data_entrada)}</td>
             <td><span class="pill ${n.tipo === 'entrada' ? 'pill-entrada' : 'pill-saida'}">${n.tipo === 'entrada' ? 'Entrada' : 'Saída'}</span></td>
             <td>${escapeHtml(n.numero_nf) || '-'}</td>
             <td>${escapeHtml(n.nome_fornecedor) || '-'}</td>
             <td class="num">${somaPorNota[n.id] ? formatarMoeda(somaPorNota[n.id]) : '-'}</td>
-            <td class="num">${formatarMoeda(n.valor_total)}</td>
+            <td class="num">${formatarMoeda(n.valor_total)}${diverge ? ' <span style="color:#b00020;" title="' + escapeHtml(diverge) + '">⚠</span>' : ''}</td>
             <td class="center">${n.nr_protocolo > 0 ? `<span class="tag-status">nº ${n.nr_protocolo}</span>` : '-'}</td>
         </tr>
-    `).join('');
+    `;
+    }).join('');
 
     corpo.querySelectorAll('.protocolo-check').forEach(chk => {
         chk.addEventListener('change', () => {
@@ -10722,6 +10815,12 @@ document.getElementById('protocoloFiltroTipo').addEventListener('change', carreg
 document.getElementById('btnGerarProtocolo').addEventListener('click', async () => {
     const ids = [...protocoloNotasSelecionadas];
     if (ids.length === 0) return;
+    const divergentes = (protocoloDadosPendentes.notas || []).filter(n => ids.includes(n.id))
+        .map(n => ({ n, motivo: divergenciaProtocoloNota(n, protocoloDadosPendentes.somaPorNota) })).filter(x => x.motivo);
+    if (divergentes.length && !confirm(`⚠️ ${divergentes.length} das ${ids.length} nota(s) selecionada(s) com valor que não fecha (o financeiro vai questionar):\n\n`
+        + divergentes.slice(0, 8).map(x => `• NF ${x.n.numero_nf || '#' + x.n.id}: ${x.motivo}`).join('\n')
+        + (divergentes.length > 8 ? `\n• … e mais ${divergentes.length - 8}` : '')
+        + '\n\nCorrija abrindo a nota (Notas → Abrir → "Ajustar a última parcela") ou gere mesmo assim?')) return;
     if (!confirm(`Gerar um novo protocolo agrupando ${ids.length} nota(s) selecionada(s)? Depois de gerado, só o último protocolo pode ser desfeito (no histórico), e só enquanto o Sicon não sincronizar.`)) return;
     const btn = document.getElementById('btnGerarProtocolo');
     btn.disabled = true;
@@ -10945,8 +11044,10 @@ async function carregarListaNotasEntrada() {
             itensPorNota[i.estoque_nota_id] = (itensPorNota[i.estoque_nota_id] || 0) + 1;
             valorPorNota[i.estoque_nota_id] = (valorPorNota[i.estoque_nota_id] || 0) + Number(i.qtd) * Number(i.valor_unit);
         });
+        const somaTitulosPorNota = {};
         (contagens.titulos || []).forEach(t => {
             titulosPorNota[t.estoque_nota_id] = (titulosPorNota[t.estoque_nota_id] || 0) + 1;
+            if (t.status !== 'cancelado') somaTitulosPorNota[t.estoque_nota_id] = (somaTitulosPorNota[t.estoque_nota_id] || 0) + Number(t.valor || 0);
         });
 
         corpo.innerHTML = '';
@@ -10963,6 +11064,15 @@ async function carregarListaNotasEntrada() {
             const marcaAgregacao =
                 (n.nota_definitiva_id ? `<br><span class="tag-status" title="Os produtos desta nota constam como agregados à nota definitiva">📦 agregada à ${def ? (def.numero_nf ? 'NF ' + escapeHtml(def.numero_nf) : '#' + def.id) : '#' + n.nota_definitiva_id}</span>` : '') +
                 (agregadasPorNota[n.id] ? `<br><span class="tag-status" title="Notas de pedido agregadas a esta nota">📦 ${agregadasPorNota[n.id]} pedido(s) agregado(s)</span>` : '');
+            // o valor da nota (NF) é o oficial; a soma dos itens só aparece quando a nota não tem valor informado
+            const valorNota = Number(n.valor_total || 0), somaItensN = Math.round((valorPorNota[n.id] || 0) * 100) / 100;
+            const somaTitN = Math.round((somaTitulosPorNota[n.id] || 0) * 100) / 100;
+            let marcaValor = '';
+            if (n.tipo !== 'saida') {
+                if (valorNota <= 0 && (somaItensN > 0 || somaTitN > 0)) marcaValor += `<br><span class="tag-status" style="background:#fff4d6; color:#8A5E12;" title="O valor total da nota (conforme a NF) não foi informado">⚠ sem valor da NF</span>`;
+                else if (valorNota > 0 && somaItensN > 0 && Math.abs(somaItensN - valorNota) >= 0.005) marcaValor += `<br><span class="tag-status" title="Soma dos itens ${formatarMoeda(somaItensN)} · valor da nota ${formatarMoeda(valorNota)}">itens ${somaItensN > valorNota ? '+' : '−'}${formatarMoeda(Math.abs(somaItensN - valorNota))}</span>`;
+                if (valorNota > 0 && somaTitN > 0 && Math.abs(somaTitN - valorNota) >= 0.005) marcaValor += `<br><span class="tag-status" style="background:#fdecea; color:#b00020;" title="Títulos somam ${formatarMoeda(somaTitN)} · valor da nota ${formatarMoeda(valorNota)}">⚠ títulos ${somaTitN > valorNota ? '+' : '−'}${formatarMoeda(Math.abs(somaTitN - valorNota))}</span>`;
+            }
             tr.innerHTML = `
                 <td>${formatarData(n.data_entrada)}</td>
                 <td><span class="pill ${n.tipo === 'saida' ? 'pill-saida' : 'pill-entrada'}">${n.tipo === 'saida' ? 'Saída' : 'Entrada'}</span></td>
@@ -10971,7 +11081,7 @@ async function carregarListaNotasEntrada() {
                 <td><span class="pill ${n.xml_original ? 'pill-entrada' : 'pill-saida'}">${n.xml_original ? 'XML' : 'Manual'}</span></td>
                 <td class="num">${itensPorNota[n.id] || 0}</td>
                 <td class="num">${titulosPorNota[n.id] || 0}</td>
-                <td class="num">${formatarMoeda(valorPorNota[n.id] || n.valor_total)}</td>
+                <td class="num">${formatarMoeda(valorNota > 0 ? valorNota : valorPorNota[n.id])}${marcaValor}</td>
                 <td class="center">${n.nr_protocolo > 0 ? `<span class="tag-status">nº ${n.nr_protocolo}</span>` : '-'}</td>
                 <td class="center"><button class="btn btn-cinza btn-pequeno" data-abrir-nota="${n.id}">✏️ Abrir</button></td>
             `;
@@ -11015,6 +11125,9 @@ document.getElementById('btnFecharNotaEntrada').addEventListener('click', () => 
 document.getElementById('btnFinalizarAlteracoesNota').addEventListener('click', async () => {
     const statusEl = document.getElementById('statusFinalizarNota');
     const btn = document.getElementById('btnFinalizarAlteracoesNota');
+
+    const avisoConferencia = avisoConferenciaNota();
+    if (avisoConferencia && !confirm(avisoConferencia + '\n\nFinalizar mesmo assim?')) return;
 
     if (!notaEmEdicaoId || !itensNotaAtual || !itensNotaAtual.length) {
         // nota sem item nenhum (ou nunca salva) -- só fecha, não tem o que reprocessar
@@ -11144,6 +11257,8 @@ async function limparFormularioNota() {
     ['notaNumeroNf', 'notaSerie', 'notaDataEmissao', 'notaDataEntrada', 'notaFornecedorNome', 'notaFornecedorCnpj',
      'notaResponsavel', 'notaChaveAcesso', 'notaObservacoes'].forEach(id => document.getElementById(id).value = '');
     document.getElementById('notaValorTotal').value = 0;
+    valorTotalSalvoNota = 0;
+    document.getElementById('notaConferenciaValores').innerHTML = '';
     document.getElementById('notaValorDesconto').value = 0;
     document.getElementById('notaValorFrete').value = 0;
     document.getElementById('notaValorTotalDica').textContent = '';
@@ -11244,6 +11359,7 @@ async function abrirNotaEntradaExistente(notaId) {
         document.getElementById('notaFornecedorNome').value = nota.nome_fornecedor || '';
         document.getElementById('notaFornecedorCnpj').value = nota.cnpj_fornecedor || '';
         document.getElementById('notaValorTotal').value = nota.valor_total || 0;
+        valorTotalSalvoNota = Number(nota.valor_total || 0);
         document.getElementById('notaValorDesconto').value = nota.valor_desconto || 0;
         document.getElementById('notaValorFrete').value = nota.valor_frete || 0;
         document.getElementById('notaResponsavel').value = nota.responsavel || '';
@@ -11458,6 +11574,102 @@ async function carregarItensETitulosDaNota(notaId) {
     renderizarTitulosNota();
 }
 
+/* ---------- valor total da nota = valor oficial (NF) ----------
+   A soma dos itens (qtd × valor unitário) pode diferir da NF por CENTAVOS: o preço unitário é arredondado em 2 casas (inclusive
+   depois do rateio de desconto/frete). O valor da NF digitado no cabeçalho é a referência para as parcelas e para o protocolo;
+   aqui ele é conferido com a soma dos itens e dos títulos. */
+let valorTotalSalvoNota = 0;
+const arred2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+function valorTotalInformadoNota() { return arred2(parseFloat(document.getElementById('notaValorTotal').value)); }
+function somaItensNotaAtual() { return arred2(itensNotaAtual.reduce((acc, m) => acc + Number(m.qtd) * Number(m.valor_unit), 0)); }
+function somaTitulosNotaAtual() { return arred2(titulosNotaAtual.filter(t => t.status !== 'cancelado').reduce((acc, t) => acc + Number(t.valor || 0), 0)); }
+function atualizarConferenciaNota() {
+    const box = document.getElementById('notaConferenciaValores');
+    if (!box) return;
+    if (!notaEmEdicaoId || notaTipoEmEdicao === 'saida') { box.innerHTML = ''; return; }
+    const total = valorTotalInformadoNota(), itens = somaItensNotaAtual(), tits = somaTitulosNotaAtual();
+    const temTitulos = titulosNotaAtual.some(t => t.status !== 'cancelado');
+    const estilo = 'border-radius:6px; padding:8px 10px; font-size:.9em;';
+    if (total <= 0) {
+        box.innerHTML = (itens > 0 || temTitulos)
+            ? `<div style="${estilo} background:#fff4d6; border:1px solid #f0c36d;">⚠️ <strong>Informe o valor total da nota (conforme a NF).</strong> Ele é o valor que vai para o protocolo e para a divisão em parcelas.
+                ${itens > 0 ? ` <button type="button" class="btn btn-cinza btn-pequeno" id="btnUsarSomaItensComoTotal">Usar a soma dos itens (${formatarMoeda(itens)})</button>` : ''}</div>`
+            : '';
+        return;
+    }
+    const difItens = arred2(itens - total), difTit = arred2(tits - total);
+    const partes = [`<strong>Valor da nota: ${formatarMoeda(total)}</strong>`];
+    if (itens > 0) {
+        partes.push(Math.abs(difItens) < 0.005
+            ? `Itens: ${formatarMoeda(itens)} ✓`
+            : `Itens: ${formatarMoeda(itens)} <span style="color:#8A5E12;">(${difItens > 0 ? '+' : '−'}${formatarMoeda(Math.abs(difItens))} — ${Math.abs(difItens) <= 1 ? 'arredondamento dos preços unitários; prevalece o valor da nota' : 'diferença grande, confira os itens'})</span>`);
+    }
+    let alerta = false;
+    if (temTitulos) {
+        if (Math.abs(difTit) < 0.005) partes.push(`Títulos: ${formatarMoeda(tits)} ✓`);
+        else {
+            alerta = true;
+            partes.push(`<span style="color:#b00020;">Títulos: ${formatarMoeda(tits)} (${difTit > 0 ? '+' : '−'}${formatarMoeda(Math.abs(difTit))} em relação à nota)</span> <button type="button" class="btn btn-cinza btn-pequeno" id="btnAjustarTitulosAoValorNota">⚖️ Ajustar a última parcela</button>`);
+        }
+    } else {
+        partes.push('Sem títulos lançados');
+    }
+    box.innerHTML = `<div style="${estilo} background:${alerta ? '#fdecea' : '#eef6f0'}; border:1px solid ${alerta ? '#e5a5a0' : '#cfe3d5'};">${partes.join(' · ')}</div>`;
+}
+document.getElementById('notaConferenciaValores').addEventListener('click', async (e) => {
+    if (e.target.closest('#btnUsarSomaItensComoTotal')) {
+        document.getElementById('notaValorTotal').value = somaItensNotaAtual().toFixed(2);
+        await salvarValorTotalNota();
+    } else if (e.target.closest('#btnAjustarTitulosAoValorNota')) {
+        await ajustarTitulosAoValorNota();
+    }
+});
+// ao mexer no valor total com a nota já salva, grava na hora (não precisa voltar em "Salvar cabeçalho")
+async function salvarValorTotalNota() {
+    atualizarConferenciaNota();
+    if (!notaEmEdicaoId || notaTipoEmEdicao === 'saida') return;
+    const novo = valorTotalInformadoNota();
+    if (novo === arred2(valorTotalSalvoNota)) return;
+    const status = document.getElementById('statusNotaEntrada');
+    try {
+        const { error } = await sb.from('estoque_notas').update({ valor_total: novo }).eq('id', notaEmEdicaoId).eq('unidade_negocio_id', meuPerfil.unidadeId);
+        if (error) throw error;
+        await registrarSentinela('valor_total_nota_alterado', `Nota ${document.getElementById('notaNumeroNf').value || '#' + notaEmEdicaoId}: valor total ${formatarMoeda(valorTotalSalvoNota)} → ${formatarMoeda(novo)} (soma dos itens ${formatarMoeda(somaItensNotaAtual())})`);
+        valorTotalSalvoNota = novo;
+        if (status) { status.className = 'status-msg sucesso'; status.textContent = '✅ Valor total da nota salvo.'; }
+    } catch (err) {
+        if (status) { status.className = 'status-msg erro'; status.textContent = '⚠️ Não consegui salvar o valor total: ' + err.message; }
+    }
+}
+document.getElementById('notaValorTotal').addEventListener('input', atualizarConferenciaNota);
+document.getElementById('notaValorTotal').addEventListener('change', salvarValorTotalNota);
+// põe a diferença na ÚLTIMA parcela ainda em aberto (a que o pagamento ainda não passou) para os títulos fecharem com a nota
+async function ajustarTitulosAoValorNota() {
+    const total = valorTotalInformadoNota(), dif = arred2(total - somaTitulosNotaAtual());
+    if (Math.abs(dif) < 0.005) return;
+    const abertos = titulosNotaAtual.filter(t => t.status !== 'pago' && t.status !== 'cancelado')
+        .sort((a, b) => String(a.data_vencimento || '').localeCompare(String(b.data_vencimento || '')) || a.id - b.id);
+    const alvo = abertos[abertos.length - 1];
+    if (!alvo) { alert('Todos os títulos já estão pagos ou cancelados — corrija a diferença pelo Financeiro.'); return; }
+    const novoValor = arred2(Number(alvo.valor) + dif);
+    if (novoValor <= 0) { alert('O ajuste deixaria a parcela com valor zerado ou negativo. Edite os títulos manualmente.'); return; }
+    if (!confirm(`Ajustar o título ${alvo.numero_titulo || '#' + alvo.id} (venc. ${formatarDataBR(alvo.data_vencimento)}) de ${formatarMoeda(alvo.valor)} para ${formatarMoeda(novoValor)} (${dif > 0 ? '+' : '−'}${formatarMoeda(Math.abs(dif))}), para os títulos somarem o valor da nota (${formatarMoeda(total)})?`)) return;
+    try {
+        await chamarPost('editarTitulo', { tituloId: alvo.id, numeroTitulo: alvo.numero_titulo || '', dataVencimento: alvo.data_vencimento || null, valor: novoValor, formaPagamento: alvo.forma_pagamento || '', status: alvo.status || 'pendente' });
+        await registrarSentinela('titulo_ajustado_ao_valor_da_nota', `Nota ${document.getElementById('notaNumeroNf').value || '#' + notaEmEdicaoId}: título ${alvo.numero_titulo || '#' + alvo.id} ${formatarMoeda(alvo.valor)} → ${formatarMoeda(novoValor)} para fechar com o valor da nota ${formatarMoeda(total)}`);
+        await carregarItensETitulosDaNota(notaEmEdicaoId);
+    } catch (err) { alert('Erro ao ajustar o título: ' + err.message); }
+}
+// aviso (texto) quando valor da nota e títulos não fecham; '' = tudo certo
+function avisoConferenciaNota() {
+    if (!notaEmEdicaoId || notaTipoEmEdicao === 'saida') return '';
+    const total = valorTotalInformadoNota(), tits = somaTitulosNotaAtual();
+    const temTitulos = titulosNotaAtual.some(t => t.status !== 'cancelado');
+    if (total <= 0 && (somaItensNotaAtual() > 0 || temTitulos)) return '⚠️ O valor total da nota (conforme a NF) não foi informado. É ele que vai para o protocolo.';
+    if (total > 0 && temTitulos && Math.abs(tits - total) >= 0.005) return `⚠️ Os títulos somam ${formatarMoeda(tits)} e o valor da nota é ${formatarMoeda(total)} (diferença de ${formatarMoeda(Math.abs(tits - total))}). O protocolo vai apresentar essa diferença.`;
+    return '';
+}
+
 function renderizarItensNota() {
     const corpo = document.getElementById('corpoItensNota');
     corpo.innerHTML = '';
@@ -11484,8 +11696,7 @@ function renderizarItensNota() {
         corpo.appendChild(tr);
     });
     document.getElementById('totalItensNota').textContent = formatarMoeda(total);
-    const dica = document.getElementById('notaValorTotalDica');
-    if (dica) dica.textContent = total > 0 ? `Soma dos itens: ${formatarMoeda(total)}` : '';
+    atualizarConferenciaNota();
 
     corpo.querySelectorAll('[data-editar-item-nota]').forEach(btn => {
         btn.addEventListener('click', () => abrirModalEditarMovimentacaoGeral(Number(btn.dataset.editarItemNota)));
@@ -11527,6 +11738,7 @@ function renderizarTitulosNota() {
         corpo.appendChild(tr);
     });
     document.getElementById('totalTitulosNota').textContent = formatarMoeda(total);
+    atualizarConferenciaNota();
 
     corpo.querySelectorAll('[data-editar-titulo]').forEach(btn => {
         btn.addEventListener('click', () => abrirModalEditarTitulo(Number(btn.dataset.editarTitulo)));
@@ -11624,6 +11836,7 @@ document.getElementById('btnSalvarCabecalhoNota').addEventListener('click', asyn
                 }
             });
             notaEmEdicaoId = nota.id;
+            valorTotalSalvoNota = Number(nota.valor_total || 0);
             statusEl.className = 'status-msg sucesso';
             statusEl.textContent = '✅ Cabeçalho salvo.';
             document.getElementById('tituloNotaEntrada').textContent = `Editando entrada — NF ${nota.numero_nf || '#' + nota.id}`;
@@ -12039,10 +12252,13 @@ function calcularVencimentosParcelas(primeiroVencimentoStr, qtdParcelas, regra, 
 
 document.getElementById('btnGerarParcelasIguais').addEventListener('click', () => {
     if (!notaEmEdicaoId) { alert('Salve o cabeçalho da nota primeiro.'); return; }
-    const totalItens = itensNotaAtual.reduce((acc, m) => acc + Number(m.qtd) * Number(m.valor_unit), 0);
-    if (totalItens <= 0) { alert('Lance os itens primeiro — a divisão usa o total dos itens.'); return; }
+    const totalNota = valorTotalInformadoNota();
+    const totalItens = totalNota > 0 ? totalNota : itensNotaAtual.reduce((acc, m) => acc + Number(m.qtd) * Number(m.valor_unit), 0);
+    if (totalItens <= 0) { alert('Informe o valor total da nota (conforme a NF) ou lance os itens primeiro.'); return; }
 
-    document.getElementById('parcelasIguaisTotalTexto').textContent = `Total a parcelar: ${formatarMoeda(totalItens)}`;
+    document.getElementById('parcelasIguaisTotalTexto').textContent = totalNota > 0
+        ? `Total a parcelar: ${formatarMoeda(totalItens)} (valor total da nota)`
+        : `Total a parcelar: ${formatarMoeda(totalItens)} (soma dos itens — informe o valor total da nota para usar o valor da NF)`;
     document.getElementById('parcelasIguaisQtd').value = '1';
     document.getElementById('parcelasIguaisPrimeiroVencimento').value = '';
     document.getElementById('parcelasIguaisDiasCustom').value = '';
@@ -12076,7 +12292,8 @@ document.getElementById('btnConfirmarParcelasIguais').addEventListener('click', 
     const statusEl = document.getElementById('statusModalParcelasIguais');
     statusEl.textContent = '';
 
-    const totalItens = itensNotaAtual.reduce((acc, m) => acc + Number(m.qtd) * Number(m.valor_unit), 0);
+    const totalNotaInformado = valorTotalInformadoNota();
+    const totalItens = totalNotaInformado > 0 ? totalNotaInformado : itensNotaAtual.reduce((acc, m) => acc + Number(m.qtd) * Number(m.valor_unit), 0);
     const qtdParcelas = parseInt(document.getElementById('parcelasIguaisQtd').value, 10);
     const primeiroVencimento = document.getElementById('parcelasIguaisPrimeiroVencimento').value;
     const regra = document.getElementById('parcelasIguaisRegraMesmoDia').checked ? 'mesmoDia' : 'dias';
