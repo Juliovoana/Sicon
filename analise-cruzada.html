@@ -110,7 +110,7 @@
   table.lanc th{ background:var(--cab); font-size:.72rem; text-transform:uppercase; letter-spacing:.03em; text-align:center; position:sticky; top:0; }
   table.lanc td.txt, table.lanc th.txt{ text-align:left; }
   table.lanc td.hist{ text-align:left; white-space:normal; overflow-wrap:anywhere; min-width:200px; max-width:340px; }
-  table.lanc td.op{ font-family:ui-monospace,Consolas,monospace; font-weight:700; cursor:copy; text-align:center; }
+  table.lanc td.op{ font-family:ui-monospace,Consolas,monospace; font-weight:700; cursor:pointer; text-align:center; text-decoration:underline dotted; }
   table.lanc td.op:hover{ background:var(--brand-soft); }
   table.lanc tfoot td{ font-weight:800; background:var(--cab); }
   table.lanc tr.sel-row{ cursor:pointer; }
@@ -120,6 +120,13 @@
   .chip-f button{ border:none; background:none; cursor:pointer; color:inherit; font-size:1.1rem; line-height:1; padding:0 4px; }
   .dica-clique{ color:var(--muted); font-size:.78rem; margin:-4px 0 8px; }
   .rol-lanc{ overflow:auto; max-height:52vh; border:1px solid var(--line-forte); border-radius:8px; }
+  /* popup da OP (itens/produtos + títulos), por cima do popup dos lançamentos */
+  #popupOp{ z-index:60; }
+  #popupOp .caixa{ max-width:1000px; }
+  #popupOp .rol-lanc{ max-height:34vh; }
+  table.lanc td.pos{ color:var(--pos, #1f7a4d); } table.lanc td.neg{ color:var(--neg, #b3261e); }
+  table.lanc tr.t-aberto td{ background:var(--brand-soft); }
+  .op-obs{ color:var(--muted); font-size:.82rem; margin:6px 0 0; }
   @media (max-width:640px){
     .pagina{ padding:12px; }
     table.cruz th, table.cruz td{ padding:6px 7px; font-size:.8rem; }
@@ -177,6 +184,10 @@
       <div class="linha-filtros">
         <div class="campo" style="flex:1"><label for="fBusca">Buscar conta ou código</label><input type="search" class="busca" id="fBusca" placeholder="Ex.: salário, 02.01…" style="width:100%"></div>
         <div class="campo" style="flex:1"><label for="fEvento">Evento (código)</label><input type="search" class="busca" id="fEvento" placeholder="Ex.: 2133, 2506 ou 2133-2136" style="width:100%" title="Um ou vários códigos separados por vírgula/espaço; intervalo com hífen (2133-2136); &quot;sem&quot; = lançamentos sem evento"></div>
+        <div class="campo" id="campoAdm" hidden><label for="fAdm">Tipo de evento</label>
+          <select id="fAdm" title="Vem da coluna Administrativo do CSV: -1 = administrativo, 0 = externo, em branco = outros">
+            <option value="todos">Todos os eventos</option><option value="A">Administrativos</option><option value="E">Externos</option><option value="O">Outros (sem classificação)</option>
+          </select></div>
         <label class="opcao"><input type="checkbox" id="fSubt" checked> Mostrar subtotal de cada grupo (nível 2)</label>
       </div>
       <div class="paineis">
@@ -214,7 +225,22 @@
       <button class="btn" id="lancExcel" type="button">⬇ Baixar Excel dos lançamentos</button>
       <button class="btn sec" id="lancMais" type="button" hidden>Mostrar mais 300</button>
       <button class="btn sec" id="lancSair" type="button">Fechar</button>
-      <span class="sub">Dica: clique no número da OP para copiá-lo.</span>
+      <span class="sub">Dica: clique no número da OP para ver os itens e os títulos dela.</span>
+    </div>
+  </div>
+</div>
+
+<div class="fundo" id="popupOp" hidden>
+  <div class="caixa" role="dialog" aria-modal="true" aria-labelledby="opTitulo">
+    <button class="fecha" id="opFechar" type="button" aria-label="Fechar">×</button>
+    <h3 id="opTitulo"></h3>
+    <div class="resumo-kpis" id="opKpis"></div>
+    <div id="opCorpo"></div>
+    <div class="btns">
+      <button class="btn sec" id="opCopiar" type="button">Copiar nº da OP</button>
+      <button class="btn sec" id="opLocal" type="button" title="Abrir itens_op.csv e titulos_op.csv deste computador (os dois de uma vez)">📂 Abrir itens_op / titulos_op deste computador</button>
+      <input type="file" id="arquivoOp" accept=".csv,text/csv" multiple style="display:none">
+      <button class="btn sec" id="opSair" type="button">Fechar</button>
     </div>
   </div>
 </div>
@@ -287,7 +313,7 @@
 
   // ===================== configuração (compartilhada com o Painel financeiro / Fechamento) =====================
   const CHAVE = 'fechamento_caixas_config_v1';
-  const ARQ = { cruz: 'analise_pagamentos_sicon.csv', status: '_status.json' };
+  const ARQ = { cruz: 'analise_pagamentos_sicon.csv', status: '_status.json', itens: 'itens_op.csv', tit: 'titulos_op.csv' };
   let cfg = { url: '', token: '' };
   try { Object.assign(cfg, JSON.parse(localStorage.getItem(CHAVE) || '{}')); } catch(e){}
   if(cfg.url && !URL_SCRIPT_OK.test(cfg.url)) cfg.url = '';
@@ -314,7 +340,7 @@
       s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb; document.body.appendChild(s);
     });
   }
-  const chamar = (q) => jsonp(cfg.url + '?token=' + encodeURIComponent(cfg.token) + q).then(r => { if(!r || !r.ok) throw new Error((r && r.erro) || 'resposta inesperada do script'); return r; });
+  let chamar = (q) => jsonp(cfg.url + '?token=' + encodeURIComponent(cfg.token) + q).then(r => { if(!r || !r.ok) throw new Error((r && r.erro) || 'resposta inesperada do script'); return r; });
 
   // ===================== modelo =====================
   let recs = [];            // lançamentos normalizados: { tp:'R'|'P', pc, set, emp, v, d:[pagto, competência, lançamento] }
@@ -324,7 +350,7 @@
   let qualidade = {}, statusColeta = null, origemInfo = '';
   let jaCarregou = false;
 
-  const FIL = { visao: 'plano_setor', detalhe: 'conta', tipo: 'ambos', base: 'pagto', periodo: 'mes', de: '', ate: '', empOff: new Set(), setOff: new Set(), gruOff: new Set(), busca: '', evento: '', subt: true };
+  const FIL = { visao: 'plano_setor', detalhe: 'conta', tipo: 'ambos', base: 'pagto', periodo: 'mes', de: '', ate: '', empOff: new Set(), setOff: new Set(), gruOff: new Set(), busca: '', evento: '', adm: 'todos', subt: true };
   const BASE_IDX = { pagto: 0, comp: 1, data: 2 };
   function carregarFiltrosSalvos(){
     const s = lerLS(K_FILTROS, {});
@@ -340,14 +366,16 @@
 
   function montar(texto){
     const querer = ['plano_cta', 'nome_nivel2', 'descricao_plano_contas', 'nomecta', 'ni2', 'total', 'tipo_cta', 'nome_setor', 'descricao_setor', 'empresa_nome', 'empresa', 'dtpagto', 'competencia', 'data',
-      'evento', 'cevento', 'evento_nome', 'nome_evento', 'descricao_evento', 'op', 'registro', 'titulo', 'parcela', 'historico', 'cliente', 'codcli', 'valor', 'operador'];
+      'evento', 'cevento', 'evento_nome', 'nome_evento', 'descricao_evento', 'administrativo', 'op', 'registro', 'titulo', 'parcela', 'historico', 'cliente', 'codcli', 'valor', 'operador'];
     const { achadas, linhas } = lerCsvColunas(texto, querer);
     const faltam = [];
     if(!achadas.plano_cta) faltam.push('PLANO_CTA'); if(!achadas.total) faltam.push('TOTAL'); if(!achadas.tipo_cta) faltam.push('TIPO_CTA');
     if(!achadas.dtpagto && !achadas.competencia && !achadas.data) faltam.push('DTPAGTO');
     if(faltam.length) throw new Error('O arquivo não tem a(s) coluna(s) ' + faltam.join(', ') + '. Confira se é o analise_pagamentos_sicon.csv.');
     const I = {}; querer.forEach((n, i) => { I[n] = i; });
-    const q = qualidade = { total: linhas.length, semTipo: 0, semData: 0, semValor: 0, semSetor: 0, semPlano: 0, de: '', ate: '', temComp: achadas.competencia, temData: achadas.data, temPagto: achadas.dtpagto, temEmpresa: achadas.empresa_nome || achadas.empresa, temSetor: achadas.nome_setor || achadas.descricao_setor };
+    const q = qualidade = { total: linhas.length, semTipo: 0, semData: 0, semValor: 0, semSetor: 0, semPlano: 0, de: '', ate: '', temComp: achadas.competencia, temData: achadas.data, temPagto: achadas.dtpagto, temEmpresa: achadas.empresa_nome || achadas.empresa, temSetor: achadas.nome_setor || achadas.descricao_setor, temAdm: achadas.administrativo };
+    // coluna Administrativo (boolean do Access): -1/verdadeiro = administrativo ('A'), 0/falso = externo ('E'), em branco = outros ('')
+    const admDe = (v) => { const t = semAcento(v); if(['-1', '1', 'true', 'verdadeiro', 'sim', 's', 'v', 'yes'].includes(t)) return 'A'; if(['0', 'false', 'falso', 'nao', 'n', 'f', 'no'].includes(t)) return 'E'; return ''; };
     const nomesConta = new Map(), nomesN2 = new Map(), n2doPc = new Map();
     recs = []; setoresAll = new Map(); empresasAll = new Map(); gruposAll = new Map();
     const conta = (mapa, chave, nome) => { let m = mapa.get(chave); if(!m){ m = new Map(); mapa.set(chave, m); } m.set(nome, (m.get(nome) || 0) + 1); };
@@ -368,7 +396,7 @@
       if(!n2doPc.has(pc)) n2doPc.set(pc, n2);
       const lim = (x) => String(x == null ? '' : x).trim();
       const ev = lim(r[I.evento] || r[I.cevento]).replace(/^0+(?=\d)/, ''); // código do evento (sem zeros à esquerda; 0/vazio = sem evento)
-      recs.push({ tp, pc, set, emp, v, d, ev: ev === '0' ? '' : ev, evn: lim(r[I.evento_nome] || r[I.nome_evento] || r[I.descricao_evento]), op: lim(r[I.op]), reg: lim(r[I.registro]), tit: lim(r[I.titulo]), par: lim(r[I.parcela]), h: lim(r[I.historico]), cl: lim(r[I.cliente]), cc: lim(r[I.codcli]), vc: num(r[I.valor]), opr: lim(r[I.operador]) });
+      recs.push({ tp, pc, set, emp, v, d, ev: ev === '0' ? '' : ev, evn: lim(r[I.evento_nome] || r[I.nome_evento] || r[I.descricao_evento]), adm: admDe(r[I.administrativo]), op: lim(r[I.op]), reg: lim(r[I.registro]), tit: lim(r[I.titulo]), par: lim(r[I.parcela]), h: lim(r[I.historico]), cl: lim(r[I.cliente]), cc: lim(r[I.codcli]), vc: num(r[I.valor]), opr: lim(r[I.operador]) });
       setoresAll.set(set, (setoresAll.get(set) || 0) + 1); empresasAll.set(emp, (empresasAll.get(emp) || 0) + 1);
     }
     infoPlano = new Map(); n2doPc.forEach((n2, pc) => { const m = nomesConta.get(pc); infoPlano.set(pc, { nome: m ? maisFrequente(m) : '(sem nome)', n2 }); });
@@ -418,6 +446,7 @@
       const inf = infoPlano.get(r.pc);
       if(FIL.gruOff.has(inf.n2)) continue;
       if(evOk && !evOk(r.ev)) continue;
+      if(FIL.adm !== 'todos' && (FIL.adm === 'O' ? r.adm !== '' : r.adm !== FIL.adm)) continue;
       if(busca && !(semAcento(r.pc + ' ' + inf.nome + ' ' + (nomeN2.get(inf.n2) || '')).includes(busca))) continue;
       rows.push(Object.assign({ dt }, r));
     }
@@ -552,13 +581,14 @@
     listaChk('listaGru', gruposAll, FIL.gruOff, 'gru', rotuloGrupo);
     $('fVisao').value = FIL.visao; $('fDetalhe').value = FIL.detalhe; $('fTipo').value = FIL.tipo; $('fBase').value = FIL.base; $('fPeriodo').value = FIL.periodo;
     $('fBusca').value = FIL.busca; $('fEvento').value = FIL.evento; $('fSubt').checked = FIL.subt;
+    $('campoAdm').hidden = !qualidade.temAdm; $('fAdm').value = FIL.adm;
     const [de, ate] = limitesPeriodo(); $('fDe').value = FIL.periodo === 'custom' ? FIL.de : de; $('fAte').value = FIL.periodo === 'custom' ? FIL.ate : ate;
     // datas que não existem no arquivo não podem ser escolhidas como base
     $('fBase').querySelector('[value=comp]').disabled = !qualidade.temComp; $('fBase').querySelector('[value=data]').disabled = !qualidade.temData; $('fBase').querySelector('[value=pagto]').disabled = !qualidade.temPagto;
     $('fSubt').closest('label').style.display = FIL.detalhe === 'conta' ? '' : 'none';
     resumosFiltro();
   }
-  const filtrosPadrao = () => { Object.assign(FIL, { visao: 'plano_setor', detalhe: 'conta', tipo: 'ambos', base: qualidade.temPagto ? 'pagto' : qualidade.temComp ? 'comp' : 'data', periodo: 'mes', de: '', ate: '', busca: '', evento: '', subt: true }); FIL.empOff = new Set(); FIL.setOff = new Set(); FIL.gruOff = new Set(); };
+  const filtrosPadrao = () => { Object.assign(FIL, { visao: 'plano_setor', detalhe: 'conta', tipo: 'ambos', base: qualidade.temPagto ? 'pagto' : qualidade.temComp ? 'comp' : 'data', periodo: 'mes', de: '', ate: '', busca: '', evento: '', adm: 'todos', subt: true }); FIL.empOff = new Set(); FIL.setOff = new Set(); FIL.gruOff = new Set(); };
 
   // ===================== popup dos lançamentos (clicar no valor) =====================
   const LANC_PAGINA = 300;
@@ -638,6 +668,125 @@
     $('lancTabela').innerHTML = '<thead><tr>' + cab.join('') + '</tr></thead><tbody>' + linhas + '</tbody><tfoot><tr><td colspan="11" style="text-align:right">' + (A.filtrados.some(r => r.tp === 'R') && A.filtrados.some(r => r.tp === 'P') ? 'SALDO (receber − pagar)' : 'TOTAL') + ' (' + A.filtrados.length.toLocaleString('pt-BR') + ' lançamento(s))</td><td>' + fmt(A.filtrados.every(r => r.tp === 'P') ? -tot : tot) + '</td>' + (temCheio ? '<td></td>' : '') + '</tr></tfoot>';
     $('lancContagem').textContent = '— mostrando ' + mostrar.length.toLocaleString('pt-BR') + ' de ' + A.filtrados.length.toLocaleString('pt-BR');
     $('lancMais').hidden = A.filtrados.length <= A.limite;
+  }
+  // ===================== detalhe da OP: itens/produtos (itens_op.csv) e títulos (titulos_op.csv) =====================
+  // Só é carregado quando alguém clica numa OP (os dois arquivos podem ser grandes); fica no cache local como o arquivo principal.
+  const CP1252 = { 0x20AC: 0x80, 0x201A: 0x82, 0x0192: 0x83, 0x201E: 0x84, 0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87, 0x02C6: 0x88, 0x2030: 0x89, 0x0160: 0x8A, 0x2039: 0x8B, 0x0152: 0x8C, 0x017D: 0x8E,
+    0x2018: 0x91, 0x2019: 0x92, 0x201C: 0x93, 0x201D: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97, 0x02DC: 0x98, 0x2122: 0x99, 0x0161: 0x9A, 0x203A: 0x9B, 0x0153: 0x9C, 0x017E: 0x9E, 0x0178: 0x9F };
+  // texto com acento "duplicado" (ex.: "INCLUSÃƒO" no lugar de "INCLUSÃO"): desfaz a dupla codificação; se não for o caso, devolve igual
+  function repararAcentos(t){
+    if(!/[ÃÂ][\u0080-\u00BF\u0152\u0153\u0160\u0161\u0178\u017D\u017E\u0192\u02C6\u02DC\u2013-\u203A\u20AC\u2122]/.test(t)) return t;
+    try {
+      const b = new Uint8Array(t.length);
+      for(let i = 0; i < t.length; i++){ const c = t.charCodeAt(i), m = c < 256 ? c : CP1252[c]; if(m === undefined) return t; b[i] = m; }
+      return new TextDecoder('utf-8', { fatal: true }).decode(b);
+    } catch(e){ return t; }
+  }
+  const normOp = (s) => String(s == null ? '' : s).trim().replace(/^0+(?=\d)/, '');
+  function indexarItens(texto){
+    const { achadas, linhas } = lerCsvColunas(repararAcentos(texto), ['op', 'desc_produto', 'qtd', 'vlr_liq', 'tipo']);
+    if(!achadas.op || !achadas.desc_produto) throw new Error('O arquivo não parece ser o itens_op.csv (faltam as colunas OP e Desc_Produto).');
+    const mapa = new Map();
+    for(const r of linhas){ const k = normOp(r[0]); if(!k) continue; let a = mapa.get(k); if(!a){ a = []; mapa.set(k, a); } a.push({ d: String(r[1]).trim(), q: num(r[2]), v: num(r[3]), tp: String(r[4]).trim().toUpperCase() }); }
+    return mapa;
+  }
+  function indexarTitulos(texto){
+    const { achadas, linhas } = lerCsvColunas(repararAcentos(texto), ['op', 'total', 'datav', 'dtpagto', 'situacao', 'historico', 'descmoeda', 'conta_pagamento']);
+    if(!achadas.op || !achadas.datav) throw new Error('O arquivo não parece ser o titulos_op.csv (faltam as colunas OP e DATAV).');
+    const mapa = new Map();
+    for(const r of linhas){
+      const k = normOp(r[0]); if(!k) continue; let a = mapa.get(k); if(!a){ a = []; mapa.set(k, a); }
+      a.push({ v: num(r[1]), venc: isoData(r[2]), vencTxt: String(r[2]).trim(), pg: isoData(r[3]), sit: String(r[4]).trim().toUpperCase(), h: String(r[5]).trim(), forma: String(r[6]).trim(), conta: String(r[7]).trim() });
+    }
+    return mapa;
+  }
+  let detOp = null, detOpPromessa = null;      // índice carregado (zera ao atualizar os dados)
+  const detLocal = { itens: null, tit: null };  // arquivos abertos neste computador (📂 do popup)
+  async function carregarDetalheOp(){
+    if(detOp) return detOp;
+    if(detOpPromessa) return detOpPromessa;
+    detOpPromessa = (async () => {
+      const det = { itens: detLocal.itens, tit: detLocal.tit, faltam: [], erros: [], semDrive: !(cfg.url && cfg.token) };
+      if(!(det.itens && det.tit) && !det.semDrive){
+        try {
+          if(!bd) bd = await abrirBd();
+          const lista = await chamar('&acao=listar'), quando = {}, tamanho = {};
+          lista.arquivos.forEach(a => { quando[a.arquivo] = a.atualizado; tamanho[a.arquivo] = a.bytes; });
+          for(const [chave, nome] of [['itens', ARQ.itens], ['tit', ARQ.tit]]){
+            if(det[chave]) continue;
+            if(!quando[nome]){ det.faltam.push(nome); continue; }
+            let texto = null; const c = await cacheGet(cacheUn + nome);
+            if(c && c.atualizado === quando[nome]) texto = c.texto;
+            else { const f = await baixarArquivo(nome, tamanho[nome]); if(f && f.texto != null){ texto = f.texto; await cachePut(cacheUn + nome, { atualizado: quando[nome], texto }); } }
+            if(texto == null){ det.erros.push('Não consegui ler ' + nome + '.'); continue; }
+            try { det[chave] = chave === 'itens' ? indexarItens(texto) : indexarTitulos(texto); } catch(err){ det.erros.push(nome + ': ' + err.message); }
+          }
+        } catch(err){ det.erros.push(err.message + dicaScriptGoogle(err.message)); }
+      }
+      detOp = det; return det;
+    })();
+    try { return await detOpPromessa; } finally { detOpPromessa = null; }
+  }
+  const diasEntre = (a, b) => Math.round((Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8, 10)) - Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10))) / 86400000);
+  const plural = (n, um, varios) => n + ' ' + (n === 1 ? um : varios);
+  function situacaoTitulo(t){
+    const quitado = t.sit === 'Q', aberto = t.sit === 'A' || (!t.sit && !t.pg);
+    const dv = t.venc || '';
+    let prazo = '', cls = '';
+    if(quitado && dv && t.pg){ const d = diasEntre(dv, t.pg); if(d > 0){ prazo = 'pago com ' + plural(d, 'dia', 'dias') + ' de atraso'; cls = 'neg'; } else prazo = 'pago no prazo'; }
+    else if(!quitado && aberto && dv){ const d = diasEntre(dv, hoje()); if(d > 0){ prazo = 'vencido há ' + plural(d, 'dia', 'dias'); cls = 'neg'; } else if(d === 0) prazo = 'vence hoje'; else prazo = 'vence em ' + plural(-d, 'dia', 'dias'); }
+    return { rot: quitado ? 'Quitado' : aberto ? 'Em aberto' : (t.sit ? 'Situação ' + t.sit : 'Em aberto'), quitado, aberto: !quitado, prazo, cls };
+  }
+  let opAberta = '';
+  function fecharOp(){ $('popupOp').hidden = true; opAberta = ''; }
+  async function abrirOp(opBruto){
+    const op = normOp(opBruto); if(!op) return;
+    opAberta = op;
+    $('opTitulo').textContent = 'OP ' + op; $('opKpis').replaceChildren();
+    $('opCorpo').replaceChildren(el('div', 'vazio', 'Carregando itens e títulos da OP…'));
+    $('popupOp').hidden = false; $('popupOp').scrollTop = 0;
+    let det;
+    try { det = await carregarDetalheOp(); }
+    catch(err){ if(opAberta === op) $('opCorpo').replaceChildren(el('div', 'vazio', err.message)); return; }
+    if(opAberta === op) desenharOp(op, det);
+  }
+  function desenharOp(op, det){
+    const itens = det.itens ? (det.itens.get(op) || []) : null, tits = det.tit ? (det.tit.get(op) || []).slice() : null;
+    const corpo = $('opCorpo'); corpo.replaceChildren();
+    const k = $('opKpis'); k.replaceChildren();
+    const par = (t, v) => { const sp = el('span'); sp.appendChild(document.createTextNode(t + ' ')); sp.appendChild(el('b', '', v)); k.appendChild(sp); };
+    // ----- itens / produtos -----
+    const secItens = el('div'); secItens.appendChild(el('h4', '', 'Itens / produtos da OP'));
+    if(!itens) secItens.appendChild(el('div', 'op-obs', 'O arquivo ' + ARQ.itens + ' não foi carregado' + (det.faltam.includes(ARQ.itens) ? ' (não está na pasta do Drive).' : '.')));
+    else if(!itens.length) secItens.appendChild(el('div', 'op-obs', 'Nenhum item encontrado para esta OP em ' + ARQ.itens + '.'));
+    else {
+      const porTipo = new Map(); itens.forEach(i => porTipo.set(i.tp || '—', (porTipo.get(i.tp || '—') || 0) + i.v));
+      const t = el('table', 'lanc');
+      t.innerHTML = '<thead><tr><th class="txt">Produto / descrição</th><th>Qtd</th><th>Valor líquido (R$)</th><th>Tipo</th></tr></thead><tbody>' +
+        itens.map(i => '<tr><td class="txt" style="white-space:normal">' + esc(i.d) + '</td><td>' + i.q.toLocaleString('pt-BR', { maximumFractionDigits: 3 }) + '</td><td>' + fmt(i.v) + '</td><td>' + esc(i.tp) + '</td></tr>').join('') +
+        '</tbody><tfoot>' + [...porTipo].map(([tp, v]) => '<tr><td class="txt" colspan="2">Total ' + esc(tp) + '</td><td>' + fmt(v) + '</td><td></td></tr>').join('') + '</tfoot>';
+      const w = el('div', 'rol-lanc'); w.appendChild(t); secItens.appendChild(w);
+      par('Itens:', String(itens.length)); porTipo.forEach((v, tp) => par('Total ' + tp + ':', fmtR(v)));
+    }
+    corpo.appendChild(secItens);
+    // ----- títulos por vencimento -----
+    const secTit = el('div'); secTit.appendChild(el('h4', '', 'Títulos, por data de vencimento'));
+    if(!tits) secTit.appendChild(el('div', 'op-obs', 'O arquivo ' + ARQ.tit + ' não foi carregado' + (det.faltam.includes(ARQ.tit) ? ' (não está na pasta do Drive).' : '.')));
+    else if(!tits.length) secTit.appendChild(el('div', 'op-obs', 'Nenhum título encontrado para esta OP em ' + ARQ.tit + '.'));
+    else {
+      tits.sort((a, b) => cmp(a.venc || a.vencTxt || '9', b.venc || b.vencTxt || '9'));
+      const sit = tits.map(situacaoTitulo);
+      const tot = tits.reduce((s, x) => s + x.v, 0), pago = tits.reduce((s, x, i) => s + (sit[i].quitado ? x.v : 0), 0);
+      const t = el('table', 'lanc');
+      t.innerHTML = '<thead><tr><th>Vencimento</th><th>Valor (R$)</th><th class="txt">Situação</th><th>Data do pagamento</th><th class="txt">Prazo</th><th class="txt">Forma de pagamento</th><th>Conta</th><th class="txt">Histórico</th></tr></thead><tbody>' +
+        tits.map((x, i) => '<tr class="' + (sit[i].quitado ? '' : 't-aberto') + '"><td>' + (x.venc ? fmtDia(x.venc) : esc(x.vencTxt) || '—') + '</td><td>' + fmt(x.v) + '</td><td class="txt">' + esc(sit[i].rot) + '</td><td>' + (x.pg ? fmtDia(x.pg) : '—') + '</td><td class="txt ' + sit[i].cls + '">' + esc(sit[i].prazo) + '</td><td class="txt">' + esc(x.forma) + '</td><td>' + esc(x.conta) + '</td><td class="hist">' + esc(x.h) + '</td></tr>').join('') +
+        '</tbody><tfoot><tr><td>Total</td><td>' + fmt(tot) + '</td><td class="txt" colspan="6">Pago: ' + fmtR(pago) + ' · Em aberto: ' + fmtR(tot - pago) + '</td></tr></tfoot>';
+      const w = el('div', 'rol-lanc'); w.appendChild(t); secTit.appendChild(w);
+      par('Títulos:', String(tits.length)); par('Valor dos títulos:', fmtR(tot)); par('Pago:', fmtR(pago)); if(tot - pago > 0.005) par('Em aberto:', fmtR(tot - pago));
+    }
+    corpo.appendChild(secTit);
+    if(det.erros.length) corpo.appendChild(el('div', 'op-obs', '⚠ ' + det.erros.join(' · ')));
+    if(det.semDrive && !(det.itens || det.tit)) corpo.appendChild(el('div', 'op-obs', 'Entre pelo Servir (o endereço do script do Google fica guardado na unidade) ou abra os arquivos deste computador pelo botão abaixo.'));
   }
   function fecharLanc(){ $('popupLanc').hidden = true; document.body.style.overflow = ''; lancAberto = null; }
   async function baixarExcelLanc(){
@@ -733,7 +882,7 @@
         ['Empresas', FIL.empOff.size ? [...empresasAll.keys()].filter(e => !FIL.empOff.has(e)).sort(cmp).join(', ') : 'todas'],
         ['Setores', FIL.setOff.size ? [...setoresAll.keys()].filter(e => !FIL.setOff.has(e)).sort(cmp).join(', ') : 'todos'],
         ['Grupos do plano', FIL.gruOff.size ? [...gruposAll.keys()].filter(e => !FIL.gruOff.has(e)).sort(cmp).map(rotuloGrupo).join('; ') : 'todos'],
-        ['Busca', FIL.busca || '—'], ['Evento', FIL.evento || 'todos'], ['Lançamentos', FILTRADO.rows.length]];
+        ['Busca', FIL.busca || '—'], ['Evento', FIL.evento || 'todos'], ['Tipo de evento', { todos: 'todos', A: 'só administrativos', E: 'só externos', O: 'só outros (sem classificação)' }[FIL.adm]], ['Lançamentos', FILTRADO.rows.length]];
       lista.forEach(r => wf.addRow(r)); wf.getColumn(1).width = 22; wf.getColumn(2).width = 90; wf.getColumn(1).font = { bold: true };
       const buf = await wb.xlsx.writeBuffer();
       const url = URL.createObjectURL(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
@@ -756,11 +905,12 @@
     if(q.semPlano) li(q.semPlano + ' lançamento(s) sem plano de contas (aparecem em 00.00.00).');
     if(q.semSetor) li(q.semSetor + ' lançamento(s) sem setor (aparecem como "Sem setor").');
     li('O valor somado é a coluna TOTAL (a parte do lançamento que cabe a cada setor). O mês vem da data escolhida em "Data usada" — por padrão a do pagamento (DTPAGTO). Lançamento sem data válida nessa coluna fica de fora.');
+    if(q.temAdm){ const c = { A: 0, E: 0, '': 0 }; recs.forEach(r => { c[r.adm]++; }); li('Tipo de evento (coluna Administrativo): ' + c.A.toLocaleString('pt-BR') + ' administrativo(s), ' + c.E.toLocaleString('pt-BR') + ' externo(s) e ' + c[''].toLocaleString('pt-BR') + ' sem classificação (outros).'); }
     li('RECEBER e PAGAR vêm de TIPO_CTA. Transferências e empréstimos também aparecem se estiverem no arquivo — use "Grupos do plano" para desmarcar o que não quiser.');
   }
   function aplicar(texto, origem){
     montar(texto); origemInfo = origem;
-    const atual = { periodo: FIL.periodo, de: FIL.de, ate: FIL.ate, empOff: FIL.empOff, setOff: FIL.setOff, gruOff: FIL.gruOff }, primeira = !jaCarregou;
+    const atual = { periodo: FIL.periodo, de: FIL.de, ate: FIL.ate, adm: FIL.adm, empOff: FIL.empOff, setOff: FIL.setOff, gruOff: FIL.gruOff }, primeira = !jaCarregou;
     if(primeira){ filtrosPadrao(); carregarFiltrosSalvos(); } else { Object.assign(FIL, atual); }
     if(!qualidade['tem' + { pagto: 'Pagto', comp: 'Comp', data: 'Data' }[FIL.base]]) FIL.base = qualidade.temPagto ? 'pagto' : qualidade.temComp ? 'comp' : 'data';
     if(primeira && !filtrar().rows.length){ FIL.periodo = 'tudo'; aviso('alerta', 'Não há lançamentos no mês atual — mostrando todo o período.'); }
@@ -807,6 +957,7 @@
     const btn = $('btnAtualizar'); btn.classList.add('girando'); btn.disabled = true;
     try {
       if(!bd) bd = await abrirBd();
+      detOp = null; detOpPromessa = null;      // os detalhes da OP são relidos (com checagem do cache) no próximo clique
       if(!recs.length) $('inicio').replaceChildren(el('div', 'vazio', 'Carregando…'));
       const lista = await chamar('&acao=listar');
       const quando = {}, tamanho = {}; lista.arquivos.forEach(a => { quando[a.arquivo] = a.atualizado; tamanho[a.arquivo] = a.bytes; });
@@ -856,7 +1007,7 @@
   $('conteudo').addEventListener('click', (e) => { const td = e.target.closest('td.cl[data-l]'); if(td) abrirLancamentos(+td.dataset.l, td.dataset.c); });
   $('lancFechar').addEventListener('click', fecharLanc); $('lancSair').addEventListener('click', fecharLanc);
   $('popupLanc').addEventListener('click', (e) => { if(e.target === $('popupLanc')) fecharLanc(); });
-  document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && !$('popupLanc').hidden) fecharLanc(); });
+  document.addEventListener('keydown', (e) => { if(e.key !== 'Escape') return; if(!$('popupOp').hidden) fecharOp(); else if(!$('popupLanc').hidden) fecharLanc(); });
   $('lancExcel').addEventListener('click', baixarExcelLanc);
   $('lancMais').addEventListener('click', () => { if(lancAberto){ lancAberto.limite += LANC_PAGINA; desenharLanc(); } });
   $('lancBusca').addEventListener('input', aplicarFiltroLanc);
@@ -869,8 +1020,27 @@
   });
   $('lancTabela').addEventListener('click', (e) => {
     const td = e.target.closest('td.op'); if(!td || !td.dataset.op) return;
-    const ok = () => { const antes = td.textContent; td.textContent = '✔ copiado'; setTimeout(() => { td.textContent = antes; }, 900); };
-    try { navigator.clipboard.writeText(td.dataset.op).then(ok, () => {}); } catch(err){}
+    abrirOp(td.dataset.op);
+  });
+  $('opFechar').addEventListener('click', fecharOp); $('opSair').addEventListener('click', fecharOp);
+  $('popupOp').addEventListener('click', (e) => { if(e.target === $('popupOp')) fecharOp(); });
+  $('opCopiar').addEventListener('click', () => {
+    if(!opAberta) return; const b = $('opCopiar'), antes = b.textContent;
+    try { navigator.clipboard.writeText(opAberta).then(() => { b.textContent = '✔ copiado'; setTimeout(() => { b.textContent = antes; }, 900); }, () => {}); } catch(err){}
+  });
+  $('opLocal').addEventListener('click', () => $('arquivoOp').click());
+  $('arquivoOp').addEventListener('change', async (ev) => {
+    const files = [...ev.target.files]; ev.target.value = ''; if(!files.length) return;
+    try {
+      for(const f of files){
+        const texto = await f.text(), cab = semAcento(texto.slice(0, 600));
+        if(cab.includes('desc_produto')) detLocal.itens = indexarItens(texto);
+        else if(cab.includes('datav')) detLocal.tit = indexarTitulos(texto);
+        else throw new Error('O arquivo ' + f.name + ' não parece ser o itens_op.csv nem o titulos_op.csv.');
+      }
+      detOp = null; detOpPromessa = null;
+      if(opAberta) abrirOp(opAberta);
+    } catch(err){ $('opCorpo').replaceChildren(el('div', 'vazio', err.message)); }
   });
   $('fVisao').addEventListener('change', () => { FIL.visao = $('fVisao').value; salvarFiltros(); render(); });
   $('fDetalhe').addEventListener('change', () => { FIL.detalhe = $('fDetalhe').value; $('fSubt').closest('label').style.display = FIL.detalhe === 'conta' ? '' : 'none'; salvarFiltros(); render(); });
@@ -879,6 +1049,7 @@
   $('fSubt').addEventListener('change', () => { FIL.subt = $('fSubt').checked; salvarFiltros(); render(); });
   $('fBusca').addEventListener('input', () => { FIL.busca = $('fBusca').value; agendar(); });
   $('fEvento').addEventListener('input', () => { FIL.evento = $('fEvento').value; agendar(); });
+  $('fAdm').addEventListener('change', () => { FIL.adm = $('fAdm').value; render(); });
   $('fPeriodo').addEventListener('change', () => {
     FIL.periodo = $('fPeriodo').value;
     if(FIL.periodo === 'custom'){ [FIL.de, FIL.ate] = [$('fDe').value, $('fAte').value]; }
@@ -904,7 +1075,7 @@
   });
 
   // expõe só para teste/diagnóstico
-  window.__ac = { lancDaCelula, abrirLancamentos, get lanc(){ return lancAberto; }, aplicar, FIL, render, get M(){ return M; }, get recs(){ return recs; }, filtrar, construir, lerCsvColunas };
+  window.__ac = { abrirOp, indexarItens, indexarTitulos, repararAcentos, setChamar: (f) => { chamar = f; }, setCfg: (u, t) => { cfg.url = u; cfg.token = t; }, get detOp(){ return detOp; }, lancDaCelula, abrirLancamentos, get lanc(){ return lancAberto; }, aplicar, FIL, render, get M(){ return M; }, get recs(){ return recs; }, filtrar, construir, lerCsvColunas };
 
   // acesso: login do Servir + credenciais da unidade (servir-acesso.js), no mesmo módulo do Painel financeiro
   let cacheUn = '';        // o cache local é separado por unidade
@@ -917,6 +1088,8 @@
       aoPronto: (cred, ctx) => {
         cfg.url = cred.url; cfg.token = cred.token; cacheUn = ctx.unidade.id + ':';
         if(cred.arquivos && cred.arquivos.cruzada) ARQ.cruz = cred.arquivos.cruzada;
+        if(cred.arquivos && cred.arquivos.itens_op) ARQ.itens = cred.arquivos.itens_op;
+        if(cred.arquivos && cred.arquivos.titulos_op) ARQ.tit = cred.arquivos.titulos_op;
         carregar();
       }
     });
