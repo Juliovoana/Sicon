@@ -597,7 +597,7 @@
 
     <table class="tabela" id="tabelaEstoque">
         <thead>
-            <tr><th class="th-ordenavel-estoque" data-ordenar-estoque="codigo">Código <span class="seta-ordem"></span></th><th>Cód. Externo</th><th class="th-ordenavel-estoque" data-ordenar-estoque="nome">Produto <span class="seta-ordem"></span></th><th>Un</th><th class="num">Valor (R$)</th><th class="num">Últ. Compra</th><th class="num">Preço Médio</th><th class="num">Estoque Inicial</th><th class="num">Estoque Atual</th><th class="center">Ações</th></tr>
+            <tr><th class="th-ordenavel-estoque" data-ordenar-estoque="codigo">Código <span class="seta-ordem"></span></th><th>Cód. Externo</th><th class="th-ordenavel-estoque" data-ordenar-estoque="nome">Produto <span class="seta-ordem"></span></th><th>Un</th><th class="num">Valor (R$)</th><th class="num">Últ. Compra</th><th class="num">Preço Médio</th><th class="num">Estoque Inicial</th><th class="num th-ordenavel-estoque" data-ordenar-estoque="estoque" title="Clique para ordenar pela quantidade (crescente/decrescente) — útil para achar saldos negativos">Estoque Atual <span class="seta-ordem"></span></th><th class="center">Ações</th></tr>
         </thead>
         <tbody id="corpoTabelaEstoque"></tbody>
     </table>
@@ -804,6 +804,14 @@
                     <label>Nº da NF</label>
                     <input type="text" id="notasFiltroNumero" placeholder="Número da nota...">
                 </div>
+                <div class="campo">
+                    <label>Valor da nota — de (R$)</label>
+                    <input type="text" id="notasFiltroValorDe" inputmode="decimal" placeholder="ex.: 150,25" autocomplete="off">
+                </div>
+                <div class="campo">
+                    <label>Valor da nota — até (R$)</label>
+                    <input type="text" id="notasFiltroValorAte" inputmode="decimal" placeholder="ex.: 160" autocomplete="off">
+                </div>
             </div>
             <div style="display:flex; gap:8px; align-items:flex-end;">
                 <button class="btn btn-azul" id="btnBuscarNotasEntrada">🔍 Buscar</button>
@@ -816,6 +824,7 @@
         </div>
     </div>
 
+    <p class="subtitulo" id="notasResumoFiltro" style="margin:6px 2px; display:none;"></p>
     <div style="max-height:65vh; overflow:auto;">
         <table class="tabela" id="tabelaNotasEntrada">
             <thead>
@@ -953,7 +962,7 @@
         </div>
         <a href="#" id="btnToggleCadSetores" style="font-size:0.85em; text-decoration:none; display:inline-block; margin-top:8px;">▶ Ver setores cadastrados (0)</a>
         <div id="blocoCadSetores" style="display:none; margin-top:8px;">
-            <input type="text" id="cadBuscaSetores" placeholder="Buscar por nome...">
+            <input type="text" id="cadBuscaSetores" placeholder="Buscar por código ou nome...">
             <table class="tabela" style="margin-top:10px;">
                 <thead><tr><th>Nome</th><th class="center">Ativo</th><th>Ações</th></tr></thead>
                 <tbody id="corpoCadSetores"></tbody>
@@ -3059,6 +3068,7 @@ async function chamarPost(acao, d) {
     if (acao === 'salvarSetor') {
         if (!ehAdministradorOuPrincipal()) throw new Error('Somente administradores ou o usuário principal podem cadastrar, alterar ou excluir setores e subsetores.');
         const registro = { unidade_negocio_id: meuPerfil.unidadeId, nome: d.nome, ativo: d.ativo };
+        if ('codigo' in d) registro.codigo = d.codigo;
         const query = d.id ? sb.from('unidade_setores').update(registro).eq('id', d.id) : sb.from('unidade_setores').insert(registro);
         const { error } = await query;
         if (error) throw error;
@@ -3853,6 +3863,9 @@ const AJUDA_ESTOQUE = {
                 dos itens é só informativa; se os <strong>títulos</strong> não fecharem com a nota, o botão <strong>⚖️ Ajustar a última parcela</strong> põe a diferença na última
                 parcela em aberto. Alterar o valor total com a nota já salva grava na hora (e fica na Sentinela). Na lista de Notas e no Protocolo, nota sem valor da NF ou com
                 títulos diferentes do valor da nota aparece com <strong>⚠</strong>, e gerar o protocolo com essas notas pede confirmação. Notas importadas por XML já trazem o valor da NF.</li>
+                <li><strong>💲 Filtro por valor da nota</strong> (guia Notas): os campos <strong>Valor da nota — de / até</strong> mostram só as notas cujo valor está na faixa
+                (por exemplo, de 150,25 até 160 — as duas pontas entram). Vale o valor mostrado na lista (o valor da NF; se a nota não tem valor informado, a soma dos itens).
+                Pode preencher só um lado (só "de" = a partir de; só "até" = até). Combina com Fornecedor e Nº da NF; clique em 🔍 Buscar ou tecle Enter.</li>
                 <li><strong>🔎 Buscas de Almoxarifado, Setor, Subsetor, Veículo, Evento e Plano de contas</strong>: em todo campo de busca (inclusive
                 nas <strong>linhas</strong> do "Baixar itens dessa nota", que antes eram listas de escolha) dá para digitar o <strong>código</strong> ou
                 <strong>parte do nome</strong>, sem se preocupar com acento nem com a ordem das palavras (ex.: "locacao gerador" acha
@@ -4071,13 +4084,23 @@ function popularRelatoriosSelects() {
    ============================================================ */
 let ordenacaoEstoque = { coluna: null, direcao: 'asc' };
 
-function ordenarListaEstoque(lista) {
+// quantidade mostrada na coluna "Estoque Atual": a do almoxarifado de trabalho (se houver) ou o total
+function estoqueExibidoDoProduto(p) {
+    if (!almoxarifadoTrabalho) return Number(p.estoque) || 0;
+    const saldo = saldoDoProdutoNoAlmoxarifado(p.id, almoxarifadoTrabalho);
+    return saldo ? (Number(saldo.estoque) || 0) : 0;
+}
+
+// ignorarQtd: as buscas de produto de outras telas (autocomplete) não devem ser reordenadas pela quantidade
+function ordenarListaEstoque(lista, ignorarQtd) {
     if (!ordenacaoEstoque.coluna) return lista;
+    if (ordenacaoEstoque.coluna === 'estoque' && ignorarQtd) return lista;
     const dir = ordenacaoEstoque.direcao === 'asc' ? 1 : -1;
     const copia = [...lista];
     copia.sort((a, b) => {
         let va, vb;
         if (ordenacaoEstoque.coluna === 'codigo') { va = a.id; vb = b.id; }
+        else if (ordenacaoEstoque.coluna === 'estoque') { va = estoqueExibidoDoProduto(a); vb = estoqueExibidoDoProduto(b); if (va === vb) return (a.nome || '').toUpperCase().localeCompare((b.nome || '').toUpperCase()); }
         else { va = (a.nome || '').toUpperCase(); vb = (b.nome || '').toUpperCase(); }
         if (typeof va === 'string') return va.localeCompare(vb) * dir;
         return (va - vb) * dir;
@@ -4085,7 +4108,7 @@ function ordenarListaEstoque(lista) {
     return copia;
 }
 
-function buscarProdutos(termo) {
+function buscarProdutos(termo, ignorarOrdemQtd) {
     termo = (termo || '').trim().toUpperCase();
     let resultado;
     if (!termo) {
@@ -4097,7 +4120,7 @@ function buscarProdutos(termo) {
             return palavras.every(palavra => texto.includes(palavra));
         });
     }
-    return ordenarListaEstoque(resultado).slice(0, 60);
+    return ordenarListaEstoque(resultado, ignorarOrdemQtd).slice(0, 60);
 }
 
 document.querySelectorAll('.th-ordenavel-estoque').forEach(th => {
@@ -6159,7 +6182,7 @@ document.getElementById('btnSalvarProduto').addEventListener('click', async () =
    ============================================================ */
 function renderizarResultadosBusca(containerId, termo, aoSelecionar) {
     const el = document.getElementById(containerId);
-    const lista = buscarProdutos(termo);
+    const lista = buscarProdutos(termo, true);
     if (!lista.length) {
         el.innerHTML = '<div class="item-resultado">Nenhum produto encontrado.</div>';
         el.classList.add('aberto');
@@ -11025,8 +11048,26 @@ async function carregarListaNotasEntrada() {
         numero: document.getElementById('notasFiltroNumero').value.trim()
     };
 
+    // faixa de valor da nota (inclusive nas duas pontas); aceita 150,25 / 150.25 / 1.234,56; vazio = sem limite
+    const lerValorFiltro = id => {
+        const t = document.getElementById(id).value.trim().replace(/\s|R\$/g, '');
+        if (!t) return null;
+        const num = Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t);
+        return Number.isFinite(num) ? Math.round(num * 100) : NaN;
+    };
+    let valorDe = lerValorFiltro('notasFiltroValorDe'), valorAte = lerValorFiltro('notasFiltroValorAte');
+    const resumoFiltro = document.getElementById('notasResumoFiltro');
+    if (Number.isNaN(valorDe) || Number.isNaN(valorAte)) {
+        corpo.innerHTML = '';
+        resumoFiltro.style.display = 'none';
+        vazio.style.display = 'block';
+        vazio.textContent = '⚠️ Valor inválido no filtro. Use números como 150,25 ou 160.';
+        return;
+    }
+    if (valorDe != null && valorAte != null && valorDe > valorAte) [valorDe, valorAte] = [valorAte, valorDe];
+
     try {
-        const [notas, contagens] = await Promise.all([
+        const [notasBrutas, contagens] = await Promise.all([
             chamarGet('listarNotasEntrada', filtros),
             chamarGet('contarItensTitulosPorNota')
         ]);
@@ -11037,7 +11078,7 @@ async function carregarListaNotasEntrada() {
         // aparece em dobro (contagem e valor) numa nota de entrada que
         // teve algum avulso já destinado
         const tipoPorNota = {};
-        (notas || []).forEach(n => { tipoPorNota[n.id] = n.tipo || 'entrada'; });
+        (notasBrutas || []).forEach(n => { tipoPorNota[n.id] = n.tipo || 'entrada'; });
         const itensPorNota = {}, valorPorNota = {}, titulosPorNota = {};
         (contagens.itens || []).forEach(i => {
             if (tipoPorNota[i.estoque_nota_id] && i.tipo !== tipoPorNota[i.estoque_nota_id]) return;
@@ -11050,13 +11091,25 @@ async function carregarListaNotasEntrada() {
             if (t.status !== 'cancelado') somaTitulosPorNota[t.estoque_nota_id] = (somaTitulosPorNota[t.estoque_nota_id] || 0) + Number(t.valor || 0);
         });
 
+        // valor mostrado na lista = valor da NF; sem ele, a soma dos itens (mesma regra da coluna "Valor total")
+        const valorExibidoNota = n => { const v = Number(n.valor_total || 0); return Math.round((v > 0 ? v : (valorPorNota[n.id] || 0)) * 100); };
+        const filtraValor = valorDe != null || valorAte != null;
+        const notas = filtraValor
+            ? (notasBrutas || []).filter(n => { const c = valorExibidoNota(n); return (valorDe == null || c >= valorDe) && (valorAte == null || c <= valorAte); })
+            : (notasBrutas || []);
+        if (filtraValor) {
+            const fmt = c => formatarMoeda(c / 100);
+            resumoFiltro.textContent = `Valor da nota ${valorDe != null && valorAte != null ? 'entre ' + fmt(valorDe) + ' e ' + fmt(valorAte) : valorDe != null ? 'a partir de ' + fmt(valorDe) : 'até ' + fmt(valorAte)}: ${notas.length} nota(s) de ${(notasBrutas || []).length}.`;
+            resumoFiltro.style.display = '';
+        } else resumoFiltro.style.display = 'none';
+
         corpo.innerHTML = '';
-        if (!notas || notas.length === 0) { vazio.style.display = 'block'; return; }
+        if (!notas.length) { vazio.style.display = 'block'; vazio.textContent = filtraValor ? 'Nenhuma nota nessa faixa de valor.' : 'Nenhuma nota encontrada.'; return; }
 
         // marcas de agregação: nota de pedido -> "agregada à NF X"; nota definitiva -> "N pedido(s) agregado(s)"
         const notaPorId = {}, agregadasPorNota = {};
-        (notas || []).forEach(n => { notaPorId[n.id] = n; });
-        (notas || []).forEach(n => { if (n.nota_definitiva_id) agregadasPorNota[n.nota_definitiva_id] = (agregadasPorNota[n.nota_definitiva_id] || 0) + 1; });
+        (notasBrutas || []).forEach(n => { notaPorId[n.id] = n; });
+        (notasBrutas || []).forEach(n => { if (n.nota_definitiva_id) agregadasPorNota[n.nota_definitiva_id] = (agregadasPorNota[n.nota_definitiva_id] || 0) + 1; });
 
         notas.forEach(n => {
             const tr = document.createElement('tr');
@@ -11101,10 +11154,10 @@ async function carregarListaNotasEntrada() {
         // datalist de fornecedores já usados, pra sugestão rápida --
         // também guarda o CNPJ de cada um, pra preencher sozinho quando
         // o nome escolhido bater exatamente com um fornecedor conhecido
-        const nomes = [...new Set((notas || []).map(n => n.nome_fornecedor).filter(Boolean))];
+        const nomes = [...new Set((notasBrutas || []).map(n => n.nome_fornecedor).filter(Boolean))];
         document.getElementById('notaListaFornecedores').innerHTML = nomes.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
         fornecedoresConhecidosCnpj = {};
-        (notas || []).forEach(n => {
+        (notasBrutas || []).forEach(n => {
             if (n.nome_fornecedor && n.cnpj_fornecedor) fornecedoresConhecidosCnpj[n.nome_fornecedor] = n.cnpj_fornecedor;
         });
     } catch (err) {
@@ -11116,6 +11169,9 @@ async function carregarListaNotasEntrada() {
 }
 
 document.getElementById('btnBuscarNotasEntrada').addEventListener('click', carregarListaNotasEntrada);
+['notasFiltroFornecedor', 'notasFiltroNumero', 'notasFiltroValorDe', 'notasFiltroValorAte'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => { if (e.key === 'Enter') carregarListaNotasEntrada(); });
+});
 document.getElementById('btnNovaNotaEntrada').addEventListener('click', abrirNovaNotaEntrada);
 document.getElementById('btnFecharNotaEntrada').addEventListener('click', () => {
     document.getElementById('modalNotaEntrada').classList.remove('aberto');
@@ -13581,10 +13637,10 @@ function renderizarTabelaCadTiposProjeto(podeGerenciar) {
 
 function renderizarTabelaCadSetores() {
     const termo = document.getElementById('cadBuscaSetores').value.trim().toLowerCase();
-    const lista = catalogosBaixa.setores.filter(s => !termo || s.nome.toLowerCase().includes(termo));
+    const lista = catalogosBaixa.setores.filter(s => !termo || s.nome.toLowerCase().includes(termo) || String(s.codigo ?? '').toLowerCase().includes(termo));
     document.getElementById('corpoCadSetores').innerHTML = lista.map(s => `
         <tr>
-            <td>${escapeHtml(s.nome)}</td>
+            <td>${s.codigo != null && s.codigo !== '' ? escapeHtml(String(s.codigo)) + ' — ' : ''}${escapeHtml(s.nome)}</td>
             <td class="center">${s.ativo ? '✅' : '—'}</td>
             <td class="center">${ehAdministradorOuPrincipal() ? `<button class="btn btn-cinza btn-pequeno" data-editar-setor="${s.id}">✏️ Editar</button>` : '—'}</td>
         </tr>
@@ -13836,7 +13892,9 @@ function abrirModalCadGenerico(tipo, id, opts) {
         document.getElementById('cadGenericoAtivo').value = item ? String(item.ativo) : 'true';
     } else if (tipo === 'setor') {
         document.getElementById('campoCadNome').style.display = '';
+        document.getElementById('campoCadCodigo').style.display = '';   // código do setor (opcional, editável)
         const item = id ? catalogosBaixa.setores.find(s => s.id === id) : null;
+        document.getElementById('cadGenericoCodigo').value = item && item.codigo != null ? item.codigo : '';
         document.getElementById('cadGenericoNome').value = item ? item.nome : '';
         document.getElementById('cadGenericoAtivo').value = item ? String(item.ativo) : 'true';
     } else if (tipo === 'subsetor') {
@@ -14016,8 +14074,10 @@ document.getElementById('btnSalvarCadGenerico').addEventListener('click', async 
         } else if (cadGenericoTipoAtual === 'setor') {
             const nome = document.getElementById('cadGenericoNome').value.trim();
             if (!nome) throw new Error('Informe o nome do setor.');
+            const codigoSetor = document.getElementById('cadGenericoCodigo').value.trim();
+            if (codigoSetor && catalogosBaixa.setores.some(s => String(s.codigo ?? '').trim().toLowerCase() === codigoSetor.toLowerCase() && s.id !== cadGenericoIdAtual)) throw new Error('Já existe um setor com esse código.');
             textoCriado = nome;
-            await chamarPost('salvarSetor', { id: cadGenericoIdAtual, nome, ativo });
+            await chamarPost('salvarSetor', { id: cadGenericoIdAtual, nome, codigo: codigoSetor || null, ativo });
         } else if (cadGenericoTipoAtual === 'subsetor') {
             const nome = document.getElementById('cadGenericoNome').value.trim();
             const setorId = document.getElementById('cadGenericoSetorPai').value;
