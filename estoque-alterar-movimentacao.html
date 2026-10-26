@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Alteração rápida de movimentação · Servir</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --verde:#1B4332;--verde2:#2D6A4F;--verdec:#EAF2EE;
+  --fundo:#F6F7F9;--painel:#FFFFFF;--linha:#E8EAED;
+  --texto:#171E1A;--texto2:#6B7280;--texto3:#9AA1A9;
+  --sucesso:#2D6A4F;--sucessob:#E8F3EC;
+  --vermelho:#C0392B;--vermelhob:#FBEAE8;
+  --amarelo:#8A5E12;--amarelob:#FEF3E2;
+  --raio:12px;--sombra:0 2px 12px rgba(23,30,26,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{min-height:100vh;font-family:'Inter',system-ui,sans-serif;background:var(--fundo);color:var(--texto)}
+
+/* login */
+#tela-login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;background:linear-gradient(135deg,#1B4332 0%,#143327 100%)}
+.login-card{width:100%;max-width:380px;background:var(--painel);border-radius:var(--raio);padding:32px 28px;box-shadow:0 8px 32px rgba(0,0,0,.2)}
+.login-titulo{font-size:1.2rem;font-weight:700;color:var(--verde)}
+.login-sub{font-size:.8rem;color:var(--texto2);margin:2px 0 20px}
+#tela-loading{min-height:100vh;display:flex;align-items:center;justify-content:center;color:var(--texto2)}
+.spin-grande{width:36px;height:36px;border:3px solid var(--linha);border-top-color:var(--verde);border-radius:50%;animation:spin .7s linear infinite;margin:0 auto 12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.campo{margin-bottom:14px;position:relative}
+.campo label{display:block;font-size:.72rem;font-weight:700;color:var(--texto2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:5px}
+input[type=text],input[type=email],input[type=password]{width:100%;background:var(--painel);border:1.5px solid var(--linha);color:var(--texto);padding:10px 12px;border-radius:8px;font-size:.95rem;font-family:inherit;transition:border-color .15s}
+input:focus{outline:none;border-color:var(--verde)}
+.btn{border:none;border-radius:8px;padding:12px 18px;font-size:.92rem;font-weight:600;cursor:pointer;font-family:inherit}
+.btn-primary{background:var(--verde);color:#fff}
+.btn-primary:hover{background:#143327}
+.btn-cinza{background:#EEF0F2;color:var(--texto)}
+.btn:disabled{opacity:.55;cursor:default}
+.msg-erro{color:var(--vermelho);font-size:.85rem;margin-top:10px;min-height:1.1em}
+.msg-ok{color:var(--sucesso);font-size:.85rem;margin-top:10px}
+
+/* app */
+#tela-app{display:none;min-height:100vh}
+header{background:var(--verde);color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+.header-titulo{font-size:.95rem;font-weight:700}
+.header-sub{font-size:.74rem;opacity:.75;margin-top:1px}
+.btn-sair{background:none;border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:6px;padding:4px 10px;font-size:.75rem;cursor:pointer;font-family:inherit}
+main{max-width:720px;margin:0 auto;padding:16px}
+.card{background:var(--painel);border:1px solid var(--linha);border-radius:var(--raio);box-shadow:var(--sombra);overflow:hidden;margin-bottom:14px}
+.card-topo{background:var(--verde);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.card-topo .num{font-size:1.05rem;font-weight:700}
+.card-topo .sub{font-size:.78rem;opacity:.8}
+.card-corpo{padding:18px}
+.info{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 16px;margin-bottom:6px}
+.info label{display:block;font-size:.68rem;font-weight:700;color:var(--texto2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
+.info .v{font-size:.9rem;font-weight:500;word-break:break-word}
+hr.div{border:none;border-top:1px solid var(--linha);margin:16px 0}
+.grade{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+@media (max-width:560px){.grade{grid-template-columns:1fr}}
+.dd{position:absolute;left:0;right:0;top:100%;z-index:20;background:#fff;border:1px solid var(--linha);border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,.14);max-height:240px;overflow-y:auto;display:none}
+.dd.aberto{display:block}
+.dd .it{padding:8px 12px;font-size:.88rem;cursor:pointer;border-bottom:1px solid #F2F3F5}
+.dd .it:last-child{border-bottom:none}
+.dd .it:hover,.dd .it.ativo{background:var(--verdec)}
+.dd .vazio{padding:10px 12px;font-size:.85rem;color:var(--texto2)}
+.sel{font-size:.82rem;margin-top:5px;min-height:1.2em;color:var(--verde)}
+.sel a{color:var(--vermelho);font-size:.78rem;margin-left:6px;cursor:pointer;text-decoration:underline}
+.mudou input[type=text]{border-color:var(--amarelo)}
+.aviso{background:var(--amarelob);color:var(--amarelo);border-radius:8px;padding:10px 12px;font-size:.82rem;margin-top:12px}
+.acoes{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;flex-wrap:wrap}
+.estado{max-width:520px;margin:60px auto;text-align:center;padding:0 20px;color:var(--texto2)}
+.estado .ic{font-size:2.2rem;margin-bottom:10px}
+.estado .t{font-size:1rem;font-weight:600;color:var(--texto);margin-bottom:6px}
+.resultado{background:var(--sucessob);border:1px solid #bbf7d0;border-radius:10px;padding:14px 16px;margin-top:14px;font-size:.88rem}
+.resultado ul{margin:6px 0 0 18px}
+</style>
+</head>
+<body>
+
+<div id="tela-loading"><div style="text-align:center"><div class="spin-grande"></div><div style="font-size:.9rem">Verificando sessão...</div></div></div>
+
+<div id="tela-login" style="display:none">
+  <div class="login-card">
+    <div class="login-titulo">Servir</div>
+    <div class="login-sub">Alteração rápida de movimentação do Estoque</div>
+    <div class="campo"><label>E-mail</label><input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email"></div>
+    <div class="campo"><label>Senha</label><input type="password" id="login-senha" placeholder="••••••••" autocomplete="current-password"></div>
+    <button class="btn btn-primary" id="btn-login" style="width:100%">Entrar</button>
+    <div class="msg-erro" id="login-erro"></div>
+  </div>
+</div>
+
+<div id="tela-app">
+  <header>
+    <div>
+      <div class="header-titulo">Alteração rápida de movimentação</div>
+      <div class="header-sub" id="header-sub"></div>
+    </div>
+    <button class="btn-sair" id="btn-sair">Sair</button>
+  </header>
+  <main id="conteudo"></main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = 'https://frzvcrcshkpvjdbbqkhz.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_h-JuDyjYgb5YKGYFRKtLEg_8gnJor9w';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const normBusca = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+const casaBusca = (texto, termo) => { const p = normBusca(termo).split(/\s+/).filter(Boolean); if (!p.length) return true; const a = normBusca(texto); return p.every(x => a.includes(x)); };
+const LIMITE_BUSCA = 10;
+const dataBR = (v) => { const s = String(v || '').slice(0, 10).split('-'); return s.length === 3 ? s[2] + '/' + s[1] + '/' + s[0] : (v || '-'); };
+const moeda = (n) => Number(n || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+// código da movimentação = id em estoque_movimentacoes; aceita ?codigo=, ?mov= ou ?id=
+const params = new URLSearchParams(location.search);
+let MOV_ID = (params.get('codigo') || params.get('mov') || params.get('id') || '').trim();
+
+const CTX = { unidadeId: null, unidadeNome: '', ehPrincipal: false, userId: null, nome: '', papel: null };
+let MOV = null;            // movimentação como está no banco
+let CAT = { setores: [], subsetores: [], veiculos: [], planoContas: [] };
+let EVENTOS = [];
+let SEL = {};              // escolhas atuais: setor, subsetor, veiculo, plano, evento
+let ORIG = {};             // escolhas originais (para destacar o que mudou)
+
+/* ---------------- login / sessão ---------------- */
+async function fazerLogin() {
+  const email = $('login-email').value.trim(), senha = $('login-senha').value;
+  const erro = $('login-erro'), btn = $('btn-login'); erro.textContent = '';
+  if (!email || !senha) { erro.textContent = 'Preencha e-mail e senha.'; return; }
+  btn.disabled = true;
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: senha });
+  btn.disabled = false;
+  if (error) { erro.textContent = error.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos.' : error.message; return; }
+  iniciarApp(data.user);
+}
+$('btn-login').addEventListener('click', fazerLogin);
+$('login-senha').addEventListener('keydown', (e) => { if (e.key === 'Enter') fazerLogin(); });
+$('btn-sair').addEventListener('click', async () => { if (confirm('Encerrar a sessão?')) { await sb.auth.signOut(); location.reload(); } });
+
+function estado(icone, titulo, texto, extra) {
+  $('conteudo').innerHTML = `<div class="estado"><div class="ic">${icone}</div><div class="t">${esc(titulo)}</div><div>${esc(texto || '')}</div>${extra || ''}</div>`;
+}
+
+/* ---------------- início ---------------- */
+async function iniciarApp(user) {
+  $('tela-loading').style.display = 'none'; $('tela-login').style.display = 'none'; $('tela-app').style.display = 'block';
+  CTX.userId = user.id;
+  CTX.nome = (user.user_metadata && (user.user_metadata.nome || user.user_metadata.full_name)) || user.email || '';
+  $('header-sub').textContent = CTX.nome;
+
+  if (!/^\d+$/.test(MOV_ID)) {
+    estado('🔎', 'Informe o código da movimentação', 'Abra este endereço com ?codigo=NÚMERO ou digite abaixo.',
+      '<div style="margin-top:14px;display:flex;gap:8px;justify-content:center"><input type="text" id="digitar-codigo" inputmode="numeric" placeholder="Código" style="max-width:160px"><button class="btn btn-primary" id="btn-abrir-codigo">Abrir</button></div>');
+    const abrir = () => { const v = $('digitar-codigo').value.trim(); if (/^\d+$/.test(v)) { MOV_ID = v; history.replaceState(null, '', '?codigo=' + v); iniciarApp(user); } };
+    $('btn-abrir-codigo').addEventListener('click', abrir);
+    $('digitar-codigo').addEventListener('keydown', (e) => { if (e.key === 'Enter') abrir(); });
+    return;
+  }
+  estado('⏳', 'Carregando movimentação #' + MOV_ID + '...');
+
+  try {
+    // a RLS só devolve movimentação de unidade em que o usuário está vinculado
+    const { data: mov, error } = await sb.from('estoque_movimentacoes').select('*').eq('id', Number(MOV_ID)).maybeSingle();
+    if (error) throw error;
+    if (!mov) { estado('🔒', 'Movimentação não encontrada', 'O código #' + MOV_ID + ' não existe ou não pertence a uma unidade em que você está logado.'); return; }
+
+    const { data: vinc, error: eV } = await sb.from('servir_unidade_usuarios').select('eh_principal').eq('user_id', user.id).eq('unidade_negocio_id', mov.unidade_negocio_id).maybeSingle();
+    if (eV) throw eV;
+    if (!vinc) { estado('🔒', 'Sem acesso', 'Esta movimentação é de uma unidade em que você não está vinculado.'); return; }
+    CTX.unidadeId = mov.unidade_negocio_id; CTX.ehPrincipal = !!vinc.eh_principal;
+
+    if (mov.tipo !== 'saida') { estado('ℹ️', 'Só é possível alterar itens de SAÍDA', 'A movimentação #' + MOV_ID + ' é uma ' + (mov.tipo === 'entrada' ? 'entrada' : mov.tipo) + '. Corrija entradas pela guia Notas do Estoque.'); return; }
+
+    // permissão do Estoque (mesma regra do estoque-app): principal e quem não tem papel = acesso total
+    if (!CTX.ehPrincipal) {
+      const { data: papel } = await sb.rpc('fn_papel_usuario', { p_unidade_negocio_id: CTX.unidadeId, p_modulo: 'estoque' });
+      CTX.papel = papel || null;
+      if (papel) {
+        const { data: linhas } = await sb.from('servir_permissoes_papel').select('permissao, permitido').eq('modulo', 'estoque').eq('papel', papel).eq('permissao', 'ver_movimentacoes');
+        if (!(linhas || []).some(l => l.permitido)) { estado('🔒', 'Sem permissão', 'Seu papel no Estoque não permite mexer em movimentações.'); return; }
+      }
+    }
+    MOV = mov;
+    await carregarDados();
+    desenhar();
+  } catch (e) {
+    console.error(e);
+    estado('⚠️', 'Não foi possível abrir a movimentação', e.message || String(e));
+  }
+}
+
+async function carregarDados() {
+  const u = CTX.unidadeId;
+  const eventosPaginados = async () => {
+    let todos = [], pag = 0;
+    while (true) {
+      const { data, error } = await sb.from('fabrica_eventos').select('codigo, descricao').eq('unidade_negocio_id', u).range(pag * 1000, pag * 1000 + 999);
+      if (error) throw error;
+      todos = todos.concat(data || []);
+      if (!data || data.length < 1000) break;
+      pag++;
+    }
+    return todos;
+  };
+  const [setores, subsetores, veiculos, plano, unidade, produto, nota, almox, eventos] = await Promise.all([
+    sb.from('unidade_setores').select('id, nome, codigo, ativo').eq('unidade_negocio_id', u).order('nome'),
+    sb.from('unidade_subsetores').select('id, nome, setor_id, ativo').eq('unidade_negocio_id', u).order('nome'),
+    sb.from('unidade_equipamentos_veiculos').select('id, nome, placa, identificador, ativo').eq('unidade_negocio_id', u).order('nome'),
+    sb.from('unidade_plano_de_contas').select('id, codigo, descricao, ativo').eq('unidade_negocio_id', u).order('codigo'),
+    sb.from('servir_unidades_negocio').select('nome').eq('id', u).maybeSingle(),
+    MOV.produto_id ? sb.from('estoque_produtos').select('nome, un').eq('id', MOV.produto_id).maybeSingle() : Promise.resolve({ data: null }),
+    MOV.estoque_nota_id ? sb.from('estoque_notas').select('id, numero_nf, nome_fornecedor, tipo').eq('id', MOV.estoque_nota_id).maybeSingle() : Promise.resolve({ data: null }),
+    MOV.almoxarifado_id ? sb.from('unidade_almoxarifados').select('nome').eq('id', MOV.almoxarifado_id).maybeSingle() : Promise.resolve({ data: null }),
+    eventosPaginados()
+  ]);
+  for (const r of [setores, subsetores, veiculos, plano]) if (r.error) throw r.error;
+  // inativos só aparecem se já estiverem na movimentação (para não perder o valor atual)
+  const manter = (lista, id) => (lista || []).filter(x => x.ativo !== false || String(x.id) === String(id));
+  CAT.setores = manter(setores.data, MOV.setor_id);
+  CAT.subsetores = manter(subsetores.data, MOV.subsetor_id);
+  CAT.veiculos = manter(veiculos.data, MOV.equipamento_veiculo_id);
+  CAT.planoContas = manter(plano.data, MOV.plano_contas_id);
+  EVENTOS = eventos;
+  CTX.unidadeNome = (unidade.data && unidade.data.nome) || '';
+  CTX.produto = produto.data; CTX.nota = nota.data; CTX.almox = almox.data;
+  $('header-sub').textContent = (CTX.unidadeNome ? CTX.unidadeNome + ' · ' : '') + CTX.nome;
+
+  const porId = (lista, id) => (id == null ? null : (lista.find(x => String(x.id) === String(id)) || { id, nome: '#' + id, descricao: '#' + id, codigo: '' }));
+  SEL = {
+    setor: porId(CAT.setores, MOV.setor_id),
+    subsetor: porId(CAT.subsetores, MOV.subsetor_id),
+    veiculo: porId(CAT.veiculos, MOV.equipamento_veiculo_id),
+    plano: porId(CAT.planoContas, MOV.plano_contas_id),
+    evento: MOV.evento ? (EVENTOS.find(e => String(e.codigo) === String(MOV.evento)) || { codigo: MOV.evento, descricao: '' }) : null
+  };
+  ORIG = { ...SEL };
+}
+
+/* ---------------- tela ---------------- */
+const rotSetor = (s) => (s.codigo != null && s.codigo !== '' ? s.codigo + ' — ' : '') + s.nome;
+const rotSub = (s) => s.nome;
+const rotVeic = (v) => (v.nome || '#' + v.id) + (v.placa ? ' (' + v.placa + ')' : v.identificador ? ' (' + v.identificador + ')' : '');
+const rotPlano = (p) => (p.codigo ? p.codigo + ' — ' : '') + (p.descricao || '');
+const rotEvento = (e) => e.codigo + (e.descricao ? ' — ' + e.descricao : '');
+
+function desenhar() {
+  const m = MOV;
+  const prod = m.descricao_avulsa ? m.descricao_avulsa + ' (avulso)' : (CTX.produto ? CTX.produto.nome : '#' + m.produto_id);
+  $('conteudo').innerHTML = `
+    <div class="card">
+      <div class="card-topo"><div><div class="num">Movimentação #${esc(m.id)} · Saída</div><div class="sub">${esc(CTX.unidadeNome)}</div></div><div class="sub">${esc(dataBR(m.data))}</div></div>
+      <div class="card-corpo">
+        <div class="info">
+          <div><label>Produto</label><div class="v">${esc(prod)}</div></div>
+          <div><label>Quantidade</label><div class="v">${esc(Number(m.qtd).toLocaleString('pt-BR'))}${CTX.produto && CTX.produto.un ? ' ' + esc(CTX.produto.un) : ''}</div></div>
+          <div><label>Valor unitário</label><div class="v">${esc(moeda(m.valor_unit))}</div></div>
+          <div><label>Almoxarifado</label><div class="v">${esc(CTX.almox ? CTX.almox.nome : '-')}</div></div>
+          <div><label>Responsável</label><div class="v">${esc(m.responsavel || '-')}</div></div>
+          <div><label>Nota</label><div class="v">${CTX.nota ? esc((CTX.nota.numero_nf ? 'NF ' + CTX.nota.numero_nf : 'Nota #' + CTX.nota.id) + (CTX.nota.nome_fornecedor ? ' · ' + CTX.nota.nome_fornecedor : '')) : '-'}</div></div>
+        </div>
+        ${m.observacao ? `<div class="info"><div><label>Observação</label><div class="v">${esc(m.observacao)}</div></div></div>` : ''}
+        <hr class="div">
+        <div class="grade">
+          <div class="campo" id="c-setor"></div>
+          <div class="campo" id="c-subsetor"></div>
+          <div class="campo" id="c-evento"></div>
+          <div class="campo" id="c-plano"></div>
+          <div class="campo" id="c-veiculo"></div>
+          <div class="campo" id="c-km"><label>KM</label><input type="text" id="f-km" inputmode="numeric" placeholder="KM do veículo" autocomplete="off"></div>
+          <div class="campo" id="c-tag"><label>Tag</label><input type="text" id="f-tag" autocomplete="off" placeholder="Tag da movimentação"></div>
+        </div>
+        <div class="aviso">Só a classificação é alterada (quantidade, valor e estoque não mudam). Se a saída pertence a uma nota de entrada, o rateio dela é refeito. A alteração fica registrada na auditoria.</div>
+        <div class="acoes"><button class="btn btn-cinza" id="btn-fechar">Fechar</button><button class="btn btn-primary" id="btn-salvar">Salvar alterações</button></div>
+        <div class="msg-erro" id="msg"></div>
+        <div id="resultado"></div>
+      </div>
+    </div>`;
+  $('f-km').value = m.km_troca != null ? String(m.km_troca) : '';
+  $('f-tag').value = m.tag || '';
+  ORIG.km = $('f-km').value; ORIG.tag = $('f-tag').value;
+
+  busca('setor', 'Setor', () => CAT.setores, rotSetor, (s) => rotSetor(s) , () => {
+    // trocou o setor: o subsetor só vale se for desse setor
+    if (SEL.subsetor && SEL.setor && String(SEL.subsetor.setor_id) !== String(SEL.setor.id)) { SEL.subsetor = null; pintar('subsetor'); }
+  });
+  busca('subsetor', 'Subsetor', () => CAT.subsetores.filter(s => !SEL.setor || String(s.setor_id) === String(SEL.setor.id)), rotSub, rotSub);
+  busca('evento', 'Evento', () => EVENTOS, rotEvento, rotEvento);
+  busca('plano', 'Plano de contas', () => CAT.planoContas, rotPlano, rotPlano);
+  busca('veiculo', 'Veículo / equipamento', () => CAT.veiculos, rotVeic, (v) => rotVeic(v) + ' ' + (v.identificador || ''));
+  ['f-km', 'f-tag'].forEach(id => $(id).addEventListener('input', marcarMudancas));
+  $('btn-fechar').addEventListener('click', fechar);
+  $('btn-salvar').addEventListener('click', salvar);
+  marcarMudancas();
+}
+
+function fechar() { window.close(); setTimeout(() => { if (!window.closed) estado('✅', 'Pode fechar esta janela', ''); }, 200); }
+
+// campo de busca por qualquer parte do texto (padrão da plataforma: vazio lista os 10 primeiros)
+function busca(chave, rotuloCampo, getLista, rotulo, textoBusca, aoMudar) {
+  const raiz = $('c-' + chave);
+  raiz.innerHTML = `<label>${esc(rotuloCampo)}</label><input type="text" id="b-${chave}" placeholder="Buscar..." autocomplete="off"><div class="dd" id="dd-${chave}"></div><div class="sel" id="sel-${chave}"></div>`;
+  const inp = $('b-' + chave), dd = $('dd-' + chave);
+  let fecharT = null;
+  const render = () => {
+    const termo = inp.value.trim();
+    const achados = getLista().filter(x => casaBusca(textoBusca(x), termo)).slice(0, LIMITE_BUSCA);
+    dd.innerHTML = achados.length ? achados.map((x, i) => `<div class="it" data-i="${i}">${esc(rotulo(x))}</div>`).join('') : `<div class="vazio">Nada encontrado.</div>`;
+    dd._achados = achados;
+    dd.classList.add('aberto');
+  };
+  inp.addEventListener('input', render);
+  inp.addEventListener('focus', render);
+  inp.addEventListener('click', render);
+  inp.addEventListener('blur', () => { fecharT = setTimeout(() => { dd.classList.remove('aberto'); inp.value = ''; }, 200); });
+  inp.addEventListener('focus', () => clearTimeout(fecharT));
+  dd.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const it = e.target.closest('.it'); if (!it) return;
+    SEL[chave] = dd._achados[Number(it.dataset.i)];
+    inp.value = ''; dd.classList.remove('aberto');
+    if (aoMudar) aoMudar();
+    pintar(chave); marcarMudancas();
+  });
+  CAMPOS[chave] = { rotulo };
+  pintar(chave);
+}
+const CAMPOS = {};
+function pintar(chave) {
+  const el = $('sel-' + chave); if (!el) return;
+  const v = SEL[chave];
+  el.innerHTML = v ? `Selecionado: <strong>${esc(CAMPOS[chave].rotulo(v))}</strong><a data-limpar="${chave}">remover</a>` : '<span style="color:var(--texto3)">Nenhum</span>';
+  const a = el.querySelector('[data-limpar]');
+  if (a) a.addEventListener('click', () => { SEL[chave] = null; pintar(chave); marcarMudancas(); });
+}
+
+const idDe = (v) => (v == null ? null : String(v.id != null ? v.id : v.codigo));
+function lerKm() {
+  const t = $('f-km').value.trim(); if (!t) return { ok: true, valor: null };
+  const n = Number(t.replace(/\./g, '').replace(',', '.'));
+  return isNaN(n) || n < 0 ? { ok: false } : { ok: true, valor: n };
+}
+function marcarMudancas() {
+  const mudou = {
+    setor: idDe(SEL.setor) !== idDe(ORIG.setor), subsetor: idDe(SEL.subsetor) !== idDe(ORIG.subsetor),
+    evento: idDe(SEL.evento) !== idDe(ORIG.evento), plano: idDe(SEL.plano) !== idDe(ORIG.plano), veiculo: idDe(SEL.veiculo) !== idDe(ORIG.veiculo),
+    km: $('f-km').value.trim() !== ORIG.km, tag: $('f-tag').value.trim() !== (ORIG.tag || '').trim()
+  };
+  Object.keys(mudou).forEach(k => { const c = $('c-' + k); if (c) c.classList.toggle('mudou', mudou[k]); });
+  return mudou;
+}
+
+/* ---------------- salvar ---------------- */
+async function salvar() {
+  const msg = $('msg'), btn = $('btn-salvar'); msg.className = 'msg-erro'; msg.textContent = ''; $('resultado').innerHTML = '';
+  const km = lerKm();
+  if (!km.ok) { msg.textContent = 'KM inválido: use só números.'; $('f-km').focus(); return; }
+  const mudou = marcarMudancas();
+  const nomes = { setor: 'Setor', subsetor: 'Subsetor', evento: 'Evento', plano: 'Plano de contas', veiculo: 'Veículo', km: 'KM', tag: 'Tag' };
+  const alterados = Object.keys(mudou).filter(k => mudou[k]);
+  if (!alterados.length) { msg.textContent = 'Nada foi alterado.'; return; }
+
+  const novoTag = $('f-tag').value.trim();
+  const upd = {
+    tag: novoTag, evento: SEL.evento ? String(SEL.evento.codigo) : '',
+    setor_id: SEL.setor ? SEL.setor.id : null, subsetor_id: SEL.subsetor ? SEL.subsetor.id : null,
+    plano_contas_id: SEL.plano ? SEL.plano.id : null, equipamento_veiculo_id: SEL.veiculo ? SEL.veiculo.id : null,
+    km_troca: km.valor
+  };
+  const texto = (k) => {
+    const o = { setor: ORIG.setor && rotSetor(ORIG.setor), subsetor: ORIG.subsetor && rotSub(ORIG.subsetor), evento: ORIG.evento && String(ORIG.evento.codigo), plano: ORIG.plano && rotPlano(ORIG.plano), veiculo: ORIG.veiculo && rotVeic(ORIG.veiculo), km: ORIG.km, tag: ORIG.tag };
+    const n = { setor: SEL.setor && rotSetor(SEL.setor), subsetor: SEL.subsetor && rotSub(SEL.subsetor), evento: SEL.evento && String(SEL.evento.codigo), plano: SEL.plano && rotPlano(SEL.plano), veiculo: SEL.veiculo && rotVeic(SEL.veiculo), km: $('f-km').value.trim(), tag: novoTag };
+    return `${nomes[k]}: ${o[k] || '(vazio)'} → ${n[k] || '(vazio)'}`;
+  };
+  const linhas = alterados.map(texto);
+
+  btn.disabled = true; msg.className = ''; msg.textContent = 'Salvando...';
+  try {
+    const { data, error } = await sb.from('estoque_movimentacoes').update(upd).eq('id', MOV.id).select('id');
+    if (error) throw error;
+    if (!data || !data.length) throw new Error('O banco não aplicou a alteração (sem permissão para esta movimentação).');
+    let avisoRateio = '';
+    try { await sincronizarRateioPorMovimento(MOV); } catch (e) { console.error(e); avisoRateio = 'A classificação foi salva, mas não consegui atualizar o rateio da nota: ' + (e.message || e); }
+    await registrarSentinela(`Alterou a classificação da saída #${MOV.id} (${CTX.produto ? CTX.produto.nome : MOV.descricao_avulsa || '#' + MOV.produto_id}): ${linhas.join('; ')}`);
+    Object.assign(MOV, upd);
+    ORIG = { ...SEL, km: $('f-km').value.trim(), tag: novoTag };
+    marcarMudancas();
+    msg.textContent = '';
+    $('resultado').innerHTML = `<div class="resultado"><strong>✅ Alterações salvas.</strong><ul>${linhas.map(l => '<li>' + esc(l) + '</li>').join('')}</ul></div>` +
+      (avisoRateio ? `<div class="aviso">⚠️ ${esc(avisoRateio)}</div>` : '');
+  } catch (e) {
+    console.error(e);
+    msg.className = 'msg-erro'; msg.textContent = '⚠️ ' + (e.message || e);
+  } finally { btn.disabled = false; }
+}
+
+async function registrarSentinela(descricao) {
+  const base = { unidade_negocio_id: CTX.unidadeId, modulo: 'estoque', tipo_acao: 'edicao_classificacao_movimentacao', descricao, operador: CTX.nome, operador_user_id: CTX.userId };
+  try {
+    let { error } = await sb.from('servir_sentinela').insert({ ...base, id_registro_alterado: String(MOV.id) });
+    if (error) ({ error } = await sb.from('servir_sentinela').insert({ ...base, descricao: descricao + ` [registro ${MOV.id}]` }));   // colunas de id ainda não existem
+    if (error) console.error('Falha ao gravar na sentinela:', error);
+  } catch (e) { console.error('Falha ao gravar na sentinela:', e); }
+}
+
+/* =========================================================================
+   Rateio da nota de entrada — cópia do que o estoque-app.html faz (sincronizarRateioNotaAgora e auxiliares).
+   Se a regra mudar lá, mudar aqui também. Só roda quando a saída está ligada a uma nota de entrada.
+   ========================================================================= */
+const ORIGEM_RATEIO_ESTOQUE = 'estoque', TIPO_RATEIO_COMPRA = 'compra', TIPO_RATEIO_BAIXA = 'baixa';
+const chaveRateioNota = (notaId, tipo) => (tipo === TIPO_RATEIO_BAIXA ? 'baixa:' : '') + String(notaId);
+function soCodigoEvento(valor) {
+  const v = String(valor || '').trim(); if (!v) return '';
+  if (EVENTOS.some(e => String(e.codigo) === v)) return v;
+  const m = v.match(/^(\S+?)\s*(?:—|–|-|:)\s+\S/);
+  return m ? m[1] : v;
+}
+async function operacaoRateioDaNota(notaId, tipo) {
+  const { data, error } = await sb.from('unidade_operacao').select('id, codigo').eq('unidade_negocio_id', CTX.unidadeId).eq('origem', ORIGEM_RATEIO_ESTOQUE).eq('id_registro_na_origem', chaveRateioNota(notaId, tipo)).order('id').limit(1);
+  if (error) throw error;
+  return (data && data[0]) || null;
+}
+async function notaIdDaMovimentacao(mov) {
+  if (mov.estoque_nota_id != null) return Number(mov.estoque_nota_id);
+  if (mov.movimentacao_origem_id != null) {
+    const { data } = await sb.from('estoque_movimentacoes').select('estoque_nota_id').eq('id', mov.movimentacao_origem_id).maybeSingle();
+    return data && data.estoque_nota_id != null ? Number(data.estoque_nota_id) : null;
+  }
+  return null;
+}
+async function sincronizarRateioPorMovimento(mov) {
+  const notaId = await notaIdDaMovimentacao(mov);
+  if (notaId != null) await sincronizarRateioNotaAgora(notaId);
+}
+async function apagarRateioDaOperacao(operacao, nota, motivo, origem) {
+  const { error: e1 } = await sb.from('unidade_rateios').delete().eq('operacao_id', operacao.id); if (e1) throw e1;
+  const { error: e2 } = await sb.from('unidade_operacao').delete().eq('id', operacao.id); if (e2) throw e2;
+  await sb.from('servir_sentinela').insert({ unidade_negocio_id: CTX.unidadeId, modulo: 'estoque', tipo_acao: origem === TIPO_RATEIO_BAIXA ? 'rateio_baixa_direta_removido' : 'rateio_compra_removido', descricao: `Removeu o rateio (operação nº ${operacao.codigo}) da nota de entrada #${nota ? nota.id : '?'} — ${motivo}`, operador: CTX.nome, operador_user_id: CTX.userId });
+}
+function calcularPercentuaisRateio(lista) {
+  const total = lista.reduce((a, g) => a + g.valor, 0);
+  lista.forEach(g => { g.percentual = total > 0 ? Math.round(g.valor / total * 10000) / 100 : Math.round(10000 / lista.length) / 100; });
+  const resto = Math.round((100 - lista.reduce((a, g) => a + g.percentual, 0)) * 100) / 100;
+  if (resto !== 0) { const maior = lista.reduce((a, g) => (g.percentual > a.percentual ? g : a), lista[0]); maior.percentual = Math.round((maior.percentual + resto) * 100) / 100; }
+}
+async function aplicarOperacaoRateio(origem, notaId, operacao, linhas, nota, rotulo) {
+  const unidade = CTX.unidadeId;
+  if (!linhas.length) { if (operacao) await apagarRateioDaOperacao(operacao, nota, `a nota ficou sem ${rotulo}`, origem); return; }
+  let op = operacao; const criou = !op;
+  if (!op) {
+    const { data: maior } = await sb.from('unidade_operacao').select('codigo').eq('unidade_negocio_id', unidade).order('codigo', { ascending: false }).limit(1);
+    const proximo = (maior && maior.length && maior[0].codigo) ? maior[0].codigo + 1 : 1;
+    const { data: nova, error: eOp } = await sb.from('unidade_operacao').insert({ unidade_negocio_id: unidade, codigo: proximo, origem: ORIGEM_RATEIO_ESTOQUE, id_registro_na_origem: chaveRateioNota(notaId, origem) }).select().single();
+    if (eOp) throw eOp; op = nova;
+  } else {
+    const { error: eDel } = await sb.from('unidade_rateios').delete().eq('operacao_id', op.id); if (eDel) throw eDel;
+  }
+  const { error: eRat } = await sb.from('unidade_rateios').insert(linhas.map(l => ({ ...l, operacao_id: op.id })));
+  if (eRat) throw eRat;
+  if (criou) await sb.from('servir_sentinela').insert({ unidade_negocio_id: unidade, modulo: 'estoque', tipo_acao: origem === TIPO_RATEIO_BAIXA ? 'rateio_baixa_direta_gerado' : 'rateio_compra_gerado', descricao: `Gerou o rateio de ${rotulo} (operação nº ${op.codigo}, ${linhas.length} linha(s)) da nota de entrada #${nota.id}${nota.numero_nf ? ' (NF ' + nota.numero_nf + ')' : ''}`, operador: CTX.nome, operador_user_id: CTX.userId });
+}
+async function sincronizarRateioNotaAgora(notaId) {
+  const unidade = CTX.unidadeId;
+  let { data: nota, error: eNota } = await sb.from('estoque_notas').select('id, tipo, numero_nf, nome_fornecedor, setor_id, evento, plano_contas_id').eq('id', notaId).maybeSingle();
+  if (eNota) { ({ data: nota, error: eNota } = await sb.from('estoque_notas').select('id, tipo, numero_nf, nome_fornecedor').eq('id', notaId).maybeSingle()); if (eNota) throw eNota; }
+  const [opCompra, opBaixa] = await Promise.all([operacaoRateioDaNota(notaId, TIPO_RATEIO_COMPRA), operacaoRateioDaNota(notaId, TIPO_RATEIO_BAIXA)]);
+  if (!nota || nota.tipo === 'saida') {
+    if (opCompra) await apagarRateioDaOperacao(opCompra, nota, nota ? 'a nota não é mais de entrada' : 'a nota foi excluída', TIPO_RATEIO_COMPRA);
+    if (opBaixa) await apagarRateioDaOperacao(opBaixa, nota, nota ? 'a nota não é mais de entrada' : 'a nota foi excluída', TIPO_RATEIO_BAIXA);
+    return;
+  }
+  const colSaida = 'id, qtd, valor_unit, setor_id, plano_contas_id, evento, equipamento_veiculo_id, km_troca';
+  const { data: entradas, error: eEnt } = await sb.from('estoque_movimentacoes').select('id, qtd, valor_unit, setor_id, plano_contas_id, evento').eq('estoque_nota_id', notaId).eq('tipo', 'entrada');
+  if (eEnt) throw eEnt;
+  const idsEntradas = (entradas || []).map(m => m.id);
+  const consultas = [sb.from('estoque_movimentacoes').select(colSaida).eq('estoque_nota_id', notaId).eq('tipo', 'saida')];
+  for (let i = 0; i < idsEntradas.length; i += 150) consultas.push(sb.from('estoque_movimentacoes').select(colSaida).in('movimentacao_origem_id', idsEntradas.slice(i, i + 150)).eq('tipo', 'saida'));
+  const resultados = await Promise.all(consultas);
+  const saidasPorId = new Map();
+  for (const r of resultados) { if (r.error) throw r.error; (r.data || []).forEach(m => saidasPorId.set(m.id, m)); }
+  const saidas = [...saidasPorId.values()];
+  if (!(entradas || []).length && !saidas.length) {
+    if (opCompra) await apagarRateioDaOperacao(opCompra, nota, 'a nota ficou sem itens', TIPO_RATEIO_COMPRA);
+    if (opBaixa) await apagarRateioDaOperacao(opBaixa, nota, 'a nota ficou sem itens', TIPO_RATEIO_BAIXA);
+    return;
+  }
+  const { data: parametros, error: eParam } = await sb.from('financeiro_parametros').select('empresa_padrao_id').eq('unidade_negocio_id', unidade).maybeSingle();
+  if (eParam) throw eParam;
+  if (!parametros || !parametros.empresa_padrao_id) throw new Error('defina a Empresa padrão em Financeiro → Parâmetros (a linha de rateio exige empresa).');
+  const empresaId = parametros.empresa_padrao_id;
+  const referencia = `Ref. ${nota.numero_nf ? 'NF ' + nota.numero_nf : 'nota'} (nota de entrada #${nota.id}${nota.nome_fornecedor ? ' · ' + nota.nome_fornecedor : ''})`;
+
+  const gruposCompra = new Map();
+  for (const m of (entradas || [])) {
+    const setorId = m.setor_id || nota.setor_id || null, planoId = m.plano_contas_id || nota.plano_contas_id || null, evento = soCodigoEvento(m.evento || nota.evento || '');
+    const chave = [setorId || '', evento, planoId || ''].join('|');
+    let g = gruposCompra.get(chave);
+    if (!g) { g = { setor_id: setorId, plano_de_contas_id: planoId, evento: evento || null, valor: 0 }; gruposCompra.set(chave, g); }
+    g.valor += Number(m.qtd) * Number(m.valor_unit);
+  }
+  const listaCompra = [...gruposCompra.values()];
+  if (listaCompra.length) calcularPercentuaisRateio(listaCompra);
+  await aplicarOperacaoRateio(TIPO_RATEIO_COMPRA, notaId, opCompra, listaCompra.map(g => ({
+    unidade_negocio_id: unidade, operacao_id: null, setor_id: g.setor_id, plano_de_contas_id: g.plano_de_contas_id, empresa_id: empresaId, pessoa_id: null,
+    evento: g.evento, equipamento_veiculo: null, percentual: g.percentual, observacao: `${referencia} · entrada em estoque (compra)`
+  })), nota, 'compra');
+
+  const idsVeic = [...new Set(saidas.map(m => m.equipamento_veiculo_id).filter(v => v != null))];
+  const veiculos = new Map();
+  if (idsVeic.length) {
+    const { data: vs, error: eVeic } = await sb.from('unidade_equipamentos_veiculos').select('id, identificador, nome, placa').in('id', idsVeic);
+    if (eVeic) throw eVeic;
+    (vs || []).forEach(v => veiculos.set(String(v.id), v));
+  }
+  const gruposBaixa = new Map();
+  for (const m of saidas) {
+    const evento = soCodigoEvento(m.evento);
+    const v = m.equipamento_veiculo_id != null ? veiculos.get(String(m.equipamento_veiculo_id)) : null;
+    const codVeic = v ? String(v.identificador || v.id) : (m.equipamento_veiculo_id != null ? String(m.equipamento_veiculo_id) : '');
+    const chave = [m.setor_id || '', evento, m.plano_contas_id || '', codVeic].join('|');
+    let g = gruposBaixa.get(chave);
+    if (!g) { g = { setor_id: m.setor_id || null, plano_de_contas_id: m.plano_contas_id || null, evento: evento || null, equipamento_veiculo: codVeic || null, veiculo: v, valor: 0, km: null }; gruposBaixa.set(chave, g); }
+    g.valor += Number(m.qtd) * Number(m.valor_unit);
+    if (m.km_troca != null && (g.km == null || Number(m.km_troca) > g.km)) g.km = Number(m.km_troca);
+  }
+  const listaBaixa = [...gruposBaixa.values()];
+  if (listaBaixa.length) calcularPercentuaisRateio(listaBaixa);
+  await aplicarOperacaoRateio(TIPO_RATEIO_BAIXA, notaId, opBaixa, listaBaixa.map(g => ({
+    unidade_negocio_id: unidade, operacao_id: null, setor_id: g.setor_id, plano_de_contas_id: g.plano_de_contas_id, empresa_id: empresaId, pessoa_id: null,
+    evento: g.evento, equipamento_veiculo: g.equipamento_veiculo, percentual: g.percentual,
+    observacao: referencia + ' · baixa direta' + (g.veiculo ? ` · Veículo: ${g.veiculo.nome || ''}${g.veiculo.placa ? ' (' + g.veiculo.placa + ')' : ''}` : '') + (g.km != null ? ` · KM ${g.km}` : '')
+  })), nota, 'baixa direta');
+}
+
+/* ---------------- arranque ---------------- */
+(async function () {
+  try {
+    const { data } = await sb.auth.getSession();
+    if (data && data.session) { iniciarApp(data.session.user); return; }
+  } catch (e) { console.error(e); }
+  $('tela-loading').style.display = 'none'; $('tela-login').style.display = 'flex';
+})();
+</script>
+</body>
+</html>
