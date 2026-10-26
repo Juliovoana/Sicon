@@ -161,7 +161,10 @@
     <button class="fecha" id="titFechar" type="button" aria-label="Fechar">×</button>
     <h3 id="titTitulo"></h3>
     <div class="resumo-kpis" id="titKpis"></div>
-    <input type="search" class="busca" id="titBusca" placeholder="Buscar (cliente, fornecedor, OP, histórico…)" style="width:100%;margin-bottom:8px">
+    <div class="linha-filtros" style="margin-bottom:8px;align-items:center">
+      <input type="search" class="busca" id="titBusca" placeholder="Buscar (cliente, fornecedor, OP, histórico…)" style="flex:1;min-width:200px">
+      <select id="titSit" class="busca" style="min-width:0" title="Filtrar a lista"><option value="todos">Todos</option><option value="atrasados">Só atrasados</option><option value="prov">Só provisionados</option><option value="conf">Só confirmados</option></select>
+    </div>
     <div class="rol-lanc"><table class="lanc" id="titTabela"></table></div>
     <div class="btns">
       <button class="btn sec" id="titCsv" type="button">⬇ Baixar CSV</button>
@@ -490,13 +493,15 @@
     const par = (tx, v) => { const s = el('span'); s.appendChild(document.createTextNode(tx + ' ')); s.appendChild(el('b', '', v)); k.appendChild(s); };
     par('Títulos:', lista.length.toLocaleString('pt-BR')); par('Total:', fmtR(soma(lista))); par('Atrasados:', atr.length + ' · ' + fmtR(soma(atr)));
     if(prov.length) par('Provisionados:', prov.length + ' · ' + fmtR(soma(prov)));
-    $('titBusca').value = ''; $('titCsv').hidden = false; $('titBusca').hidden = false; desenharTit();
+    $('titBusca').value = ''; $('titCsv').hidden = false; $('titBusca').hidden = false; $('titSit').hidden = false; $('titSit').value = 'todos';
+    $('titSit').querySelector('[value=prov]').disabled = !prov.length; $('titSit').querySelector('[value=atrasados]').disabled = !atr.length; desenharTit();
     $('popupTit').hidden = false; document.body.style.overflow = 'hidden';
   }
   function desenharTit(){
     const A = titAberto; if(!A) return; const dD = dias(R.D);
     const q = semAcento($('titBusca').value);
-    A.filtrados = q ? A.lista.filter(t => semAcento([t.op, t.cl, t.h, t.tit, nomeEmp(t.emp), fmt(t.v)].join(' ')).includes(q)) : A.lista;
+    const fs = $('titSit').value, okSit = (t) => fs === 'atrasados' ? dias(t.venc) - dD <= 0 : fs === 'prov' ? t.sit === 'P' : fs === 'conf' ? t.sit !== 'P' : true;
+    A.filtrados = A.lista.filter(t => okSit(t) && (!q || semAcento([t.op, t.cl, t.h, t.tit, nomeEmp(t.emp), fmt(t.v)].join(' ')).includes(q)));
     const temProv = A.lista.some(t => t.sit === 'P');
     const cab = ['<th>Vencimento</th>', '<th>Dias</th>', '<th class="txt">Empresa</th>', '<th>OP</th>', '<th>Título</th>', '<th class="txt">' + (A.lado === 'P' ? 'Fornecedor' : 'Cliente') + '</th>', '<th class="txt">Histórico</th>'];
     if(temProv) cab.push('<th>Situação</th>'); cab.push('<th>Valor (R$)</th>');
@@ -508,7 +513,7 @@
   // como o saldo de uma conta foi calculado (para conferir com o extrato): totais, âncora e os últimos lançamentos até a data
   function abrirConta(gi, ci){
     const g = R.fluxos[gi], c = g && g.contas[ci]; if(!c) return; const conta = c.ref, D = R.D;
-    titAberto = null; $('titCsv').hidden = true; $('titBusca').hidden = true;
+    titAberto = null; $('titCsv').hidden = true; $('titBusca').hidden = true; $('titSit').hidden = true;
     $('titTitulo').textContent = conta.nome + ' — como o saldo de ' + fmtDia(D) + ' foi calculado';
     const ate = conta.mv.filter(m => m.d <= D), antes = conta.mv.filter(m => m.d < D);
     const sr = antes.reduce((s, m) => s + m.r, 0), sx = antes.reduce((s, m) => s + m.x, 0);
@@ -524,7 +529,7 @@
       '</tbody><tfoot><tr><td colspan="4" style="text-align:left;font-weight:400">Mostrando os ' + ult.length + ' lançamentos mais recentes até ' + fmtDia(D) + '. Compare o saldo e esses lançamentos com o extrato; se faltar lançamento aqui, ele não está no dados_mov_caixa.csv (a consulta do movimento pode estar filtrando por empresa ou por outro critério).</td></tr></tfoot>';
     $('popupTit').hidden = false; document.body.style.overflow = 'hidden';
   }
-  function fecharTit(){ $('popupTit').hidden = true; titAberto = null; document.body.style.overflow = ''; $('titCsv').hidden = false; $('titBusca').hidden = false; }
+  function fecharTit(){ $('popupTit').hidden = true; titAberto = null; document.body.style.overflow = ''; $('titCsv').hidden = false; $('titBusca').hidden = false; $('titSit').hidden = false; }
   function csvTit(){
     const A = titAberto; if(!A) return;
     const cel = (s) => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
@@ -715,7 +720,7 @@
   $('colFluxos').addEventListener('click', (e) => { const tr = e.target.closest('tr.cl[data-g]'); if(tr) abrirConta(+tr.dataset.g, +tr.dataset.c); });
   $('titFechar').addEventListener('click', fecharTit); $('titSair').addEventListener('click', fecharTit);
   $('popupTit').addEventListener('click', (e) => { if(e.target === $('popupTit')) fecharTit(); });
-  $('titBusca').addEventListener('input', desenharTit);
+  $('titBusca').addEventListener('input', desenharTit); $('titSit').addEventListener('change', desenharTit);
   $('titCsv').addEventListener('click', csvTit);
   document.addEventListener('keydown', (e) => { if(e.key !== 'Escape') return; if(!$('popupPdf').hidden) $('popupPdf').hidden = true; else if(!$('popupTit').hidden) fecharTit(); });
 
