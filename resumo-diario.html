@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>Resumo diário</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='4' width='56' height='56' rx='14' fill='%231f6f4a'/%3E%3Cpath d='M16 44V28M28 44V18M40 44V32M52 44V22' fill='none' stroke='%23fff' stroke-width='5' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#f4f6f5; --card:#ffffff; --ink:#18241f; --muted:#5d6b64; --line:#dfe5e2; --line-forte:#b9c4be;
+    --brand:#1f6f4a; --brand-soft:#e3f1ea; --pos:#1f7a4d; --neg:#b3261e; --info:#2b6cb0;
+    --warn:#9a6200; --warn-bg:#fff0cf; --bad-bg:#fde4e1; --radius:12px; --cab:#e4e7ea; --zebra:#f8faf9;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#121715; --card:#1b2420; --ink:#e8efeb; --muted:#9fb0a7; --line:#2b3832; --line-forte:#43524a; --brand:#58c28d; --brand-soft:#1d3329;
+      --pos:#6fd6a1; --neg:#ff8f86; --info:#7db4f0; --warn:#f0be5d; --warn-bg:#3a2d10; --bad-bg:#401c19; --cab:#26322c; --zebra:#1f2924; }
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; line-height:1.4; -webkit-text-size-adjust:100%; }
+  .pagina{ max-width:1500px; margin:0 auto; padding:16px; }
+  a{ color:var(--brand); }
+  .topo{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .topo h1{ margin:0; font-size:1.3rem; }
+  .sub{ color:var(--muted); font-size:.9rem; margin-top:2px; }
+  .acoes{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .btn-ic{ width:42px; height:42px; border-radius:50%; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; text-decoration:none; }
+  .btn-ic:hover{ border-color:var(--brand); }
+  .btn-ic.girando span{ display:inline-block; animation:gira .8s linear infinite; }
+  @keyframes gira{ to{ transform:rotate(360deg); } }
+  #arquivosCsv{ display:none; }
+  .btn{ border:none; border-radius:8px; padding:8px 13px; font-size:.88rem; font-weight:700; cursor:pointer; background:var(--brand); color:#fff; }
+  @media (prefers-color-scheme: dark){ .btn{ color:#0c1a13; } }
+  .btn:disabled{ opacity:.6; cursor:default; }
+  .btn.sec{ background:var(--card); color:var(--ink); border:1px solid var(--line); }
+  .btn.mini{ padding:4px 9px; font-size:.78rem; }
+  .aviso{ border-radius:var(--radius); padding:10px 14px; margin-bottom:12px; font-size:.92rem; border:1px solid var(--line); background:var(--brand-soft); }
+  .aviso.alerta{ background:var(--warn-bg); color:var(--warn); border-color:var(--warn); }
+  .aviso.erro{ background:var(--bad-bg); color:var(--neg); border-color:var(--neg); }
+  .aviso[hidden]{ display:none; }
+
+  .filtros{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:12px; margin-bottom:12px; }
+  .linha-filtros{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+  .campo label{ display:block; font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:3px; }
+  .campo input[type=date], .busca{ border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; padding:7px 9px; font-size:.9rem; max-width:100%; }
+  .busca{ min-width:200px; }
+  .opcao{ display:flex; gap:8px; align-items:center; font-size:.88rem; cursor:pointer; padding:6px 2px; }
+  .painel{ border:1px solid var(--line); border-radius:10px; background:var(--card); }
+  .painel > summary{ list-style:none; cursor:pointer; padding:8px 12px; font-size:.9rem; font-weight:700; display:flex; gap:8px; align-items:center; }
+  .painel > summary::-webkit-details-marker{ display:none; }
+  .painel > summary::before{ content:'▸'; color:var(--muted); }
+  .painel[open] > summary::before{ content:'▾'; }
+  .painel .conta-resumo{ color:var(--muted); font-weight:500; font-size:.82rem; }
+  .painel .corpo{ padding:8px 12px 12px; border-top:1px solid var(--line); max-height:280px; overflow:auto; }
+  .lista-chk label{ display:flex; gap:8px; align-items:center; padding:3px 0; font-size:.88rem; cursor:pointer; }
+  .ferramentas{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+
+  .kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; margin-bottom:12px; }
+  .kpi{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:10px 12px; }
+  .kpi span{ display:block; color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.04em; }
+  .kpi b{ font-size:1.1rem; }
+  .pos{ color:var(--pos); } .neg{ color:var(--neg); }
+
+  .grade{ display:grid; grid-template-columns:minmax(0,5fr) minmax(0,6fr); gap:14px; align-items:start; }
+  @media (max-width:1000px){ .grade{ grid-template-columns:minmax(0,1fr); } }
+  .bloco{ background:var(--card); border:1px solid var(--line-forte); border-radius:var(--radius); overflow:hidden; margin-bottom:14px; }
+  .bloco h2{ margin:0; padding:9px 12px; font-size:.95rem; background:var(--brand); color:#fff; letter-spacing:.02em; }
+  @media (prefers-color-scheme: dark){ .bloco h2{ color:#0c1a13; } }
+  .bloco h2.pag{ background:#8f3b33; } .bloco h2.rec{ background:#2b6f8f; }
+  @media (prefers-color-scheme: dark){ .bloco h2.pag, .bloco h2.rec{ color:#fff; } }
+  .rolagem{ overflow:auto; }
+  table.t{ border-collapse:collapse; width:100%; font-size:.86rem; }
+  table.t th, table.t td{ padding:6px 10px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap; }
+  table.t th{ background:var(--cab); font-size:.72rem; text-transform:uppercase; letter-spacing:.03em; text-align:center; }
+  table.t td:first-child, table.t th:first-child{ text-align:left; white-space:normal; }
+  table.t tbody tr:nth-child(even) td{ background:var(--zebra); }
+  table.t tr.emp td{ background:var(--brand-soft); font-weight:800; }
+  table.t tr.sub td{ background:var(--cab); font-weight:700; }
+  table.t tr.tot td{ background:var(--cab); font-weight:800; border-top:2px solid var(--line-forte); }
+  table.t tr.cl{ cursor:pointer; }
+  table.t tr.cl:hover td{ background:var(--brand-soft); }
+  table.t td.pass{ color:var(--muted); }
+  .vazio{ text-align:center; color:var(--muted); padding:30px 16px; background:var(--card); border:1px dashed var(--line); border-radius:var(--radius); }
+  .nota{ color:var(--muted); font-size:.8rem; padding:8px 12px; }
+  .rodape{ color:var(--muted); font-size:.8rem; text-align:center; margin:18px 0 6px; }
+  details.dados{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:10px 14px; margin-top:14px; font-size:.88rem; }
+  details.dados summary{ cursor:pointer; font-weight:700; }
+  details.dados ul{ margin:8px 0 0; padding-left:18px; color:var(--muted); }
+
+  .fundo{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:flex-start; justify-content:center; padding:16px; z-index:50; overflow:auto; }
+  .fundo[hidden]{ display:none; }
+  .caixa{ background:var(--card); border-radius:var(--radius); padding:16px 18px; max-width:1100px; width:100%; margin:auto; }
+  .caixa h3{ margin:0 0 4px; font-size:1.05rem; padding-right:30px; }
+  .caixa .fecha{ float:right; border:none; background:none; color:var(--muted); font-size:1.6rem; cursor:pointer; line-height:1; }
+  .resumo-kpis{ display:flex; gap:14px; flex-wrap:wrap; font-size:.9rem; color:var(--muted); margin:4px 0 8px; }
+  .resumo-kpis b{ color:var(--ink); }
+  .caixa .btns{ display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; align-items:center; }
+  table.lanc{ border-collapse:collapse; width:100%; font-size:.84rem; }
+  table.lanc th, table.lanc td{ padding:6px 8px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }
+  table.lanc th{ background:var(--cab); font-size:.72rem; text-transform:uppercase; letter-spacing:.03em; text-align:center; position:sticky; top:0; }
+  table.lanc td.txt, table.lanc th.txt{ text-align:left; }
+  table.lanc td.hist{ text-align:left; white-space:normal; overflow-wrap:anywhere; min-width:180px; max-width:320px; }
+  table.lanc tfoot td{ font-weight:800; background:var(--cab); }
+  table.lanc tr.atraso td{ color:var(--neg); }
+  .rol-lanc{ overflow:auto; max-height:56vh; border:1px solid var(--line-forte); border-radius:8px; }
+  #popupPdf .caixa{ max-width:460px; }
+  @media (max-width:640px){
+    .pagina{ padding:12px; }
+    table.t th, table.t td{ padding:6px 7px; font-size:.8rem; }
+    .busca{ min-width:0; width:100%; }
+  }
+</style>
+</head>
+<body>
+<div class="pagina">
+  <div class="topo">
+    <div>
+      <h1>Resumo diário</h1>
+      <div class="sub" id="subtitulo">Saldo das contas e contas a pagar / a receber — atrasados e futuros</div>
+    </div>
+    <div class="acoes">
+      <a class="btn-ic" href="painel-financeiro.html" title="Painel financeiro" aria-label="Painel financeiro">▤</a>
+      <a class="btn-ic" href="analise-cruzada.html" title="Análise cruzada por setor e por mês" aria-label="Análise cruzada">▦</a>
+      <label class="btn-ic" for="arquivosCsv" title="Abrir os CSV deste computador (analise_pagamentos_sicon.csv e dados_mov_caixa.csv, os dois de uma vez)" aria-label="Importar CSV">📂</label>
+      <input type="file" id="arquivosCsv" accept=".csv,text/csv" multiple>
+      <button class="btn-ic" id="btnAtualizar" title="Atualizar" aria-label="Atualizar"><span>⟳</span></button>
+    </div>
+  </div>
+
+  <div class="aviso" id="aviso" hidden></div>
+
+  <div id="app" hidden>
+    <div class="filtros">
+      <div class="linha-filtros">
+        <div class="campo"><label for="fData">Data</label><input type="date" id="fData"></div>
+        <div class="campo"><button class="btn sec" id="btnOntem" type="button" title="Dia anterior (padrão)">Ontem</button> <button class="btn sec" id="btnHoje" type="button">Hoje</button></div>
+        <label class="opcao"><input type="checkbox" id="fZeradas" checked> Ocultar contas sem saldo e sem movimento</label>
+        <div class="campo" style="margin-left:auto"><button class="btn" id="btnPdf" type="button">📄 PDF</button></div>
+      </div>
+      <details class="painel" style="margin-top:10px" id="painelEmp"><summary>Empresas <span class="conta-resumo" id="rEmp"></span></summary>
+        <div class="corpo"><div class="ferramentas"><button class="btn sec mini" id="empTodas" type="button">Marcar todas</button><button class="btn sec mini" id="empNenhuma" type="button">Desmarcar todas</button></div><div class="lista-chk" id="listaEmp"></div></div>
+      </details>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+
+    <div class="grade">
+      <div id="colFluxos"></div>
+      <div id="colTitulos"></div>
+    </div>
+
+    <details class="dados"><summary>Sobre os dados</summary><ul id="dadosLista"></ul></details>
+  </div>
+  <div id="inicio"></div>
+  <div class="rodape" id="rodape"></div>
+</div>
+
+<div class="fundo" id="popupTit" hidden>
+  <div class="caixa" role="dialog" aria-modal="true" aria-labelledby="titTitulo">
+    <button class="fecha" id="titFechar" type="button" aria-label="Fechar">×</button>
+    <h3 id="titTitulo"></h3>
+    <div class="resumo-kpis" id="titKpis"></div>
+    <input type="search" class="busca" id="titBusca" placeholder="Buscar (cliente, fornecedor, OP, histórico…)" style="width:100%;margin-bottom:8px">
+    <div class="rol-lanc"><table class="lanc" id="titTabela"></table></div>
+    <div class="btns">
+      <button class="btn sec" id="titCsv" type="button">⬇ Baixar CSV</button>
+      <button class="btn sec" id="titSair" type="button">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div class="fundo" id="popupPdf" hidden>
+  <div class="caixa" role="dialog" aria-modal="true">
+    <button class="fecha" id="pdfFechar" type="button" aria-label="Fechar">×</button>
+    <h3>Resumo diário em PDF</h3>
+    <div class="resumo-kpis" id="pdfInfo"></div>
+    <div class="btns">
+      <button class="btn" id="pdfVer" type="button">Visualizar</button>
+      <button class="btn sec" id="pdfBaixar" type="button">Baixar</button>
+      <button class="btn sec" id="pdfCompartilhar" type="button">Compartilhar</button>
+    </div>
+  </div>
+</div>
+
+<script src="servir-acesso.js"></script>
+<script>
+(function(){
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  function el(tag, cls, texto){ const e = document.createElement(tag); if(cls) e.className = cls; if(texto !== undefined && texto !== null) e.textContent = texto; return e; }
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const semAcento = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const URL_SCRIPT_OK = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
+
+  // ===================== formatação =====================
+  const arred = (n) => { const r = Math.round((n + Number.EPSILON) * 100) / 100; return r === 0 ? 0 : r; };
+  const fmt = (n) => arred(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtR = (n) => (n < 0 ? '-' : '') + 'R$ ' + arred(Math.abs(n)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtDia = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '—';
+  const fmtDiaCurto = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(2, 4) : '—';
+  const pad3 = (n) => String(n).padStart(3, '0');
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const hoje = () => { const d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
+  const isoData = (s) => {
+    s = String(s || '').trim(); let y, mo, d, m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(m){ y = +m[1]; mo = +m[2]; d = +m[3]; }
+    else { m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/); if(!m) return ''; y = +m[3]; mo = +m[2]; d = +m[1]; }
+    if(y < 2000 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return '';
+    return y + '-' + pad2(mo) + '-' + pad2(d);
+  };
+  const num = (s) => {
+    s = String(s || '').trim(); if(!s) return 0;
+    if(s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+    const n = parseFloat(s); return isNaN(n) ? 0 : n;
+  };
+  const cmp = (a, b) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true });
+  const dias = (iso) => Math.round(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 86400000);
+  const somaDias = (iso, n) => { const d = new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) + n * 86400000); return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate()); };
+  const semZeros = (c) => String(c == null ? '' : c).trim().replace(/^0+(?=\d)/, '');
+
+  // ===================== CSV (guarda só as colunas usadas) =====================
+  function lerCsvColunas(texto, querer){
+    texto = String(texto || '').replace(/^﻿/, '');
+    let fimCab = texto.search(/\r|\n/); if(fimCab < 0) fimCab = texto.length;
+    const primeira = texto.slice(0, fimCab);
+    const cont = (c) => primeira.split(c).length - 1;
+    const sep = [',', ';', '\t'].sort((a, b) => cont(b) - cont(a))[0], sepCode = sep.charCodeAt(0);
+    const cab = primeira.split(sep).map(h => semAcento(h.replace(/^"|"$/g, '')).replace(/\s+/g, '_'));
+    const want = cab.map(h => querer.indexOf(h));
+    const achadas = {}; querer.forEach((n, i) => { achadas[n] = want.includes(i); });
+    const linhas = []; let rec = new Array(querer.length).fill(''), campo = '', col = 0, aspas = false, qualquer = false;
+    const fecharCampo = () => { const w = want[col]; if(w >= 0) rec[w] = campo; if(campo !== '') qualquer = true; campo = ''; col++; };
+    const fecharLinha = () => { fecharCampo(); if(qualquer || col > 1) linhas.push(rec); rec = new Array(querer.length).fill(''); col = 0; qualquer = false; };
+    for(let i = fimCab; i < texto.length; i++){
+      const c = texto.charCodeAt(i);
+      if(aspas){
+        if(c === 34){ if(texto.charCodeAt(i + 1) === 34){ if(want[col] >= 0) campo += '"'; i++; } else aspas = false; }
+        else if(want[col] >= 0) campo += texto[i];
+      }
+      else if(c === 34) aspas = true;
+      else if(c === sepCode) fecharCampo();
+      else if(c === 10 || c === 13){
+        if(c === 13 && texto.charCodeAt(i + 1) === 10) i++;
+        if(col === 0 && campo === '') continue;
+        fecharLinha();
+      }
+      else if(want[col] >= 0) campo += texto[i];
+    }
+    if(col > 0 || campo !== '') fecharLinha();
+    return { achadas, linhas };
+  }
+
+  // ===================== configuração (compartilhada com o Painel financeiro) =====================
+  const CHAVE = 'fechamento_caixas_config_v1';
+  const ARQ = { cruz: 'analise_pagamentos_sicon.csv', mov: 'dados_mov_caixa.csv', lanc: 'caixa_bancos.csv', status: '_status.json' };
+  let cfg = { url: '', token: '' };
+  try { Object.assign(cfg, JSON.parse(localStorage.getItem(CHAVE) || '{}')); } catch(e){}
+  if(cfg.url && !URL_SCRIPT_OK.test(cfg.url)) cfg.url = '';
+  const lerLS = (k, padrao) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : padrao; } catch(e){ return padrao; } };
+  const gravarLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
+  const K_FILTROS = 'rd_filtros_v1';
+
+  // ===================== cache (IndexedDB — o mesmo banco da Análise cruzada, então o CSV grande não é baixado duas vezes) =====================
+  let bd = null, cacheUn = '', nomeUnidade = '';
+  function abrirBd(){ return new Promise((res) => { try { const rq = indexedDB.open('analise_cruzada_v1', 1); rq.onupgradeneeded = () => rq.result.createObjectStore('arquivos'); rq.onsuccess = () => res(rq.result); rq.onerror = () => res(null); } catch(e){ res(null); } }); }
+  const cacheGet = (n) => new Promise((res) => { if(!bd) return res(null); try { const r = bd.transaction('arquivos').objectStore('arquivos').get(n); r.onsuccess = () => res(r.result || null); r.onerror = () => res(null); } catch(e){ res(null); } });
+  const cachePut = (n, v) => new Promise((res) => { if(!bd) return res(); try { const t = bd.transaction('arquivos', 'readwrite'); t.objectStore('arquivos').put(v, n); t.oncomplete = () => res(); t.onerror = () => res(); } catch(e){ res(); } });
+
+  // ===================== Google (JSONP) =====================
+  function jsonp(url){
+    return new Promise((resolve, reject) => {
+      const cb = 'rd_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+      const s = document.createElement('script'); let fim = false;
+      const limpar = () => { delete window[cb]; s.remove(); clearTimeout(t); };
+      const t = setTimeout(() => { if(!fim){ fim = true; limpar(); reject(new Error('Tempo esgotado ao falar com o script do Google.')); } }, 120000);
+      window[cb] = (d) => { if(fim) return; fim = true; limpar(); resolve(d); };
+      s.onerror = () => { if(fim) return; fim = true; limpar(); reject(new Error('Não consegui falar com o script do Google.')); };
+      s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb; document.body.appendChild(s);
+    });
+  }
+  let chamar = (q) => jsonp(cfg.url + '?token=' + encodeURIComponent(cfg.token) + q).then(r => { if(!r || !r.ok) throw new Error((r && r.erro) || 'resposta inesperada do script'); return r; });
+
+  // ===================== modelo =====================
+  let titulos = [];          // só os em aberto: { tp:'P'|'R', sit:'A'|'P', venc, emp, v, op, cl, h, tit }
+  let contas = [];           // { key, cod, nome, emp, mv:[{d, r, x}] }
+  const nomesEmp = new Map();   // código da empresa -> nome
+  const qual = { cruz: null, mov: null };
+  const dataPadrao = () => somaDias(hoje(), -1);     // padrão: o dia anterior (o dia fechado)
+  const FIL = { data: dataPadrao(), empOff: new Set(), zeradas: true };
+  const DIAS = [0, 1, 2, 3, 10, 30, 60, 90, 120, 150];
+  const nomeEmp = (c) => nomesEmp.get(c) || ('Empresa ' + c);
+
+  function montarCruz(texto){
+    const querer = ['tipo_cta', 'total', 'valor', 'datav', 'dtpagto', 'situacao', 'empresa', 'empresa_nome', 'historico', 'cliente', 'op', 'titulo', 'provisionado', 'provisionamento', 'provisao'];
+    const { achadas, linhas } = lerCsvColunas(texto, querer);
+    const faltam = []; if(!achadas.tipo_cta) faltam.push('TIPO_CTA'); if(!achadas.total) faltam.push('TOTAL'); if(!achadas.datav) faltam.push('DATAV'); if(!achadas.situacao) faltam.push('SITUACAO');
+    if(faltam.length) throw new Error('O arquivo de pagamentos não tem a(s) coluna(s) ' + faltam.join(', ') + '. Confira se é o analise_pagamentos_sicon.csv.');
+    const I = {}; querer.forEach((n, i) => { I[n] = i; });
+    const q = { total: linhas.length, abertos: 0, prov: 0, semVenc: 0, semValor: 0, quitados: 0 };
+    const out = [];
+    for(const r of linhas){
+      const emp = semZeros(r[I.empresa]);
+      if(emp && r[I.empresa_nome] && !nomesEmp.has(emp)) nomesEmp.set(emp, String(r[I.empresa_nome]).trim());
+      const st = String(r[I.situacao]).trim().toUpperCase();
+      // A = em aberto (confirmado) | P = provisionado | Q = quitado (não entra aqui). Sem situação: sem data de pagamento = em aberto.
+      let sit = st.startsWith('P') ? 'P' : st.startsWith('A') ? 'A' : st.startsWith('Q') ? 'Q' : (isoData(r[I.dtpagto]) ? 'Q' : 'A');
+      // coluna própria de provisionamento (PROVISIONADO / PROVISIONAMENTO / PROVISAO): -1, 1, sim, verdadeiro, true, s, p = provisionado; só vale para o que não está quitado
+      const fl = semAcento(r[I.provisionado] || r[I.provisionamento] || r[I.provisao]);
+      if(sit === 'A' && ['-1', '1', 'true', 'verdadeiro', 'sim', 's', 'p', 'v', 'yes'].includes(fl)) sit = 'P';
+      if(sit === 'Q'){ q.quitados++; continue; }
+      const t = String(r[I.tipo_cta]).trim().toUpperCase(), tp = t.startsWith('R') ? 'R' : t.startsWith('P') ? 'P' : '';
+      if(!tp) continue;
+      const venc = isoData(r[I.datav]); if(!venc){ q.semVenc++; continue; }
+      const v = num(r[I.total]); if(!(v > 0)){ if(num(r[I.valor]) > 0) q.semValor++; continue; }
+      if(sit === 'A') q.abertos++; else q.prov++;
+      out.push({ tp, sit, venc, emp, v, op: String(r[I.op]).trim(), cl: String(r[I.cliente]).trim(), h: String(r[I.historico]).trim(), tit: String(r[I.titulo]).trim() });
+    }
+    titulos = out; qual.cruz = q;
+  }
+  function montarMov(texto){
+    const querer = ['cod_conta', 'nome_conta_caixa', 'data', 'receita', 'despesa', 'empresa', 'empresaa_razao_social', 'quitado', 'historico', 'nomecta'];
+    const { achadas, linhas } = lerCsvColunas(texto, querer);
+    const faltam = []; if(!achadas.cod_conta) faltam.push('COD_CONTA'); if(!achadas.data) faltam.push('DATA'); if(!achadas.receita) faltam.push('RECEITA'); if(!achadas.despesa) faltam.push('DESPESA');
+    if(faltam.length) throw new Error('O arquivo de movimento não tem a(s) coluna(s) ' + faltam.join(', ') + '. Confira se é o dados_mov_caixa.csv.');
+    const I = {}; querer.forEach((n, i) => { I[n] = i; });
+    const mapa = new Map(), razao = new Map(), q = { total: linhas.length, usadas: 0, semData: 0, ate: '', ancoras: 0 };
+    for(const r of linhas){
+      if(String(r[I.quitado]).trim().toUpperCase().startsWith('A')) continue;      // título em aberto que vem na mesma consulta: não é movimento de caixa
+      const d = isoData(r[I.data]); if(!d){ q.semData++; continue; }
+      const rc = num(r[I.receita]), dp = num(r[I.despesa]);
+      const cod = String(r[I.cod_conta]).trim(), nome = String(r[I.nome_conta_caixa]).trim(), key = cod + '|' + nome;
+      let c = mapa.get(key); if(!c){ c = { key, cod, nome: nome || ('Conta ' + cod), emp: '', cont: new Map(), mv: [], anc: [] }; mapa.set(key, c); }
+      const emp = semZeros(r[I.empresa]); if(emp){ c.cont.set(emp, (c.cont.get(emp) || 0) + 1);
+        const rz = String(r[I.empresaa_razao_social]).trim(); if(rz){ const m = razao.get(emp) || new Map(); m.set(rz, (m.get(rz) || 0) + 1); razao.set(emp, m); } }
+      const hist = String(r[I.historico]).trim();
+      // linha "Saldo Inicial" = saldo real da conta naquele dia (âncora), não é movimento: o saldo passa a partir dela, como no Extrato das contas
+      if(ehLinhaSaldo(hist) || semAcento(r[I.nomecta]).includes('saldo inicial')){ c.anc.push({ d, v: rc - dp }); q.ancoras++; }
+      else if(rc || dp) c.mv.push({ d, r: rc, x: dp, h: hist.slice(0, 90) });
+      q.usadas++; if(d > q.ate) q.ate = d;
+    }
+    razao.forEach((m, emp) => { if(!nomesEmp.has(emp)){ let melhor = '', n = -1; m.forEach((k, nome) => { if(k > n){ n = k; melhor = nome; } }); nomesEmp.set(emp, melhor); } });
+    contas = [...mapa.values()].map(c => { let melhor = '', n = -1; c.cont.forEach((k, e) => { if(k > n){ n = k; melhor = e; } }); c.emp = melhor; delete c.cont;
+      // abertura = saldo da âncora mais recente menos tudo o que foi lançado até o dia dela (a abertura "volta" os lançamentos); sem âncora = 0
+      return c; });
+    qual.mov = q; recalcularAberturas();
+  }
+  // linha de abertura do extrato: HISTORICO "SALDO ANTERIOR" / "SALDO INICIAL" (mesma regra do Extrato das contas)
+  const ehLinhaSaldo = (h) => /^\s*saldo\s+(anterior|inicial)\b/.test(semAcento(h));
+  // abertura = saldo da âncora mais recente menos tudo o que foi lançado até o dia dela (a abertura "volta" os lançamentos); sem âncora = 0.
+  // Âncoras vêm do próprio movimento ou, se ele não as tem, do caixa_bancos.csv (o mesmo arquivo do Extrato das contas).
+  let aberturasExt = new Map();
+  function recalcularAberturas(){
+    for(const c of contas){
+      const anc = c.anc.length ? c.anc : (aberturasExt.get(c.cod) || []);
+      c.abertura = 0; c.ancora = null; c.ancoraFonte = c.anc.length ? 'mov' : (anc.length ? 'extrato' : '');
+      if(anc.length){ const da = anc.reduce((m, a) => a.d > m ? a.d : m, ''), va = anc.filter(a => a.d === da).reduce((s, a) => s + a.v, 0);
+        c.abertura = va - c.mv.reduce((s, m) => m.d <= da ? s + m.r - m.x : s, 0); c.ancora = { d: da, v: va }; }
+    }
+  }
+  function montarAberturas(texto){
+    const querer = ['caixa', 'data', 'historico', 'entrada', 'saida'];
+    const { achadas, linhas } = lerCsvColunas(texto, querer);
+    if(!achadas.caixa || !achadas.data || !achadas.entrada || !achadas.saida) throw new Error('O arquivo de lançamentos (caixa_bancos.csv) não tem as colunas CAIXA, DATA, ENTRADA e SAIDA.');
+    const I = {}; querer.forEach((nm, i) => { I[nm] = i; }); const mapa = new Map(); let n = 0;
+    for(const r of linhas){
+      if(!ehLinhaSaldo(r[I.historico])) continue;
+      const d = isoData(r[I.data]); if(!d) continue;
+      const cx = String(r[I.caixa]).trim(); const a = mapa.get(cx) || []; a.push({ d, v: num(r[I.entrada]) - num(r[I.saida]) }); mapa.set(cx, a); n++;
+    }
+    aberturasExt = mapa; qual.lanc = { linhas: linhas.length, ancoras: n, contas: mapa.size };
+    if(contas.length) recalcularAberturas();
+  }
+
+  // ===================== cálculo =====================
+  const empresasTodas = () => { const s = new Set(); contas.forEach(c => s.add(c.emp)); titulos.forEach(t => s.add(t.emp)); return [...s].sort((a, b) => cmp(nomeEmp(a), nomeEmp(b))); };
+  function calcular(D){
+    const emOk = (e) => !FIL.empOff.has(e);
+    // contas
+    const grupos = new Map(); let totSaldo = 0;
+    for(const c of contas){
+      if(!emOk(c.emp)) continue;
+      let ant = c.abertura, ent = 0, sai = 0;
+      for(const m of c.mv){ if(m.d < D) ant += m.r - m.x; else if(m.d === D){ ent += m.r; sai += m.x; } }
+      const zero = Math.abs(ant) < 0.005 && !ent && !sai;
+      if(zero && FIL.zeradas) continue;
+      let g = grupos.get(c.emp); if(!g){ g = { emp: c.emp, nome: nomeEmp(c.emp), contas: [], ant: 0, ent: 0, sai: 0, atu: 0 }; grupos.set(c.emp, g); }
+      const atu = ant + ent - sai;
+      g.contas.push({ nome: c.nome, ant, ent, sai, atu, ref: c }); g.ant += ant; g.ent += ent; g.sai += sai; g.atu += atu; totSaldo += atu;
+    }
+    const fluxos = [...grupos.values()].sort((a, b) => cmp(a.nome, b.nome)); fluxos.forEach(g => g.contas.sort((a, b) => cmp(a.nome, b.nome)));
+    const tot = fluxos.reduce((s, g) => ({ ant: s.ant + g.ant, ent: s.ent + g.ent, sai: s.sai + g.sai, atu: s.atu + g.atu }), { ant: 0, ent: 0, sai: 0, atu: 0 });
+    // títulos: cada um cai no primeiro prazo que o comporta; depois acumula (como no relatório de referência)
+    const n = DIAS.length, P = { A: new Array(n + 1).fill(0), P: new Array(n + 1).fill(0) }, R = new Array(n + 1).fill(0), dD = dias(D);
+    for(const t of titulos){
+      if(!emOk(t.emp)) continue;
+      const dd = dias(t.venc) - dD; let i = DIAS.findIndex(k => dd <= k); if(i < 0) i = n;
+      if(t.tp === 'P') P[t.sit][i] += t.v; else if(t.sit === 'A') R[i] += t.v;
+    }
+    const acum = (a) => { const r = []; let s = 0; for(let i = 0; i <= n; i++){ s += a[i]; r.push(s); } return r; };
+    const pc = acum(P.A), pp = acum(P.P), rc = acum(R);
+    const linhas = [];
+    for(let i = 0; i <= n; i++){
+      const rot = i === 0 ? 'Atrasado até (' + fmtDiaCurto(D) + ')' : i < n ? 'Próximos ' + pad3(DIAS[i]) + ' dias (' + fmtDiaCurto(somaDias(D, DIAS[i])) + ')' : 'TOTAL PROJEÇÃO';
+      const pag = { conf: pc[i], prov: pp[i], total: pc[i] + pp[i] };
+      const rec = { conf: rc[i], confSaldo: rc[i] + tot.atu, liq: rc[i] + tot.atu - pag.total };
+      linhas.push({ i, rot, dias: i < n ? DIAS[i] : null, pag, rec });
+    }
+    return { D, fluxos, tot, linhas };
+  }
+  const listaTitulos = (lado, i, D) => {
+    const dD = dias(D), lim = i == null || i >= DIAS.length ? Infinity : DIAS[i];
+    return titulos.filter(t => !FIL.empOff.has(t.emp) && t.tp === lado && (lado === 'P' || t.sit === 'A') && dias(t.venc) - dD <= lim)
+      .sort((a, b) => (a.venc < b.venc ? -1 : a.venc > b.venc ? 1 : 0) || cmp(a.cl, b.cl));
+  };
+
+  // ===================== tela =====================
+  let R = null;      // último cálculo
+  function render(){
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(FIL.data)) FIL.data = dataPadrao();
+    R = calcular(FIL.data);
+    // KPIs
+    const L = R.linhas, l30 = L.find(x => x.dias === 30) || L[L.length - 1];
+    const k = (rot, v, cls) => { const d = el('div', 'kpi'); d.appendChild(el('span', '', rot)); d.appendChild(el('b', cls || '', v)); return d; };
+    $('kpis').replaceChildren(
+      k('Saldo em contas', fmtR(R.tot.atu), R.tot.atu < 0 ? 'neg' : 'pos'),
+      k('A pagar — atrasado', fmtR(L[0].pag.total), L[0].pag.total ? 'neg' : ''),
+      k('A receber — atrasado', fmtR(L[0].rec.conf), L[0].rec.conf ? 'pos' : ''),
+      k('Liquidez em 30 dias', fmtR(l30.rec.liq), l30.rec.liq < 0 ? 'neg' : 'pos'));
+    $('subtitulo').textContent = 'Posição de ' + fmtDia(R.D) + ' — saldo das contas e contas a pagar / a receber (atrasados e futuros)';
+    desenharFluxos(); desenharTitulos();
+  }
+  function desenharFluxos(){
+    const bloco = el('div', 'bloco'); bloco.appendChild(el('h2', '', 'Fluxos financeiros'));
+    const rol = el('div', 'rolagem'), t = el('table', 't');
+    let h = '<thead><tr><th>Conta</th><th>Saldo anterior</th><th>Entradas</th><th>Saídas</th><th>Saldo atual</th></tr></thead><tbody>';
+    if(!qual.mov) h += '<tr><td colspan="5" class="pass" style="text-align:center">Sem dados de movimento (dados_mov_caixa.csv).</td></tr>';
+    else if(!R.fluxos.length) h += '<tr><td colspan="5" class="pass" style="text-align:center">Nenhuma conta com saldo ou movimento nesta data.</td></tr>';
+    const cel = (v, forte) => '<td' + (v < 0 ? ' class="neg"' : '') + '>' + fmt(v) + '</td>';
+    R.fluxos.forEach((g, gi) => {
+      h += '<tr class="emp"><td colspan="5">' + esc(g.nome) + '</td></tr>';
+      g.contas.forEach((c, ci) => { h += '<tr class="cl" data-g="' + gi + '" data-c="' + ci + '" title="Ver como o saldo foi calculado"><td>' + esc(c.nome) + (c.ref.ancora ? ' <span class="pass" title="Saldo com abertura da linha de saldo de ' + fmtDia(c.ref.ancora.d) + '">⚓</span>' : '') + '</td>' + cel(c.ant) + cel(c.ent) + cel(c.sai) + cel(c.atu) + '</tr>'; });
+      h += '<tr class="sub"><td>Subtotal ' + esc(g.nome) + '</td>' + cel(g.ant) + cel(g.ent) + cel(g.sai) + cel(g.atu) + '</tr>';
+    });
+    h += '<tr class="tot"><td>Total</td>' + cel(R.tot.ant) + cel(R.tot.ent) + cel(R.tot.sai) + cel(R.tot.atu) + '</tr></tbody>';
+    t.innerHTML = h; rol.appendChild(t); bloco.appendChild(rol);
+    bloco.appendChild(el('div', 'nota', 'Saldo = soma de tudo o que está no dados_mov_caixa.csv até o dia anterior (inclui lançamentos de saldo inicial, se existirem no arquivo).'));
+    $('colFluxos').replaceChildren(bloco);
+  }
+  function desenharTitulos(){
+    const frag = document.createDocumentFragment();
+    const semAbertos = !qual.cruz || (!qual.cruz.abertos && !qual.cruz.prov);
+    if(!qual.cruz) frag.appendChild(el('div', 'vazio', 'Sem dados de pagamentos (analise_pagamentos_sicon.csv).'));
+    else {
+      if(semAbertos) frag.appendChild(el('div', 'aviso alerta', 'O arquivo de pagamentos ainda não traz títulos em aberto (SITUACAO = A). Peça ao coletor para incluir os em aberto na consulta — até lá só os saldos das contas aparecem.'));
+      // a pagar
+      let b = el('div', 'bloco'); b.appendChild(el('h2', 'pag', 'Contas a pagar — DESPESAS'));
+      let t = el('table', 't'), h = '<thead><tr><th>Prazo</th><th>Confirmado</th><th>Provisionado</th><th>Total</th></tr></thead><tbody>';
+      R.linhas.forEach(l => { const ult = l.dias == null; h += '<tr class="' + (ult ? 'tot ' : '') + 'cl" data-l="P" data-i="' + l.i + '" title="Ver os títulos"><td>' + esc(l.rot) + '</td><td>' + fmt(l.pag.conf) + '</td><td>' + fmt(l.pag.prov) + '</td><td>' + fmt(l.pag.total) + '</td></tr>'; });
+      t.innerHTML = h + '</tbody>'; const r1 = el('div', 'rolagem'); r1.appendChild(t); b.appendChild(r1); frag.appendChild(b);
+      // a receber
+      b = el('div', 'bloco'); b.appendChild(el('h2', 'rec', 'Contas a receber — RECEITAS'));
+      t = el('table', 't'); h = '<thead><tr><th>Prazo</th><th>Confirmado</th><th>Confirmado + saldo</th><th>Liquidez</th></tr></thead><tbody>';
+      R.linhas.forEach(l => { const ult = l.dias == null; h += '<tr class="' + (ult ? 'tot ' : '') + 'cl" data-l="R" data-i="' + l.i + '" title="Ver os títulos"><td>' + esc(l.rot) + '</td><td>' + fmt(l.rec.conf) + '</td><td>' + fmt(l.rec.confSaldo) + '</td><td class="' + (l.rec.liq < 0 ? 'neg' : '') + '">' + fmt(l.rec.liq) + '</td></tr>'; });
+      t.innerHTML = h + '</tbody>'; const r2 = el('div', 'rolagem'); r2.appendChild(t); b.appendChild(r2);
+      b.appendChild(el('div', 'nota', 'Os prazos são acumulados (cada linha inclui os atrasados e tudo o que vence até a data). Liquidez = confirmado a receber + saldo das contas − total a pagar. Clique numa linha para ver os títulos.'));
+      frag.appendChild(b);
+    }
+    $('colTitulos').replaceChildren(frag);
+  }
+  function desenharEmpresas(){
+    const box = $('listaEmp'); box.replaceChildren();
+    const todas = empresasTodas();
+    todas.forEach(e => { const lb = el('label'), cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !FIL.empOff.has(e); cb.dataset.e = e;
+      cb.addEventListener('change', () => { if(cb.checked) FIL.empOff.delete(e); else FIL.empOff.add(e); resumoEmp(); render(); });
+      lb.appendChild(cb); lb.appendChild(document.createTextNode(nomeEmp(e))); box.appendChild(lb); });
+    resumoEmp();
+  }
+  function resumoEmp(){ const n = empresasTodas().length; $('rEmp').textContent = '· ' + (FIL.empOff.size ? (n - FIL.empOff.size) + ' de ' + n : 'todas'); }
+
+  // ===================== popup dos títulos =====================
+  let titAberto = null;
+  function abrirTitulos(lado, i){
+    const lin = R.linhas[i], lista = listaTitulos(lado, i, R.D); if(!lin) return;
+    const dD = dias(R.D);
+    titAberto = { lado, lista, titulo: (lado === 'P' ? 'A pagar' : 'A receber') + ' — ' + lin.rot, filtrados: lista };
+    $('titTitulo').textContent = titAberto.titulo;
+    const soma = (a) => a.reduce((s, t) => s + t.v, 0), atr = lista.filter(t => dias(t.venc) - dD <= 0), prov = lista.filter(t => t.sit === 'P');
+    const k = $('titKpis'); k.replaceChildren();
+    const par = (tx, v) => { const s = el('span'); s.appendChild(document.createTextNode(tx + ' ')); s.appendChild(el('b', '', v)); k.appendChild(s); };
+    par('Títulos:', lista.length.toLocaleString('pt-BR')); par('Total:', fmtR(soma(lista))); par('Atrasados:', atr.length + ' · ' + fmtR(soma(atr)));
+    if(prov.length) par('Provisionados:', prov.length + ' · ' + fmtR(soma(prov)));
+    $('titBusca').value = ''; $('titCsv').hidden = false; $('titBusca').hidden = false; desenharTit();
+    $('popupTit').hidden = false; document.body.style.overflow = 'hidden';
+  }
+  function desenharTit(){
+    const A = titAberto; if(!A) return; const dD = dias(R.D);
+    const q = semAcento($('titBusca').value);
+    A.filtrados = q ? A.lista.filter(t => semAcento([t.op, t.cl, t.h, t.tit, nomeEmp(t.emp), fmt(t.v)].join(' ')).includes(q)) : A.lista;
+    const temProv = A.lista.some(t => t.sit === 'P');
+    const cab = ['<th>Vencimento</th>', '<th>Dias</th>', '<th class="txt">Empresa</th>', '<th>OP</th>', '<th>Título</th>', '<th class="txt">' + (A.lado === 'P' ? 'Fornecedor' : 'Cliente') + '</th>', '<th class="txt">Histórico</th>'];
+    if(temProv) cab.push('<th>Situação</th>'); cab.push('<th>Valor (R$)</th>');
+    const mostrar = A.filtrados.slice(0, 500);
+    const linhas = mostrar.map(t => { const d = dias(t.venc) - dD;
+      return '<tr' + (d <= 0 ? ' class="atraso"' : '') + '><td>' + fmtDia(t.venc) + '</td><td>' + (d < 0 ? 'atrasado ' + (-d) + ' d' : d === 0 ? 'hoje' : 'em ' + d + ' d') + '</td><td class="txt">' + esc(nomeEmp(t.emp)) + '</td><td>' + esc(t.op) + '</td><td>' + esc(t.tit) + '</td><td class="txt">' + esc(t.cl) + '</td><td class="hist">' + esc(t.h) + '</td>' + (temProv ? '<td>' + (t.sit === 'P' ? 'Provisionado' : 'Confirmado') + '</td>' : '') + '<td>' + fmt(t.v) + '</td></tr>'; }).join('');
+    $('titTabela').innerHTML = '<thead><tr>' + cab.join('') + '</tr></thead><tbody>' + linhas + '</tbody><tfoot><tr><td colspan="' + (cab.length - 1) + '" style="text-align:right">TOTAL (' + A.filtrados.length.toLocaleString('pt-BR') + ' título(s)' + (A.filtrados.length > mostrar.length ? ', mostrando ' + mostrar.length : '') + ')</td><td>' + fmt(A.filtrados.reduce((s, t) => s + t.v, 0)) + '</td></tr></tfoot>';
+  }
+  // como o saldo de uma conta foi calculado (para conferir com o extrato): totais, âncora e os últimos lançamentos até a data
+  function abrirConta(gi, ci){
+    const g = R.fluxos[gi], c = g && g.contas[ci]; if(!c) return; const conta = c.ref, D = R.D;
+    titAberto = null; $('titCsv').hidden = true; $('titBusca').hidden = true;
+    $('titTitulo').textContent = conta.nome + ' — como o saldo de ' + fmtDia(D) + ' foi calculado';
+    const ate = conta.mv.filter(m => m.d <= D), antes = conta.mv.filter(m => m.d < D);
+    const sr = antes.reduce((s, m) => s + m.r, 0), sx = antes.reduce((s, m) => s + m.x, 0);
+    const k = $('titKpis'); k.replaceChildren();
+    const par = (tx, v) => { const s = el('span'); s.appendChild(document.createTextNode(tx + ' ')); s.appendChild(el('b', '', v)); k.appendChild(s); };
+    par('Lançamentos até o dia anterior:', antes.length.toLocaleString('pt-BR') + (antes.length ? ' (de ' + fmtDia(antes.reduce((m, x) => x.d < m ? x.d : m, antes[0].d)) + ' a ' + fmtDia(antes.reduce((m, x) => x.d > m ? x.d : m, antes[0].d)) + ')' : ''));
+    par('Entradas:', fmt(sr)); par('Saídas:', fmt(sx));
+    par(conta.ancora ? 'Abertura (linha de saldo de ' + fmtDia(conta.ancora.d) + ' = ' + fmt(conta.ancora.v) + ', vinda do ' + (conta.ancoraFonte === 'extrato' ? ARQ.lanc : ARQ.mov) + '):' : 'Abertura (sem linha de saldo anterior/inicial em nenhum arquivo):', fmt(conta.abertura));
+    par('Saldo anterior:', fmt(c.ant)); par('Saldo atual:', fmt(c.atu));
+    const ult = ate.slice().sort((a, b) => (a.d < b.d ? 1 : a.d > b.d ? -1 : 0)).slice(0, 40);
+    $('titTabela').innerHTML = '<thead><tr><th>Data</th><th class="txt">Histórico</th><th>Entrada</th><th>Saída</th></tr></thead><tbody>' +
+      (ult.length ? ult.map(m => '<tr><td>' + fmtDia(m.d) + '</td><td class="hist">' + esc(m.h) + '</td><td>' + (m.r ? fmt(m.r) : '') + '</td><td>' + (m.x ? fmt(m.x) : '') + '</td></tr>').join('') : '<tr><td colspan="4" class="txt">Nenhum lançamento até esta data.</td></tr>') +
+      '</tbody><tfoot><tr><td colspan="4" style="text-align:left;font-weight:400">Mostrando os ' + ult.length + ' lançamentos mais recentes até ' + fmtDia(D) + '. Compare o saldo e esses lançamentos com o extrato; se faltar lançamento aqui, ele não está no dados_mov_caixa.csv (a consulta do movimento pode estar filtrando por empresa ou por outro critério).</td></tr></tfoot>';
+    $('popupTit').hidden = false; document.body.style.overflow = 'hidden';
+  }
+  function fecharTit(){ $('popupTit').hidden = true; titAberto = null; document.body.style.overflow = ''; $('titCsv').hidden = false; $('titBusca').hidden = false; }
+  function csvTit(){
+    const A = titAberto; if(!A) return;
+    const cel = (s) => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
+    const linhas = [['Vencimento', 'Empresa', 'OP', 'Título', A.lado === 'P' ? 'Fornecedor' : 'Cliente', 'Histórico', 'Situação', 'Valor'].map(cel).join(';')];
+    A.filtrados.forEach(t => linhas.push([fmtDia(t.venc), nomeEmp(t.emp), t.op, t.tit, t.cl, t.h, t.sit === 'P' ? 'Provisionado' : 'Confirmado', fmt(t.v)].map(cel).join(';')));
+    const url = URL.createObjectURL(new Blob(['﻿' + linhas.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a'); a.href = url; a.download = (A.lado === 'P' ? 'a_pagar' : 'a_receber') + '_' + R.D + '.csv';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  // ===================== PDF (mesma disposição do resumo diário de referência) =====================
+  const carregarScript = (src) => new Promise((ok, ko) => { if(document.querySelector('script[src="' + src + '"]')) return ok(); const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => ko(new Error('Não consegui carregar ' + src)); document.head.appendChild(s); });
+  let pdfAtual = null;
+  async function gerarPdf(){
+    const btn = $('btnPdf'); btn.disabled = true; const txt = btn.textContent; btn.textContent = 'Gerando…';
+    try {
+      await carregarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+      await carregarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+      const { jsPDF } = window.jspdf, doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' }), W = 297;
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text('FLUXOS FINANCEIROS', 10, 12);
+      doc.setFontSize(10); doc.text('DATA: ' + fmtDia(R.D), W - 10, 12, { align: 'right' });
+      if(nomeUnidade){ doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.text(nomeUnidade, 10, 17); }
+      const L = R.linhas, base = { theme: 'grid', styles: { fontSize: 8, cellPadding: 1.4, lineColor: [150, 150, 150], lineWidth: 0.1 }, headStyles: { fillColor: [228, 231, 234], textColor: [20, 20, 20], fontStyle: 'bold', halign: 'center' } };
+      const colN = { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } };
+      doc.autoTable(Object.assign({}, base, { startY: 21, margin: { left: 10, right: W / 2 + 3 }, head: [['Contas a Pagar - DESPESAS', 'Confirmado', 'Provisionado', 'Total']],
+        body: L.map(l => [l.rot, fmt(l.pag.conf), fmt(l.pag.prov), fmt(l.pag.total)]), columnStyles: colN,
+        didParseCell: (d) => { if(d.section === 'body' && d.row.index === L.length - 1) d.cell.styles.fontStyle = 'bold'; } }));
+      const y1 = doc.lastAutoTable.finalY;
+      doc.autoTable(Object.assign({}, base, { startY: 21, margin: { left: W / 2 + 3, right: 10 }, head: [['Contas a Receber - RECEITAS', 'Confirmado', 'Conf. + Saldo', 'Liquidez']],
+        body: L.map(l => [l.rot, fmt(l.rec.conf), fmt(l.rec.confSaldo), fmt(l.rec.liq)]), columnStyles: colN,
+        didParseCell: (d) => { if(d.section === 'body' && d.row.index === L.length - 1) d.cell.styles.fontStyle = 'bold'; if(d.section === 'body' && d.column.index === 3 && L[d.row.index].rec.liq < 0) d.cell.styles.textColor = [179, 38, 30]; } }));
+      const y2 = Math.max(y1, doc.lastAutoTable.finalY) + 8;
+      // saldos por empresa e conta
+      const corpo = [], estilo = [];
+      R.fluxos.forEach(g => {
+        corpo.push([g.nome, 'Saldo anterior', 'Entradas', 'Saídas', 'Saldo atual']); estilo.push('emp');
+        g.contas.forEach(c => { corpo.push([c.nome, fmt(c.ant), fmt(c.ent), fmt(c.sai), fmt(c.atu)]); estilo.push(''); });
+        corpo.push(['Subtotal ' + g.nome, fmt(g.ant), fmt(g.ent), fmt(g.sai), fmt(g.atu)]); estilo.push('sub');
+      });
+      corpo.push(['TOTAL', fmt(R.tot.ant), fmt(R.tot.ent), fmt(R.tot.sai), fmt(R.tot.atu)]); estilo.push('tot');
+      doc.autoTable(Object.assign({}, base, { startY: y2, margin: { left: 10, right: 10 }, head: [['Saldos das contas', 'Saldo anterior', 'Entradas', 'Saídas', 'Saldo atual']], body: corpo,
+        columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
+        didParseCell: (d) => { if(d.section !== 'body') return; const e = estilo[d.row.index];
+          if(e === 'emp'){ d.cell.styles.fillColor = [227, 241, 234]; d.cell.styles.fontStyle = 'bold'; if(d.column.index > 0) d.cell.styles.halign = 'center'; }
+          else if(e === 'sub' || e === 'tot'){ d.cell.styles.fillColor = [228, 231, 234]; d.cell.styles.fontStyle = 'bold'; } } }));
+      const n = doc.getNumberOfPages();
+      for(let p = 1; p <= n; p++){ doc.setPage(p); doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(110, 110, 110);
+        doc.text('Gerado em ' + new Date().toLocaleString('pt-BR') + ' · Página ' + p + ' de ' + n, W - 10, 205, { align: 'right' }); doc.setTextColor(0, 0, 0); }
+      const blob = doc.output('blob');
+      if(pdfAtual) URL.revokeObjectURL(pdfAtual.url);
+      pdfAtual = { blob, url: URL.createObjectURL(blob), nome: 'resumo_diario_' + R.D + '.pdf' };
+      $('pdfInfo').textContent = 'Data ' + fmtDia(R.D) + ' · ' + n + ' página(s)';
+      $('popupPdf').hidden = false;
+    } catch(e){ alert('Não consegui gerar o PDF: ' + (e.message || e)); }
+    finally { btn.textContent = txt; btn.disabled = false; }
+  }
+  $('pdfVer').addEventListener('click', () => { if(pdfAtual) window.open(pdfAtual.url, '_blank'); });
+  $('pdfBaixar').addEventListener('click', () => { if(!pdfAtual) return; const a = document.createElement('a'); a.href = pdfAtual.url; a.download = pdfAtual.nome; document.body.appendChild(a); a.click(); a.remove(); });
+  $('pdfCompartilhar').addEventListener('click', async () => {
+    if(!pdfAtual) return; const f = new File([pdfAtual.blob], pdfAtual.nome, { type: 'application/pdf' });
+    try { if(navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: 'Resumo diário ' + fmtDia(R.D) }); else alert('Este aparelho não compartilha arquivos daqui — use "Baixar".'); } catch(e){}
+  });
+  $('pdfFechar').addEventListener('click', () => { $('popupPdf').hidden = true; });
+  $('popupPdf').addEventListener('click', (e) => { if(e.target === $('popupPdf')) $('popupPdf').hidden = true; });
+
+  // ===================== carga =====================
+  function aviso(tipo, msg){ const a = $('aviso'); a.className = 'aviso' + (tipo ? ' ' + tipo : ''); a.textContent = msg || ''; a.hidden = !msg; }
+  function preencherDados(){
+    const ul = $('dadosLista'); ul.replaceChildren(); const li = (t) => ul.appendChild(el('li', '', t));
+    const c = qual.cruz, m = qual.mov;
+    if(c){ li('Pagamentos: ' + c.total.toLocaleString('pt-BR') + ' linhas; ' + c.quitados.toLocaleString('pt-BR') + ' quitadas (não entram aqui), ' + c.abertos.toLocaleString('pt-BR') + ' em aberto e ' + c.prov.toLocaleString('pt-BR') + ' provisionadas.');
+      if(c.semVenc) li(c.semVenc + ' linha(s) em aberto sem data de vencimento válida ficaram de fora.');
+      if(c.semValor) li(c.semValor + ' linha(s) em aberto com TOTAL zerado (provavelmente sem rateio) ficaram de fora — o valor delas não está nas contas acima.'); }
+    else li('Pagamentos: arquivo não carregado.');
+    if(m){ li('Movimento: ' + m.total.toLocaleString('pt-BR') + ' linhas, ' + contas.length + ' conta(s), último lançamento em ' + fmtDia(m.ate) + (m.semData ? '; ' + m.semData + ' sem data válida ficaram de fora' : '') + '.');
+      const ext = qual.lanc ? contas.filter(c => c.ancoraFonte === 'extrato').length : 0;
+      li((m.ancoras ? m.ancoras + ' linha(s) de "SALDO ANTERIOR/INICIAL" no movimento. ' : 'O movimento não tem linhas de "SALDO ANTERIOR/INICIAL". ') + (qual.lanc ? ext + ' conta(s) usaram o saldo de abertura do ' + ARQ.lanc + ' (' + qual.lanc.ancoras + ' linha(s) de saldo nele).' : 'O ' + ARQ.lanc + ' não foi carregado: sem ele as contas que não têm essa linha no movimento ficam sem saldo de abertura e podem divergir do Extrato.') + ' Contas com abertura têm o selo ⚓.');
+      li('Clique numa conta para ver como o saldo foi calculado e os últimos lançamentos — útil para conferir com o extrato.'); }
+    else li('Movimento: arquivo não carregado.');
+    li('Confirmado = em aberto. Provisionado = coluna PROVISIONADO marcada (-1, 1, sim, verdadeiro) ou situação P. Os valores somados são a coluna TOTAL (a parte de cada rateio).');
+    li('"Atrasado até" inclui o que vence na própria data (como no relatório de referência). Os títulos em aberto são os de hoje: ao escolher uma data passada só os saldos e os prazos mudam.');
+  }
+  function aplicar(){
+    $('inicio').replaceChildren(); $('app').hidden = false;
+    const s = lerLS(K_FILTROS, {}); if(typeof s.zeradas === 'boolean') FIL.zeradas = s.zeradas;
+    $('fZeradas').checked = FIL.zeradas; $('fData').value = FIL.data;
+    desenharEmpresas(); preencherDados(); render();
+  }
+  const LIMITE_LEITURA_DIRETA = 3 * 1024 * 1024;
+  const mb = (b) => (b / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' MB';
+  function dicaScriptGoogle(msg){
+    if(/permiss|authoriz|autoriz|external_request/i.test(msg)) return ' — No script do Google, rode a função "autorizar" uma vez (menu Executar) e reimplante (Implantar → Gerenciar implantações → ✏️ → Nova versão).';
+    return '';
+  }
+  async function baixarEmPartes(n, bytes){
+    for(let tentativa = 0; tentativa < 3; tentativa++){
+      let inicio = 0, atualizado = null, mudou = false; const partes = [];
+      while(true){
+        let r;
+        try { r = await chamar('&acao=parte&arquivo=' + encodeURIComponent(n) + '&inicio=' + inicio); }
+        catch(err){ throw new Error(err.message + dicaScriptGoogle(err.message)); }
+        if(r.proximo === undefined) throw new Error('O script do Google está desatualizado e não sabe ler arquivos grandes em partes. Cole a versão nova de google-apps-script-coletor.gs no script, rode "autorizar" e reimplante.');
+        if(atualizado && r.atualizado !== atualizado){ mudou = true; break; }
+        atualizado = r.atualizado; partes.push(r.texto);
+        $('rodape').textContent = 'Baixando ' + n + '… ' + mb(Math.min(r.proximo, r.total)) + ' de ' + mb(r.total || bytes);
+        if(r.proximo >= r.total) break;
+        if(r.proximo <= inicio) throw new Error('A leitura em partes de ' + n + ' não avançou.');
+        inicio = r.proximo;
+      }
+      if(!mudou) return { texto: partes.join(''), atualizado };
+    }
+    throw new Error('O arquivo ' + n + ' mudou várias vezes durante a leitura — tente atualizar de novo em instantes.');
+  }
+  async function baixarArquivo(n, bytes){
+    if(!(bytes > LIMITE_LEITURA_DIRETA)){
+      const r = await chamar('&acao=ler&arquivos=' + encodeURIComponent(n)); const f = r.arquivos[n];
+      if(f && f.texto != null) return { texto: f.texto, atualizado: f.atualizado };
+      if(!(f && (f.grande || /exced|maxim|too large/i.test(f.erro || '')))) return null;
+    }
+    return baixarEmPartes(n, bytes);
+  }
+  async function carregar(){
+    if(!cfg.url || !cfg.token){ if(!qual.cruz && !qual.mov) mostrarInicio(); return; }
+    const btn = $('btnAtualizar'); btn.classList.add('girando'); btn.disabled = true;
+    try {
+      if(!bd) bd = await abrirBd();
+      const lista = await chamar('&acao=listar');
+      const quando = {}, tamanho = {}; lista.arquivos.forEach(a => { quando[a.arquivo] = a.atualizado; tamanho[a.arquivo] = a.bytes; });
+      if(!quando[ARQ.cruz] && !quando[ARQ.mov]) throw new Error('Nem ' + ARQ.cruz + ' nem ' + ARQ.mov + ' estão na pasta do Drive.');
+      const textos = {};
+      for(const n of [ARQ.cruz, ARQ.mov, ARQ.lanc, ARQ.status].filter(n => quando[n])){
+        const c = await cacheGet(cacheUn + n);
+        if(c && c.atualizado === quando[n]){ textos[n] = c.texto; continue; }
+        $('rodape').textContent = 'Baixando ' + n + '… (arquivo grande, pode levar alguns segundos)';
+        const f = await baixarArquivo(n, tamanho[n]);
+        if(f && f.texto != null){ textos[n] = f.texto; await cachePut(cacheUn + n, { atualizado: quando[n], texto: f.texto }); }
+      }
+      $('rodape').textContent = '';
+      const falhas = [];
+      if(textos[ARQ.cruz]){ try { montarCruz(textos[ARQ.cruz]); } catch(e){ falhas.push(e.message); } } else falhas.push('Não encontrei/li ' + ARQ.cruz + ' — sem os títulos a pagar e a receber.');
+      if(textos[ARQ.mov]){ try { montarMov(textos[ARQ.mov]); } catch(e){ falhas.push(e.message); } } else falhas.push('Não encontrei/li ' + ARQ.mov + ' — sem os saldos das contas.');
+      if(textos[ARQ.lanc]){ try { montarAberturas(textos[ARQ.lanc]); } catch(e){ falhas.push(e.message); } }
+      if(!qual.cruz && !qual.mov) throw new Error(falhas.join(' '));
+      aplicar();
+      const origem = 'Dados do Drive — ' + [quando[ARQ.cruz] && ARQ.cruz + ' ' + new Date(quando[ARQ.cruz]).toLocaleString('pt-BR'), quando[ARQ.mov] && ARQ.mov + ' ' + new Date(quando[ARQ.mov]).toLocaleString('pt-BR')].filter(Boolean).join(' · ');
+      $('rodape').textContent = origem;
+      avisoColeta(textos[ARQ.status], falhas);
+    } catch(err){
+      console.error(err);
+      aviso('erro', (qual.cruz || qual.mov ? 'Não consegui atualizar agora (mostrando os últimos dados): ' : '') + err.message);
+      if(!qual.cruz && !qual.mov) $('inicio').replaceChildren();
+    } finally { btn.classList.remove('girando'); btn.disabled = false; }
+  }
+  function avisoColeta(statusTexto, falhas){
+    let msg = (falhas || []).join(' '), tipo = 'alerta';
+    try { if(statusTexto){ const s = JSON.parse(statusTexto), q = new Date(s.executado_em), h = (Date.now() - q.getTime()) / 3600000;
+      if(s.ok === false){ msg += ' A última coleta (' + q.toLocaleString('pt-BR') + ') teve erro em algum arquivo — os dados podem estar desatualizados.'; tipo = 'erro'; }
+      else if(h > 3) msg += ' A coleta no computador da empresa não roda desde ' + q.toLocaleString('pt-BR') + ' — os dados podem estar desatualizados.'; } } catch(e){}
+    aviso(tipo, msg.trim());
+  }
+  function mostrarInicio(){
+    const v = el('div', 'vazio'); v.appendChild(el('div', '', 'Nenhum dado carregado.'));
+    v.appendChild(el('div', '', 'Entre pelo Servir (o endereço do script do Google fica guardado na unidade) ou abra os dois CSV deste computador (📂): analise_pagamentos_sicon.csv e dados_mov_caixa.csv.'));
+    $('inicio').replaceChildren(v); $('app').hidden = true;
+  }
+  $('arquivosCsv').addEventListener('change', async (ev) => {
+    const arqs = [...ev.target.files]; if(!arqs.length) return;
+    try {
+      for(const f of arqs){
+        const texto = await f.text(), cab = semAcento(texto.slice(0, texto.search(/\r|\n/) > 0 ? texto.search(/\r|\n/) : 2000));
+        if(cab.includes('tipo_cta')) montarCruz(texto); else if(cab.includes('cod_conta')) montarMov(texto); else if(/(^|,|;)caixa(,|;|$)/.test(cab) && cab.includes('entrada')) montarAberturas(texto); else throw new Error('Não reconheci o arquivo ' + f.name + ' (esperado analise_pagamentos_sicon.csv ou dados_mov_caixa.csv).');
+      }
+      aplicar(); aviso('', ''); $('rodape').textContent = 'Arquivo(s) aberto(s) neste computador: ' + arqs.map(f => f.name).join(', ');
+    } catch(err){ aviso('erro', err.message); }
+    ev.target.value = '';
+  });
+
+  // ===================== eventos de interface =====================
+  $('btnAtualizar').addEventListener('click', carregar);
+  $('btnPdf').addEventListener('click', gerarPdf);
+  $('fData').addEventListener('change', () => { FIL.data = $('fData').value || dataPadrao(); render(); });
+  $('btnOntem').addEventListener('click', () => { FIL.data = dataPadrao(); $('fData').value = FIL.data; render(); });
+  $('btnHoje').addEventListener('click', () => { FIL.data = hoje(); $('fData').value = FIL.data; render(); });
+  $('fZeradas').addEventListener('change', () => { FIL.zeradas = $('fZeradas').checked; gravarLS(K_FILTROS, { zeradas: FIL.zeradas }); render(); });
+  $('empTodas').addEventListener('click', () => { FIL.empOff = new Set(); desenharEmpresas(); render(); });
+  $('empNenhuma').addEventListener('click', () => { FIL.empOff = new Set(empresasTodas()); desenharEmpresas(); render(); });
+  $('colTitulos').addEventListener('click', (e) => { const tr = e.target.closest('tr.cl[data-l]'); if(tr) abrirTitulos(tr.dataset.l, +tr.dataset.i); });
+  $('colFluxos').addEventListener('click', (e) => { const tr = e.target.closest('tr.cl[data-g]'); if(tr) abrirConta(+tr.dataset.g, +tr.dataset.c); });
+  $('titFechar').addEventListener('click', fecharTit); $('titSair').addEventListener('click', fecharTit);
+  $('popupTit').addEventListener('click', (e) => { if(e.target === $('popupTit')) fecharTit(); });
+  $('titBusca').addEventListener('input', desenharTit);
+  $('titCsv').addEventListener('click', csvTit);
+  document.addEventListener('keydown', (e) => { if(e.key !== 'Escape') return; if(!$('popupPdf').hidden) $('popupPdf').hidden = true; else if(!$('popupTit').hidden) fecharTit(); });
+
+  // expõe só para teste/diagnóstico
+  window.__rd = { abrirConta, montarAberturas, montarCruz, montarMov, aplicar, render, calcular, FIL, abrirTitulos, listaTitulos, gerarPdf, setChamar: (f) => { chamar = f; }, get R(){ return R; }, get titulos(){ return titulos; }, get contas(){ return contas; } };
+
+  // acesso: login do Servir + credenciais da unidade (servir-acesso.js), no mesmo módulo do Painel financeiro
+  (async function iniciar(){
+    bd = await abrirBd();
+    ServirAcesso.preparar({
+      modulo: 'painel_financeiro',
+      legado: () => !!(cfg.url && cfg.token),
+      aoLegado: () => carregar(),
+      aoPronto: (cred, ctx) => {
+        cfg.url = cred.url; cfg.token = cred.token; cacheUn = ctx.unidade.id + ':'; nomeUnidade = (ctx.unidade && (ctx.unidade.nome || ctx.unidade.nome_fantasia)) || '';
+        if(cred.arquivos && cred.arquivos.cruzada) ARQ.cruz = cred.arquivos.cruzada;
+        if(cred.arquivos && cred.arquivos.mov) ARQ.mov = cred.arquivos.mov;
+        if(cred.arquivos && cred.arquivos.lanc) ARQ.lanc = cred.arquivos.lanc;
+        carregar();
+      }
+    });
+  })();
+})();
+</script>
+</body>
+</html>
