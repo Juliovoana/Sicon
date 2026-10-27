@@ -300,6 +300,14 @@
             <div id="tabelaEstLocal" style="overflow-x:auto;"></div>
             <p class="status-msg" id="statusEstLocal"></p>
         </div>
+        <div class="cartao">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:8px;">
+                <h2 style="margin:0;">Transferências registradas</h2>
+                <input type="search" id="transfHistBusca" placeholder="Buscar nº, local, item..." style="max-width:240px;">
+            </div>
+            <p class="subtitulo" style="margin:0 0 10px 0;">Cada transferência tem um número. Clique em <strong>🧾 Relatório</strong> para abrir (ou reimprimir) o PDF.</p>
+            <div id="listaTransfHist"></div>
+        </div>
     </div>
 
     <!-- ==================== ABA POR SETOR (relatório de entregas) ==================== -->
@@ -351,23 +359,29 @@
 
 <!-- ==================== MODAL: TRANSFERIR ENTRE ALMOXARIFADOS ==================== -->
 <div id="modal-transferencia" class="modal-overlay">
-    <div class="modal-caixa" style="max-width:480px;">
+    <div class="modal-caixa" style="max-width:560px;">
         <h3>Transferir entre almoxarifados</h3>
-        <p class="subtitulo" style="margin-bottom:12px;">O estoque total do item não muda: a quantidade sai de um local e entra no outro.</p>
-        <div class="campo"><label>Item</label><select id="transfItem"></select></div>
+        <p class="subtitulo" style="margin-bottom:12px;">Monte a transferência com um ou mais itens: tudo vai num <strong>mesmo número</strong> e gera um <strong>relatório de transferência</strong> em PDF. O estoque total não muda — a quantidade sai de um local e entra no outro.</p>
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <div class="campo" style="flex:1; min-width:180px;"><label>De (sai)</label><select id="transfDe"></select></div>
             <div class="campo" style="flex:1; min-width:180px;"><label>Para (entra)</label><select id="transfPara"></select></div>
         </div>
-        <p class="subtitulo" id="transfSaldos" style="margin:0 0 10px 0;"></p>
-        <div style="display:flex; gap:8px;">
-            <div class="campo" style="flex:1;"><label>Quantidade</label><input type="number" id="transfQtd" min="1" step="1" value="1"></div>
-            <div class="campo" style="flex:1;"><label>Data</label><input type="date" id="transfData"></div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <div class="campo" style="flex:1; min-width:140px;"><label>Data</label><input type="date" id="transfData"></div>
+            <div class="campo" style="flex:2; min-width:200px;"><label>Observação (opcional)</label><input type="text" id="transfObs" maxlength="120"></div>
         </div>
-        <div class="campo"><label>Observação (opcional)</label><input type="text" id="transfObs" maxlength="120"></div>
+        <div style="border:1px solid var(--border); border-radius:10px; padding:10px; margin-bottom:10px;">
+            <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+                <div class="campo" style="flex:3; min-width:200px; margin:0;"><label>Item</label><select id="transfItem"></select></div>
+                <div class="campo" style="flex:1; min-width:80px; margin:0;"><label>Qtd</label><input type="number" id="transfQtd" min="1" step="1" value="1"></div>
+                <button type="button" class="btn btn-cinza" id="btnAddItemTransf" style="width:auto;">+ Adicionar</button>
+            </div>
+            <p class="subtitulo" id="transfSaldos" style="margin:6px 0 0 0;"></p>
+        </div>
+        <div id="transfCarrinho" style="margin-bottom:10px;"></div>
         <div style="display:flex; gap:8px; margin-top:6px;">
             <button type="button" class="btn btn-cinza" id="btnCancelarTransf" style="flex:1;">Cancelar</button>
-            <button type="button" class="btn btn-principal" id="btnConfirmarTransf" style="flex:1;">Transferir</button>
+            <button type="button" class="btn btn-principal" id="btnConfirmarTransf" style="flex:1;">Transferir e gerar relatório</button>
         </div>
         <p class="status-msg" id="statusTransf"></p>
     </div>
@@ -670,7 +684,7 @@ function somarDias(dataISO, dias) {
 // ---------------------------------------------------------------
 const AJUDA_UNIFORMES_EPI = {
     titulo: 'Uniformes / EPI',
-    ultimaRevisao: '27/10/2026',  /* almoxarifado do módulo por id (renomeável) */
+    ultimaRevisao: '27/10/2026',  /* almoxarifado do módulo por id (renomeável); transferência numerada com relatório */
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>Controle de peças de uniforme e EPI entregues aos profissionais do Staff --
@@ -814,11 +828,17 @@ const AJUDA_UNIFORMES_EPI = {
                 <li><strong>Locais</strong>: marque quais almoxarifados entram na conta. Só aparecem os que têm itens do catálogo.</li>
                 <li><strong>Unir os locais marcados</strong>: troca as colunas por um <em>total único</em> (com a distribuição ao lado) —
                 vale na tela, no PDF e no CSV. <strong>Só itens com saldo</strong> e o filtro por nome ajudam a enxugar a lista.</li>
-                <li><strong>🔁 Transferir entre almoxarifados</strong> (botão no topo ou na linha do item): escolhe o item, o local de
-                origem e o de destino e a quantidade. O sistema grava <strong>uma saída na origem e uma entrada no destino</strong>
-                (o estoque total não muda) e confere os dois saldos. Se a origem não tiver saldo suficiente, pede confirmação
-                (o local ficaria negativo). A transferência <strong>não conta como consumo</strong> no relatório Por setor e vai
-                para a auditoria.</li>
+                <li><strong>🔁 Transferir entre almoxarifados</strong> (botão no topo ou na linha do item): escolhe o local de
+                origem e o de destino, a data e <strong>um ou mais itens</strong> (item + quantidade, "+ Adicionar"). Tudo vai
+                <strong>num mesmo número de transferência</strong> (1, 2, 3... por unidade) e, ao confirmar, abre o
+                <strong>Relatório de transferência</strong> em PDF (declaração, lista de peças, total e duas linhas de assinatura:
+                quem entrega e quem recebe). O sistema grava <strong>uma saída na origem e uma entrada no destino</strong> para cada
+                item (o estoque total não muda), com "Transferência nº N" na observação, e confere os saldos. Se algum item não tiver
+                saldo suficiente na origem, pede confirmação (o local ficaria negativo). Se algo falhar no meio, <strong>nada fica
+                gravado</strong>. A transferência <strong>não conta como consumo</strong> no relatório Por setor e vai para a auditoria.</li>
+                <li><strong>Transferências registradas</strong> (lista abaixo da tabela): busca por número, local, item ou observação, e
+                o botão <strong>🧾 Relatório</strong> reabre/reimprime o PDF igual ao original (os nomes dos itens ficam guardados
+                como estavam na data).</li>
                 <li>O segundo almoxarifado precisa existir: cadastre em <em>Estoque → Cadastros → Almoxarifados</em> (só administrador
                 ou principal).</li>
             </ul>
@@ -2101,36 +2121,75 @@ function csvEstoqueLocal() {
 document.getElementById('btnPdfEstLocal').addEventListener('click', pdfEstoqueLocal);
 document.getElementById('btnCsvEstLocal').addEventListener('click', csvEstoqueLocal);
 
-// ----- transferência -----
+// ----- transferência (lote numerado: vários itens, um número, um relatório) -----
+let carrinhoTransf = [];      // [{catalogoId, qtd}]
+let transfHistorico = [];     // linhas de staff_uniformes_epi_transferencias
+const nomeAlmoxPorId = id => (almoxarifados.find(a => String(a.id) === String(id)) || {}).nome || '—';
+const nomeItemCatalogo = c => c.nome + (c.tamanho ? ' — ' + c.tamanho : '');
+
 function atualizarSaldosTransferencia() {
     const item = catalogo.find(c => String(c.id) === document.getElementById('transfItem').value);
     const de = document.getElementById('transfDe').value, para = document.getElementById('transfPara').value;
-    const nome = id => (almoxarifados.find(a => String(a.id) === String(id)) || {}).nome || '—';
     document.getElementById('transfSaldos').innerHTML = item
-        ? `Saldo atual — <strong>${escapeHtml(nome(de))}</strong>: ${saldoNoLocal(item.produto_id, de)} · <strong>${escapeHtml(nome(para))}</strong>: ${saldoNoLocal(item.produto_id, para)}`
+        ? `Saldo atual — <strong>${escapeHtml(nomeAlmoxPorId(de))}</strong>: ${saldoNoLocal(item.produto_id, de)} · <strong>${escapeHtml(nomeAlmoxPorId(para))}</strong>: ${saldoNoLocal(item.produto_id, para)}`
         : '';
 }
+
+function renderCarrinhoTransf() {
+    const box = document.getElementById('transfCarrinho');
+    const de = document.getElementById('transfDe').value;
+    if (!carrinhoTransf.length) { box.innerHTML = '<div class="vazio">Nenhum item na transferência ainda — escolha o item e clique em "+ Adicionar".</div>'; return; }
+    const totalPecas = carrinhoTransf.reduce((s, x) => s + x.qtd, 0);
+    box.innerHTML = carrinhoTransf.map((x, i) => {
+        const c = catalogo.find(k => String(k.id) === String(x.catalogoId));
+        const saldo = c ? saldoNoLocal(c.produto_id, de) : 0;
+        const falta = x.qtd > saldo;
+        return `<div style="display:flex; align-items:center; gap:8px; padding:6px 8px; border-bottom:1px solid var(--border); ${i % 2 === 0 ? 'background:#f6f6f6;' : ''}">
+            <strong style="min-width:34px; text-align:right;">${x.qtd}</strong>
+            <span style="flex:1;">${escapeHtml(c ? nomeItemCatalogo(c) : 'Item removido')}</span>
+            <span style="font-size:.8rem; ${falta ? 'color:var(--danger); font-weight:700;' : 'color:var(--muted);'}">saldo na origem: ${saldo}${falta ? ' ⚠' : ''}</span>
+            <button type="button" class="btn btn-cinza" data-remover-transf="${i}" style="width:auto; padding:2px 9px;" title="Remover">×</button>
+        </div>`;
+    }).join('') + `<div style="text-align:right; padding:6px 8px; font-weight:700;">Total: ${totalPecas} peça${totalPecas > 1 ? 's' : ''} em ${carrinhoTransf.length} ${carrinhoTransf.length > 1 ? 'itens' : 'item'}</div>`;
+}
+
 function abrirModalTransferencia(catalogoIdPre) {
     if (almoxarifados.length < 2) { alert('Só existe um almoxarifado nesta unidade. Cadastre o segundo no Estoque (Cadastros → Almoxarifados) para poder transferir.'); return; }
     const itens = catalogo.filter(c => c.produto_id && c.ativo !== false).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-    document.getElementById('transfItem').innerHTML = itens.map(c => `<option value="${c.id}">${escapeHtml(c.nome + (c.tamanho ? ' — ' + c.tamanho : ''))}</option>`).join('');
+    document.getElementById('transfItem').innerHTML = itens.map(c => `<option value="${c.id}">${escapeHtml(nomeItemCatalogo(c))}</option>`).join('');
     if (catalogoIdPre) document.getElementById('transfItem').value = String(catalogoIdPre);
     const opcoes = almoxarifados.map(a => `<option value="${a.id}">${escapeHtml(a.nome)}</option>`).join('');
     document.getElementById('transfDe').innerHTML = opcoes; document.getElementById('transfPara').innerHTML = opcoes;
-    // origem sugerida = onde o item tem mais saldo; destino = outro local
+    // origem sugerida (quando abre pela linha de um item) = onde o item tem mais saldo; destino = outro local
     const it = catalogo.find(c => String(c.id) === document.getElementById('transfItem').value);
     let origem = almoxarifados[0].id;
-    if (it) { let melhor = -Infinity; almoxarifados.forEach(a => { const v = saldoNoLocal(it.produto_id, a.id); if (v > melhor) { melhor = v; origem = a.id; } }); }
+    if (catalogoIdPre && it) { let melhor = -Infinity; almoxarifados.forEach(a => { const v = saldoNoLocal(it.produto_id, a.id); if (v > melhor) { melhor = v; origem = a.id; } }); }
     document.getElementById('transfDe').value = String(origem);
     document.getElementById('transfPara').value = String((almoxarifados.find(a => String(a.id) !== String(origem)) || almoxarifados[1]).id);
     document.getElementById('transfQtd').value = 1; document.getElementById('transfData').value = hojeISO(); document.getElementById('transfObs').value = '';
+    carrinhoTransf = catalogoIdPre && it ? [{ catalogoId: it.id, qtd: 1 }] : [];
     document.getElementById('statusTransf').textContent = ''; document.getElementById('statusTransf').style.color = '';
-    atualizarSaldosTransferencia();
+    atualizarSaldosTransferencia(); renderCarrinhoTransf();
     document.getElementById('modal-transferencia').classList.add('aberto');
 }
 document.getElementById('btnNovaTransferencia').addEventListener('click', () => abrirModalTransferencia(null));
 document.getElementById('btnCancelarTransf').addEventListener('click', () => document.getElementById('modal-transferencia').classList.remove('aberto'));
-['transfItem', 'transfDe', 'transfPara'].forEach(id => document.getElementById(id).addEventListener('change', atualizarSaldosTransferencia));
+['transfItem', 'transfDe', 'transfPara'].forEach(id => document.getElementById(id).addEventListener('change', () => { atualizarSaldosTransferencia(); renderCarrinhoTransf(); }));
+document.getElementById('btnAddItemTransf').addEventListener('click', () => {
+    const statusEl = document.getElementById('statusTransf'); statusEl.style.color = 'var(--danger)'; statusEl.textContent = '';
+    const idItem = document.getElementById('transfItem').value;
+    if (!idItem) { statusEl.textContent = 'Escolha o item.'; return; }
+    const qtd = Number(document.getElementById('transfQtd').value);
+    if (!Number.isInteger(qtd) || qtd < 1) { statusEl.textContent = 'A quantidade precisa ser um número inteiro de pelo menos 1.'; return; }
+    const ja = carrinhoTransf.find(x => String(x.catalogoId) === idItem);
+    if (ja) ja.qtd += qtd; else carrinhoTransf.push({ catalogoId: idItem, qtd });
+    document.getElementById('transfQtd').value = 1;
+    renderCarrinhoTransf();
+});
+document.getElementById('transfCarrinho').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-remover-transf]'); if (!b) return;
+    carrinhoTransf.splice(Number(b.dataset.removerTransf), 1); renderCarrinhoTransf();
+});
 
 async function lerSaldoLocalBanco(produtoId, almoxarifadoId) {
     const { data, error } = await sb.from('estoque_saldo_almoxarifado').select('estoque')
@@ -2139,64 +2198,180 @@ async function lerSaldoLocalBanco(produtoId, almoxarifadoId) {
     return data ? Number(data.estoque) || 0 : null;   // null = ainda não existe linha de saldo nesse local
 }
 
+// número da transferência: max + 1 por unidade; o índice único (unidade, numero) barra a corrida e a gravação tenta de novo
+async function reservarTransferencia(registro) {
+    for (let tentativa = 0; tentativa < 4; tentativa++) {
+        const { data: ult, error: eMax } = await sb.from('staff_uniformes_epi_transferencias').select('numero')
+            .eq('unidade_negocio_id', meuPerfil.unidadeId).order('numero', { ascending: false }).limit(1);
+        if (eMax) throw eMax;
+        const numero = (ult && ult[0] ? Number(ult[0].numero) || 0 : 0) + 1;
+        const { data, error } = await sb.from('staff_uniformes_epi_transferencias').insert({ ...registro, numero }).select().single();
+        if (!error) return data;
+        if (error.code !== '23505') throw error;
+    }
+    throw new Error('Não consegui reservar o número da transferência (várias ao mesmo tempo). Tente de novo.');
+}
+function erroTabelaTransferencia(e) {
+    const m = String((e && e.message) || e || '');
+    return /staff_uniformes_epi_transferencias/.test(m) && /(does not exist|schema cache|Could not find)/i.test(m)
+        ? 'Falta rodar o SQL staff-uniformes-epi-transferencias.sql no Supabase (nada foi alterado).' : null;
+}
+
 document.getElementById('btnConfirmarTransf').addEventListener('click', async () => {
     const statusEl = document.getElementById('statusTransf'); statusEl.textContent = ''; statusEl.style.color = 'var(--danger)';
     if (!podeRegistrar()) { statusEl.textContent = 'Você não tem permissão para registrar transferências.'; return; }
-    const item = catalogo.find(c => String(c.id) === document.getElementById('transfItem').value);
-    if (!item || !item.produto_id) { statusEl.textContent = 'Escolha o item.'; return; }
     const de = almoxarifados.find(a => String(a.id) === document.getElementById('transfDe').value);
     const para = almoxarifados.find(a => String(a.id) === document.getElementById('transfPara').value);
     if (!de || !para) { statusEl.textContent = 'Escolha o local de origem e o de destino.'; return; }
     if (String(de.id) === String(para.id)) { statusEl.textContent = 'A origem e o destino precisam ser diferentes.'; return; }
-    const qtd = Number(document.getElementById('transfQtd').value);
-    if (!Number.isInteger(qtd) || qtd < 1) { statusEl.textContent = 'A quantidade precisa ser um número inteiro de pelo menos 1.'; return; }
+    if (!carrinhoTransf.length) { statusEl.textContent = 'Adicione pelo menos um item à transferência.'; return; }
+    const linhas = carrinhoTransf.map(x => ({ x, item: catalogo.find(c => String(c.id) === String(x.catalogoId)) }));
+    if (linhas.some(l => !l.item || !l.item.produto_id)) { statusEl.textContent = 'Há item sem produto de estoque vinculado — remova-o da lista.'; return; }
     const data = document.getElementById('transfData').value || hojeISO();
     const obs = document.getElementById('transfObs').value.trim();
-    const saldoOrigem = saldoNoLocal(item.produto_id, de.id);
-    if (qtd > saldoOrigem && !confirm(`O saldo de "${de.nome}" é ${saldoOrigem} e você está transferindo ${qtd} — esse local ficará negativo. Continuar?`)) return;
+    const faltando = linhas.filter(l => l.x.qtd > saldoNoLocal(l.item.produto_id, de.id));
+    if (faltando.length && !confirm(`Em "${de.nome}", estes itens ficarão negativos:\n\n` + faltando.map(l => `• ${nomeItemCatalogo(l.item)}: saldo ${saldoNoLocal(l.item.produto_id, de.id)}, transferindo ${l.x.qtd}`).join('\n') + '\n\nContinuar?')) return;
 
     const btn = document.getElementById('btnConfirmarTransf'); btn.disabled = true; btn.textContent = 'Transferindo...';
-    const produtoId = item.produto_id;
-    const base = {
-        data, produto_id: produtoId, qtd, valor_unit: Number(item.estoque_produtos?.valor) || 0, almoxarifado: 1,
-        observacao: `Transferência ${de.nome} → ${para.nome}` + (obs ? ' — ' + obs : ''),
-        responsavel: meuPerfil.nomeOperador, fornecedor_nome: NOME_TRANSFERENCIA, afeta_preco_medio: false, unidade_negocio_id: meuPerfil.unidadeId
-    };
-    const desfazer = { movs: [], ajustes: [] };   // o que já foi gravado, pra desfazer se algo falhar no meio
+    const desfazer = { movs: [], ajustes: [], registroId: null };   // o que já foi gravado, pra desfazer tudo se algo falhar no meio
     try {
-        const antesDe = await lerSaldoLocalBanco(produtoId, de.id);
-        const antesPara = await lerSaldoLocalBanco(produtoId, para.id);
-        // garante a linha de saldo do destino (o local pode nunca ter tido esse item)
-        if (antesPara === null) {
-            const { error: eNovo } = await sb.from('estoque_saldo_almoxarifado').insert({ unidade_negocio_id: meuPerfil.unidadeId, produto_id: produtoId, almoxarifado_id: para.id, estoque: 0, estoque_inicial: 0 });
-            if (eNovo) console.warn('Não criei a linha de saldo do destino (a função de ajuste pode criar):', eNovo.message);
+        // 1º grava o registro numerado (com o retrato dos itens): se a tabela não existir, para aqui sem mexer em estoque
+        const registro = await reservarTransferencia({
+            unidade_negocio_id: meuPerfil.unidadeId, data, de_almoxarifado_id: de.id, para_almoxarifado_id: para.id, de_nome: de.nome, para_nome: para.nome,
+            observacao: obs || null, responsavel: meuPerfil.nomeOperador,
+            itens: linhas.map(l => ({ catalogo_id: l.item.id, produto_id: l.item.produto_id, nome: l.item.nome, tamanho: l.item.tamanho || null, qtd: l.x.qtd, valor_unit: Number(l.item.estoque_produtos?.valor) || 0 }))
+        });
+        desfazer.registroId = registro.id;
+        const verificacoes = [];
+        for (const { x, item } of linhas) {
+            const produtoId = item.produto_id, qtd = x.qtd;
+            const base = {
+                data, produto_id: produtoId, qtd, valor_unit: Number(item.estoque_produtos?.valor) || 0, almoxarifado: 1,
+                observacao: `Transferência nº ${registro.numero}: ${de.nome} → ${para.nome}` + (obs ? ' — ' + obs : ''),
+                responsavel: meuPerfil.nomeOperador, fornecedor_nome: NOME_TRANSFERENCIA, afeta_preco_medio: false, unidade_negocio_id: meuPerfil.unidadeId
+            };
+            const antesDe = await lerSaldoLocalBanco(produtoId, de.id);
+            const antesPara = await lerSaldoLocalBanco(produtoId, para.id);
+            // garante a linha de saldo do destino (o local pode nunca ter tido esse item)
+            if (antesPara === null) {
+                const { error: eNovo } = await sb.from('estoque_saldo_almoxarifado').insert({ unidade_negocio_id: meuPerfil.unidadeId, produto_id: produtoId, almoxarifado_id: para.id, estoque: 0, estoque_inicial: 0 });
+                if (eNovo) console.warn('Não criei a linha de saldo do destino (a função de ajuste pode criar):', eNovo.message);
+            }
+            const { data: movSaida, error: eS } = await sb.from('estoque_movimentacoes').insert({ ...base, tipo: 'saida', almoxarifado_id: de.id }).select().single();
+            if (eS) throw eS; desfazer.movs.push(movSaida.id);
+            const { data: movEntrada, error: eE } = await sb.from('estoque_movimentacoes').insert({ ...base, tipo: 'entrada', almoxarifado_id: para.id }).select().single();
+            if (eE) throw eE; desfazer.movs.push(movEntrada.id);
+            const { error: a1 } = await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: produtoId, p_delta: -qtd, p_almoxarifado_id: de.id });
+            if (a1) throw a1; desfazer.ajustes.push({ produtoId, delta: qtd, almox: de.id });
+            const { error: a2 } = await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: produtoId, p_delta: qtd, p_almoxarifado_id: para.id });
+            if (a2) throw a2; desfazer.ajustes.push({ produtoId, delta: -qtd, almox: para.id });
+            verificacoes.push({ item, qtd, antesDe, antesPara });
         }
-        const { data: movSaida, error: eS } = await sb.from('estoque_movimentacoes').insert({ ...base, tipo: 'saida', almoxarifado_id: de.id }).select().single();
-        if (eS) throw eS; desfazer.movs.push(movSaida.id);
-        const { data: movEntrada, error: eE } = await sb.from('estoque_movimentacoes').insert({ ...base, tipo: 'entrada', almoxarifado_id: para.id }).select().single();
-        if (eE) throw eE; desfazer.movs.push(movEntrada.id);
-        const { error: a1 } = await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: produtoId, p_delta: -qtd, p_almoxarifado_id: de.id });
-        if (a1) throw a1; desfazer.ajustes.push({ delta: qtd, almox: de.id });
-        const { error: a2 } = await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: produtoId, p_delta: qtd, p_almoxarifado_id: para.id });
-        if (a2) throw a2;
 
-        // confere se o saldo andou como esperado nos dois locais
-        const depoisDe = await lerSaldoLocalBanco(produtoId, de.id), depoisPara = await lerSaldoLocalBanco(produtoId, para.id);
-        const okDe = depoisDe === (antesDe ?? 0) - qtd, okPara = depoisPara === (antesPara ?? 0) + qtd;
-        try { await registrarSentinela('transferencia_uniforme_epi', `${qtd}x ${item.nome}${item.tamanho ? ' — ' + item.tamanho : ''}: ${de.nome} → ${para.nome}`); } catch (_) { /* auditoria não bloqueia */ }
-        document.getElementById('modal-transferencia').classList.remove('aberto');
-        await carregarCatalogo(); renderizarCatalogoAdmin(); await carregarEstoqueLocal();
-        if (!okDe || !okPara) {
-            const st = document.getElementById('statusEstLocal'); st.style.color = 'var(--danger)';
-            st.textContent = `Transferência registrada, mas o saldo conferido no banco não bateu (${de.nome}: ${depoisDe}, ${para.nome}: ${depoisPara}). Rode "Reprocessar Estoque" no Estoque e confira.`;
+        // confere se o saldo andou como esperado nos dois locais, item a item
+        const divergentes = [];
+        for (const v of verificacoes) {
+            const depoisDe = await lerSaldoLocalBanco(v.item.produto_id, de.id), depoisPara = await lerSaldoLocalBanco(v.item.produto_id, para.id);
+            if (depoisDe !== (v.antesDe ?? 0) - v.qtd || depoisPara !== (v.antesPara ?? 0) + v.qtd) divergentes.push(`${nomeItemCatalogo(v.item)} (${de.nome}: ${depoisDe}, ${para.nome}: ${depoisPara})`);
         }
+        const resumo = linhas.map(l => `${l.x.qtd}x ${nomeItemCatalogo(l.item)}`).join('; ');
+        try { await registrarSentinela('transferencia_uniforme_epi', `Transferência nº ${registro.numero}: ${de.nome} → ${para.nome} — ${resumo}`); } catch (_) { /* auditoria não bloqueia */ }
+        document.getElementById('modal-transferencia').classList.remove('aberto');
+        await carregarCatalogo(); renderizarCatalogoAdmin(); await carregarEstoqueLocal(); await carregarTransfHistorico();
+        if (divergentes.length) {
+            const st = document.getElementById('statusEstLocal'); st.style.color = 'var(--danger)';
+            st.textContent = `Transferência nº ${registro.numero} registrada, mas o saldo conferido no banco não bateu em: ${divergentes.join('; ')}. Rode "Reprocessar Estoque" no Estoque e confira.`;
+        }
+        await gerarPdfTransferencia(registro);
     } catch (e) {
-        // desfaz o que já tinha sido gravado (melhor esforço)
-        for (const a of desfazer.ajustes) { try { await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: produtoId, p_delta: a.delta, p_almoxarifado_id: a.almox }); } catch (_) { /* ignora */ } }
+        // desfaz tudo o que já tinha sido gravado (melhor esforço): ajustes, movimentos e o registro numerado
+        for (const a of desfazer.ajustes) { try { await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: a.produtoId, p_delta: a.delta, p_almoxarifado_id: a.almox }); } catch (_) { /* ignora */ } }
         for (const id of desfazer.movs) { try { await sb.from('estoque_movimentacoes').delete().eq('id', id); } catch (_) { /* ignora */ } }
-        statusEl.textContent = 'Erro ao transferir (nada foi alterado): ' + (e.message || e);
-    } finally { btn.disabled = false; btn.textContent = 'Transferir'; }
+        if (desfazer.registroId) { try { await sb.from('staff_uniformes_epi_transferencias').delete().eq('id', desfazer.registroId); } catch (_) { /* ignora */ } }
+        statusEl.textContent = erroTabelaTransferencia(e) || ('Erro ao transferir (nada foi alterado): ' + (e.message || e));
+    } finally { btn.disabled = false; btn.textContent = 'Transferir e gerar relatório'; }
 });
+
+// ----- histórico de transferências + relatório em PDF -----
+const semAcentoBusca = s => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+async function carregarTransfHistorico() {
+    const { data, error } = await sb.from('staff_uniformes_epi_transferencias').select('*')
+        .eq('unidade_negocio_id', meuPerfil.unidadeId).order('numero', { ascending: false }).limit(300);
+    transfHistorico = error ? [] : (data || []);
+    renderTransfHistorico(error ? (erroTabelaTransferencia(error) || ('Não consegui carregar: ' + error.message)) : '');
+}
+function renderTransfHistorico(erroTxt) {
+    const box = document.getElementById('listaTransfHist');
+    if (erroTxt) { box.innerHTML = `<div class="vazio" style="color:var(--danger);">${escapeHtml(erroTxt)}</div>`; return; }
+    const termo = semAcentoBusca(document.getElementById('transfHistBusca').value);
+    const lista = transfHistorico.filter(t => !termo || semAcentoBusca([t.numero, t.de_nome, t.para_nome, t.observacao, t.responsavel, ...(t.itens || []).map(i => i.nome + ' ' + (i.tamanho || ''))].join(' ')).includes(termo));
+    if (!lista.length) { box.innerHTML = '<div class="vazio">Nenhuma transferência registrada.</div>'; return; }
+    box.innerHTML = lista.slice(0, 100).map(t => {
+        const pecas = (t.itens || []).reduce((s, i) => s + (Number(i.qtd) || 0), 0), n = (t.itens || []).length;
+        return `<div style="display:flex; align-items:center; gap:10px; padding:8px 4px; border-bottom:1px solid var(--border); flex-wrap:wrap;">
+            <strong style="min-width:56px;">Nº ${t.numero}</strong>
+            <div style="flex:1; min-width:220px;">
+                <div>${formatarDataSemFuso(t.data)} · ${escapeHtml(t.de_nome)} → ${escapeHtml(t.para_nome)} · ${n} ${n > 1 ? 'itens' : 'item'} (${pecas} peça${pecas > 1 ? 's' : ''})</div>
+                <div class="meta" style="font-size:.82rem; color:var(--muted);">${escapeHtml((t.itens || []).map(i => i.qtd + 'x ' + i.nome + (i.tamanho ? ' ' + i.tamanho : '')).join(', '))}${t.observacao ? ' — ' + escapeHtml(t.observacao) : ''}${t.responsavel ? ' · por ' + escapeHtml(t.responsavel) : ''}</div>
+            </div>
+            <button type="button" class="btn btn-cinza" data-relatorio-transf="${t.id}" style="width:auto;">🧾 Relatório</button>
+        </div>`;
+    }).join('') + (lista.length > 100 ? `<div class="subtitulo" style="padding:8px;">Mostrando as 100 mais recentes de ${lista.length} — use a busca para achar outras.</div>` : '');
+}
+document.getElementById('transfHistBusca').addEventListener('input', () => renderTransfHistorico());
+document.getElementById('listaTransfHist').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-relatorio-transf]'); if (!b) return;
+    const reg = transfHistorico.find(t => t.id === b.dataset.relatorioTransf); if (reg) gerarPdfTransferencia(reg);
+});
+document.querySelector('[data-aba="estoquelocal"]').addEventListener('click', carregarTransfHistorico);
+
+// relatório de transferência: mesmo estilo do recibo (título, declaração, lista de peças, cidade/data, assinaturas), numerado
+async function gerarPdfTransferencia(reg) {
+    try {
+        await carregarJsPdf();
+        if (!autoTablePdfCarregado) { await carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js'); autoTablePdfCarregado = true; }
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        const margem = 14, larguraUtil = 210 - margem * 2;
+        const empresa = configRecibo.razao_social || meuPerfil.unidadeNome || '________________';
+        let y = 20;
+        doc.setFontSize(8); doc.setTextColor(150);
+        doc.text('Transferência nº ' + reg.numero, 210 - margem, y, { align: 'right' });
+        doc.setTextColor(0);
+        doc.setFontSize(12); doc.setFont(undefined, 'bold');
+        const titulo = doc.splitTextToSize('RELATÓRIO DE TRANSFERÊNCIA DE UNIFORMES E EQUIPAMENTOS DE SEGURANÇA Nº ' + reg.numero, larguraUtil);
+        doc.text(titulo, margem, y); y += titulo.length * 6 + 3;
+        doc.setFontSize(10); doc.setFont(undefined, 'normal');
+        const pecas = (reg.itens || []).reduce((s, i) => s + (Number(i.qtd) || 0), 0);
+        const decl = doc.splitTextToSize(`${empresa} registra que, em ${formatarDataExtensoRecibo(reg.data)}, foram transferidos do almoxarifado "${reg.de_nome}" para o almoxarifado "${reg.para_nome}" os uniformes e ou equipamentos listados abaixo (${pecas} peça${pecas > 1 ? 's' : ''}).`, larguraUtil);
+        doc.text(decl, margem, y); y += decl.length * 5 + 2;
+        if (reg.observacao) { const o = doc.splitTextToSize('Observação: ' + reg.observacao, larguraUtil); doc.text(o, margem, y); y += o.length * 5 + 2; }
+        y += 3;
+        const itens = [...(reg.itens || [])].sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+        doc.autoTable({
+            startY: y, margin: { left: margem, right: margem },
+            head: [['Qtd', 'Item']], body: itens.map(i => [String(i.qtd), i.nome + (i.tamanho ? ' — ' + i.tamanho : '')]),
+            foot: [[String(pecas), 'TOTAL DE PEÇAS']],
+            styles: { fontSize: 10, cellPadding: 2 }, headStyles: { fillColor: [27, 67, 50] },
+            footStyles: { fillColor: [235, 235, 235], textColor: 0, fontStyle: 'bold' },
+            columnStyles: { 0: { cellWidth: 20, halign: 'right' } }, alternateRowStyles: { fillColor: [245, 245, 245] }
+        });
+        y = doc.lastAutoTable.finalY + 12;
+        if (y > 235) { doc.addPage(); y = 25; }
+        doc.setFontSize(10);
+        doc.text(`${configRecibo.cidade || '________________'}, ${formatarDataExtensoRecibo(reg.data)}`, margem, y);
+        y += 22;
+        const meio = 210 / 2;
+        doc.setDrawColor(120);
+        doc.line(margem, y, meio - 6, y); doc.line(meio + 6, y, 210 - margem, y);
+        doc.setFontSize(9);
+        doc.text('Entregue por — ' + reg.de_nome, margem, y + 5); doc.text('Recebido por — ' + reg.para_nome, meio + 6, y + 5);
+        if (reg.responsavel) { doc.setTextColor(120); doc.setFontSize(8); doc.text('Registrado no sistema por ' + reg.responsavel + ' em ' + new Date(reg.criado_em || Date.now()).toLocaleString('pt-BR'), margem, y + 14); doc.setTextColor(0); }
+        const total = doc.getNumberOfPages();
+        for (let p = 1; p <= total; p++) { doc.setPage(p); doc.setFontSize(8); doc.setTextColor(150); doc.text(`Página ${p} de ${total}`, 210 - margem, 290, { align: 'right' }); }
+        mostrarPopupAcoesPdf('Relatório de transferência nº ' + reg.numero, doc.output('blob'), `transferencia-${reg.numero}.pdf`);
+    } catch (e) { alert('Não consegui gerar o PDF da transferência: ' + (e.message || e)); }
+}
 
 // ---------------------------------------------------------------
 // DEVOLVER / DESCARTAR

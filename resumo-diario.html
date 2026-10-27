@@ -170,6 +170,7 @@
     <div class="resumo-kpis" id="titKpis"></div>
     <div class="linha-filtros" style="margin-bottom:8px;align-items:center">
       <input type="search" class="busca" id="titBusca" placeholder="Buscar (cliente, fornecedor, OP, histórico…)" style="flex:1;min-width:200px">
+      <select id="contaModo" class="busca" style="min-width:0" title="O que mostrar desta conta" hidden><option value="dia">Extrato do dia</option><option value="ent">Só entradas do dia</option><option value="sai">Só saídas do dia</option><option value="ate">Como o saldo foi calculado (últimos lançamentos)</option></select>
       <select id="titSit" class="busca" style="min-width:0" title="Filtrar a lista"><option value="todos">Todos</option><option value="atrasados">Só atrasados</option><option value="prov">Só provisionados</option><option value="conf">Só confirmados</option></select>
     </div>
     <div class="rol-lanc"><table class="lanc" id="titTabela"></table></div>
@@ -477,7 +478,7 @@
     const cel = (v, forte) => '<td' + (v < 0 ? ' class="neg"' : '') + '>' + fmt(v) + '</td>';
     R.fluxos.forEach((g, gi) => {
       h += '<tr class="emp"><td colspan="5">' + esc(g.nome) + '</td></tr>';
-      g.contas.forEach((c, ci) => { h += '<tr class="cl" data-g="' + gi + '" data-c="' + ci + '" title="Ver como o saldo foi calculado"><td>' + esc(c.nome) + (c.ref.ancora ? ' <span class="pass" title="Saldo com abertura da linha de saldo de ' + fmtDia(c.ref.ancora.d) + '">⚓</span>' : '') + '</td>' + cel(c.ant) + cel(c.ent) + cel(c.sai) + cel(c.atu) + '</tr>'; });
+      g.contas.forEach((c, ci) => { h += '<tr class="cl" data-g="' + gi + '" data-c="' + ci + '" title="Clique na conta ou nos saldos para ver o extrato do dia; em Entradas ou Saídas, só os lançamentos daquele lado"><td>' + esc(c.nome) + (c.ref.ancora ? ' <span class="pass" title="Saldo com abertura da linha de saldo de ' + fmtDia(c.ref.ancora.d) + '">⚓</span>' : '') + '</td>' + cel(c.ant) + cel(c.ent) + cel(c.sai) + cel(c.atu) + '</tr>'; });
       h += '<tr class="sub"><td>Subtotal ' + esc(g.nome) + '</td>' + cel(g.ant) + cel(g.ent) + cel(g.sai) + cel(g.atu) + '</tr>';
     });
     h += '<tr class="tot"><td>Total</td>' + cel(R.tot.ant) + cel(R.tot.ent) + cel(R.tot.sai) + cel(R.tot.atu) + '</tr></tbody>';
@@ -529,6 +530,7 @@
     const par = (tx, v) => { const s = el('span'); s.appendChild(document.createTextNode(tx + ' ')); s.appendChild(el('b', '', v)); k.appendChild(s); };
     par('Títulos:', lista.length.toLocaleString('pt-BR')); par('Total:', fmtR(soma(lista))); par('Atrasados:', atr.length + ' · ' + fmtR(soma(atr)));
     if(prov.length) par('Provisionados:', prov.length + ' · ' + fmtR(soma(prov)));
+    contaAberta = null; $('contaModo').hidden = true;
     $('titBusca').value = ''; $('titCsv').hidden = false; $('titBusca').hidden = false; $('titSit').hidden = false; $('titSit').value = 'todos';
     $('titSit').querySelector('[value=prov]').disabled = !prov.length; $('titSit').querySelector('[value=atrasados]').disabled = !atr.length; desenharTit();
     $('popupTit').hidden = false; document.body.style.overflow = 'hidden';
@@ -546,26 +548,49 @@
       return '<tr' + (d <= 0 ? ' class="atraso"' : '') + '><td>' + fmtDia(t.venc) + '</td><td>' + (d < 0 ? 'atrasado ' + (-d) + ' d' : d === 0 ? 'hoje' : 'em ' + d + ' d') + '</td><td class="txt">' + esc(nomeEmp(t.emp)) + '</td><td>' + esc(t.op) + '</td><td>' + esc(t.tit) + '</td><td class="txt">' + esc(t.cl) + '</td><td class="hist">' + esc(t.h) + '</td>' + (temProv ? '<td>' + (t.sit === 'P' ? 'Provisionado' : 'Confirmado') + '</td>' : '') + '<td>' + fmt(t.v) + '</td></tr>'; }).join('');
     $('titTabela').innerHTML = '<thead><tr>' + cab.join('') + '</tr></thead><tbody>' + linhas + '</tbody><tfoot><tr><td colspan="' + (cab.length - 1) + '" style="text-align:right">TOTAL (' + A.filtrados.length.toLocaleString('pt-BR') + ' título(s)' + (A.filtrados.length > mostrar.length ? ', mostrando ' + mostrar.length : '') + ')</td><td>' + fmt(A.filtrados.reduce((s, t) => s + t.v, 0)) + '</td></tr></tfoot>';
   }
-  // como o saldo de uma conta foi calculado (para conferir com o extrato): totais, âncora e os últimos lançamentos até a data
-  function abrirConta(gi, ci){
-    const g = R.fluxos[gi], c = g && g.contas[ci]; if(!c) return; const conta = c.ref, D = R.D;
+  // popup de uma conta. Clicar em Entradas / Saídas lista só os lançamentos do dia daquele lado; clicar no resto da linha mostra o
+  // extrato do dia (todos os lançamentos da data). O seletor do popup troca de visão, inclusive para "como o saldo foi calculado"
+  // (conferência com o extrato: totais, abertura e os últimos lançamentos até a data).
+  let contaAberta = null;
+  function abrirConta(gi, ci, modo){
+    const g = R.fluxos[gi], c = g && g.contas[ci]; if(!c) return;
+    contaAberta = { c, D: R.D };
     titAberto = null; $('titCsv').hidden = true; $('titBusca').hidden = true; $('titSit').hidden = true;
-    $('titTitulo').textContent = conta.nome + ' — como o saldo de ' + fmtDia(D) + ' foi calculado';
-    const ate = conta.mv.filter(m => m.d <= D), antes = conta.mv.filter(m => m.d < D);
-    const sr = antes.reduce((s, m) => s + m.r, 0), sx = antes.reduce((s, m) => s + m.x, 0);
-    const k = $('titKpis'); k.replaceChildren();
-    const par = (tx, v) => { const s = el('span'); s.appendChild(document.createTextNode(tx + ' ')); s.appendChild(el('b', '', v)); k.appendChild(s); };
-    par('Lançamentos até o dia anterior:', antes.length.toLocaleString('pt-BR') + (antes.length ? ' (de ' + fmtDia(antes.reduce((m, x) => x.d < m ? x.d : m, antes[0].d)) + ' a ' + fmtDia(antes.reduce((m, x) => x.d > m ? x.d : m, antes[0].d)) + ')' : ''));
-    par('Entradas:', fmt(sr)); par('Saídas:', fmt(sx));
-    par(conta.ancora ? 'Abertura (linha de saldo de ' + fmtDia(conta.ancora.d) + ' = ' + fmt(conta.ancora.v) + ', vinda do ' + (conta.ancoraFonte === 'extrato' ? ARQ.lanc : ARQ.mov) + '):' : 'Abertura (sem linha de saldo anterior/inicial em nenhum arquivo):', fmt(conta.abertura));
-    par('Saldo anterior:', fmt(c.ant)); par('Saldo atual:', fmt(c.atu));
-    const ult = ate.slice().sort((a, b) => (a.d < b.d ? 1 : a.d > b.d ? -1 : 0)).slice(0, 40);
-    $('titTabela').innerHTML = '<thead><tr><th>Data</th><th class="txt">Histórico</th><th>Entrada</th><th>Saída</th></tr></thead><tbody>' +
-      (ult.length ? ult.map(m => '<tr><td>' + fmtDia(m.d) + '</td><td class="hist">' + esc(m.h) + '</td><td>' + (m.r ? fmt(m.r) : '') + '</td><td>' + (m.x ? fmt(m.x) : '') + '</td></tr>').join('') : '<tr><td colspan="4" class="txt">Nenhum lançamento até esta data.</td></tr>') +
-      '</tbody><tfoot><tr><td colspan="4" style="text-align:left;font-weight:400">Mostrando os ' + ult.length + ' lançamentos mais recentes até ' + fmtDia(D) + '. Compare o saldo e esses lançamentos com o extrato; se faltar lançamento aqui, ele não está no dados_mov_caixa.csv (a consulta do movimento pode estar filtrando por empresa ou por outro critério).</td></tr></tfoot>';
+    $('contaModo').hidden = false; $('contaModo').value = modo || 'dia';
+    desenharConta();
     $('popupTit').hidden = false; document.body.style.overflow = 'hidden';
   }
-  function fecharTit(){ $('popupTit').hidden = true; titAberto = null; document.body.style.overflow = ''; $('titCsv').hidden = false; $('titBusca').hidden = false; $('titSit').hidden = false; }
+  function desenharConta(){
+    const A = contaAberta; if(!A) return; const c = A.c, conta = c.ref, D = A.D, modo = $('contaModo').value;
+    const k = $('titKpis'); k.replaceChildren();
+    const par = (tx, v) => { const s = el('span'); s.appendChild(document.createTextNode(tx + ' ')); s.appendChild(el('b', '', v)); k.appendChild(s); };
+    if(modo === 'ate'){
+      $('titTitulo').textContent = conta.nome + ' — como o saldo de ' + fmtDia(D) + ' foi calculado';
+      const ate = conta.mv.filter(m => m.d <= D), antes = conta.mv.filter(m => m.d < D);
+      const sr = antes.reduce((s, m) => s + m.r, 0), sx = antes.reduce((s, m) => s + m.x, 0);
+      par('Lançamentos até o dia anterior:', antes.length.toLocaleString('pt-BR') + (antes.length ? ' (de ' + fmtDia(antes.reduce((m, x) => x.d < m ? x.d : m, antes[0].d)) + ' a ' + fmtDia(antes.reduce((m, x) => x.d > m ? x.d : m, antes[0].d)) + ')' : ''));
+      par('Entradas:', fmt(sr)); par('Saídas:', fmt(sx));
+      par(conta.ancora ? 'Abertura (linha de saldo de ' + fmtDia(conta.ancora.d) + ' = ' + fmt(conta.ancora.v) + ', vinda do ' + (conta.ancoraFonte === 'extrato' ? ARQ.lanc : ARQ.mov) + '):' : 'Abertura (sem linha de saldo anterior/inicial em nenhum arquivo):', fmt(conta.abertura));
+      par('Saldo anterior:', fmt(c.ant)); par('Saldo atual:', fmt(c.atu));
+      const ult = ate.slice().sort((a, b) => (a.d < b.d ? 1 : a.d > b.d ? -1 : 0)).slice(0, 40);
+      $('titTabela').innerHTML = '<thead><tr><th>Data</th><th class="txt">Histórico</th><th>Entrada</th><th>Saída</th></tr></thead><tbody>' +
+        (ult.length ? ult.map(m => '<tr><td>' + fmtDia(m.d) + '</td><td class="hist">' + esc(m.h) + '</td><td>' + (m.r ? fmt(m.r) : '') + '</td><td>' + (m.x ? fmt(m.x) : '') + '</td></tr>').join('') : '<tr><td colspan="4" class="txt">Nenhum lançamento até esta data.</td></tr>') +
+        '</tbody><tfoot><tr><td colspan="4" style="text-align:left;font-weight:400">Mostrando os ' + ult.length + ' lançamentos mais recentes até ' + fmtDia(D) + '. Compare o saldo e esses lançamentos com o extrato; se faltar lançamento aqui, ele não está no dados_mov_caixa.csv (a consulta do movimento pode estar filtrando por empresa ou por outro critério).</td></tr></tfoot>';
+      return;
+    }
+    // visões do dia: extrato do dia, só entradas ou só saídas
+    const doDia = conta.mv.filter(m => m.d === D);
+    const lista = modo === 'ent' ? doDia.filter(m => m.r) : modo === 'sai' ? doDia.filter(m => m.x) : doDia;
+    const nomeModo = modo === 'ent' ? 'entradas' : modo === 'sai' ? 'saídas' : 'extrato';
+    $('titTitulo').textContent = conta.nome + ' — ' + nomeModo + ' de ' + fmtDia(D);
+    par('Saldo anterior:', fmt(c.ant)); par('Entradas do dia:', fmt(c.ent)); par('Saídas do dia:', fmt(c.sai)); par('Saldo atual:', fmt(c.atu));
+    const totR = lista.reduce((s, m) => s + m.r, 0), totX = lista.reduce((s, m) => s + m.x, 0);
+    $('titTabela').innerHTML = '<thead><tr><th>Data</th><th class="txt">Histórico</th><th>Entrada</th><th>Saída</th></tr></thead><tbody>' +
+      (lista.length ? lista.map(m => '<tr><td>' + fmtDia(m.d) + '</td><td class="hist">' + esc(m.h) + '</td><td>' + (m.r ? fmt(m.r) : '') + '</td><td>' + (m.x ? fmt(m.x) : '') + '</td></tr>').join('')
+        : '<tr><td colspan="4" class="txt">Nenhum lançamento ' + (modo === 'ent' ? 'de entrada ' : modo === 'sai' ? 'de saída ' : '') + 'nesta conta em ' + fmtDia(D) + '.</td></tr>') +
+      '</tbody><tfoot><tr><td colspan="2" style="text-align:left">TOTAL (' + lista.length.toLocaleString('pt-BR') + ' lançamento(s))</td><td>' + (totR ? fmt(totR) : '') + '</td><td>' + (totX ? fmt(totX) : '') + '</td></tr></tfoot>';
+  }
+  function fecharTit(){ $('popupTit').hidden = true; titAberto = null; contaAberta = null; $('contaModo').hidden = true; document.body.style.overflow = ''; $('titCsv').hidden = false; $('titBusca').hidden = false; $('titSit').hidden = false; }
   function csvTit(){
     const A = titAberto; if(!A) return;
     const cel = (s) => '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"';
@@ -643,7 +668,7 @@
     if(m){ li('Movimento: ' + m.total.toLocaleString('pt-BR') + ' linhas, ' + contas.length + ' conta(s), último lançamento em ' + fmtDia(m.ate) + (m.semData ? '; ' + m.semData + ' sem data válida ficaram de fora' : '') + '.');
       const ext = qual.lanc ? contas.filter(c => c.ancoraFonte === 'extrato').length : 0;
       li((m.ancoras ? m.ancoras + ' linha(s) de "SALDO ANTERIOR/INICIAL" no movimento. ' : 'O movimento não tem linhas de "SALDO ANTERIOR/INICIAL". ') + (qual.lanc ? ext + ' conta(s) usaram o saldo de abertura do ' + ARQ.lanc + ' (' + qual.lanc.ancoras + ' linha(s) de saldo nele).' : 'O ' + ARQ.lanc + ' não foi carregado: sem ele as contas que não têm essa linha no movimento ficam sem saldo de abertura e podem divergir do Extrato.') + ' Contas com abertura têm o selo ⚓.');
-      li('Clique numa conta para ver como o saldo foi calculado e os últimos lançamentos — útil para conferir com o extrato.'); }
+      li('Clique numa conta para ver o extrato do dia; clicando em Entradas ou Saídas aparecem só os lançamentos daquele lado. No seletor do popup, "Como o saldo foi calculado" mostra a abertura e os últimos lançamentos — útil para conferir com o extrato.'); }
     else li('Movimento: arquivo não carregado.');
     li('Confirmado = em aberto. Provisionado = coluna PROVISIONADO marcada (-1, 1, sim, verdadeiro) ou situação P. Os valores somados são a coluna TOTAL (a parte de cada rateio).');
     li('Prazos da projeção: botão ⚙ Prazos (guardados neste aparelho, por unidade). Os prazos são sempre contados a partir da data do relatório.');
@@ -789,7 +814,8 @@
   $('empTodas').addEventListener('click', () => { FIL.empOff = new Set(); desenharEmpresas(); render(); });
   $('empNenhuma').addEventListener('click', () => { FIL.empOff = new Set(empresasTodas()); desenharEmpresas(); render(); });
   $('colTitulos').addEventListener('click', (e) => { const tr = e.target.closest('tr.cl[data-l]'); if(tr) abrirTitulos(tr.dataset.l, +tr.dataset.i); });
-  $('colFluxos').addEventListener('click', (e) => { const tr = e.target.closest('tr.cl[data-g]'); if(tr) abrirConta(+tr.dataset.g, +tr.dataset.c); });
+  $('colFluxos').addEventListener('click', (e) => { const tr = e.target.closest('tr.cl[data-g]'); if(!tr) return; const td = e.target.closest('td'), i = td ? td.cellIndex : 0; abrirConta(+tr.dataset.g, +tr.dataset.c, i === 2 ? 'ent' : i === 3 ? 'sai' : 'dia'); });
+  $('contaModo').addEventListener('change', desenharConta);
   $('titFechar').addEventListener('click', fecharTit); $('titSair').addEventListener('click', fecharTit);
   $('popupTit').addEventListener('click', (e) => { if(e.target === $('popupTit')) fecharTit(); });
   $('titBusca').addEventListener('input', desenharTit); $('titSit').addEventListener('change', desenharTit);
@@ -797,7 +823,7 @@
   document.addEventListener('keydown', (e) => { if(e.key !== 'Escape') return; if(!$('popupPdf').hidden) $('popupPdf').hidden = true; else if(!$('popupPrazos').hidden) $('popupPrazos').hidden = true; else if(!$('popupTit').hidden) fecharTit(); });
 
   // expõe só para teste/diagnóstico
-  window.__rd = { abrirPrazos, aplicarPrazos, abrirConta, montarAberturas, montarCruz, montarMov, aplicar, render, calcular, FIL, abrirTitulos, listaTitulos, gerarPdf, setChamar: (f) => { chamar = f; }, get R(){ return R; }, get titulos(){ return titulos; }, get contas(){ return contas; } };
+  window.__rd = { desenharConta, abrirPrazos, aplicarPrazos, abrirConta, montarAberturas, montarCruz, montarMov, aplicar, render, calcular, FIL, abrirTitulos, listaTitulos, gerarPdf, setChamar: (f) => { chamar = f; }, get R(){ return R; }, get titulos(){ return titulos; }, get contas(){ return contas; } };
 
   // acesso: login do Servir + credenciais da unidade (servir-acesso.js), no mesmo módulo do Painel financeiro
   (async function iniciar(){
