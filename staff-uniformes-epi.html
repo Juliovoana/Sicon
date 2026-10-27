@@ -242,9 +242,20 @@
     <!-- ==================== ABA CATÁLOGO ==================== -->
     <div class="conteudo-aba" id="aba-catalogo">
         <div class="cartao hidden" id="blocoCriarAlmoxarifado">
-            <h2>Almoxarifado dedicado</h2>
-            <p class="subtitulo" style="margin:0 0 10px 0;">Ainda não existe um almoxarifado "Uniformes / EPI" nesta unidade — crie um antes de cadastrar itens de catálogo (o estoque de cada item fica registrado nele, dentro do Estoque).</p>
-            <button type="button" class="btn btn-principal" id="btnCriarAlmoxarifadoDedicado" style="width:auto;">+ Criar almoxarifado "Uniformes / EPI"</button>
+            <h2>Almoxarifado do módulo</h2>
+            <p class="subtitulo" style="margin:0 0 10px 0;" id="textoAlmoxarifadoModulo"></p>
+            <button type="button" class="btn btn-cinza hidden" id="btnAlterarAlmoxarifadoModulo" style="width:auto;">Alterar</button>
+            <div id="areaConfigAlmoxarifado" class="hidden">
+                <div class="campo"><label>Usar um almoxarifado que já existe</label>
+                    <select id="campoAlmoxarifadoModulo"></select>
+                </div>
+                <button type="button" class="btn btn-principal" id="btnSalvarAlmoxarifadoModulo" style="width:auto;">Usar este almoxarifado</button>
+                <div class="campo" style="margin-top:16px;"><label>Ou criar um novo (escolha o nome)</label>
+                    <input type="text" id="campoNomeNovoAlmoxarifado" value="Uniformes / EPI" maxlength="80">
+                </div>
+                <button type="button" class="btn btn-cinza" id="btnCriarAlmoxarifadoDedicado" style="width:auto;">+ Criar e usar este nome</button>
+                <div id="statusAlmoxarifadoModulo" class="subtitulo" style="margin-top:8px;"></div>
+            </div>
         </div>
         <div class="cartao">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
@@ -659,7 +670,7 @@ function somarDias(dataISO, dias) {
 // ---------------------------------------------------------------
 const AJUDA_UNIFORMES_EPI = {
     titulo: 'Uniformes / EPI',
-    ultimaRevisao: '17/10/2026',  /* setor: cadastro rápido só admin/principal */
+    ultimaRevisao: '27/10/2026',  /* almoxarifado do módulo por id (renomeável) */
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>Controle de peças de uniforme e EPI entregues aos profissionais do Staff --
@@ -733,11 +744,13 @@ const AJUDA_UNIFORMES_EPI = {
             <p>Só quem é <strong>Administrador</strong> do Staff (ou o Principal da unidade)
             gerencia o catálogo.</p>
             <ul>
-                <li>Antes do primeiro item, é preciso criar o <strong>almoxarifado
-                dedicado</strong> "Uniformes / EPI" (um botão aparece automaticamente enquanto
-                ele não existir).</li>
+                <li>Antes do primeiro item, é preciso definir o <strong>almoxarifado do módulo</strong> (bloco no topo
+                desta aba): escolha um almoxarifado que já existe no Estoque ou crie um novo <strong>com o nome que quiser</strong>.
+                O módulo guarda o <strong>código (id)</strong> do almoxarifado, não o nome — então ele pode ser <strong>renomeado
+                depois no Estoque</strong> sem quebrar nada. Para trocar de almoxarifado use <strong>Alterar</strong>. Enquanto nenhum
+                for definido, vale o antigo: o almoxarifado chamado "Uniformes / EPI".</li>
                 <li>O caminho inverso também funciona: <strong>produto novo cadastrado no Estoque</strong>
-                escolhendo o almoxarifado "Uniformes / EPI" entra <strong>automaticamente no catálogo</strong>
+                escolhendo o almoxarifado do módulo entra <strong>automaticamente no catálogo</strong>
                 (a tela do Estoque pede o Tipo — Uniforme ou EPI — e, opcionalmente, tamanho, CA e vida útil).
                 Se quem cadastrou no Estoque não for Administrador do Staff nem Principal, o produto fica só no
                 estoque e a tela avisa — aí o item precisa ser cadastrado aqui, no catálogo.</li>
@@ -899,6 +912,7 @@ let catalogoEmEdicaoId = null;
 let entregaAlvoBaixa = null; // {id, tipoBaixa}
 let carrinhoEntrega = []; // itens adicionados na "Nova entrega" antes de confirmar (vira 1 recibo)
 let configRecibo = { razao_social: '', cidade: '' };
+let almoxarifadoConfigId = null;   // staff_uniformes_epi_config.almoxarifado_id (null = ainda vale o nome "Uniformes / EPI")
 
 function podeRegistrar() { return meuPerfil.ehPrincipal || papelStaffAtual === 'administrador' || papelStaffAtual === 'operacional'; }
 function podeGerenciarCatalogo() { return meuPerfil.ehPrincipal || papelStaffAtual === 'administrador'; }
@@ -1070,22 +1084,95 @@ async function carregarCatalogo() {
     catalogo = error ? [] : (data || []);
 }
 
+// O almoxarifado do módulo é identificado pelo ID guardado em staff_uniformes_epi_config.almoxarifado_id --
+// assim pode ser renomeado à vontade no Estoque. Enquanto nenhum id foi escolhido (ou o SQL
+// staff-uniformes-epi-almoxarifado-id.sql não rodou), vale o jeito antigo: almoxarifado chamado "Uniformes / EPI".
 function almoxarifadoDedicado() {
+    if (almoxarifadoConfigId != null) {
+        const porId = almoxarifados.find(a => String(a.id) === String(almoxarifadoConfigId));
+        if (porId) return porId;
+    }
     return almoxarifados.find(a => a.nome.trim().toLowerCase() === NOME_ALMOXARIFADO_DEDICADO.toLowerCase()) || null;
 }
 
 function atualizarBlocoCriarAlmoxarifado() {
-    document.getElementById('blocoCriarAlmoxarifado').classList.toggle('hidden', !!almoxarifadoDedicado());
+    const bloco = document.getElementById('blocoCriarAlmoxarifado');
+    const ded = almoxarifadoDedicado();
+    const gerencia = podeGerenciarCatalogo();
+    const texto = document.getElementById('textoAlmoxarifadoModulo');
+    const btnAlterar = document.getElementById('btnAlterarAlmoxarifadoModulo');
+    const area = document.getElementById('areaConfigAlmoxarifado');
+    // Quem não gerencia o catálogo só vê o aviso quando falta o almoxarifado; quem gerencia vê sempre (para poder trocar).
+    bloco.classList.toggle('hidden', !!ded && !gerencia);
+    if (ded) {
+        texto.innerHTML = 'Almoxarifado em uso: <strong>' + escapeHtml(ded.nome) + '</strong>' +
+            (almoxarifadoConfigId != null && String(almoxarifadoConfigId) === String(ded.id) ? '' : ' <em>(identificado pelo nome — clique em Alterar e salve para fixá-lo; depois ele pode ser renomeado no Estoque)</em>') +
+            '. O estoque de cada item do catálogo fica registrado nele, dentro do Estoque.';
+        btnAlterar.classList.toggle('hidden', !gerencia);
+        if (!area.dataset.aberta) area.classList.add('hidden');
+    } else {
+        texto.textContent = gerencia
+            ? 'Ainda não há um almoxarifado definido para este módulo. Escolha um que já existe no Estoque ou crie um novo (com o nome que quiser) antes de cadastrar itens de catálogo.'
+            : 'Ainda não há um almoxarifado definido para este módulo — peça a um Administrador do Staff para configurá-lo.';
+        btnAlterar.classList.add('hidden');
+        area.classList.toggle('hidden', !gerencia);
+        area.dataset.aberta = gerencia ? '1' : '';
+    }
+    const sel = document.getElementById('campoAlmoxarifadoModulo');
+    sel.innerHTML = almoxarifados.map(a => `<option value="${a.id}">${escapeHtml(a.nome)}</option>`).join('');
+    if (ded) sel.value = ded.id;
 }
 
-document.getElementById('btnCriarAlmoxarifadoDedicado').addEventListener('click', async () => {
-    const { error } = await sb.from('unidade_almoxarifados').insert({
-        unidade_negocio_id: meuPerfil.unidadeId, nome: NOME_ALMOXARIFADO_DEDICADO, ativo: true
+document.getElementById('btnAlterarAlmoxarifadoModulo').addEventListener('click', () => {
+    const area = document.getElementById('areaConfigAlmoxarifado');
+    const abrir = area.classList.contains('hidden');
+    area.classList.toggle('hidden', !abrir);
+    area.dataset.aberta = abrir ? '1' : '';
+});
+
+async function salvarAlmoxarifadoDoModulo(novoId, descricaoSentinela) {
+    const statusEl = document.getElementById('statusAlmoxarifadoModulo');
+    const { error } = await sb.from('staff_uniformes_epi_config').upsert({
+        unidade_negocio_id: meuPerfil.unidadeId, almoxarifado_id: novoId
     });
-    if (error) { alert('Não foi possível criar o almoxarifado: ' + error.message); return; }
-    await registrarSentinela('almoxarifado_criado', 'Almoxarifado dedicado "' + NOME_ALMOXARIFADO_DEDICADO + '" criado');
-    await carregarAlmoxarifados();
+    if (error) {
+        const faltaColuna = /almoxarifado_id/i.test(error.message || '') && /(column|coluna|schema cache)/i.test(error.message || '');
+        statusEl.style.color = 'var(--danger)';
+        statusEl.textContent = faltaColuna
+            ? 'Falta rodar o SQL staff-uniformes-epi-almoxarifado-id.sql no Supabase para guardar o almoxarifado.'
+            : 'Não foi possível salvar: ' + error.message;
+        return false;
+    }
+    almoxarifadoConfigId = novoId;
+    await registrarSentinela('almoxarifado_modulo_definido', descricaoSentinela);
+    statusEl.textContent = '';
+    document.getElementById('areaConfigAlmoxarifado').dataset.aberta = '';
     atualizarBlocoCriarAlmoxarifado();
+    return true;
+}
+
+document.getElementById('btnSalvarAlmoxarifadoModulo').addEventListener('click', async () => {
+    const sel = document.getElementById('campoAlmoxarifadoModulo');
+    const alvo = almoxarifados.find(a => String(a.id) === sel.value);
+    if (!alvo) { alert('Escolha um almoxarifado.'); return; }
+    await salvarAlmoxarifadoDoModulo(alvo.id, 'Almoxarifado do módulo definido: "' + alvo.nome + '" (id ' + alvo.id + ')');
+});
+
+document.getElementById('btnCriarAlmoxarifadoDedicado').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusAlmoxarifadoModulo');
+    const nome = document.getElementById('campoNomeNovoAlmoxarifado').value.trim();
+    if (!nome) { alert('Informe o nome do novo almoxarifado.'); return; }
+    if (almoxarifados.some(a => a.nome.trim().toLowerCase() === nome.toLowerCase())) {
+        alert('Já existe um almoxarifado com esse nome — escolha-o na lista acima ("Usar um almoxarifado que já existe").'); return;
+    }
+    statusEl.style.color = ''; statusEl.textContent = 'Criando...';
+    const { data, error } = await sb.from('unidade_almoxarifados').insert({
+        unidade_negocio_id: meuPerfil.unidadeId, nome, ativo: true
+    }).select().single();
+    if (error) { statusEl.style.color = 'var(--danger)'; statusEl.textContent = 'Não foi possível criar o almoxarifado: ' + error.message; return; }
+    await registrarSentinela('almoxarifado_criado', 'Almoxarifado do módulo "' + nome + '" criado (id ' + data.id + ')');
+    await carregarAlmoxarifados();
+    await salvarAlmoxarifadoDoModulo(data.id, 'Almoxarifado do módulo definido: "' + nome + '" (id ' + data.id + ')');
 });
 
 // ---------------------------------------------------------------
@@ -1097,6 +1184,7 @@ async function carregarConfigRecibo() {
     const { data, error } = await sb.from('staff_uniformes_epi_config')
         .select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).maybeSingle();
     configRecibo = (error || !data) ? { razao_social: '', cidade: '' } : data;
+    almoxarifadoConfigId = (error || !data) ? null : (data.almoxarifado_id ?? null);
 }
 document.getElementById('btnConfigRecibo').addEventListener('click', () => {
     document.getElementById('campoRazaoSocialRecibo').value = configRecibo.razao_social || '';
@@ -2413,7 +2501,7 @@ function abrirFormCatalogo(item) {
     document.getElementById('modal-catalogo-item').classList.add('aberto');
 }
 document.getElementById('btnNovoItemCatalogo').addEventListener('click', () => {
-    if (!almoxarifadoDedicado()) { alert('Crie o almoxarifado "Uniformes / EPI" primeiro (bloco acima).'); return; }
+    if (!almoxarifadoDedicado()) { alert('Defina o almoxarifado do módulo primeiro (bloco "Almoxarifado do módulo", acima).'); return; }
     abrirFormCatalogo(null);
 });
 document.getElementById('btnCancelarCatalogo').addEventListener('click', () => document.getElementById('modal-catalogo-item').classList.remove('aberto'));

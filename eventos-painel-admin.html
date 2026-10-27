@@ -225,6 +225,26 @@
   .btn-upload-imagem:hover{ border-color:var(--brand-2); background:var(--brand-soft); }
   .btn-upload-imagem:disabled{ opacity:.6; cursor:not-allowed; }
   .drawer-body .field-row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  /* formulário da captação: 3 campos por linha (2 em tela média, 1 no celular); .s2/.s3 = ocupa 2/3 colunas */
+  /* fundo cinza um pouco mais escuro no modal da captação, para os campos brancos se destacarem */
+  #modalCaptacaoOverlay .modal-lista{ background:#DFE3E8; }
+  #modalCaptacaoOverlay .modal-lista-body{ background:#DFE3E8; }
+  #modalCaptacaoOverlay .drawer-section{ background:#E9ECF0; border-color:#CBD1D8; }
+  #modalCaptacaoOverlay .field-group input, #modalCaptacaoOverlay .field-group select, #modalCaptacaoOverlay .sc-busca{ border-color:#B9C0C8; }
+  .cap-grid{ display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); column-gap:14px; }
+  .cap-grid > .field-group{ min-width:0; margin-bottom:14px; }
+  .cap-grid > .s2{ grid-column:span 2; }
+  .cap-grid > .s3{ grid-column:1 / -1; }
+  .cap-grid > .cap-sub{ grid-column:1 / -1; display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); column-gap:14px; }
+  .cap-grid > .cap-sub > .field-group{ min-width:0; margin-bottom:14px; }
+  .cap-grid > .cap-sub > .s2{ grid-column:span 2; }
+  @media (max-width:860px){
+    .cap-grid, .cap-grid > .cap-sub{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .cap-grid > .s2, .cap-grid > .cap-sub > .s2{ grid-column:1 / -1; }
+  }
+  @media (max-width:520px){
+    .cap-grid, .cap-grid > .cap-sub{ grid-template-columns:1fr; }
+  }
   .grade-campos{ display:grid; gap:10px; margin-bottom:10px; }
   .grade-campos.col3{ grid-template-columns: 1.1fr 1fr 0.8fr; }
   .grade-campos.col2{ grid-template-columns: 1fr 1fr; }
@@ -823,6 +843,20 @@
                 </div>
                 <div class="lista-cadastro" id="listaEmpresasFinanceiras"></div>
               </div>
+            </div>
+
+            <div style="margin-top:28px;">
+              <div class="filtros-notas" style="justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                <strong style="font-size:1rem;">Assessorias <span style="font-weight:400; color:var(--muted); font-size:.82rem;">(indicadores do evento: nome, contato e e-mail)</span></strong>
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                  <input type="text" id="buscaAssessorias" placeholder="Buscar por nome, e-mail ou telefone..." autocomplete="off" style="padding:8px 12px; border-radius:9px; border:1.5px solid var(--border); min-width:250px; font-family:inherit; font-size:.88rem;">
+                  <button class="btn-novo" id="btnImportarAssessorias" title="Importar uma lista (CSV) exportada do sistema antigo" style="background:var(--surface); color:var(--ink); border:1.5px solid var(--border);">📥 Importar CSV</button>
+                  <button class="btn-novo" id="btnNovaAssessoria">+ Nova</button>
+                </div>
+              </div>
+              <input type="file" id="arquivoAssessorias" accept=".csv,.txt,text/csv,text/plain" hidden>
+              <div id="statusAssessorias" style="font-size:.82rem; color:var(--muted); margin:6px 0;"></div>
+              <div class="lista-cadastro" id="listaAssessorias"></div>
             </div>
 
             <div style="margin-top:28px;">
@@ -1730,7 +1764,7 @@
     await carregarPersonalizacao();
     await Promise.all([
       verificarColunaClientePessoa(), verificarColunasCatalogoEventos(), carregarFeriados(), carregarEventos(), carregarSetores(), carregarClientesEventos(), carregarSolicitantes(),
-      carregarTiposEvento(), carregarStatusCaptacao(), carregarAndamentos(), carregarEmpresasFinanceiras(),
+      carregarTiposEvento(), carregarStatusCaptacao(), carregarAndamentos(), carregarEmpresasFinanceiras(), carregarAssessorias(),
       carregarClientesEntidades(), carregarCaptacoes(), carregarSetoresUnidade(), carregarFormasPagamento(), carregarPlanosContas(),
       carregarPapelEPermissoesEventos(),
     ]);
@@ -1971,6 +2005,7 @@
           <div class="field-group"><label>Andamento</label><div id="ev_andamento_slot"></div></div>
         </div>
         <div class="field-group"><label>Cliente</label><div id="ev_cliente_slot"></div></div>
+        <div class="field-group"><label>Assessoria</label><div id="ev_assessoria_slot"></div></div>
         <div class="field-row">
           <div class="field-group"><label>Local do evento</label><input type="text" id="ev_local_evento" value="${e.local_evento || ''}"></div>
           <div class="field-group"><label>Contato</label><input type="text" id="ev_contato" value="${e.contato || ''}"></div>
@@ -2000,6 +2035,8 @@
       </div>
     `;
 
+    ligarTravasDatas(PARES_DATAS_EVENTO);
+
     seletorClienteEvento = null;
     textoLegadoClienteEvento = e.cliente_pessoa_id ? '' : (e.cliente || '');
     const slotClienteEvento = document.getElementById('ev_cliente_slot');
@@ -2026,6 +2063,15 @@
     seletorAndamentoEvento = criarSeletorCatalogo(document.getElementById('ev_andamento_slot'), {
       tipoCat: 'andamento', selecionado: e.andamento_id ? todosAndamentos.find(a => a.id === e.andamento_id) || null : null,
     });
+    seletorAssessoriaEvento = null;
+    const slotAssessoriaEv = document.getElementById('ev_assessoria_slot');
+    if(temTabelaAssessorias && temColunaAssessoriaIdEvento){
+      seletorAssessoriaEvento = criarSeletorCatalogo(slotAssessoriaEv, {
+        tipoCat: 'assessoria', selecionado: e.assessoria_id ? todasAssessorias.find(a => a.id === e.assessoria_id) || null : null,
+      });
+    } else {
+      slotAssessoriaEv.innerHTML = `<p style="font-size:.78rem; color:var(--accent-ink, #8A5E12); margin:0;">${AVISO_SQL_ASSESSORIA}</p>`;
+    }
     if(!temColunasCatalogoEventos){
       ['ev_andamento_slot'].forEach(slotId => {
         const p = document.createElement('p');
@@ -2072,6 +2118,9 @@
       clienteTexto = document.getElementById('ev_cliente').value.trim() || null;
     }
 
+    const parInvalidoEv = erroDatas(PARES_DATAS_EVENTO);
+    if(parInvalidoEv){ alert(parInvalidoEv.msg); document.getElementById(parInvalidoEv.fim).focus(); return; }
+
     const tipoEscolhido = seletorTipoEvento.obter(), andamentoEscolhido = seletorAndamentoEvento.obter();
     const eventoOrigem = eventoIdAtual ? todosEventos.find(x => x.id === eventoIdAtual) : null;
 
@@ -2097,6 +2146,9 @@
       };
       if(temColunaClientePessoa) payload.cliente_pessoa_id = clientePessoaId;
       if(temColunasCatalogoEventos){ payload.tipo_id = tipoEscolhido?.id || null; payload.andamento_id = andamentoEscolhido?.id || null; }
+      const assessoriaEscolhida = seletorAssessoriaEvento ? seletorAssessoriaEvento.obter() : null;
+      const assessoriaAnteriorEv = eventoOrigem ? (eventoOrigem.assessoria_id || null) : null;
+      if(seletorAssessoriaEvento) payload.assessoria_id = assessoriaEscolhida ? assessoriaEscolhida.id : null;
 
       if(eventoIdAtual){
         const { error } = await sb.from('eventos').update(payload).eq('id', eventoIdAtual);
@@ -2106,6 +2158,11 @@
         if(temColunaClientePessoa && capOrigem && (clientePessoaId || !clienteTexto)){
           const { error: eCap } = await sb.from('eventos_captacoes').update({ cliente_pessoa_id: clientePessoaId, cliente_entidade_id: null }).eq('id', capOrigem);
           if(eCap) throw new Error(eCap.message);
+        }
+        // a captação de origem acompanha a assessoria (só se mudou aqui, para não apagar texto antigo da captação sem querer)
+        if(seletorAssessoriaEvento && capOrigem && temColunaAssessoriaId && assessoriaAnteriorEv !== (assessoriaEscolhida ? assessoriaEscolhida.id : null)){
+          const { error: eAss } = await sb.from('eventos_captacoes').update({ assessoria: assessoriaEscolhida ? assessoriaEscolhida.nome : null, assessoria_id: assessoriaEscolhida ? assessoriaEscolhida.id : null }).eq('id', capOrigem);
+          if(eAss) throw new Error(eAss.message);
         }
         await carregarTudo();
         document.getElementById('drawerEventoOverlay').classList.remove('show');
@@ -3443,6 +3500,22 @@
           </div>
         </div>
       `;
+    } else if(tipo === 'assessoria'){
+      const as = id ? todasAssessorias.find(x => x.id === id) : {};
+      titulo.textContent = id ? 'Editar assessoria' : 'Nova assessoria';
+      body.innerHTML = `
+        <div class="drawer-section">
+          <div class="field-group"><label>Assessoria</label><input type="text" id="c_nome" value="${escaparHtmlVenda(as.nome || '')}"></div>
+          <div class="field-row">
+            <div class="field-group"><label>Contato</label><input type="text" id="c_contato" value="${escaparHtmlVenda(as.contato || '')}" placeholder="Telefone ou nome do contato"></div>
+            <div class="field-group"><label>E-mail</label><input type="text" id="c_email" value="${escaparHtmlVenda(as.email || '')}"></div>
+          </div>
+          <div class="field-group">
+            <label>Status</label>
+            <select id="c_ativo"><option value="true" ${as.ativo !== false ? 'selected' : ''}>Ativo</option><option value="false" ${as.ativo === false ? 'selected' : ''}>Inativo</option></select>
+          </div>
+        </div>
+      `;
     } else if(tipo === 'clienteEntidade'){
       const ce = id ? todosClientesEntidades.find(x => x.id === id) : {};
       titulo.textContent = id ? 'Editar cliente' : 'Novo cliente';
@@ -3472,6 +3545,129 @@
   let todosStatusCaptacao = [];
   let todosAndamentos = [];
   let todasEmpresasFinanceiras = [];
+  // Assessorias = cadastro livre de indicadores do evento (nome, contato, e-mail), vindo do sistema antigo.
+  // Tabela eventos_assessorias + eventos_captacoes.assessoria_id (eventos-assessorias.sql). Sem o SQL, o campo da captação
+  // volta a ser texto livre (eventos_captacoes.assessoria) e a lista de Cadastro avisa.
+  let todasAssessorias = [];
+  let temTabelaAssessorias = true, temColunaAssessoriaId = true, temColunaAssessoriaIdEvento = true;
+  let seletorAssessoriaEvento = null;
+  const AVISO_SQL_ASSESSORIA = '⚠️ Rode o eventos-assessorias.sql no Supabase para usar o cadastro de assessorias.';
+  const LIMITE_LISTA_ASSESSORIAS = 300;
+  const normAssessoria = (t) => String(t == null ? '' : t).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const soDigitos = (t) => String(t == null ? '' : t).replace(/\D/g, '');
+  // busca da assessoria: todas as palavras digitadas têm que aparecer em nome + contato + e-mail (sem acento/caixa);
+  // palavra que parece telefone ("98107-4294", "(73) 981", "+55 73") também casa só pelos dígitos do contato
+  function casaAssessoria(a, termo){
+    const palavras = normAssessoria(termo).split(' ').filter(Boolean);
+    if(!palavras.length) return true;
+    const texto = normAssessoria([a.nome, a.contato, a.email].join(' ')), digitos = soDigitos(a.contato);
+    return palavras.every(w => texto.includes(w) || (/^[\d().+\-/]+$/.test(w) && soDigitos(w).length >= 2 && digitos.includes(soDigitos(w))));
+  }
+  const rotuloAssessoria = (a) => a.nome;
+  const infoAssessoria = (a) => [a.contato, a.email].filter(Boolean).join(' · ');
+
+  async function carregarAssessorias(){
+    const r = await buscarTodasLinhas(() => sb.from('eventos_assessorias').select('*', { count: 'exact' }).eq('unidade_negocio_id', agenciaId).order('nome').order('id'));
+    if(r.error){ console.warn('eventos_assessorias indisponível:', r.error.message); temTabelaAssessorias = false; todasAssessorias = []; }
+    else { temTabelaAssessorias = true; todasAssessorias = r.data || []; }
+    const rc = await sb.from('eventos_captacoes').select('assessoria_id').limit(1);
+    temColunaAssessoriaId = !rc.error;
+    const re = await sb.from('eventos').select('assessoria_id').limit(1);
+    temColunaAssessoriaIdEvento = !re.error;
+    renderListaAssessorias();
+  }
+  function renderListaAssessorias(){
+    const el = document.getElementById('listaAssessorias'), st = document.getElementById('statusAssessorias');
+    if(!el) return;
+    if(!temTabelaAssessorias){ el.innerHTML = ''; st.textContent = AVISO_SQL_ASSESSORIA; return; }
+    const termo = normAssessoria(document.getElementById('buscaAssessorias').value);
+    const filtradas = termo ? todasAssessorias.filter(a => casaAssessoria(a, termo)) : todasAssessorias;
+    st.textContent = termo ? `${filtradas.length} de ${todasAssessorias.length} assessoria(s)` : `${todasAssessorias.length} assessoria(s) cadastrada(s)`;
+    if(!filtradas.length){ el.innerHTML = '<div class="vazio">' + (termo ? 'Nenhuma assessoria encontrada.' : 'Nenhuma assessoria ainda. Use "+ Nova" ou "Importar CSV".') + '</div>'; return; }
+    const visiveis = filtradas.slice(0, LIMITE_LISTA_ASSESSORIAS);
+    el.innerHTML = '';
+    visiveis.forEach(a => {
+      const row = document.createElement('div');
+      row.className = 'cadastro-row';
+      row.innerHTML = `<div class="cadastro-info"><span class="nome">${escaparHtmlVenda(a.nome)}</span>${infoAssessoria(a) ? `<span class="meta">${escaparHtmlVenda(infoAssessoria(a))}</span>` : ''}</div>
+        <span class="status-tag ${a.ativo !== false ? 'ativo' : 'inativo'}">${a.ativo !== false ? 'ativo' : 'inativo'}</span>`;
+      row.addEventListener('click', () => abrirDrawerCadastro('assessoria', a.id));
+      el.appendChild(row);
+    });
+    if(filtradas.length > visiveis.length){
+      const mais = document.createElement('div');
+      mais.className = 'vazio';
+      mais.textContent = `Mostrando ${visiveis.length} de ${filtradas.length}. Use a busca para achar as demais.`;
+      el.appendChild(mais);
+    }
+  }
+  document.getElementById('buscaAssessorias').addEventListener('input', renderListaAssessorias);
+  document.getElementById('btnNovaAssessoria').addEventListener('click', () => {
+    if(!temTabelaAssessorias){ alert(AVISO_SQL_ASSESSORIA); return; }
+    abrirDrawerCadastro('assessoria', null);
+  });
+
+  // ---- importar CSV do sistema antigo (colunas Assessoria/Nome, Contato, Email; com ou sem cabeçalho) ----
+  function lerCsvSimples(texto){
+    const primeira = texto.split(/\r?\n/)[0] || '';
+    const delim = [';', '\t', ','].map(d => [d, primeira.split(d).length]).sort((a, b) => b[1] - a[1])[0][0];
+    const linhas = []; let campo = '', linha = [], aspas = false;
+    for(let i = 0; i < texto.length; i++){
+      const ch = texto[i];
+      if(aspas){ if(ch === '"'){ if(texto[i + 1] === '"'){ campo += '"'; i++; } else aspas = false; } else campo += ch; }
+      else if(ch === '"') aspas = true;
+      else if(ch === delim){ linha.push(campo); campo = ''; }
+      else if(ch === '\n' || ch === '\r'){ if(ch === '\r' && texto[i + 1] === '\n') i++; linha.push(campo); campo = ''; if(linha.some(x => x.trim())) linhas.push(linha); linha = []; }
+      else campo += ch;
+    }
+    linha.push(campo); if(linha.some(x => x.trim())) linhas.push(linha);
+    return linhas;
+  }
+  function assessoriasDoCsv(linhas){
+    if(!linhas.length) return [];
+    const cab = linhas[0].map(normAssessoria);
+    const temCab = cab.some(c => ['assessoria', 'nome', 'contato', 'email', 'e-mail'].includes(c));
+    const achar = (...nomes) => cab.findIndex(c => nomes.includes(c));
+    const iNome = temCab ? Math.max(achar('assessoria', 'nome'), 0) : 0;
+    const iContato = temCab ? achar('contato', 'telefone') : 1;
+    const iEmail = temCab ? achar('email', 'e-mail') : 2;
+    return (temCab ? linhas.slice(1) : linhas).map(l => ({
+      nome: (l[iNome] || '').trim(), contato: iContato >= 0 ? (l[iContato] || '').trim() : '', email: iEmail >= 0 ? (l[iEmail] || '').trim() : '',
+    })).filter(x => x.nome);
+  }
+  document.getElementById('btnImportarAssessorias').addEventListener('click', () => {
+    if(!temTabelaAssessorias){ alert(AVISO_SQL_ASSESSORIA); return; }
+    if(!temPermissaoEventos('cadastrar_tipo_evento')){ alert('Você não tem permissão pra cadastrar assessorias.'); return; }
+    document.getElementById('arquivoAssessorias').click();
+  });
+  document.getElementById('arquivoAssessorias').addEventListener('change', async (ev) => {
+    const arquivo = ev.target.files && ev.target.files[0]; ev.target.value = '';
+    if(!arquivo) return;
+    const st = document.getElementById('statusAssessorias');
+    try{
+      const buf = await arquivo.arrayBuffer();
+      let texto = new TextDecoder('utf-8').decode(buf);
+      if(texto.includes('\uFFFD')) texto = new TextDecoder('windows-1252').decode(buf); // exportação do Access costuma vir em ANSI
+      texto = texto.replace(/^\uFEFF/, '');
+      const lidas = assessoriasDoCsv(lerCsvSimples(texto));
+      if(!lidas.length){ alert('Nenhuma assessoria encontrada no arquivo. Use colunas Assessoria, Contato e Email.'); return; }
+      const existentes = new Set(todasAssessorias.map(a => normAssessoria(a.nome)));
+      const novas = [], jaTem = [];
+      lidas.forEach(x => { const k = normAssessoria(x.nome); if(existentes.has(k)){ jaTem.push(x); return; } existentes.add(k); novas.push(x); });
+      if(!novas.length){ alert(`Todas as ${lidas.length} assessorias do arquivo já estão cadastradas (mesmo nome).`); return; }
+      if(!confirm(`Importar ${novas.length} assessoria(s) nova(s)?` + (jaTem.length ? `\n${jaTem.length} já existem (mesmo nome) e serão ignoradas.` : ''))) return;
+      let gravadas = 0;
+      for(let i = 0; i < novas.length; i += 200){
+        st.textContent = `Importando... ${gravadas} de ${novas.length}`;
+        const lote = novas.slice(i, i + 200).map(x => ({ unidade_negocio_id: agenciaId, ativo: true, nome: x.nome, contato: x.contato || null, email: x.email || null }));
+        const { error } = await sb.from('eventos_assessorias').insert(lote);
+        if(error) throw new Error(error.message + (gravadas ? ` (já foram importadas ${gravadas}; importe de novo para completar — as repetidas são ignoradas)` : ''));
+        gravadas += lote.length;
+      }
+      await carregarAssessorias();
+      st.textContent = `✅ ${gravadas} assessoria(s) importada(s).` + (jaTem.length ? ` ${jaTem.length} já existiam.` : '');
+    } catch(erro){ st.textContent = ''; alert('Erro ao importar: ' + erro.message); renderListaAssessorias(); }
+  });
 
   function renderListaSimples(idContainer, lista, tipoDrawer, extraMeta){
     const el = document.getElementById(idContainer);
@@ -3578,7 +3774,7 @@
   let todasCaptacoes = [];
   let captacaoIdAtual = null;
   let seletorClienteCaptacao = null, textoLegadoClienteCaptacao = '';
-  let seletorPlanoCaptacao = null, seletorTipoCaptacao = null, seletorAndamentoCaptacao = null, seletorSetorCaptacao = null;
+  let seletorPlanoCaptacao = null, seletorTipoCaptacao = null, seletorAndamentoCaptacao = null, seletorSetorCaptacao = null, seletorAssessoriaCaptacao = null, textoLegadoAssessoriaCaptacao = '';
 
   async function carregarCaptacoes(){
     const { data, error } = await buscarTodasLinhas(() => sb.from('eventos_captacoes')
@@ -3617,6 +3813,7 @@
           <span class="nome">${c.nome}${c.evento_id ? ' ✓ evento criado' : ''}</span>
           <span class="meta">${c.cliente ? c.cliente.nome + ' · ' : ''}${c.tipo ? c.tipo.nome + ' · ' : ''}${periodo}</span>
         </div>
+        <button type="button" class="btn-acao-rapida" data-acao-vendas-cap="${c.id}" title="Lançar orçamento / venda (itens e pagamentos)">🛒</button>
         <span class="status-tag ${c.status && c.status.nome === 'Fechado' ? 'ativo' : c.status && c.status.nome === 'Cancelado' ? 'cancelada' : 'inativo'}">${c.status ? c.status.nome : 'sem status'}</span>
       </div>`;
     }).join('') + (filtradas.length > visiveis.length
@@ -3627,6 +3824,8 @@
   let limiteListaCaptacoes = LOTE_LISTA;
   document.getElementById('listaCaptacoes').addEventListener('click', (ev) => {
     if(ev.target.closest('#btnMaisCaptacoes')){ limiteListaCaptacoes += LOTE_LISTA; renderListaCaptacoes(); return; }
+    const vendas = ev.target.closest('[data-acao-vendas-cap]');
+    if(vendas){ ev.stopPropagation(); const cv = todasCaptacoes.find(x => String(x.id) === vendas.dataset.acaoVendasCap); if(cv) abrirTelaVendas('captacao', cv.id); return; }
     const linha = ev.target.closest('[data-captacao-id]');
     if(!linha) return;
     const c = todasCaptacoes.find(x => String(x.id) === linha.dataset.captacaoId);
@@ -3642,6 +3841,36 @@
 
   document.getElementById('btnNovaCaptacao').addEventListener('click', () => abrirModalCaptacao(null));
   document.getElementById('btnFecharModalCaptacao').addEventListener('click', () => document.getElementById('modalCaptacaoOverlay').classList.remove('show'));
+
+  // datas da captação: início do atendimento nasce com hoje (captação nova); limite não pode ser antes do início do atendimento
+  // e fim do evento não pode ser antes do início do evento
+  const hojeLocalCaptacao = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const PARES_DATAS_CAPTACAO = [
+    { ini: 'cap_inicio_atend', fim: 'cap_dt_limite_atend', msg: 'A data limite de atendimento não pode ser menor que a data de início do atendimento.' },
+    { ini: 'cap_dt_inicio_evento', fim: 'cap_dt_fim_evento', msg: 'A data fim do evento não pode ser menor que a data início do evento.' },
+  ];
+  // evento (gaveta "Dados do evento"): data fim não pode ser menor que a data início
+  const PARES_DATAS_EVENTO = [
+    { ini: 'ev_data_inicio', fim: 'ev_data_fim', msg: 'A data fim do evento não pode ser menor que a data início do evento.' },
+  ];
+  function erroDatas(pares){
+    for(const p of pares){
+      const a = document.getElementById(p.ini).value, b = document.getElementById(p.fim).value;
+      if(a && b && b < a) return p;
+    }
+    return null;
+  }
+  function ligarTravasDatas(pares){
+    const atualizarMin = () => pares.forEach(p => { document.getElementById(p.fim).min = document.getElementById(p.ini).value || ''; });
+    pares.forEach(p => {
+      [p.ini, p.fim].forEach(idCampo => document.getElementById(idCampo).addEventListener('change', () => {
+        atualizarMin();
+        const ini = document.getElementById(p.ini).value, fimEl = document.getElementById(p.fim);
+        if(ini && fimEl.value && fimEl.value < ini){ alert(p.msg); fimEl.value = ''; fimEl.focus(); }
+      }));
+    });
+    atualizarMin();
+  }
 
   async function abrirModalCaptacao(id){
     captacaoIdAtual = id;
@@ -3664,47 +3893,35 @@
     document.getElementById('modalCaptacaoBody').innerHTML = `
       <div class="drawer-section">
         <div class="drawer-section-title">Dados da captação</div>
-        <div class="field-group"><label>Nome do evento/captação</label><input type="text" id="cap_nome" value="${c.nome || ''}"></div>
-        <div class="field-row">
-          <div class="field-group">
+        <div class="cap-grid">
+          <div class="field-group s3"><label>Nome do evento/captação</label><input type="text" id="cap_nome" value="${c.nome || ''}"></div>
+          <div class="field-group s2">
             <label>Cliente</label>
             <div id="cap_cliente_slot"></div>
           </div>
           <div class="field-group"><label>Tipo</label><div id="cap_tipo_slot"></div></div>
-        </div>
-        <div class="field-row">
           <div class="field-group"><label>Status</label><select id="cap_status">${optStatus}</select></div>
           <div class="field-group"><label>Andamento</label><div id="cap_andamento_slot"></div></div>
-        </div>
-        <div class="field-row">
           <div class="field-group"><label>Setor</label><div id="cap_setor_slot"></div></div>
           <div class="field-group"><label>Empresa financeira</label><select id="cap_empresa_financeira">${optEmpresa}</select></div>
-        </div>
-        <div class="field-group"><label>Plano de Contas (padrão da captação)</label><div id="cap_plano_slot"></div></div>
-        <div class="field-group"><label>Solicitação (o que foi pedido)</label><input type="text" id="cap_solicitacao" value="${c.solicitacao || ''}"></div>
-        <div class="field-row">
-          <div class="field-group"><label>Início atendimento</label><input type="date" id="cap_inicio_atend" value="${c.inicio_atend || ''}"></div>
+          <div class="field-group s2"><label>Plano de Contas (padrão da captação)</label><div id="cap_plano_slot"></div></div>
+          <div class="field-group s3"><label>Solicitação (o que foi pedido)</label><input type="text" id="cap_solicitacao" value="${c.solicitacao || ''}"></div>
+          <div class="field-group"><label>Início atendimento</label><input type="date" id="cap_inicio_atend" value="${id ? (c.inicio_atend || '') : hojeLocalCaptacao()}"></div>
           <div class="field-group"><label>Data limite atendimento</label><input type="date" id="cap_dt_limite_atend" value="${c.dt_limite_atend || ''}"></div>
-        </div>
-        <div class="field-row">
+          <div class="field-group"><label>Data fecha</label><input type="date" id="cap_data_fecha" value="${c.data_fecha || ''}"></div>
           <div class="field-group"><label>Data início evento</label><input type="date" id="cap_dt_inicio_evento" value="${c.dt_inicio_evento || ''}"></div>
           <div class="field-group"><label>Data fim evento</label><input type="date" id="cap_dt_fim_evento" value="${c.dt_fim_evento || ''}"></div>
-        </div>
-        <div class="field-group"><label>Local</label><input type="text" id="cap_local" value="${c.local || ''}"></div>
-        <div class="field-row" id="cap_bloco_casamento" style="display:${mostraCasamento ? 'grid' : 'none'};">
-          <div class="field-group"><label>Convidados</label><input type="number" id="cap_convidados" value="${c.convidados ?? ''}"></div>
-          <div class="field-group"><label>Igreja</label><input type="text" id="cap_igreja" value="${c.igreja || ''}"></div>
-        </div>
-        <div class="field-group"><label>Assessoria</label><input type="text" id="cap_assessoria" value="${c.assessoria || ''}"></div>
-        <div class="field-row">
-          <div class="field-group"><label>Comissão (R$)</label><input type="number" step="0.01" id="cap_valor_comissao" value="${c.valor_comissao ?? ''}"></div>
-          <div class="field-group"><label>Comissionado (a quem)</label><input type="text" id="cap_comissionado_nome" value="${c.comissionado_nome || ''}"></div>
-        </div>
-        <div class="field-row">
           <div class="field-group"><label>Nº contrato</label><input type="text" id="cap_numero_contrato" value="${c.numero_contrato || ''}"></div>
-          <div class="field-group"><label>Data fecha</label><input type="date" id="cap_data_fecha" value="${c.data_fecha || ''}"></div>
+          <div class="field-group s2"><label>Local</label><input type="text" id="cap_local" value="${c.local || ''}"></div>
+          <div class="field-group"><label>Assessoria</label><div id="cap_assessoria_slot"></div></div>
+          <div class="cap-sub" id="cap_bloco_casamento" style="display:${mostraCasamento ? 'grid' : 'none'};">
+            <div class="field-group"><label>Convidados</label><input type="number" id="cap_convidados" value="${c.convidados ?? ''}"></div>
+            <div class="field-group s2"><label>Igreja</label><input type="text" id="cap_igreja" value="${c.igreja || ''}"></div>
+          </div>
+          <div class="field-group"><label>Comissão (R$)</label><input type="number" step="0.01" id="cap_valor_comissao" value="${c.valor_comissao ?? ''}"></div>
+          <div class="field-group s2"><label>Comissionado (a quem)</label><input type="text" id="cap_comissionado_nome" value="${c.comissionado_nome || ''}"></div>
+          <div class="field-group s3"><label>Obs. gerais</label><input type="text" id="cap_obs_geral" value="${c.obs_geral || ''}"></div>
         </div>
-        <div class="field-group"><label>Obs. gerais</label><input type="text" id="cap_obs_geral" value="${c.obs_geral || ''}"></div>
       </div>
 
       <div class="drawer-section">
@@ -3714,6 +3931,8 @@
           : `<p style="font-size:.82rem; color:var(--muted);">Salve a captação primeiro pra poder lançar itens.</p>`}
       </div>
     `;
+
+    ligarTravasDatas(PARES_DATAS_CAPTACAO);
 
     seletorClienteCaptacao = null;
     const slotClienteCaptacao = document.getElementById('cap_cliente_slot');
@@ -3740,6 +3959,19 @@
     seletorSetorCaptacao = criarSeletorCatalogo(document.getElementById('cap_setor_slot'), {
       tipoCat: 'setor', selecionado: c.setor_id ? todosSetoresUnidade.find(s => s.id === c.setor_id) || null : null,
     });
+    // assessoria: do cadastro (por id; ou pelo mesmo nome, para captações antigas com texto livre); sem o SQL, volta ao texto livre
+    seletorAssessoriaCaptacao = null;
+    textoLegadoAssessoriaCaptacao = c.assessoria || '';
+    const slotAssessoria = document.getElementById('cap_assessoria_slot');
+    if(temTabelaAssessorias){
+      const daAssessoria = (c.assessoria_id ? todasAssessorias.find(a => a.id === c.assessoria_id) : null)
+        || (c.assessoria ? todasAssessorias.find(a => normAssessoria(a.nome) === normAssessoria(c.assessoria)) : null) || null;
+      seletorAssessoriaCaptacao = criarSeletorCatalogo(slotAssessoria, {
+        tipoCat: 'assessoria', selecionado: daAssessoria, textoLegado: daAssessoria ? '' : textoLegadoAssessoriaCaptacao,
+      });
+    } else {
+      slotAssessoria.innerHTML = `<input type="text" id="cap_assessoria" value="${escaparHtmlVenda(c.assessoria || '')}"><p style="font-size:.74rem; color:var(--accent-ink, #8A5E12); margin:4px 0 0;">${AVISO_SQL_ASSESSORIA}</p>`;
+    }
     if(!temColunasCatalogoEventos){
       const p = document.createElement('p');
       p.style.cssText = 'font-size:.74rem; color:var(--accent-ink, #8A5E12); margin:4px 0 0;';
@@ -3757,6 +3989,19 @@
     document.getElementById('modalCaptacaoOverlay').classList.add('show');
   }
 
+  // assessoria no payload: escolhida do cadastro (nome + id); sem escolha e sem vínculo anterior, mantém o texto antigo; removeu o vínculo = limpa
+  function valoresAssessoriaCaptacao(){
+    if(!seletorAssessoriaCaptacao) return { assessoria: document.getElementById('cap_assessoria').value.trim() || null };
+    const a = seletorAssessoriaCaptacao.obter();
+    const original = captacaoIdAtual ? todasCaptacoes.find(x => x.id === captacaoIdAtual) : null;
+    let v;
+    if(a) v = { assessoria: a.nome, assessoria_id: a.id };
+    else if(original && original.assessoria_id) v = { assessoria: null, assessoria_id: null };
+    else v = { assessoria: textoLegadoAssessoriaCaptacao || null, assessoria_id: null };
+    if(!temColunaAssessoriaId) delete v.assessoria_id;
+    return v;
+  }
+
   document.getElementById('btnSalvarCaptacao').addEventListener('click', async () => {
     const nome = document.getElementById('cap_nome').value.trim();
     if(!nome){ alert('Informe o nome do evento/captação.'); return; }
@@ -3769,6 +4014,9 @@
       else if(!digitado){ clienteCaptacao.cliente_pessoa_id = null; clienteCaptacao.cliente_entidade_id = null; }
       else if(digitado !== textoLegadoClienteCaptacao){ alert('Escolha o cliente na lista ou use o botão + para cadastrar. (Para não ter cliente, deixe o campo vazio.)'); return; }
     }
+
+    const parInvalido = erroDatas(PARES_DATAS_CAPTACAO);
+    if(parInvalido){ alert(parInvalido.msg); document.getElementById(parInvalido.fim).focus(); return; }
 
     const btn = document.getElementById('btnSalvarCaptacao');
     btn.disabled = true;
@@ -3791,7 +4039,7 @@
         local: document.getElementById('cap_local').value.trim() || null,
         convidados: document.getElementById('cap_convidados').value || null,
         igreja: document.getElementById('cap_igreja').value.trim() || null,
-        assessoria: document.getElementById('cap_assessoria').value.trim() || null,
+        ...valoresAssessoriaCaptacao(),
         valor_comissao: document.getElementById('cap_valor_comissao').value || null,
         comissionado_nome: document.getElementById('cap_comissionado_nome').value.trim() || null,
         numero_contrato: document.getElementById('cap_numero_contrato').value.trim() || null,
@@ -3814,6 +4062,14 @@
         const p = seletorClienteCaptacao.obter();
         const { error: eEv } = await sb.from('eventos').update({ cliente_pessoa_id: clienteCaptacao.cliente_pessoa_id, cliente: p ? p.nome : null }).eq('id', eventoDaCaptacao);
         if(eEv) throw new Error(eEv.message);
+      }
+      // ...e a assessoria (só se escolheu uma ou se tinha vínculo antes e foi removido)
+      if(eventoDaCaptacao && seletorAssessoriaCaptacao && temColunaAssessoriaIdEvento){
+        const a = seletorAssessoriaCaptacao.obter(), antes = todasCaptacoes.find(x => x.id === captacaoIdAtual);
+        if(a || (antes && antes.assessoria_id)){
+          const { error: eAss } = await sb.from('eventos').update({ assessoria_id: a ? a.id : null }).eq('id', eventoDaCaptacao);
+          if(eAss) throw new Error(eAss.message);
+        }
       }
       await Promise.all([carregarCaptacoes(), carregarEventos()]);
       await abrirModalCaptacao(captacaoIdAtual);
@@ -3856,6 +4112,7 @@
         obs_geral: c.obs_geral,
       };
       if(c.cliente_pessoa_id) dadosEvento.cliente_pessoa_id = c.cliente_pessoa_id;
+      if(c.assessoria_id && temColunaAssessoriaIdEvento) dadosEvento.assessoria_id = c.assessoria_id;
       // condição de pagamento e dados do orçamento acompanham a captação pro evento. Só copia se a coluna
       // existe (a captação veio do banco com ela) -- assim "Criar Evento" segue funcionando antes de rodar eventos-orcamento.sql
       ['condicao_pagamento', 'pgto_percentual_entrada', 'pgto_dias_antes_entrega', 'orcamento_dados'].forEach(campo => {
@@ -5435,6 +5692,11 @@
       campos: [{ campo: 'nome', label: 'Nome', obrigatorio: true }],
       lista: () => todosAndamentos, label: a => a.nome, recarregar: carregarAndamentos,
     },
+    assessoria: {
+      tabela: 'eventos_assessorias', rotulo: 'assessoria', campoPrincipal: 'nome',
+      campos: [{ campo: 'nome', label: 'Assessoria', obrigatorio: true }, { campo: 'contato', label: 'Contato (telefone ou nome)' }, { campo: 'email', label: 'E-mail' }],
+      lista: () => todasAssessorias, label: rotuloAssessoria, info: infoAssessoria, casa: casaAssessoria, placeholder: 'Buscar por nome, e-mail ou telefone...', recarregar: carregarAssessorias,
+    },
   };
   let cadastroRapidoCatalogoAtual = null; // { tipoCat, idEmEdicao, callback }
   function abrirCadastroRapidoCatalogo(tipoCat, { registro, nomeInicial, aoSalvar } = {}){
@@ -5486,14 +5748,14 @@
   // mesmo espírito visual do criarSeletorCliente, mas sem a linha de info (só nome/rótulo)
   // permissão que cada catálogo exige pra cadastrar/editar (papel 'operador' pode não ter) —
   // ver PERMISSÕES POR PAPEL / servir_permissoes_papel
-  const PERMISSAO_POR_CATALOGO = { setor: 'cadastrar_setor', planoContas: 'cadastrar_plano_contas', tipoEvento: 'cadastrar_tipo_evento', andamento: 'cadastrar_andamento' };
+  const PERMISSAO_POR_CATALOGO = { setor: 'cadastrar_setor', planoContas: 'cadastrar_plano_contas', tipoEvento: 'cadastrar_tipo_evento', andamento: 'cadastrar_andamento', assessoria: 'cadastrar_tipo_evento' /* catálogo só do Eventos, como tipo/andamento */ };
   function criarSeletorCatalogo(container, { tipoCat, selecionado, textoLegado, aoSelecionar, aoEditar }){
     const config = CATALOGOS_RAPIDOS[tipoCat];
     const podeCadastrar = temPermissaoEventos(PERMISSAO_POR_CATALOGO[tipoCat]);
     container.innerHTML = `
       <div style="display:flex; gap:6px; align-items:flex-start;">
         <div style="flex:1; position:relative;">
-          <input type="text" class="sc-busca" placeholder="Buscar ${escaparHtmlVenda(config.rotulo)}..." autocomplete="off">
+          <input type="text" class="sc-busca" placeholder="${escaparHtmlVenda(config.placeholder || ('Buscar ' + config.rotulo + '...'))}" autocomplete="off">
           <div class="lista-sugestoes-autocomplete sc-sug"></div>
         </div>
         ${podeCadastrar ? `
@@ -5508,14 +5770,15 @@
     let atual = selecionado || null;
     const desenhar = () => {
       busca.value = atual ? config.label(atual) : '';
-      info.textContent = atual ? '' : (textoLegado ? `Valor atual (sem vínculo com o cadastro): ${textoLegado}` : '');
+      info.textContent = atual ? (config.info ? config.info(atual) : '') : (textoLegado ? `Valor atual (sem vínculo com o cadastro): ${textoLegado}` : '');
       if(btnEditar) btnEditar.style.display = atual ? '' : 'none';
     };
     const mostrar = (termo) => {
       const lista = config.lista();
-      const filtrados = (termo ? lista.filter(x => config.label(x).toLowerCase().includes(termo.toLowerCase())) : lista).slice(0, 30);
+      const casa = config.casa ? (x => config.casa(x, termo)) : (x => config.label(x).toLowerCase().includes(termo.toLowerCase()));
+      const filtrados = (termo ? lista.filter(casa) : lista).slice(0, 30);
       sug.innerHTML = filtrados.length
-        ? filtrados.map(x => `<div class="sugestao-autocomplete" data-id="${x.id}">${escaparHtmlVenda(config.label(x))}</div>`).join('')
+        ? filtrados.map(x => `<div class="sugestao-autocomplete" data-id="${x.id}">${escaparHtmlVenda(config.label(x))}${config.info && config.info(x) ? `<span style="color:var(--muted); font-size:.82em;"> ${escaparHtmlVenda(config.info(x))}</span>` : ''}</div>`).join('')
         : '<div class="sugestao-autocomplete-vazia">Nada encontrado.</div>';
       sug.classList.add('show');
       sug.querySelectorAll('[data-id]').forEach(el => el.addEventListener('mousedown', (e) => {
@@ -5726,6 +5989,25 @@
       img.src = src;
     });
   }
+  // Logos enviados antes da correção do Servir Central foram gravados em JPEG com o fundo transparente virando PRETO.
+  // Se os 4 cantos são pretos, apaga (deixa transparente) só o preto ligado às bordas — o resto do desenho não é tocado.
+  function removerFundoPretoLogo(canvas){
+    const w = canvas.width, h = canvas.height; if(w < 4 || h < 4) return;
+    const ctx = canvas.getContext('2d'), img = ctx.getImageData(0, 0, w, h), d = img.data;
+    const escuro = (i) => d[i + 3] > 0 && d[i] < 50 && d[i + 1] < 50 && d[i + 2] < 50;
+    const cantos = [0, w - 1, (h - 1) * w, h * w - 1];
+    if(!cantos.every(p => escuro(p * 4))) return;
+    const visto = new Uint8Array(w * h), pilha = [];
+    const empilhar = (p) => { if(!visto[p] && escuro(p * 4)){ visto[p] = 1; pilha.push(p); } };
+    for(let x = 0; x < w; x++){ empilhar(x); empilhar((h - 1) * w + x); }
+    for(let y = 0; y < h; y++){ empilhar(y * w); empilhar(y * w + w - 1); }
+    while(pilha.length){
+      const p = pilha.pop(), x = p % w, y = (p - x) / w;
+      d[p * 4 + 3] = 0;
+      if(x > 0) empilhar(p - 1); if(x < w - 1) empilhar(p + 1); if(y > 0) empilhar(p - w); if(y < h - 1) empilhar(p + w);
+    }
+    ctx.putImageData(img, 0, 0);
+  }
   // logo da unidade: redesenhado em PNG (o Servir Central grava JPEG) preservando a proporção; null se não houver/falhar
   async function logoParaOrcamento(){
     const url = personalizacaoUnidade && personalizacaoUnidade.logo_url;
@@ -5744,6 +6026,7 @@
       const canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.round(w * escala)); canvas.height = Math.max(1, Math.round(h * escala));
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      removerFundoPretoLogo(canvas);
       return { dataUrl: canvas.toDataURL('image/png'), razao: w / h };
     } catch(e){ console.warn('Logo não carregou pro orçamento:', e.message); return null; }
   }
@@ -5975,7 +6258,7 @@
   const MAPA_TABELA_CADASTRO = {
     setor: 'unidade_setores', cliente: 'eventos_clientes', solicitante: 'eventos_solicitantes',
     tipoEvento: 'eventos_tipos', statusCaptacao: 'eventos_status', andamento: 'eventos_andamentos',
-    empresaFinanceira: 'eventos_empresas_financeiras'
+    empresaFinanceira: 'eventos_empresas_financeiras', assessoria: 'eventos_assessorias'
     // clienteEntidade não entra aqui — é tratado à parte (unidade_entidades + papel)
   };
 
@@ -5990,6 +6273,7 @@
     else if(cadastroTipoAtual === 'statusCaptacao') await carregarStatusCaptacao();
     else if(cadastroTipoAtual === 'andamento') await carregarAndamentos();
     else if(cadastroTipoAtual === 'empresaFinanceira') await carregarEmpresasFinanceiras();
+    else if(cadastroTipoAtual === 'assessoria') await carregarAssessorias();
     else if(cadastroTipoAtual === 'clienteEntidade') await carregarClientesEntidades();
   }
 
@@ -6042,6 +6326,10 @@
         }
         if(cadastroTipoAtual === 'empresaFinanceira'){
           payload.cnpj = document.getElementById('c_cnpj').value.trim() || null;
+        }
+        if(cadastroTipoAtual === 'assessoria'){
+          payload.contato = document.getElementById('c_contato').value.trim() || null;
+          payload.email = document.getElementById('c_email').value.trim() || null;
         }
 
         const query = cadastroIdAtual

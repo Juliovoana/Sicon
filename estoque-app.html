@@ -573,7 +573,7 @@
                 <p class="subtitulo" id="npAlmoxSelecionado" style="margin-top:4px;"></p>
             </div>
         </div>
-        <!-- só aparece quando o almoxarifado escolhido é o dedicado "Uniformes / EPI": o item também vai pro catálogo do Staff -->
+        <!-- só aparece quando o almoxarifado escolhido é o dedicado a Uniformes/EPI (id definido no módulo Staff): o item também vai pro catálogo do Staff -->
         <div id="npBlocoCatalogoUniforme" style="display:none; margin-top:10px; background:#EFF6FF; border:1px solid #BFD7FF; border-radius:8px; padding:10px 14px;">
             <p class="subtitulo" style="margin:0 0 8px 0;"><strong>👕 Catálogo de Uniformes/EPI</strong> — este é o almoxarifado dedicado a Uniformes/EPI: o produto também será gravado no <strong>catálogo</strong> do Controle de Uniformes/EPI (Staff). Cada tamanho de cada peça é um item próprio.</p>
             <div class="grade col4">
@@ -3645,7 +3645,7 @@ async function carregarEventos() {
 async function carregarTudo() {
     document.getElementById('tagContagem').textContent = 'carregando dados do Supabase...';
     try {
-        await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarProjetos(), carregarEventos(), carregarTiposProjeto(), carregarParametrosLembrar()]);
+        await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarProjetos(), carregarEventos(), carregarTiposProjeto(), carregarParametrosLembrar(), carregarAlmoxUniformesEpiId()]);
     } catch (err) {
         console.error(err);
         document.getElementById('tagContagem').textContent = '⚠️ Não foi possível carregar os dados. Confira a URL/chave do Supabase.';
@@ -3685,7 +3685,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
    ============================================================ */
 const AJUDA_ESTOQUE = {
     titulo: 'Estoque — Controle de Estoque & Projetos',
-    ultimaRevisao: '23/10/2026',
+    ultimaRevisao: '27/10/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>O Estoque controla o material físico da unidade (contêiner/esquadria): o que entra
@@ -3722,9 +3722,10 @@ const AJUDA_ESTOQUE = {
             <p>No cadastro de produto (novo ou edição), o campo <strong>Grupo</strong> é obrigatório —
             o botão <strong>"+"</strong> ao lado abre um cadastro rápido pra criar um grupo novo na hora,
             sem precisar sair da tela.</p>
-            <p><strong>👕 Produto novo no almoxarifado "Uniformes / EPI":</strong> ao cadastrar um produto novo
-            escolhendo o almoxarifado dedicado <strong>Uniformes / EPI</strong> (o mesmo que o Controle de Uniformes/EPI
-            do Staff usa), aparece um bloco pedindo o <strong>Tipo</strong> (Uniforme ou EPI — obrigatório) e, se quiser,
+            <p><strong>👕 Produto novo no almoxarifado de Uniformes/EPI:</strong> ao cadastrar um produto novo
+            escolhendo o almoxarifado dedicado a <strong>Uniformes/EPI</strong> (o que foi definido no Controle de Uniformes/EPI
+            do Staff, em Catálogo → Almoxarifado do módulo; ele é identificado pelo código, então pode ter qualquer nome e ser
+            renomeado), aparece um bloco pedindo o <strong>Tipo</strong> (Uniforme ou EPI — obrigatório) e, se quiser,
             Tamanho, Vida útil (dias) e, só pra EPI, Nº do CA e Validade do CA. O produto é salvo no estoque <strong>e
             também gravado no catálogo</strong> de Uniformes/EPI, já pronto pra ser entregue aos profissionais. Cada
             tamanho de cada peça é um produto/item próprio. Só <strong>Principal ou Administrador do Staff</strong> pode
@@ -6031,10 +6032,24 @@ document.getElementById('buscaEstoque').addEventListener('input', () => {
 let grupoSelecionadoNovoProduto = null;
 let almoxarifadoSelecionadoNovoProduto = null;
 
-// Almoxarifado dedicado a Uniformes/EPI (mesmo nome que o módulo Staff -> Controle de Uniformes/EPI procura/cria):
-// produto novo cadastrado nele também entra no catálogo daquele módulo (staff_uniformes_epi_catalogo)
+// Almoxarifado dedicado a Uniformes/EPI: produto novo cadastrado nele também entra no catálogo do módulo Staff ->
+// Controle de Uniformes/EPI (staff_uniformes_epi_catalogo). É identificado pelo ID que aquele módulo guarda em
+// staff_uniformes_epi_config.almoxarifado_id (o almoxarifado pode ser renomeado); sem id guardado (ou sem o SQL
+// staff-uniformes-epi-almoxarifado-id.sql), vale o jeito antigo: almoxarifado chamado "Uniformes / EPI".
 const NOME_ALMOXARIFADO_UNIFORMES_EPI = 'Uniformes / EPI';
-const ehAlmoxarifadoUniformesEpi = (a) => !!a && String(a.nome || '').trim().toLowerCase() === NOME_ALMOXARIFADO_UNIFORMES_EPI.toLowerCase();
+var almoxUniformesEpiId = null;
+async function carregarAlmoxUniformesEpiId() {
+    try {
+        const { data, error } = await sb.from('staff_uniformes_epi_config')
+            .select('almoxarifado_id').eq('unidade_negocio_id', meuPerfil.unidadeId).maybeSingle();
+        almoxUniformesEpiId = (error || !data) ? null : (data.almoxarifado_id ?? null);
+    } catch (e) { almoxUniformesEpiId = null; }
+}
+const ehAlmoxarifadoUniformesEpi = (a) => {
+    if (!a) return false;
+    if (almoxUniformesEpiId != null) return String(a.id) === String(almoxUniformesEpiId);
+    return String(a.nome || '').trim().toLowerCase() === NOME_ALMOXARIFADO_UNIFORMES_EPI.toLowerCase();
+};
 
 function atualizarBlocoCatalogoUniformeNP() {
     document.getElementById('npBlocoCatalogoUniforme').style.display = ehAlmoxarifadoUniformesEpi(almoxarifadoSelecionadoNovoProduto) ? '' : 'none';

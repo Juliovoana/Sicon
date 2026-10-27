@@ -104,7 +104,14 @@
   table.lanc tfoot td{ font-weight:800; background:var(--cab); }
   table.lanc tr.atraso td{ color:var(--neg); }
   .rol-lanc{ overflow:auto; max-height:56vh; border:1px solid var(--line-forte); border-radius:8px; }
-  #popupPdf .caixa{ max-width:460px; }
+  #popupPdf .caixa, #popupPrazos .caixa{ max-width:460px; }
+  .chips-prazo{ display:flex; flex-wrap:wrap; gap:8px; margin:10px 0; }
+  .chip-prazo{ display:inline-flex; align-items:center; gap:6px; border:1px solid var(--line-forte); background:var(--brand-soft); border-radius:999px; padding:4px 6px 4px 12px; font-size:.88rem; font-weight:700; }
+  .chip-prazo button{ border:none; background:none; cursor:pointer; color:var(--muted); font-size:1.05rem; line-height:1; padding:0 4px; }
+  .chip-prazo button:hover{ color:var(--neg); }
+  .add-prazo{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .add-prazo input{ width:110px; border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; padding:7px 9px; font-size:.9rem; }
+  .msg-prazo{ min-height:1.2em; font-size:.84rem; color:var(--neg); margin-top:6px; }
   @media (max-width:640px){
     .pagina{ padding:12px; }
     table.t th, table.t td{ padding:6px 7px; font-size:.8rem; }
@@ -136,7 +143,7 @@
         <div class="campo"><label for="fData">Data</label><input type="date" id="fData"></div>
         <div class="campo"><button class="btn sec" id="btnOntem" type="button" title="Dia anterior (padrão)">Ontem</button> <button class="btn sec" id="btnHoje" type="button">Hoje</button></div>
         <label class="opcao"><input type="checkbox" id="fZeradas" checked> Ocultar contas sem saldo e sem movimento</label>
-        <div class="campo" style="margin-left:auto"><button class="btn" id="btnPdf" type="button">📄 PDF</button></div>
+        <div class="campo" style="margin-left:auto"><button class="btn sec" id="btnPrazos" type="button" title="Escolher os prazos da projeção (dias)">⚙ Prazos <span id="rPrazos"></span></button> <button class="btn" id="btnPdf" type="button">📄 PDF</button></div>
       </div>
       <details class="painel" style="margin-top:10px" id="painelEmp"><summary>Empresas <span class="conta-resumo" id="rEmp"></span></summary>
         <div class="corpo"><div class="ferramentas"><button class="btn sec mini" id="empTodas" type="button">Marcar todas</button><button class="btn sec mini" id="empNenhuma" type="button">Desmarcar todas</button></div><div class="lista-chk" id="listaEmp"></div></div>
@@ -183,6 +190,25 @@
       <button class="btn sec" id="pdfBaixar" type="button">Baixar</button>
       <button class="btn sec" id="pdfCompartilhar" type="button">Compartilhar</button>
     </div>
+  </div>
+</div>
+
+<div class="fundo" id="popupPrazos" hidden>
+  <div class="caixa" role="dialog" aria-modal="true" aria-labelledby="prazosTitulo">
+    <button class="fecha" id="prazosFechar" type="button" aria-label="Fechar">×</button>
+    <h3 id="prazosTitulo">Prazos da projeção</h3>
+    <div class="resumo-kpis">Informe os dias à frente da data do relatório. A linha "Atrasado até" e o "TOTAL PROJEÇÃO" sempre existem; cada prazo abaixo vira uma linha "Próximos N dias" (acumulada).</div>
+    <div class="chips-prazo" id="prazosChips"></div>
+    <div class="add-prazo">
+      <input type="number" id="prazoNovo" min="1" max="3650" step="1" placeholder="Dias" inputmode="numeric">
+      <button class="btn sec" id="prazoAdd" type="button">+ Adicionar prazo</button>
+    </div>
+    <div class="msg-prazo" id="prazosMsg"></div>
+    <div class="btns">
+      <button class="btn" id="prazosAplicar" type="button">Aplicar</button>
+      <button class="btn sec" id="prazosPadrao" type="button">Restaurar padrão</button>
+    </div>
+    <div class="resumo-kpis" style="margin-top:10px">Os prazos ficam guardados neste aparelho, por unidade. Padrão: 1, 2, 3, 10, 30, 60, 90, 120 e 150 dias.</div>
   </div>
 </div>
 
@@ -291,7 +317,13 @@
   const qual = { cruz: null, mov: null };
   const dataPadrao = () => somaDias(hoje(), -1);     // padrão: o dia anterior (o dia fechado)
   const FIL = { data: dataPadrao(), empOff: new Set(), zeradas: true };
-  const DIAS = [0, 1, 2, 3, 10, 30, 60, 90, 120, 150];
+  // Prazos da projeção: DIAS[0] = 0 ("Atrasado até") + os prazos escolhidos, em ordem crescente. Guardados por unidade neste aparelho.
+  const PRAZOS_PADRAO = [1, 2, 3, 10, 30, 60, 90, 120, 150], MAX_PRAZOS = 20, MAX_DIAS_PRAZO = 3650;
+  const chavePrazos = () => 'rd_prazos_v1_' + (cacheUn || 'geral');
+  const prazosValidos = (v) => Array.isArray(v) ? [...new Set(v.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= MAX_DIAS_PRAZO))].sort((a, b) => a - b).slice(0, MAX_PRAZOS) : [];
+  let DIAS = [0, ...PRAZOS_PADRAO];
+  function carregarPrazos(){ const p = prazosValidos(lerLS(chavePrazos(), null)); DIAS = [0, ...(p.length ? p : PRAZOS_PADRAO)]; atualizarRotuloPrazos(); }
+  function atualizarRotuloPrazos(){ const per = DIAS.slice(1).join(',') !== PRAZOS_PADRAO.join(','); $('rPrazos').textContent = per ? '· personalizados' : ''; }
   const nomeEmp = (c) => nomesEmp.get(c) || ('Empresa ' + c);
 
   function montarCruz(texto){
@@ -395,10 +427,12 @@
     const tot = fluxos.reduce((s, g) => ({ ant: s.ant + g.ant, ent: s.ent + g.ent, sai: s.sai + g.sai, atu: s.atu + g.atu }), { ant: 0, ent: 0, sai: 0, atu: 0 });
     // títulos: cada um cai no primeiro prazo que o comporta; depois acumula (como no relatório de referência)
     const n = DIAS.length, P = { A: new Array(n + 1).fill(0), P: new Array(n + 1).fill(0) }, R = new Array(n + 1).fill(0), dD = dias(D);
+    const antigo = { P: null, R: null };      // vencimento mais antigo entre os títulos em aberto considerados
     for(const t of titulos){
       if(!emOk(t.emp)) continue;
       const dd = dias(t.venc) - dD; let i = DIAS.findIndex(k => dd <= k); if(i < 0) i = n;
-      if(t.tp === 'P') P[t.sit][i] += t.v; else if(t.sit === 'A') R[i] += t.v;
+      if(t.tp === 'P'){ P[t.sit][i] += t.v; if(!antigo.P || t.venc < antigo.P) antigo.P = t.venc; }
+      else if(t.sit === 'A'){ R[i] += t.v; if(!antigo.R || t.venc < antigo.R) antigo.R = t.venc; }
     }
     const acum = (a) => { const r = []; let s = 0; for(let i = 0; i <= n; i++){ s += a[i]; r.push(s); } return r; };
     const pc = acum(P.A), pp = acum(P.P), rc = acum(R);
@@ -409,7 +443,7 @@
       const rec = { conf: rc[i], confSaldo: rc[i] + tot.atu, liq: rc[i] + tot.atu - pag.total };
       linhas.push({ i, rot, dias: i < n ? DIAS[i] : null, pag, rec });
     }
-    return { D, fluxos, tot, linhas };
+    return { D, fluxos, tot, linhas, antigo };
   }
   const listaTitulos = (lado, i, D) => {
     const dD = dias(D), lim = i == null || i >= DIAS.length ? Infinity : DIAS[i];
@@ -423,13 +457,14 @@
     if(!/^\d{4}-\d{2}-\d{2}$/.test(FIL.data)) FIL.data = dataPadrao();
     R = calcular(FIL.data);
     // KPIs
-    const L = R.linhas, l30 = L.find(x => x.dias === 30) || L[L.length - 1];
+    // liquidez: prazo mais próximo de 30 dias (o 30 do padrão; se os prazos foram personalizados, o que mais se aproxima)
+    const L = R.linhas, reais = L.filter(x => x.dias), l30 = reais.length ? reais.reduce((m, x) => Math.abs(x.dias - 30) < Math.abs(m.dias - 30) ? x : m) : L[L.length - 1];
     const k = (rot, v, cls) => { const d = el('div', 'kpi'); d.appendChild(el('span', '', rot)); d.appendChild(el('b', cls || '', v)); return d; };
     $('kpis').replaceChildren(
       k('Saldo em contas', fmtR(R.tot.atu), R.tot.atu < 0 ? 'neg' : 'pos'),
       k('A pagar — atrasado', fmtR(L[0].pag.total), L[0].pag.total ? 'neg' : ''),
       k('A receber — atrasado', fmtR(L[0].rec.conf), L[0].rec.conf ? 'pos' : ''),
-      k('Liquidez em 30 dias', fmtR(l30.rec.liq), l30.rec.liq < 0 ? 'neg' : 'pos'));
+      k('Liquidez em ' + (l30.dias || 'todo o período') + (l30.dias ? ' dias' : ''), fmtR(l30.rec.liq), l30.rec.liq < 0 ? 'neg' : 'pos'));
     $('subtitulo').textContent = 'Posição de ' + fmtDia(R.D) + ' — saldo das contas e contas a pagar / a receber (atrasados e futuros)';
     desenharFluxos(); desenharTitulos();
   }
@@ -466,7 +501,8 @@
       t = el('table', 't'); h = '<thead><tr><th>Prazo</th><th>Confirmado</th><th>Confirmado + saldo</th><th>Liquidez</th></tr></thead><tbody>';
       R.linhas.forEach(l => { const ult = l.dias == null; h += '<tr class="' + (ult ? 'tot ' : '') + 'cl" data-l="R" data-i="' + l.i + '" title="Ver os títulos"><td>' + esc(l.rot) + '</td><td>' + fmt(l.rec.conf) + '</td><td>' + fmt(l.rec.confSaldo) + '</td><td class="' + (l.rec.liq < 0 ? 'neg' : '') + '">' + fmt(l.rec.liq) + '</td></tr>'; });
       t.innerHTML = h + '</tbody>'; const r2 = el('div', 'rolagem'); r2.appendChild(t); b.appendChild(r2);
-      b.appendChild(el('div', 'nota', 'Os prazos são acumulados (cada linha inclui os atrasados e tudo o que vence até a data). Liquidez = confirmado a receber + saldo das contas − total a pagar. Clique numa linha para ver os títulos.'));
+      b.appendChild(el('div', 'nota', 'Os prazos são acumulados (cada linha inclui os atrasados e tudo o que vence até a data). Liquidez = confirmado a receber + saldo das contas − total a pagar. Clique numa linha para ver os títulos. ' +
+        'Vencimento mais antigo em aberto: a pagar ' + (R.antigo.P ? fmtDia(R.antigo.P) : '—') + ' · a receber ' + (R.antigo.R ? fmtDia(R.antigo.R) : '—') + ' (o "Atrasado" inclui tudo desde essa data — confira se o seu controle também).'));
       frag.appendChild(b);
     }
     $('colTitulos').replaceChildren(frag);
@@ -610,9 +646,38 @@
       li('Clique numa conta para ver como o saldo foi calculado e os últimos lançamentos — útil para conferir com o extrato.'); }
     else li('Movimento: arquivo não carregado.');
     li('Confirmado = em aberto. Provisionado = coluna PROVISIONADO marcada (-1, 1, sim, verdadeiro) ou situação P. Os valores somados são a coluna TOTAL (a parte de cada rateio).');
+    li('Prazos da projeção: botão ⚙ Prazos (guardados neste aparelho, por unidade). Os prazos são sempre contados a partir da data do relatório.');
     li('"Atrasado até" inclui o que vence na própria data (como no relatório de referência). Os títulos em aberto são os de hoje: ao escolher uma data passada só os saldos e os prazos mudam.');
   }
+  // ===================== janela dos prazos =====================
+  let prazosEdit = [];
+  function desenharChipsPrazos(){
+    const box = $('prazosChips'); box.replaceChildren();
+    prazosEdit.forEach((d, i) => { const c = el('span', 'chip-prazo', pad3(d) + ' dias'), b = el('button', '', '×'); b.type = 'button'; b.title = 'Remover'; b.setAttribute('aria-label', 'Remover o prazo de ' + d + ' dias');
+      b.addEventListener('click', () => { prazosEdit.splice(i, 1); $('prazosMsg').textContent = ''; desenharChipsPrazos(); }); c.appendChild(b); box.appendChild(c); });
+    if(!prazosEdit.length) box.appendChild(el('span', 'pass', 'Nenhum prazo — adicione pelo menos um.'));
+  }
+  function adicionarPrazo(){
+    const msg = $('prazosMsg'), inp = $('prazoNovo'), txt = inp.value.trim().replace(',', '.'), n = Number(txt);
+    msg.textContent = '';
+    if(!txt) return;
+    if(!Number.isInteger(n) || n < 1 || n > MAX_DIAS_PRAZO){ msg.textContent = 'Informe um número inteiro de 1 a ' + MAX_DIAS_PRAZO + ' dias.'; return; }
+    if(prazosEdit.includes(n)){ msg.textContent = 'O prazo de ' + n + ' dias já está na lista.'; return; }
+    if(prazosEdit.length >= MAX_PRAZOS){ msg.textContent = 'No máximo ' + MAX_PRAZOS + ' prazos.'; return; }
+    prazosEdit.push(n); prazosEdit.sort((a, b) => a - b); inp.value = ''; desenharChipsPrazos(); inp.focus();
+  }
+  function abrirPrazos(){ prazosEdit = DIAS.slice(1); $('prazosMsg').textContent = ''; $('prazoNovo').value = ''; desenharChipsPrazos(); $('popupPrazos').hidden = false; $('prazoNovo').focus(); }
+  function aplicarPrazos(){
+    if(!prazosEdit.length){ $('prazosMsg').textContent = 'Adicione pelo menos um prazo.'; return; }
+    if($('prazoNovo').value.trim()) adicionarPrazo();       // o que ficou digitado e não foi adicionado também vale
+    if($('prazosMsg').textContent) return;
+    DIAS = [0, ...prazosEdit];
+    if(DIAS.slice(1).join(',') === PRAZOS_PADRAO.join(',')) { try { localStorage.removeItem(chavePrazos()); } catch(e){} } else gravarLS(chavePrazos(), prazosEdit);
+    atualizarRotuloPrazos(); $('popupPrazos').hidden = true; if(R) render();
+  }
+
   function aplicar(){
+    carregarPrazos();
     $('inicio').replaceChildren(); $('app').hidden = false;
     const s = lerLS(K_FILTROS, {}); if(typeof s.zeradas === 'boolean') FIL.zeradas = s.zeradas;
     $('fZeradas').checked = FIL.zeradas; $('fData').value = FIL.data;
@@ -710,6 +775,13 @@
   // ===================== eventos de interface =====================
   $('btnAtualizar').addEventListener('click', carregar);
   $('btnPdf').addEventListener('click', gerarPdf);
+  $('btnPrazos').addEventListener('click', abrirPrazos);
+  $('prazosFechar').addEventListener('click', () => { $('popupPrazos').hidden = true; });
+  $('popupPrazos').addEventListener('click', (e) => { if(e.target === $('popupPrazos')) $('popupPrazos').hidden = true; });
+  $('prazoAdd').addEventListener('click', adicionarPrazo);
+  $('prazoNovo').addEventListener('keydown', (e) => { if(e.key === 'Enter'){ e.preventDefault(); adicionarPrazo(); } });
+  $('prazosAplicar').addEventListener('click', aplicarPrazos);
+  $('prazosPadrao').addEventListener('click', () => { prazosEdit = PRAZOS_PADRAO.slice(); $('prazosMsg').textContent = ''; desenharChipsPrazos(); });
   $('fData').addEventListener('change', () => { FIL.data = $('fData').value || dataPadrao(); render(); });
   $('btnOntem').addEventListener('click', () => { FIL.data = dataPadrao(); $('fData').value = FIL.data; render(); });
   $('btnHoje').addEventListener('click', () => { FIL.data = hoje(); $('fData').value = FIL.data; render(); });
@@ -722,10 +794,10 @@
   $('popupTit').addEventListener('click', (e) => { if(e.target === $('popupTit')) fecharTit(); });
   $('titBusca').addEventListener('input', desenharTit); $('titSit').addEventListener('change', desenharTit);
   $('titCsv').addEventListener('click', csvTit);
-  document.addEventListener('keydown', (e) => { if(e.key !== 'Escape') return; if(!$('popupPdf').hidden) $('popupPdf').hidden = true; else if(!$('popupTit').hidden) fecharTit(); });
+  document.addEventListener('keydown', (e) => { if(e.key !== 'Escape') return; if(!$('popupPdf').hidden) $('popupPdf').hidden = true; else if(!$('popupPrazos').hidden) $('popupPrazos').hidden = true; else if(!$('popupTit').hidden) fecharTit(); });
 
   // expõe só para teste/diagnóstico
-  window.__rd = { abrirConta, montarAberturas, montarCruz, montarMov, aplicar, render, calcular, FIL, abrirTitulos, listaTitulos, gerarPdf, setChamar: (f) => { chamar = f; }, get R(){ return R; }, get titulos(){ return titulos; }, get contas(){ return contas; } };
+  window.__rd = { abrirPrazos, aplicarPrazos, abrirConta, montarAberturas, montarCruz, montarMov, aplicar, render, calcular, FIL, abrirTitulos, listaTitulos, gerarPdf, setChamar: (f) => { chamar = f; }, get R(){ return R; }, get titulos(){ return titulos; }, get contas(){ return contas; } };
 
   // acesso: login do Servir + credenciais da unidade (servir-acesso.js), no mesmo módulo do Painel financeiro
   (async function iniciar(){
