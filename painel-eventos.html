@@ -243,6 +243,11 @@
 
     <div class="aba" id="aba-conferencia" hidden>
       <div class="kpis" id="kpisConf"></div>
+      <div class="bloco"><h2><span>Venda confirmada × parcelas do financeiro</span>
+        <span class="ac"><select id="vSit" aria-label="Situação"><option value="div">Só divergentes</option><option value="menor">Parcelas a menos que a venda</option><option value="maior">Parcelas a mais que a venda</option><option value="sem_parcelas">Venda sem parcelas</option><option value="sem_venda">Parcelas sem venda confirmada</option><option value="confere">Conferem</option><option value="todos">Todos</option></select>
+          <label style="font-weight:600;font-size:.8rem">Tolerância R$ <input type="number" id="vTol" value="1" min="0" step="0.01" style="width:70px"></label>
+          <button class="btn sec mini" id="vCsv" type="button">⬇ CSV</button><button class="btn sec mini" id="vXls" type="button">⬇ Excel</button></span></h2>
+        <div class="nota" id="vInfo"></div><div class="rolagem" id="tbVenda"></div></div>
       <div class="bloco"><h2>Eventos com valor a receber vencido</h2><div class="rolagem" id="tbDif"></div></div>
       <div class="grade2">
         <div class="bloco"><h2>Eventos do período sem nenhum pagamento</h2><div class="rolagem" id="tbSemOrc"></div></div>
@@ -475,12 +480,21 @@
   function corrigirBaixas(rows){
     rows.forEach(t => { t.vraw = t.v; });
     const por = new Map(), fora = new Set();
-    rows.forEach(t => { if(!t.titulo) return; const k = t.ev + '|' + t.titulo; let a = por.get(k); if(!a){ a = []; por.set(k, a); } a.push(t); });
+    // o código do título (ex.: 127572/4) pode se repetir em parcelas diferentes: baixas parciais do mesmo título repetem o VALOR, parcelas distintas não
+    rows.forEach(t => { if(!t.titulo) return; const k = t.ev + '|' + t.titulo + '|' + t.vraw.toFixed(2); let a = por.get(k); if(!a){ a = []; por.set(k, a); } a.push(t); });
     por.forEach(lista => {
       const valorTit = Math.max(...lista.map(t => t.vraw)), pagos = lista.filter(t => t.pago), abertos = lista.filter(t => !t.pago);
       const pagoSoma = pagos.reduce((x, t) => x + t.vf, 0);
       pagos.forEach(t => { t.v = t.vf; });
-      if(abertos.length){ const saldo = Math.max(0, valorTit - pagoSoma); abertos.forEach((t, i) => { t.v = i === 0 ? saldo : 0; if(i > 0 || saldo < 0.005) fora.add(t); }); }
+      if(abertos.length){
+        // em aberto: vencimentos diferentes são parcelas diferentes (cada uma com seu valor); no mesmo vencimento é a mesma linha repetida
+        const porVenc = new Map(); abertos.forEach(t => { const k = t.venc || ''; if(!porVenc.has(k)) porVenc.set(k, []); porVenc.get(k).push(t); });
+        let i = 0;
+        porVenc.forEach(g => {
+          const saldo = i === 0 && pagos.length ? Math.max(0, valorTit - pagoSoma) : valorTit; i++;
+          g.forEach((t, j) => { t.v = j === 0 ? saldo : 0; if(j > 0 || saldo < 0.005) fora.add(t); });
+        });
+      }
     });
     rows.forEach(t => { if(!t.titulo && t.pago) t.v = t.vf; t.vf = t.v; });
     return rows.filter(t => !fora.has(t));
@@ -886,8 +900,42 @@
     r.rec = r.tit; r.res = r.rec - r.desp; return r;
   }
 
+  // ----- venda confirmada x parcelas do financeiro -----
+  // venda confirmada = itens fechados do evento (itens do contrato, ou orçamentos); parcelas = títulos a receber do evento (pagos + saldo em aberto)
+  const SIT_VENDA = { confere: 'Confere', menor: 'Parcelas a menos', maior: 'Parcelas a mais', sem_parcelas: 'Venda sem parcelas', sem_venda: 'Parcelas sem venda confirmada' };
+  let vendaMais = 300;
+  function linhasVenda(){
+    const tol = Math.max(0, +$('vTol').value || 0), usa = ITENSpor.size > 0, fonte = usa ? ITENSpor : ORCpor, out = [];
+    R.linhas.forEach(r => {
+      const id = r.e.id, itens = fonte.get(id) || [], ti = TIpor.get(id) || [];
+      let venda = 0, nao = 0; itens.forEach(l => { if(l.fech) venda += l.v; else nao += l.v; });
+      const fin = somaV(ti, t => t.v), dif = fin - venda; if(!venda && !fin) return;
+      const sit = venda > tol && fin <= tol ? 'sem_parcelas' : fin > tol && venda <= tol ? 'sem_venda' : Math.abs(dif) <= tol ? 'confere' : dif < 0 ? 'menor' : 'maior';
+      out.push({ e: r.e, venda, nao, fin, dif, n: ti.length, sit });
+    });
+    return out;
+  }
+  function visiveisVenda(){
+    const f = $('vSit').value; return linhasVenda().filter(x => f === 'todos' ? true : f === 'div' ? x.sit !== 'confere' : x.sit === f).sort((a, b) => Math.abs(b.dif) - Math.abs(a.dif) || (+a.e.id - +b.e.id));
+  }
+  function desenharVenda(){
+    const fonte = ITENSpor.size > 0 ? ARQ.iev : ARQ.orc, tem = ITENSpor.size > 0 || ORCpor.size > 0, todas = linhasVenda(), l = visiveisVenda();
+    const cont = (s) => todas.filter(x => x.sit === s).length, soma = (a, f) => a.reduce((s, x) => s + f(x), 0);
+    $('vInfo').textContent = !tem ? 'O arquivo de itens/orçamentos (' + ARQ.iev + ' ou ' + ARQ.orc + ') não foi carregado — sem a venda confirmada não há o que comparar.'
+      : todas.length.toLocaleString('pt-BR') + ' evento(s) do filtro atual com venda ou parcelas: ' + cont('confere').toLocaleString('pt-BR') + ' conferem; ' + (todas.length - cont('confere')).toLocaleString('pt-BR') + ' divergem (' + cont('menor') + ' com parcelas a menos, ' + cont('maior') + ' a mais, ' + cont('sem_parcelas') + ' venda sem parcelas, ' + cont('sem_venda') + ' parcelas sem venda confirmada). Venda confirmada ' + fmtR(soma(todas, x => x.venda)) + ' · parcelas ' + fmtR(soma(todas, x => x.fin)) + ' · diferença ' + fmtR(soma(todas, x => x.dif)) + '. Venda = itens fechados de ' + fonte + '; parcelas = títulos do evento (recebidos + saldo em aberto). Itens não fechados não entram na venda (coluna "Não fechado").';
+    const mostrar = l.slice(0, vendaMais);
+    $('tbVenda').innerHTML = !tem ? '' : '<table class="t"><thead><tr><th class="txt">Evento</th><th class="txt">Cliente</th><th>Fim</th><th>Venda confirmada</th><th>Parcelas</th><th>Diferença</th><th>Nº parcelas</th><th>Não fechado</th><th class="txt">Situação</th></tr></thead><tbody>' +
+      (mostrar.length ? mostrar.map(x => '<tr class="cl" data-ev="' + esc(x.e.id) + '"><td class="txt">' + esc(x.e.id + ' · ' + x.e.nome) + '</td><td class="txt">' + esc(nomeCli(x.e.cli)) + '</td><td>' + fmtDia(x.e.fim) + '</td><td>' + fmt(x.venda) + '</td><td>' + fmt(x.fin) + '</td><td class="' + (x.sit === 'confere' ? '' : 'neg') + '">' + fmt(x.dif) + '</td><td>' + x.n + '</td><td>' + (x.nao ? fmt(x.nao) : '') + '</td><td class="txt">' + SIT_VENDA[x.sit] + '</td></tr>').join('') : '<tr><td class="txt" colspan="9">Nenhum evento nesta situação.</td></tr>') + '</tbody></table>' +
+      (l.length > mostrar.length ? '<div class="nota"><a href="#" data-vmais>Mostrando ' + mostrar.length + ' de ' + l.length.toLocaleString('pt-BR') + ' — mostrar mais</a></div>' : '');
+  }
+  function dadosVendaExport(){
+    const cab = ['Nº', 'Evento', 'Cliente', 'Fim', 'Venda confirmada', 'Parcelas no financeiro', 'Diferença (parcelas - venda)', 'Nº parcelas', 'Itens não fechados', 'Situação'];
+    return { cab, moeda: [4, 5, 6, 8], l: visiveisVenda().map(x => [x.e.id, x.e.nome, nomeCli(x.e.cli), fmtDia(x.e.fim), r2(x.venda), r2(x.fin), r2(x.dif), x.n, r2(x.nao), SIT_VENDA[x.sit]]) };
+  }
+
   // ----- conferência -----
   function desenharConferencia(){
+    desenharVenda();
     const L = R.linhas;
     const tiOrfas = TI.filter(t => !t.ev), tiSemEv = TI.filter(t => t.ev && !EV.has(t.ev)), semFin = TI.filter(t => !t.temFin);
     const semPag = L.filter(r => !r.ti.length), venc = L.filter(r => r.vencido > 0);
@@ -1432,7 +1480,12 @@
   $('tbGrupos').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-g]'); if(!tr) return; const g = grupoAtual[+tr.dataset.g]; if(g) abrirListaEventos($('grAgrupar').selectedOptions[0].text + ': ' + g.rot, g.linhas); });
   $('tbOper').addEventListener('click', (e) => { const td = e.target.closest('td[data-i]'); if(!td || !incAtual) return; const o = incAtual.ops[+td.dataset.i]; const ls = eventosDoOperador(o, td.dataset.t);
     abrirListaEventos(o.op + ' — ' + ({ ev: 'eventos criados', ti: 'eventos com pagamentos incluídos' }[td.dataset.t]), ls); });
-  ['tbDif', 'tbSemOrc', 'tbSemTit'].forEach(id => $(id).addEventListener('click', (e) => { const tr = e.target.closest('tr[data-ev]'); if(tr) abrirEvento(tr.dataset.ev); }));
+  $('vSit').addEventListener('change', () => { vendaMais = 300; desenharVenda(); });
+  $('vTol').addEventListener('input', () => { vendaMais = 300; desenharVenda(); });
+  $('tbVenda').addEventListener('click', (e) => { if(e.target.closest('[data-vmais]')){ e.preventDefault(); vendaMais += 300; desenharVenda(); } });
+  $('vCsv').addEventListener('click', () => { const d = dadosVendaExport(); baixarCsv(nomeArq('venda_x_financeiro'), d.cab, d.l); });
+  $('vXls').addEventListener('click', async () => { const d = dadosVendaExport(); try { await baixarXlsx(nomeArq('venda_x_financeiro'), 'Venda x financeiro', d.cab, d.l, d.moeda); } catch(err){ alert('Não consegui gerar o Excel: ' + err.message); } });
+  ['tbVenda', 'tbDif', 'tbSemOrc', 'tbSemTit'].forEach(id => $(id).addEventListener('click', (e) => { const tr = e.target.closest('tr[data-ev]'); if(tr) abrirEvento(tr.dataset.ev); }));
   $('popFechar').addEventListener('click', fecharPopup); $('popSair').addEventListener('click', fecharPopup);
   $('popup').addEventListener('click', (e) => { if(e.target === $('popup')) fecharPopup(); });
   $('popCorpo').addEventListener('click', (e) => { const td = e.target.closest('td[data-op]'); if(td) abrirOp(td.dataset.op); });
