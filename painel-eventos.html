@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex, nofollow">
+<title>Painel de Eventos</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='4' y='4' width='56' height='56' rx='14' fill='%231f6f4a'/%3E%3Cpath d='M18 44V30M30 44V20M42 44V34M52 44V24' fill='none' stroke='%23fff' stroke-width='5' stroke-linecap='round'/%3E%3Ccircle cx='46' cy='16' r='5' fill='%23f2a93b'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#f4f6f5; --card:#ffffff; --ink:#18241f; --muted:#5d6b64; --line:#dfe5e2; --line-forte:#b9c4be;
+    --brand:#1f6f4a; --brand-soft:#e3f1ea; --pos:#1f7a4d; --neg:#b3261e; --info:#2b6cb0;
+    --warn:#9a6200; --warn-bg:#fff0cf; --bad-bg:#fde4e1; --radius:12px; --cab:#e4e7ea; --zebra:#f8faf9; --ouro:#f2a93b;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#121715; --card:#1b2420; --ink:#e8efeb; --muted:#9fb0a7; --line:#2b3832; --line-forte:#43524a; --brand:#58c28d; --brand-soft:#1d3329;
+      --pos:#6fd6a1; --neg:#ff8f86; --info:#7db4f0; --warn:#f0be5d; --warn-bg:#3a2d10; --bad-bg:#401c19; --cab:#26322c; --zebra:#1f2924; }
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; line-height:1.4; -webkit-text-size-adjust:100%; }
+  .pagina{ max-width:1500px; margin:0 auto; padding:16px; }
+  a{ color:var(--brand); }
+  .topo{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .topo h1{ margin:0; font-size:1.3rem; }
+  .sub{ color:var(--muted); font-size:.9rem; margin-top:2px; }
+  .acoes{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .btn-ic{ width:42px; height:42px; border-radius:50%; border:1px solid var(--line); background:var(--card); color:var(--ink); cursor:pointer; font-size:1.1rem; display:flex; align-items:center; justify-content:center; text-decoration:none; }
+  .btn-ic:hover{ border-color:var(--brand); }
+  .btn-ic.girando span{ display:inline-block; animation:gira .8s linear infinite; }
+  @keyframes gira{ to{ transform:rotate(360deg); } }
+  #arquivosCsv{ display:none; }
+  .btn{ border:none; border-radius:8px; padding:8px 13px; font-size:.88rem; font-weight:700; cursor:pointer; background:var(--brand); color:#fff; }
+  @media (prefers-color-scheme: dark){ .btn{ color:#0c1a13; } }
+  .btn:disabled{ opacity:.6; cursor:default; }
+  .btn.sec{ background:var(--card); color:var(--ink); border:1px solid var(--line); }
+  .btn.mini{ padding:4px 9px; font-size:.78rem; }
+  .aviso{ border-radius:var(--radius); padding:10px 14px; margin-bottom:12px; font-size:.92rem; border:1px solid var(--line); background:var(--brand-soft); }
+  .aviso.alerta{ background:var(--warn-bg); color:var(--warn); border-color:var(--warn); }
+  .aviso.erro{ background:var(--bad-bg); color:var(--neg); border-color:var(--neg); }
+  .aviso[hidden]{ display:none; }
+
+  .filtros{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:12px; margin-bottom:12px; }
+  .linha-filtros{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+  .campo label{ display:block; font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin-bottom:3px; }
+  .campo input[type=date], .campo select, .busca{ border:1px solid var(--line); background:var(--card); color:var(--ink); border-radius:8px; padding:7px 9px; font-size:.9rem; max-width:100%; }
+  .busca{ min-width:200px; }
+  .paineis{ display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+  .painel{ border:1px solid var(--line); border-radius:10px; background:var(--card); flex:1; min-width:210px; }
+  .painel > summary{ list-style:none; cursor:pointer; padding:8px 12px; font-size:.9rem; font-weight:700; display:flex; gap:8px; align-items:center; }
+  .painel > summary::-webkit-details-marker{ display:none; }
+  .painel > summary::before{ content:'▸'; color:var(--muted); }
+  .painel[open] > summary::before{ content:'▾'; }
+  .painel .conta-resumo{ color:var(--muted); font-weight:500; font-size:.82rem; }
+  .painel .corpo{ padding:8px 12px 12px; border-top:1px solid var(--line); max-height:260px; overflow:auto; }
+  .lista-chk label{ display:flex; gap:8px; align-items:center; padding:3px 0; font-size:.88rem; cursor:pointer; }
+  .ferramentas{ display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+
+  .abas{ display:flex; gap:4px; flex-wrap:wrap; border-bottom:2px solid var(--line); margin-bottom:12px; }
+  .abas button{ border:none; background:none; color:var(--muted); font-weight:700; font-size:.92rem; padding:9px 14px; cursor:pointer; border-bottom:3px solid transparent; margin-bottom:-2px; }
+  .abas button.ativa{ color:var(--brand); border-bottom-color:var(--brand); }
+  .aba[hidden]{ display:none; }
+
+  .kpis{ display:grid; grid-template-columns:repeat(auto-fit,minmax(165px,1fr)); gap:10px; margin-bottom:12px; }
+  .kpi{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:10px 12px; }
+  .kpi span{ display:block; color:var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; }
+  .kpi b{ font-size:1.08rem; }
+  .kpi small{ display:block; color:var(--muted); font-size:.75rem; }
+  .pos{ color:var(--pos); } .neg{ color:var(--neg); }
+
+  .grade2{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:14px; align-items:start; }
+  @media (max-width:1000px){ .grade2{ grid-template-columns:minmax(0,1fr); } }
+  .bloco{ background:var(--card); border:1px solid var(--line-forte); border-radius:var(--radius); overflow:hidden; margin-bottom:14px; }
+  .bloco h2{ margin:0; padding:9px 12px; font-size:.95rem; background:var(--brand); color:#fff; letter-spacing:.02em; display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+  @media (prefers-color-scheme: dark){ .bloco h2{ color:#0c1a13; } }
+  .bloco h2 .ac{ display:flex; gap:6px; align-items:center; }
+  .bloco .graf{ padding:10px 12px; height:300px; position:relative; }
+  .rolagem{ overflow:auto; max-height:62vh; }
+  table.t{ border-collapse:collapse; width:100%; font-size:.86rem; }
+  table.t th, table.t td{ padding:6px 10px; text-align:right; border-bottom:1px solid var(--line); white-space:nowrap; }
+  table.t th{ background:var(--cab); font-size:.72rem; text-transform:uppercase; letter-spacing:.03em; text-align:center; position:sticky; top:0; }
+  table.t th.ord{ cursor:pointer; } table.t th.ord:hover{ background:var(--brand-soft); }
+  table.t td.txt, table.t th.txt{ text-align:left; white-space:normal; }
+  table.t tbody tr:nth-child(even) td{ background:var(--zebra); }
+  table.t tr.tot td{ background:var(--cab); font-weight:800; border-top:2px solid var(--line-forte); }
+  table.t tr.cl{ cursor:pointer; }
+  table.t tr.cl:hover td{ background:var(--brand-soft); }
+  table.t td.c{ text-align:center; }
+  .vazio{ text-align:center; color:var(--muted); padding:30px 16px; background:var(--card); border:1px dashed var(--line); border-radius:var(--radius); }
+  .nota{ color:var(--muted); font-size:.8rem; padding:8px 12px; }
+  .rodape{ color:var(--muted); font-size:.8rem; text-align:center; margin:18px 0 6px; }
+  details.dados{ background:var(--card); border:1px solid var(--line); border-radius:var(--radius); padding:10px 14px; margin-top:14px; font-size:.88rem; }
+  details.dados summary{ cursor:pointer; font-weight:700; }
+  details.dados ul{ margin:8px 0 0; padding-left:18px; color:var(--muted); }
+  .barra-h{ display:flex; gap:8px; align-items:center; padding:8px 12px; flex-wrap:wrap; }
+  .tag{ display:inline-block; font-size:.72rem; font-weight:700; border-radius:999px; padding:1px 8px; background:var(--brand-soft); color:var(--brand); }
+  .tag.ruim{ background:var(--bad-bg); color:var(--neg); } .tag.alerta{ background:var(--warn-bg); color:var(--warn); }
+
+  .fundo{ position:fixed; inset:0; background:rgba(0,0,0,.55); display:flex; align-items:flex-start; justify-content:center; padding:16px; z-index:50; overflow:auto; }
+  .fundo[hidden]{ display:none; }
+  .caixa{ background:var(--card); border-radius:var(--radius); padding:16px 18px; max-width:1150px; width:100%; margin:auto; }
+  .caixa h3{ margin:0 0 4px; font-size:1.05rem; padding-right:30px; }
+  .caixa h4{ margin:14px 0 6px; font-size:.92rem; }
+  .caixa .fecha{ float:right; border:none; background:none; color:var(--muted); font-size:1.6rem; cursor:pointer; line-height:1; }
+  .resumo-kpis{ display:flex; gap:14px; flex-wrap:wrap; font-size:.9rem; color:var(--muted); margin:4px 0 8px; }
+  .resumo-kpis b{ color:var(--ink); }
+  .caixa .btns{ display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; align-items:center; }
+  table.lanc{ border-collapse:collapse; width:100%; font-size:.84rem; }
+  table.lanc th, table.lanc td{ padding:6px 8px; border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }
+  table.lanc th{ background:var(--cab); font-size:.72rem; text-transform:uppercase; letter-spacing:.03em; text-align:center; position:sticky; top:0; }
+  table.lanc td.txt, table.lanc th.txt{ text-align:left; }
+  table.lanc td.hist{ text-align:left; white-space:normal; overflow-wrap:anywhere; min-width:160px; max-width:300px; }
+  table.lanc tfoot td{ font-weight:800; background:var(--cab); }
+  table.lanc tr.atraso td{ color:var(--neg); }
+  table.lanc tr.cl{ cursor:pointer; } table.lanc tr.cl:hover td{ background:var(--brand-soft); }
+  .rol-lanc{ overflow:auto; max-height:36vh; border:1px solid var(--line-forte); border-radius:8px; }
+  #popupDre{ z-index:55; } #popupPdf{ z-index:70; }
+  .resultados-busca{ position:absolute; left:0; right:0; top:100%; z-index:30; background:var(--card); border:1px solid var(--line-forte); border-radius:8px; max-height:280px; overflow:auto; box-shadow:0 8px 24px rgba(0,0,0,.18); }
+  .resultados-busca .item-resultado{ padding:8px 10px; cursor:pointer; font-size:.88rem; border-bottom:1px solid var(--line); }
+  .resultados-busca .item-resultado:hover, .resultados-busca .item-resultado.ativo{ background:var(--brand-soft); }
+  .resultados-busca .vazio-busca{ padding:10px; color:var(--muted); font-size:.85rem; }
+  #dreCorpo h4{ margin:14px 0 6px; }
+  .dre-cab{ display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:6px 16px; margin-bottom:6px; font-size:.88rem; }
+  .dre-cab span{ color:var(--muted); font-size:.72rem; text-transform:uppercase; letter-spacing:.04em; display:block; }
+  table.lanc tr.e-grupo td{ font-weight:800; background:var(--cab); }
+  table.lanc tr.e-n1 td{ font-weight:700; color:var(--muted); }
+  table.lanc tr.e-sub td{ font-weight:700; }
+  table.lanc tr.e-tot td{ font-weight:800; background:var(--cab); border-top:2px solid var(--line-forte); }
+  #popupOp{ z-index:60; } #popupOp .caixa{ max-width:1000px; } #popupOp .rol-lanc{ max-height:34vh; }
+  table.lanc td.op{ font-family:ui-monospace,Consolas,monospace; font-weight:700; cursor:pointer; text-align:center; text-decoration:underline dotted; }
+  table.lanc td.op:hover{ background:var(--brand-soft); }
+  table.lanc tr.t-aberto td{ background:var(--brand-soft); }
+  .op-obs{ color:var(--muted); font-size:.82rem; margin:6px 0 0; }
+  table.lanc tr.sel-ativa td{ background:var(--brand-soft); font-weight:700; }
+  .filtro-chip{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0; font-size:.86rem; background:var(--brand-soft); border-radius:8px; padding:6px 10px; }
+  .filtro-chip[hidden]{ display:none; }
+  .duas-col{ display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; }
+  @media (max-width:760px){ .duas-col{ grid-template-columns:minmax(0,1fr); } }
+  @media (max-width:640px){
+    .pagina{ padding:12px; }
+    table.t th, table.t td{ padding:6px 7px; font-size:.8rem; }
+    .busca{ min-width:0; width:100%; }
+  }
+</style>
+</head>
+<body>
+<div class="pagina">
+  <div class="topo">
+    <div>
+      <h1>Painel de Eventos</h1>
+      <div class="sub" id="subtitulo">Receita, despesa e resultado dos eventos — por data de finalização, inclusão e operador</div>
+    </div>
+    <div class="acoes">
+      <a class="btn-ic" href="painel-financeiro.html" title="Painel financeiro" aria-label="Painel financeiro">▤</a>
+      <label class="btn-ic" for="arquivosCsv" title="Abrir os CSV deste computador (analise_eventos, analise_orcamentos_eventos, analise_pagamentos_eventos e, se existir, analise_despesas_eventos — todos de uma vez)" aria-label="Importar CSV">📂</label>
+      <input type="file" id="arquivosCsv" accept=".csv,text/csv" multiple>
+      <button class="btn-ic" id="btnAtualizar" title="Atualizar" aria-label="Atualizar"><span>⟳</span></button>
+    </div>
+  </div>
+
+  <div class="aviso" id="aviso" hidden></div>
+
+  <div id="app" hidden>
+    <div class="filtros">
+      <div class="linha-filtros">
+        <div class="campo"><label for="fBase">Data base do evento</label>
+          <select id="fBase"><option value="fim">Finalização do evento (Dt_fim)</option><option value="ini">Início do evento (Dt_inicio)</option><option value="atend">Início do atendimento (inclusão do evento)</option><option value="venc">Vencimento do pagamento/despesa (DT_VENC)</option><option value="pagto">Data do pagamento/despesa (DTPAGTO)</option><option value="vp">Vencimento / pagamento (pago = data do pagamento; em aberto = vencimento)</option></select></div>
+        <div class="campo"><label for="fPeriodo">Período</label>
+          <select id="fPeriodo"><option value="ano">Ano atual</option><option value="anoAnt">Ano anterior</option><option value="12m">Últimos 12 meses</option><option value="mes">Mês atual</option><option value="mesAnt">Mês anterior</option><option value="tudo">Tudo</option><option value="pers">Personalizado</option></select></div>
+        <div class="campo"><label for="fDe">De</label><input type="date" id="fDe"></div>
+        <div class="campo"><label for="fAte">Até</label><input type="date" id="fAte"></div>
+        <div class="campo" style="position:relative"><label for="fEvento">Evento (nº ou nome)</label>
+          <input type="search" id="fEvento" class="busca" placeholder="Todos os eventos…" autocomplete="off" style="min-width:250px">
+          <div class="resultados-busca" id="fEventoRes" hidden></div></div>
+        <div class="campo" id="campoDreEvento" hidden><label>&nbsp;</label><button class="btn" id="btnDre" type="button">📄 DRE do evento</button> <button class="btn sec" id="btnLimparEvento" type="button">× tirar</button></div>
+        <div class="campo"><label for="fAdm">Tipo de evento</label>
+          <select id="fAdm"><option value="todos">Todos</option><option value="ext">Externos</option><option value="adm">Administrativos</option></select></div>
+        <div class="campo"><button class="btn sec" id="btnPadrao" type="button">Restaurar padrão</button></div>
+      </div>
+      <div class="paineis">
+        <details class="painel" id="pnEmp"><summary>Empresas <span class="conta-resumo" id="rEmp"></span></summary><div class="corpo"><div class="ferramentas"><button class="btn sec mini" data-todas="emp" type="button">Marcar todas</button><button class="btn sec mini" data-nenhuma="emp" type="button">Desmarcar</button></div><div class="lista-chk" id="listaEmp"></div></div></details>
+        <details class="painel" id="pnTipo"><summary>Tipos de evento <span class="conta-resumo" id="rTipo"></span></summary><div class="corpo"><div class="ferramentas"><button class="btn sec mini" data-todas="tipo" type="button">Marcar todos</button><button class="btn sec mini" data-nenhuma="tipo" type="button">Desmarcar</button></div><div class="lista-chk" id="listaTipo"></div></div></details>
+        <details class="painel" id="pnSet"><summary>Setores <span class="conta-resumo" id="rSet"></span></summary><div class="corpo"><div class="ferramentas"><button class="btn sec mini" data-todas="set" type="button">Marcar todos</button><button class="btn sec mini" data-nenhuma="set" type="button">Desmarcar</button></div><div class="lista-chk" id="listaSet"></div></div></details>
+        <details class="painel" id="pnOp"><summary>Operadores <span class="conta-resumo" id="rOp"></span></summary><div class="corpo"><div class="ferramentas"><select id="fOpTipo" class="busca" style="min-width:0"><option value="ev">Operador do evento (cadastro)</option><option value="pg">Operador do pagamento / despesa (inclusão)</option></select></div><div class="ferramentas"><button class="btn sec mini" data-todas="op" type="button">Marcar todos</button><button class="btn sec mini" data-nenhuma="op" type="button">Desmarcar</button></div><div class="lista-chk" id="listaOp"></div></div></details>
+      </div>
+    </div>
+
+    <div class="aviso alerta" id="avisoDesp" hidden></div>
+
+    <div class="abas" id="abas">
+      <button data-aba="geral" class="ativa" type="button">Visão geral</button>
+      <button data-aba="eventos" type="button">Eventos</button>
+      <button data-aba="grupos" type="button">Resultado por…</button>
+      <button data-aba="inclusao" type="button">Inclusão e operador</button>
+      <button data-aba="conferencia" type="button">Conferência</button>
+    </div>
+
+    <div class="aba" id="aba-geral">
+      <div class="kpis" id="kpis"></div>
+      <div class="bloco"><h2>Por mês (data base)</h2><div class="graf"><canvas id="gMes"></canvas></div></div>
+      <div class="grade2">
+        <div class="bloco"><h2>Receita por tipo de evento</h2><div class="graf"><canvas id="gTipo"></canvas></div></div>
+        <div class="bloco"><h2>Receita por setor</h2><div class="graf"><canvas id="gSetor"></canvas></div></div>
+      </div>
+      <div class="grade2">
+        <div class="bloco"><h2>Maiores clientes</h2><div class="rolagem" id="tbClientes"></div></div>
+        <div class="bloco"><h2>Receita por empresa</h2><div class="rolagem" id="tbPlanos"></div></div>
+      </div>
+    </div>
+
+    <div class="aba" id="aba-eventos" hidden>
+      <div class="bloco">
+        <h2><span>Eventos do período</span><span class="ac"><input type="search" class="busca" id="evBusca" placeholder="Buscar (evento, cliente, tipo, nº, operador…)"><button class="btn sec mini" id="evCsv" type="button">⬇ CSV</button><button class="btn sec mini" id="evXlsx" type="button">⬇ Excel</button></span></h2>
+        <div class="rolagem" id="tbEventos"></div>
+      </div>
+    </div>
+
+    <div class="aba" id="aba-grupos" hidden>
+      <div class="bloco">
+        <h2><span>Receita, despesa e resultado</span><span class="ac"><label style="font-weight:500;font-size:.82rem">Agrupar por</label>
+          <select id="grAgrupar" class="busca" style="min-width:0"><option value="mes">Mês</option><option value="ano">Ano</option><option value="tipo">Tipo de evento</option><option value="emp">Empresa</option><option value="cli">Cliente</option><option value="oper">Operador do evento</option></select>
+          <button class="btn sec mini" id="grCsv" type="button">⬇ CSV</button><button class="btn sec mini" id="grXlsx" type="button">⬇ Excel</button></span></h2>
+        <div class="rolagem" id="tbGrupos"></div>
+        <div class="nota">Clique numa linha para ver os eventos do grupo. O período e a data base são os do filtro acima.</div>
+      </div>
+    </div>
+
+    <div class="aba" id="aba-inclusao" hidden>
+      <div class="filtros">
+        <div class="linha-filtros">
+          <div class="campo"><label for="iPeriodo">Período da inclusão</label>
+            <select id="iPeriodo"><option value="mes">Mês atual</option><option value="mesAnt">Mês anterior</option><option value="90d">Últimos 90 dias</option><option value="ano">Ano atual</option><option value="anoAnt">Ano anterior</option><option value="tudo">Tudo</option><option value="pers">Personalizado</option></select></div>
+          <div class="campo"><label for="iDe">De</label><input type="date" id="iDe"></div>
+          <div class="campo"><label for="iAte">Até</label><input type="date" id="iAte"></div>
+          <div class="campo"><label for="iMedida">Medida por mês</label>
+            <select id="iMedida"><option value="tit">Valor dos pagamentos incluídos</option><option value="ev">Eventos criados</option></select></div>
+        </div>
+        <div class="nota" style="padding:8px 0 0">Aqui a data é a de <b>inclusão no sistema</b> — evento (início do atendimento) e pagamento (data/hora de inclusão no financeiro) — e o operador é quem fez o lançamento. Valem os filtros de empresa, tipo e administrativo acima; o período de finalização do evento <b>não</b> vale aqui.</div>
+      </div>
+      <div class="bloco"><h2>Por operador</h2><div class="rolagem" id="tbOper"></div></div>
+      <div class="bloco"><h2>Por mês e operador</h2><div class="graf"><canvas id="gOper"></canvas></div><div class="rolagem" id="tbOperMes"></div></div>
+    </div>
+
+    <div class="aba" id="aba-conferencia" hidden>
+      <div class="kpis" id="kpisConf"></div>
+      <div class="bloco"><h2>Eventos com valor a receber vencido</h2><div class="rolagem" id="tbDif"></div></div>
+      <div class="grade2">
+        <div class="bloco"><h2>Eventos do período sem nenhum pagamento</h2><div class="rolagem" id="tbSemOrc"></div></div>
+        <div class="bloco"><h2>Pagamentos sem evento válido (maiores)</h2><div class="rolagem" id="tbSemTit"></div></div>
+      </div>
+    </div>
+
+    <details class="dados"><summary>Sobre os dados</summary><ul id="dadosLista"></ul></details>
+  </div>
+  <div id="inicio"></div>
+  <div class="rodape" id="rodape"></div>
+</div>
+
+<div class="fundo" id="popup" hidden>
+  <div class="caixa" role="dialog" aria-modal="true" aria-labelledby="popTitulo">
+    <button class="fecha" id="popFechar" type="button" aria-label="Fechar">×</button>
+    <h3 id="popTitulo"></h3>
+    <div class="resumo-kpis" id="popKpis"></div>
+    <div id="popCorpo"></div>
+    <div class="btns"><button class="btn sec" id="popVoltar" type="button" hidden>← Voltar</button><button class="btn sec" id="popSair" type="button">Fechar</button></div>
+  </div>
+</div>
+
+<div class="fundo" id="popupOp" hidden>
+  <div class="caixa" role="dialog" aria-modal="true" aria-labelledby="opTitulo">
+    <button class="fecha" id="opFechar" type="button" aria-label="Fechar">×</button>
+    <h3 id="opTitulo"></h3>
+    <div class="resumo-kpis" id="opKpis"></div>
+    <div id="opCorpo"></div>
+    <div class="btns">
+      <button class="btn sec" id="opCopiar" type="button">Copiar nº da OP</button>
+      <button class="btn sec" id="opLocal" type="button" title="Abrir itens_op.csv e titulos_op.csv deste computador (os dois de uma vez)">📂 Abrir itens_op / titulos_op deste computador</button>
+      <input type="file" id="arquivoOp" accept=".csv,text/csv" multiple style="display:none">
+      <button class="btn sec" id="opSair" type="button">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div class="fundo" id="popupDre" hidden>
+  <div class="caixa" role="dialog" aria-modal="true" aria-labelledby="dreTitulo" style="max-width:1180px">
+    <button class="fecha" id="dreFechar" type="button" aria-label="Fechar">×</button>
+    <h3 id="dreTitulo"></h3>
+    <div class="resumo-kpis" id="dreKpis"></div>
+    <div class="barra-h" style="padding:0 0 8px">
+      <label style="font-size:.85rem">Custo provisionado: <input type="number" id="dreProv" min="0" max="500" step="1" style="width:70px;border:1px solid var(--line);border-radius:6px;padding:4px 6px;background:var(--card);color:var(--ink)"> % das receitas</label>
+      <button class="btn" id="drePdf" type="button">📄 PDF</button>
+    </div>
+    <div id="dreCorpo"></div>
+    <div class="btns"><button class="btn sec" id="dreSair" type="button">Fechar</button></div>
+  </div>
+</div>
+
+<div class="fundo" id="popupPdf" hidden>
+  <div class="caixa" role="dialog" aria-modal="true" aria-labelledby="pdfTitulo" style="max-width:480px">
+    <button class="fecha" id="pdfFechar" type="button" aria-label="Fechar">×</button>
+    <h3 id="pdfTitulo">PDF pronto</h3>
+    <div class="op-obs" id="pdfInfo"></div>
+    <div class="btns"><button class="btn" id="pdfVer" type="button">👁 Visualizar</button><button class="btn sec" id="pdfBaixar" type="button">⬇ Baixar</button><button class="btn sec" id="pdfCompartilhar" type="button">📤 Compartilhar</button></div>
+  </div>
+</div>
+
+<script src="servir-acesso.js"></script>
+<script>
+(function(){
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  function el(tag, cls, texto){ const e = document.createElement(tag); if(cls) e.className = cls; if(texto !== undefined && texto !== null) e.textContent = texto; return e; }
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const semAcento = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+  const URL_SCRIPT_OK = /^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/;
+
+  // ===================== formatação =====================
+  const arred = (n) => { const r = Math.round((n + Number.EPSILON) * 100) / 100; return r === 0 ? 0 : r; };
+  const fmt = (n) => arred(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtR = (n) => (n < 0 ? '-' : '') + 'R$ ' + arred(Math.abs(n)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtCurto = (n) => { const a = Math.abs(n); return (n < 0 ? '-' : '') + (a >= 1e6 ? (a / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + ' mi' : a >= 1e3 ? (a / 1e3).toLocaleString('pt-BR', { maximumFractionDigits: 0 }) + ' mil' : a.toLocaleString('pt-BR', { maximumFractionDigits: 0 })); };
+  const fmtDia = (iso) => iso ? iso.slice(8, 10) + '/' + iso.slice(5, 7) + '/' + iso.slice(0, 4) : '—';
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const hoje = () => { const d = new Date(); return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); };
+  const isoData = (s) => {
+    s = String(s || '').trim(); let y, mo, d, m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(m){ y = +m[1]; mo = +m[2]; d = +m[3]; }
+    else { m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})/); if(!m) return ''; y = +m[3]; mo = +m[2]; d = +m[1]; }
+    if(y < 2000 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return '';
+    return y + '-' + pad2(mo) + '-' + pad2(d);
+  };
+  const num = (s) => { s = String(s || '').trim(); if(!s) return 0; if(s.includes(',')) s = s.replace(/\./g, '').replace(',', '.'); const n = parseFloat(s); return isNaN(n) ? 0 : n; };
+  const cmp = (a, b) => String(a).localeCompare(String(b), 'pt-BR', { numeric: true });
+  const dias = (iso) => Math.round(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 86400000);
+  const somaDias = (iso, n) => { const d = new Date(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) + n * 86400000); return d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate()); };
+  const semZeros = (c) => String(c == null ? '' : c).trim().replace(/^0+(?=\d)/, '');
+  const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const rotMes = (ym) => ym ? MESES[+ym.slice(5, 7) - 1] + '/' + ym.slice(2, 4) : 'Sem data';
+  const nomeProprio = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+
+  // ===================== CSV (tabela completa; colunas repetidas viram nome, nome_2, ...) =====================
+  function lerCsvTabela(texto){
+    texto = String(texto || '').replace(/^﻿/, '');
+    let fim = texto.search(/\r|\n/); if(fim < 0) fim = texto.length;
+    const primeira = texto.slice(0, fim), cont = (c) => primeira.split(c).length - 1;
+    const sep = [',', ';', '\t'].sort((a, b) => cont(b) - cont(a))[0], sc = sep.charCodeAt(0);
+    const linhas = []; let rec = [], campo = '', aspas = false;
+    const fecharCampo = () => { rec.push(campo); campo = ''; };
+    const fecharLinha = () => { fecharCampo(); if(rec.length > 1 || rec[0] !== '') linhas.push(rec); rec = []; };
+    for(let i = 0; i < texto.length; i++){
+      const c = texto.charCodeAt(i);
+      if(aspas){ if(c === 34){ if(texto.charCodeAt(i + 1) === 34){ campo += '"'; i++; } else aspas = false; } else campo += texto[i]; }
+      else if(c === 34) aspas = true;
+      else if(c === sc) fecharCampo();
+      else if(c === 10 || c === 13){ if(c === 13 && texto.charCodeAt(i + 1) === 10) i++; fecharLinha(); }
+      else campo += texto[i];
+    }
+    if(campo !== '' || rec.length) fecharLinha();
+    if(!linhas.length) return { idx: {}, linhas: [] };
+    const idx = {}, visto = {};
+    linhas[0].forEach((h, i) => { let n = semAcento(h).replace(/\s+/g, '_'); visto[n] = (visto[n] || 0) + 1; if(visto[n] > 1) n += '_' + visto[n]; idx[n] = i; });
+    return { idx, linhas: linhas.slice(1) };
+  }
+  function lerCsvColunas(texto, querer){
+    texto = String(texto || '').replace(/^﻿/, '');
+    let fimCab = texto.search(/\r|\n/); if(fimCab < 0) fimCab = texto.length;
+    const primeira = texto.slice(0, fimCab);
+    const cont = (c) => primeira.split(c).length - 1;
+    const sep = [',', ';', '\t'].sort((a, b) => cont(b) - cont(a))[0], sepCode = sep.charCodeAt(0);
+    const cab = primeira.split(sep).map(h => semAcento(h.replace(/^"|"$/g, '')).replace(/\s+/g, '_'));
+    const want = cab.map(h => querer.indexOf(h));
+    const achadas = {}; querer.forEach((n, i) => { achadas[n] = want.includes(i); });
+    const linhas = []; let rec = new Array(querer.length).fill(''), campo = '', col = 0, aspas = false, qualquer = false;
+    const fecharCampo = () => { const w = want[col]; if(w >= 0) rec[w] = campo; if(campo !== '') qualquer = true; campo = ''; col++; };
+    const fecharLinha = () => { fecharCampo(); if(qualquer || col > 1) linhas.push(rec); rec = new Array(querer.length).fill(''); col = 0; qualquer = false; };
+    for(let i = fimCab; i < texto.length; i++){
+      const c = texto.charCodeAt(i);
+      if(aspas){
+        if(c === 34){ if(texto.charCodeAt(i + 1) === 34){ if(want[col] >= 0) campo += '"'; i++; } else aspas = false; }
+        else if(want[col] >= 0) campo += texto[i];
+      }
+      else if(c === 34) aspas = true;
+      else if(c === sepCode) fecharCampo();
+      else if(c === 10 || c === 13){
+        if(c === 13 && texto.charCodeAt(i + 1) === 10) i++;
+        if(col === 0 && campo === '') continue;        // linha em branco
+        fecharLinha();
+      }
+      else if(want[col] >= 0) campo += texto[i];
+    }
+    if(col > 0 || campo !== '') fecharLinha();
+    return { achadas, linhas };
+  }
+
+  // devolve o índice da primeira coluna existente entre os nomes
+  const colDe = (idx, ...nomes) => { for(const n of nomes) if(idx[n] !== undefined) return idx[n]; return -1; };
+  const at = (r, i) => i < 0 ? '' : (r[i] == null ? '' : r[i]);
+
+  // ===================== configuração =====================
+  const CHAVE = 'fechamento_caixas_config_v1';
+  const ARQ = { ev: 'analise_eventos.csv', pag: 'analise_pagamentos_eventos.csv', desp: 'analise_despesas_eventos.csv', sic: 'analise_pagamentos_sicon.csv', cus: 'analise_custos_eventos.csv', orc: 'analise_orcamentos_eventos.csv', iev: 'analise_itens_evento.csv', itens: 'itens_op.csv', tit: 'titulos_op.csv', status: '_status.json' };
+  let cfg = { url: '', token: '' };
+  try { Object.assign(cfg, JSON.parse(localStorage.getItem(CHAVE) || '{}')); } catch(e){}
+  if(cfg.url && !URL_SCRIPT_OK.test(cfg.url)) cfg.url = '';
+  const lerLS = (k, padrao) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : padrao; } catch(e){ return padrao; } };
+  const gravarLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
+  const K_FILTROS = 'pe_filtros_v1';
+
+  // ===================== cache (IndexedDB — o mesmo banco dos outros painéis) =====================
+  let bd = null, cacheUn = '', nomeUnidade = '';
+  function abrirBd(){ return new Promise((res) => { try { const rq = indexedDB.open('analise_cruzada_v1', 1); rq.onupgradeneeded = () => rq.result.createObjectStore('arquivos'); rq.onsuccess = () => res(rq.result); rq.onerror = () => res(null); } catch(e){ res(null); } }); }
+  const cacheGet = (n) => new Promise((res) => { if(!bd) return res(null); try { const r = bd.transaction('arquivos').objectStore('arquivos').get(n); r.onsuccess = () => res(r.result || null); r.onerror = () => res(null); } catch(e){ res(null); } });
+  const cachePut = (n, v) => new Promise((res) => { if(!bd) return res(); try { const t = bd.transaction('arquivos', 'readwrite'); t.objectStore('arquivos').put(v, n); t.oncomplete = () => res(); t.onerror = () => res(); } catch(e){ res(); } });
+
+  // ===================== Google (JSONP) =====================
+  function jsonp(url){
+    return new Promise((resolve, reject) => {
+      const cb = 'pe_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+      const s = document.createElement('script'); let fim = false;
+      const limpar = () => { delete window[cb]; s.remove(); clearTimeout(t); };
+      const t = setTimeout(() => { if(!fim){ fim = true; limpar(); reject(new Error('Tempo esgotado ao falar com o script do Google.')); } }, 120000);
+      window[cb] = (d) => { if(fim) return; fim = true; limpar(); resolve(d); };
+      s.onerror = () => { if(fim) return; fim = true; limpar(); reject(new Error('Não consegui falar com o script do Google.')); };
+      s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb; document.body.appendChild(s);
+    });
+  }
+  let chamar = (q) => jsonp(cfg.url + '?token=' + encodeURIComponent(cfg.token) + q).then(r => { if(!r || !r.ok) throw new Error((r && r.erro) || 'resposta inesperada do script'); return r; });
+
+  // ===================== modelo =====================
+  let EV = new Map();               // id -> evento
+  let TI = [], DS = [], DSarq = [], SIC = [], CUS = [];   // pagamentos do evento (receita); despesas; despesas de arquivo próprio; tabela do financeiro (despesas + OP); consumo do almoxarifado
+  const SETNOME = new Map();        // código do setor -> nome (vem da tabela do financeiro; o arquivo do almoxarifado traz só o código)
+  let OPR = new Map();              // 'titulo|evento' do pagamento (receita) -> nº da OP (vem da tabela do financeiro)
+  let TIpor = new Map(), DSpor = new Map(), ORCpor = new Map(), ITENSpor = new Map(), FORMAR = new Map();
+  const nomesEmp = new Map(), nomesCli = new Map();
+  const qual = { ev: null, pag: null, desp: null, sic: null, cus: null, orc: null, iev: null };
+  const SEM_TIPO = 'Sem tipo', SEM_SETOR = '(sem setor)', SEM_OPER = '(sem operador)';
+  const ehVerdade = (s) => /^(s|sim|-1|1|true|verdadeiro|v)$/i.test(String(s || '').trim());
+
+  function montarEventos(texto){
+    const { idx, linhas } = lerCsvTabela(texto);
+    const cId = colDe(idx, 'id_evento'); if(cId < 0) throw new Error('O arquivo de eventos não tem a coluna id_evento. Confira se é o ' + ARQ.ev + '.');
+    const c = { nome: colDe(idx, 'evento', 'nome'), ini: colDe(idx, 'dt_inicio'), fim: colDe(idx, 'dt_fim'), uso: colDe(idx, 'uso_cadastro'), tipo: colDe(idx, 'tipo'), atend: colDe(idx, 'inicio_atendimento'),
+      local: colDe(idx, 'local'), emp: colDe(idx, 'emp_financeiro'), cli: colDe(idx, 'cli_financeiro'), adm: colDe(idx, 'administrativo'), assess: colDe(idx, 'assessoria') };
+    const m = new Map(); const q = { total: linhas.length, semFim: 0, fimAntesIni: 0 };
+    for(const r of linhas){
+      const id = semZeros(at(r, cId)); if(!id) continue;
+      const ini = isoData(at(r, c.ini)), fim = isoData(at(r, c.fim)), atend = isoData(at(r, c.atend));
+      if(!fim) q.semFim++; if(ini && fim && fim < ini) q.fimAntesIni++;
+      m.set(id, { id, nome: nomeProprio(at(r, c.nome)), ini, fim, atend, oper: nomeProprio(at(r, c.uso)).toUpperCase(), tipo: nomeProprio(at(r, c.tipo)) || SEM_TIPO,
+        local: nomeProprio(at(r, c.local)), assess: nomeProprio(at(r, c.assess)), emp: semZeros(at(r, c.emp)), cli: semZeros(at(r, c.cli)), adm: ehVerdade(at(r, c.adm)) });
+    }
+    EV = m; qual.ev = q;
+  }
+  // títulos de venda (receita) ou despesas (lado forçado 'D')
+  function lerTitulos(texto, forcado){
+    const { idx, linhas } = lerCsvTabela(texto);
+    const c = { ev: colDe(idx, 'id_evento', 'evento'), v: colDe(idx, 'valor', 'vlr', 'total'), vf: colDe(idx, 'vlr_fina'), venc: colDe(idx, 'dt_venc', 'datav', 'vencimento'), pago: colDe(idx, 'dtpagto', 'data_pagamento', 'datap'),
+      cli: colDe(idx, 'cliente', 'fornecedor', 'codcli'), nome: colDe(idx, 'nomecli', 'nome_cliente', 'nome_fornecedor', 'fornecedor_nome', 'fornecedor'), titulo: colDe(idx, 'titulo'), forma: colDe(idx, 'tipo_pag', 'forma_pagamento'),
+      setor: colDe(idx, 'descricao', 'setor', 'descricao_setor'), emp: colDe(idx, 'empresa_nome'), op2: colDe(idx, 'operador_2'), op1: colDe(idx, 'operador'), inc: colDe(idx, 'dthrincliu', 'inclusao'), mov: colDe(idx, 'tipo_mov'), datav: colDe(idx, 'datav'), datap: colDe(idx, 'datap') };
+    if(c.ev < 0 || c.v < 0) throw new Error('O arquivo ' + (forcado ? 'de despesas' : 'de pagamentos') + ' não tem as colunas id_evento e valor.');
+    const q = { total: linhas.length, semEvento: 0, semInclusao: 0, despesasNoArquivo: 0 }; const out = [];
+    for(const r of linhas){
+      const ev = semZeros(at(r, c.ev));
+      let lado = forcado || 'R'; const mov = String(at(r, c.mov)).trim().toUpperCase(); if(!forcado && mov && !mov.startsWith('V')){ lado = 'D'; q.despesasNoArquivo++; }
+      const inc = isoData(at(r, c.inc)); if(!inc) q.semInclusao++; if(!ev) q.semEvento++;
+      out.push({ ev, lado, v: num(at(r, c.v)), vf: c.vf < 0 ? num(at(r, c.v)) : num(at(r, c.vf)), venc: isoData(at(r, c.venc)), pago: isoData(at(r, c.pago)), datap: isoData(at(r, c.datap)), cli: semZeros(at(r, c.cli)), nome: nomeProprio(at(r, c.nome)),
+        titulo: String(at(r, c.titulo)).trim(), forma: String(at(r, c.forma)).trim(), setor: nomeProprio(at(r, c.setor)) || SEM_SETOR, emp: nomeProprio(at(r, c.emp)),
+        oper: nomeProprio(at(r, c.op2) || at(r, c.op1)).toUpperCase(), inc, temFin: !!inc });
+    }
+    return { out, q };
+  }
+  // O arquivo traz uma linha por baixa e repete o VALOR do título em todas elas (somar o VALOR contaria a mesma venda várias vezes).
+  // Cada linha paga vale a sua baixa (VLR_FINA); em aberto fica o saldo do título (valor do título − baixas), numa linha só.
+  function corrigirBaixas(rows){
+    rows.forEach(t => { t.vraw = t.v; });
+    const por = new Map(), fora = new Set();
+    rows.forEach(t => { if(!t.titulo) return; const k = t.ev + '|' + t.titulo; let a = por.get(k); if(!a){ a = []; por.set(k, a); } a.push(t); });
+    por.forEach(lista => {
+      const valorTit = Math.max(...lista.map(t => t.vraw)), pagos = lista.filter(t => t.pago), abertos = lista.filter(t => !t.pago);
+      const pagoSoma = pagos.reduce((x, t) => x + t.vf, 0);
+      pagos.forEach(t => { t.v = t.vf; });
+      if(abertos.length){ const saldo = Math.max(0, valorTit - pagoSoma); abertos.forEach((t, i) => { t.v = i === 0 ? saldo : 0; if(i > 0 || saldo < 0.005) fora.add(t); }); }
+    });
+    rows.forEach(t => { if(!t.titulo && t.pago) t.v = t.vf; t.vf = t.v; });
+    return rows.filter(t => !fora.has(t));
+  }
+  function montarPagamentos(texto){ const { out, q } = lerTitulos(texto, ''); TI = corrigirBaixas(out.filter(t => t.lado === 'R')); const extra = out.filter(t => t.lado === 'D'); qual.pag = q; if(extra.length) DSarq = extra; }
+  function montarDespesas(texto){ const { out, q } = lerTitulos(texto, 'D'); DSarq = out; qual.desp = q; }
+  // orçamento (só usado no DRE do evento — a receita do painel continua sendo a dos pagamentos)
+  function montarOrcamentos(texto){
+    const { idx, linhas } = lerCsvTabela(texto);
+    const c = { ev: colDe(idx, 'id_evento'), setor: colDe(idx, 'descricao_setor'), serv: colDe(idx, 'servico'), cto: colDe(idx, 'contrato'), qtd: colDe(idx, 'qtd'), vu: colDe(idx, 'valorunit'), v: colDe(idx, 'valor_total'), fech: colDe(idx, 'fechada') };
+    if(c.ev < 0 || c.v < 0) throw new Error('O arquivo de orçamentos não tem as colunas id_evento e valor_total. Confira se é o ' + ARQ.orc + '.');
+    const m = new Map();
+    for(const r of linhas){
+      const ev = semZeros(at(r, c.ev)); if(!ev) continue;
+      const qtd = num(at(r, c.qtd)), vu = num(at(r, c.vu)); let v = num(at(r, c.v)); if(!v && qtd && vu) v = qtd * vu;
+      const l = { setor: nomeProprio(at(r, c.setor)) || SEM_SETOR, serv: nomeProprio(at(r, c.serv)), cto: nomeProprio(at(r, c.cto)), qtd, vu, v, fech: c.fech < 0 ? true : ehVerdade(at(r, c.fech)) };
+      if(!m.has(ev)) m.set(ev, []); m.get(ev).push(l);
+    }
+    ORCpor = m; qual.orc = { total: linhas.length, eventos: m.size, ultimo: Math.max(0, ...[...m.keys()].map(k => +k || 0)) };
+  }
+  // itens do evento (analise_itens_evento.csv) — o orçamento/contrato que aparece no DRE do Sicon
+  function montarItensEvento(texto){
+    const { idx, linhas } = lerCsvTabela(texto);
+    const c = { ev: colDe(idx, 'id_evento', 'evento'), setor: colDe(idx, 'principal', 'descricao_setor', 'setor'), prod: colDe(idx, 'produto', 'servico', 'descricao'), cto: colDe(idx, 'contrato', 'obs', 'observacao'),
+      qtd: colDe(idx, 'qtd', 'quantidade'), vu: colDe(idx, 'vlr_unit', 'valorunit', 'valor_unit', 'vlr_unitario'), v: colDe(idx, 'valor', 'valor_total', 'vlr_total'), fech: colDe(idx, 'fechada', 'fechado', 'status') };
+    if(c.ev < 0 || c.v < 0) throw new Error('O arquivo de itens do evento não tem as colunas id_evento e valor. Confira se é o ' + ARQ.iev + '.');
+    const m = new Map(); let n = 0;
+    for(const r of linhas){
+      const ev = semZeros(at(r, c.ev)); if(!ev) continue;
+      const qtd = num(at(r, c.qtd)), vu = num(at(r, c.vu)); let v = num(at(r, c.v)); if(!v && qtd && vu) v = qtd * vu;
+      const l = { setor: nomeProprio(at(r, c.setor)) || SEM_SETOR, serv: nomeProprio(at(r, c.prod)), cto: nomeProprio(at(r, c.cto)), qtd, vu, v, fech: c.fech < 0 ? true : ehVerdade(at(r, c.fech)) };
+      if(!m.has(ev)) m.set(ev, []); m.get(ev).push(l); n++;
+    }
+    ITENSpor = m; qual.iev = { total: n, eventos: m.size };
+  }
+  // tabela do financeiro (analise_pagamentos_sicon.csv): as contas a PAGAR ligadas a eventos são as despesas; o nº da OP também vem daqui
+  function montarSicon(texto){
+    const { achadas, linhas } = lerCsvColunas(repararAcentos(texto), ['tipo_cta', 'evento', 'total', 'op', 'titulo', 'parcela', 'datav', 'dtpagto', 'situacao', 'cliente', 'codcli', 'nome_setor', 'empresa_nome', 'operador', 'dthrincliu', 'descmoeda', 'historico', 'plano_cta', 'descricao_plano_contas', 'nome_nivel1', 'nome_nivel2', 'setors']);
+    if(!achadas.tipo_cta || !achadas.evento || !achadas.total) throw new Error('O arquivo da tabela do financeiro não tem as colunas TIPO_CTA, EVENTO e TOTAL. Confira se é o ' + ARQ.sic + '.');
+    const q = { total: linhas.length, pagar: 0, receber: 0, semEvento: 0, zerados: 0 }, out = [];
+    for(const r of linhas){
+      const cs = semZeros(r[21]), ns = nomeProprio(r[11]); if(cs && ns && !SETNOME.has(cs)) SETNOME.set(cs, ns);
+      const ev = semZeros(r[1]); if(!ev || ev === '0'){ q.semEvento++; continue; }
+      const v = num(r[2]); if(!v){ q.zerados++; continue; }
+      const tp = String(r[0]).trim().toUpperCase().charAt(0); if(tp !== 'P' && tp !== 'R') continue;
+      const sit = String(r[8]).trim().toUpperCase(), venc = isoData(r[6]); let pago = isoData(r[7]); const inc = isoData(r[14]);
+      if(!pago && sit.startsWith('Q')) pago = venc || inc || '2000-01-01';
+      if(tp === 'P') q.pagar++; else q.receber++;
+      out.push({ tp, ev, v, op: normOp(r[3]), titulo: String(r[4]).trim(), parcela: String(r[5]).trim(), venc, pago, nome: nomeProprio(r[9]), cli: semZeros(r[10]), setor: nomeProprio(r[11]) || SEM_SETOR, emp: nomeProprio(r[12]), oper: nomeProprio(r[13]).toUpperCase(), inc, forma: String(r[15]).trim(), h: nomeProprio(r[16]), plano: String(r[17]).trim(), planoNome: nomeProprio(r[18]), n1: nomeProprio(r[19]), n2: nomeProprio(r[20]) });
+    }
+    SIC = out; qual.sic = q;
+  }
+  // consumo do almoxarifado (analise_custos_eventos.csv, consulta CUSTOS_EVENTOS do Access): só as linhas de estoque entram;
+  // pagamentos que venham no mesmo arquivo são ignorados porque as despesas pagas já vêm (com rateio) da tabela do financeiro
+  function montarCustos(texto){
+    const { achadas, linhas } = lerCsvColunas(repararAcentos(texto), ['evento', 'titulospagos', 'titulosapagar', 'cliente', 'plano_cta', 'nome', 'nome_n1', 'nome_n2', 'data_ref', 'registro', 'historico', 'setors', 'primeirodesetor']);
+    if(!achadas.evento || !achadas.titulospagos || !achadas.cliente) throw new Error('O arquivo do almoxarifado não tem as colunas EVENTO, TitulosPagos e CLIENTE. Confira se é o ' + ARQ.cus + '.');
+    const q = { total: linhas.length, estoque: 0, semEvento: 0, semEventoValor: 0, outros: 0, zerados: 0, valor: 0 }, out = [];
+    for(const r of linhas){
+      const pg = num(r[1]), ap = num(r[2]), ev = semZeros(r[0]);
+      if(!/^ALMOXARIFADO/i.test(String(r[3]).trim())){ q.outros++; continue; }
+      if(!ev || ev === '0'){ q.semEvento++; q.semEventoValor += pg + ap; continue; }
+      if(!pg && !ap){ q.zerados++; continue; }
+      const dt = isoData(r[8]), sc = semZeros(r[11]) || semZeros(r[12]);
+      const base = { ev, venc: dt, cli: '', nome: 'ALMOXARIFADO (ESTOQUE)', titulo: 'EST ' + String(r[9]).trim(), forma: '', setorCod: sc, emp: '', oper: '', inc: dt, op: '', h: nomeProprio(r[10]), plano: String(r[4]).trim(), planoNome: nomeProprio(r[5]) || '(sem plano de contas)', n1: nomeProprio(r[6]), n2: nomeProprio(r[7]), almox: true };
+      if(pg){ out.push(Object.assign({ v: pg, pago: dt || '2000-01-01' }, base)); q.valor += pg; }
+      if(ap){ out.push(Object.assign({ v: ap, pago: '' }, base)); q.valor += ap; }
+      q.estoque++;
+    }
+    CUS = out; qual.cus = q;
+  }
+
+  // índices por evento + nomes de empresa/cliente
+  function reconstruir(){
+    OPR = new Map();
+    if(SIC.length){
+      DS = SIC.filter(x => x.tp === 'P' && EV.has(x.ev)).map(x => ({ ev: x.ev, lado: 'D', v: x.v, vf: x.v, venc: x.venc, pago: x.pago, cli: x.cli, nome: x.nome, titulo: x.titulo, forma: x.forma, setor: x.setor, emp: x.emp, oper: x.oper, inc: x.inc, temFin: !!x.inc, op: x.op, h: x.h, plano: x.plano, planoNome: x.planoNome, n1: x.n1, n2: x.n2 }));
+      FORMAR = new Map();
+      SIC.forEach(x => { if(x.tp !== 'R') return; const k = x.titulo + '|' + x.ev; if(x.op && !OPR.has(k)) OPR.set(k, x.op); if(x.forma && !FORMAR.has(k)) FORMAR.set(k, x.forma); });
+    } else DS = DSarq;
+    // consumo do almoxarifado soma às despesas (só quando as despesas pagas já foram carregadas, senão o total ficaria parcial)
+    if(CUS.length && DS.length) DS = DS.concat(CUS.filter(x => EV.has(x.ev)).map(x => Object.assign({ lado: 'D', vf: x.v, temFin: false, setor: x.setorCod ? (SETNOME.get(x.setorCod) || 'Setor ' + x.setorCod) : SEM_SETOR }, x)));
+    TIpor = new Map(); DSpor = new Map();
+    const add = (m, k, v) => { let a = m.get(k); if(!a){ a = []; m.set(k, a); } a.push(v); };
+    TI.forEach(t => { if(t.ev) add(TIpor, t.ev, t); }); DS.forEach(d => { if(d.ev) add(DSpor, d.ev, d); });
+    // nome da empresa = o mais usado nos títulos dos eventos daquela empresa (o evento só guarda o código)
+    nomesEmp.clear(); const cont = new Map();
+    TI.forEach(t => { const e = EV.get(t.ev); if(!e || !e.emp || !t.emp) return; const k = e.emp + '|' + t.emp; cont.set(k, (cont.get(k) || 0) + 1); });
+    const melhor = new Map(); cont.forEach((n, k) => { const [cod, nome] = k.split('|'); const m = melhor.get(cod); if(!m || n > m.n) melhor.set(cod, { n, nome }); });
+    melhor.forEach((m, cod) => nomesEmp.set(cod, m.nome));
+    nomesCli.clear(); TI.forEach(t => { if(t.cli && t.nome && !nomesCli.has(t.cli)) nomesCli.set(t.cli, t.nome); });
+  }
+  const nomeEmp = (cod) => cod ? (nomesEmp.get(cod) || ('Empresa ' + cod)) : 'Sem empresa';
+  const opDe = (t) => t.op || (t.lado === 'R' ? (OPR.get(t.titulo + '|' + t.ev) || '') : '');
+  const nomeCli = (cod) => cod ? (nomesCli.get(cod) || ('Cliente ' + cod)) : 'Sem cliente';
+
+  // ===================== filtros =====================
+  const PADRAO = { base: 'fim', periodo: 'ano', adm: 'todos' };
+  const FIL = Object.assign({ de: '', ate: '', opTipo: 'ev', evento: '', empOff: new Set(), tipoOff: new Set(), setOff: new Set(), opEvOff: new Set(), opPgOff: new Set() }, PADRAO);
+  const ehTit = () => FIL.base === 'venc' || FIL.base === 'pagto' || FIL.base === 'vp';   // a data vale para cada pagamento/despesa, não para o evento
+  const INC = { periodo: 'mes', de: '', ate: '', medida: 'tit' };
+  function periodo(p){
+    const h = hoje(), y = +h.slice(0, 4), m = +h.slice(5, 7), ult = (yy, mm) => new Date(yy, mm, 0).getDate();
+    if(p === 'ano') return [y + '-01-01', y + '-12-31'];
+    if(p === 'anoAnt') return [(y - 1) + '-01-01', (y - 1) + '-12-31'];
+    if(p === '12m') return [somaDias(h, -365), h];
+    if(p === '90d') return [somaDias(h, -90), h];
+    if(p === 'mes') return [y + '-' + pad2(m) + '-01', y + '-' + pad2(m) + '-' + pad2(ult(y, m))];
+    if(p === 'mesAnt'){ const yy = m === 1 ? y - 1 : y, mm = m === 1 ? 12 : m - 1; return [yy + '-' + pad2(mm) + '-01', yy + '-' + pad2(mm) + '-' + pad2(ult(yy, mm))]; }
+    return ['', ''];
+  }
+  function limitesDe(obj){ if(obj.periodo === 'pers') return [obj.de || '', obj.ate || '']; return periodo(obj.periodo); }
+  const dataBase = (e) => FIL.base === 'ini' ? e.ini : FIL.base === 'atend' ? e.atend : e.fim;
+  function passaAtributos(e){
+    if(FIL.empOff.has(e.emp || '')) return false;
+    if(FIL.tipoOff.has(e.tipo)) return false;
+    if(FIL.opTipo === 'ev' && FIL.opEvOff.has(e.oper || '')) return false;
+    if(FIL.adm === 'ext' && e.adm) return false; if(FIL.adm === 'adm' && !e.adm) return false;
+    return true;
+  }
+
+  // ===================== cálculo =====================
+  let R = null;
+  const valTit = (t) => t.v;
+  function entradaMes(ym, ti, ds){
+    const x = { ym, ti, ds, rec: 0, pago: 0, aberto: 0, desp: 0 };
+    ti.forEach(t => { const v = valTit(t); x.rec += v; if(t.pago) x.pago += v; else x.aberto += v; });
+    ds.forEach(t => { x.desp += valTit(t); }); x.res = x.rec - x.desp; return x;
+  }
+  function calcular(){
+    const hojeIso = hoje(), [de, ate] = limitesDe({ periodo: FIL.periodo, de: FIL.de, ate: FIL.ate });
+    const porTit = ehTit() && !FIL.evento, opPg = FIL.opTipo === 'pg' && FIL.opPgOff.size > 0, filtraTit = FIL.setOff.size > 0 || opPg, temDesp = DS.length > 0;
+    const okT = (t) => !FIL.setOff.has(t.setor) && !(opPg && FIL.opPgOff.has(t.oper || ''));
+    const noPeriodo = (d) => d ? !((de && d < de) || (ate && d > ate)) : FIL.periodo === 'tudo';
+    const dTit = (t) => FIL.base === 'venc' ? t.venc : FIL.base === 'pagto' ? t.pago : (t.pago || t.venc);
+    const linhas = [], porSetor = new Map(), porEmp = new Map(), porCli = new Map();
+    const T = { eventos: 0, comReceita: 0, tit: 0, pago: 0, aberto: 0, vencido: 0, desp: 0, despPago: 0, rec: 0, res: 0, semData: 0, semPagamento: 0 };
+    for(const e of EV.values()){
+      if(FIL.evento){ if(e.id !== FIL.evento) continue; } else if(!passaAtributos(e)) continue;   // filtro por evento ignora todos os outros filtros
+      let d = '', ti, ds;
+      if(porTit){
+        const ok = (t) => okT(t) && noPeriodo(dTit(t));
+        ti = (TIpor.get(e.id) || []).filter(ok); ds = (DSpor.get(e.id) || []).filter(ok);
+        if(!ti.length && !ds.length) continue;
+      } else {
+        d = dataBase(e);
+        if(!FIL.evento){ if(d){ if((de && d < de) || (ate && d > ate)) continue; } else if(FIL.periodo !== 'tudo') continue; }
+        const okE = FIL.evento ? (() => true) : okT;
+        ti = (TIpor.get(e.id) || []).filter(okE); ds = (DSpor.get(e.id) || []).filter(okE);
+        if(filtraTit && !FIL.evento && !ti.length && !ds.length) continue;
+      }
+      const r = { e, d, ti, ds, tit: 0, pago: 0, aberto: 0, vencido: 0, desp: 0, despPago: 0 };
+      ti.forEach(t => { const v = valTit(t); r.tit += v; if(t.pago) r.pago += v; else { r.aberto += v; if(t.venc && t.venc < hojeIso) r.vencido += v; } });
+      ds.forEach(t => { const v = valTit(t); r.desp += v; if(t.pago) r.despPago += v; });
+      r.rec = r.tit;
+      r.res = r.rec - r.desp; r.resCaixa = r.pago - r.despPago;
+      if(porTit){   // um bloco por mês da data de cada pagamento/despesa
+        const por = new Map(), pega = (ym) => { let x = por.get(ym); if(!x){ x = { ti: [], ds: [] }; por.set(ym, x); } return x; };
+        ti.forEach(t => pega((dTit(t) || '').slice(0, 7)).ti.push(t)); ds.forEach(t => pega((dTit(t) || '').slice(0, 7)).ds.push(t));
+        r.meses = [...por.entries()].map(([ym, x]) => entradaMes(ym, x.ti, x.ds));
+      } else r.meses = [entradaMes(d ? d.slice(0, 7) : '', ti, ds)];
+      linhas.push(r);
+      T.eventos++; if(r.rec) T.comReceita++; if(!ti.length) T.semPagamento++; T.tit += r.tit; T.pago += r.pago; T.aberto += r.aberto; T.vencido += r.vencido; T.desp += r.desp; T.despPago += r.despPago; T.rec += r.rec; if(!d && !porTit) T.semData++;
+      ti.forEach(t => porSetor.set(t.setor, (porSetor.get(t.setor) || 0) + valTit(t)));
+      porEmp.set(e.emp, (porEmp.get(e.emp) || 0) + r.rec);
+      porCli.set(e.cli, (porCli.get(e.cli) || 0) + r.rec);
+    }
+    T.res = T.rec - T.desp; T.temDesp = temDesp;
+    R = { linhas, T, porSetor, porEmp, porCli, de, ate };
+  }
+
+  // ===================== tela =====================
+  let FILTROS_PRONTOS = false, aberta = 'geral';
+  const charts = {}; let Chart = null, libGraficos = null;
+  const carregarScript = (src) => new Promise((ok, ko) => { if(document.querySelector('script[src="' + src + '"]')) return ok(); const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = () => ko(new Error('Não consegui carregar ' + src)); document.head.appendChild(s); });
+  const prepararGraficos = () => libGraficos || (libGraficos = (window.Chart ? Promise.resolve() : carregarScript('https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js')).then(() => { Chart = window.Chart; }));
+  function grafico(id, cfgGraf){
+    if(!Chart) return;
+    if(charts[id]){ charts[id].destroy(); delete charts[id]; }
+    const cv = $(id); if(!cv) return;
+    Chart.defaults.color = getComputedStyle(document.documentElement).getPropertyValue('--muted').trim() || '#666';
+    charts[id] = new Chart(cv, cfgGraf);
+  }
+  const PALETA = ['#1f6f4a', '#2b6cb0', '#f2a93b', '#8f3b33', '#6b5b95', '#2a9d8f', '#e76f51', '#577590', '#9a6200', '#43aa8b'];
+  // resumo por barra: BARRAS[id](datasetIndex, index) -> { titulo, linhas, valor(r) } (calculado só ao passar o mouse / clicar)
+  const BARRAS = {}, cacheBarra = new Map();
+  const nomeCurto = (t, n) => t.length > n ? t.slice(0, n - 1) + '…' : t;
+  function infoBarra(id, ds, i){
+    const k = id + '|' + ds + '|' + i; if(cacheBarra.has(k)) return cacheBarra.get(k);
+    const f = BARRAS[id]; let v = null;
+    if(f){ v = f(ds, i); if(v) v.top = v.linhas.slice().sort((x, y) => Math.abs(v.valor(y)) - Math.abs(v.valor(x))).slice(0, 5); }
+    cacheBarra.set(k, v); return v;
+  }
+  const opcoesBase = (horizontal, id, legenda) => {
+    const o = { responsive: true, maintainAspectRatio: false, indexAxis: horizontal ? 'y' : 'x', plugins: { legend: { display: legenda !== false, position: 'bottom' }, tooltip: { callbacks: { label: (c) => ' ' + c.dataset.label + ': ' + fmtR(c.parsed[horizontal ? 'x' : 'y']) } } }, scales: { [horizontal ? 'x' : 'y']: { ticks: { callback: (v) => fmtCurto(v) } } } };
+    if(id){
+      o.interaction = { mode: 'nearest', intersect: true };
+      o.onHover = (evt, els) => { if(evt.native && evt.native.target) evt.native.target.style.cursor = els.length ? 'pointer' : 'default'; };
+      o.onClick = (evt, els) => { if(!els.length) return; const inf = infoBarra(id, els[0].datasetIndex, els[0].index); if(inf && inf.linhas.length) abrirListaEventos(inf.titulo, inf.linhas); };
+      o.plugins.tooltip.callbacks.afterBody = (itens) => {
+        const it = itens[0]; if(!it) return []; const inf = infoBarra(id, it.datasetIndex, it.dataIndex); if(!inf) return [];
+        const n = inf.linhas.length; if(!n) return ['', 'Nenhum evento nesta barra.'];
+        return ['', n.toLocaleString('pt-BR') + ' evento(s)' + (n > inf.top.length ? ' — principais:' : ':'), ...inf.top.map(r => '• ' + r.e.id + ' · ' + nomeCurto(r.e.nome || 'Evento', 30) + ' — ' + fmtR(inf.valor(r))), 'Clique para ver a tabela'];
+      };
+    }
+    return o;
+  };
+
+  function chip(id, lista, offSet, rotulo, nomeFn){
+    const box = $(id); box.replaceChildren();
+    lista.forEach(it => { const lb = el('label'), cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !offSet.has(it.k); cb.dataset.k = it.k;
+      cb.addEventListener('change', () => { if(cb.checked) offSet.delete(it.k); else offSet.add(it.k); resumoPaineis(); atualizar(); });
+      lb.appendChild(cb); lb.appendChild(document.createTextNode(it.rot)); box.appendChild(lb); });
+  }
+  const listaEmpresas = () => { const s = new Set(); EV.forEach(e => s.add(e.emp || '')); return [...s].map(k => ({ k, rot: nomeEmp(k) })).sort((a, b) => cmp(a.rot, b.rot)); };
+  const listaTipos = () => { const s = new Set(); EV.forEach(e => s.add(e.tipo)); return [...s].map(k => ({ k, rot: k })).sort((a, b) => cmp(a.rot, b.rot)); };
+  const listaSetores = () => { const s = new Set(); TI.forEach(t => s.add(t.setor)); DS.forEach(t => s.add(t.setor)); return [...s].map(k => ({ k, rot: k })).sort((a, b) => cmp(a.rot, b.rot)); };
+  const offOp = () => FIL.opTipo === 'ev' ? FIL.opEvOff : FIL.opPgOff;
+  const listaOperadores = () => { const q = new Set(); if(FIL.opTipo === 'ev') EV.forEach(e => q.add(e.oper || '')); else { TI.forEach(t => q.add(t.oper || '')); DS.forEach(t => q.add(t.oper || '')); } return [...q].map(k => ({ k, rot: k || SEM_OPER })).sort((a, b) => cmp(a.rot, b.rot)); };
+  function desenharPaineis(){
+    chip('listaEmp', listaEmpresas(), FIL.empOff); chip('listaTipo', listaTipos(), FIL.tipoOff); chip('listaSet', listaSetores(), FIL.setOff); chip('listaOp', listaOperadores(), offOp());
+    resumoPaineis();
+  }
+  function resumoPaineis(){
+    const r = (id, off, tot) => { $(id).textContent = '· ' + (off.size ? (tot - off.size) + ' de ' + tot : 'todos'); };
+    r('rEmp', FIL.empOff, listaEmpresas().length); r('rTipo', FIL.tipoOff, listaTipos().length); r('rSet', FIL.setOff, listaSetores().length); r('rOp', offOp(), listaOperadores().length);
+  }
+  function marcar(qual_, todos){
+    const mapa = { emp: [FIL.empOff, listaEmpresas], tipo: [FIL.tipoOff, listaTipos], set: [FIL.setOff, listaSetores], op: [offOp(), listaOperadores] }[qual_];
+    mapa[0].clear(); if(!todos) mapa[1]().forEach(i => mapa[0].add(i.k));
+    desenharPaineis(); atualizar();
+  }
+
+  function salvarFiltros(){ gravarLS(K_FILTROS, { base: FIL.base, periodo: FIL.periodo, adm: FIL.adm, iPeriodo: INC.periodo, iMedida: INC.medida }); }
+  function lerCamposFiltro(){
+    FIL.base = $('fBase').value; FIL.periodo = $('fPeriodo').value; FIL.adm = $('fAdm').value; FIL.opTipo = $('fOpTipo').value;
+    if(FIL.periodo !== 'pers'){ const [a, b] = periodo(FIL.periodo); $('fDe').value = a; $('fAte').value = b; FIL.de = a; FIL.ate = b; } else { FIL.de = $('fDe').value; FIL.ate = $('fAte').value; }
+    INC.periodo = $('iPeriodo').value; INC.medida = $('iMedida').value;
+    if(INC.periodo !== 'pers'){ const [a, b] = periodo(INC.periodo); $('iDe').value = a; $('iAte').value = b; INC.de = a; INC.ate = b; } else { INC.de = $('iDe').value; INC.ate = $('iAte').value; }
+  }
+  function atualizar(){ lerCamposFiltro(); salvarFiltros(); calcular(); render(); }
+
+  function kpi(rot, valor, cls, sub){ const d = el('div', 'kpi'); d.appendChild(el('span', '', rot)); d.appendChild(el('b', cls || '', valor)); if(sub) d.appendChild(el('small', '', sub)); return d; }
+  function render(){
+    if(!R) return;
+    desenharGeral(); desenharEventos(); desenharGrupos(); desenharInclusao(); desenharConferencia();
+    const [a, b] = [R.de, R.ate]; if(FIL.evento && EV.get(FIL.evento)){ $('subtitulo').textContent = 'Evento ' + FIL.evento + ' · ' + EV.get(FIL.evento).nome + ' (o filtro por evento ignora os demais filtros)'; return; }
+    $('subtitulo').textContent = R.T.eventos.toLocaleString('pt-BR') + ' evento(s) · ' + ({ fim: 'finalizados', ini: 'iniciados', atend: 'com atendimento iniciado', venc: 'com pagamento/despesa vencendo', pagto: 'com pagamento/despesa pago', vp: 'com pagamento/despesa (pago ou vencendo)' }[FIL.base] || 'finalizados') + ' ' + (a || b ? 'entre ' + (fmtDia(a) || 'o início') + ' e ' + (fmtDia(b) || 'hoje') : 'em qualquer data');
+  }
+
+  // ----- visão geral -----
+  function desenharGeral(){
+    const T = R.T, k = $('kpis'); k.replaceChildren();
+    k.append(kpi('Eventos', T.eventos.toLocaleString('pt-BR'), '', T.comReceita.toLocaleString('pt-BR') + ' com pagamento'),
+      kpi('Receita (pagamentos do evento)', fmtR(T.rec), 'pos', T.comReceita ? 'ticket médio ' + fmtR(T.rec / T.comReceita) : ''),
+      kpi('Recebido', fmtR(T.pago), 'pos', T.rec ? Math.round(T.pago / T.rec * 100) + '% da receita' : ''),
+      kpi('A receber', fmtR(T.aberto), '', 'em aberto'),
+      kpi('Vencido', fmtR(T.vencido), T.vencido ? 'neg' : '', 'a receber já vencido'),
+      kpi('Despesa', T.temDesp ? fmtR(T.desp) : '—', '', T.temDesp ? fmtR(T.despPago) + ' paga' : 'sem dados de despesa'),
+      kpi('Resultado', T.temDesp ? fmtR(T.res) : '—', T.temDesp ? (T.res < 0 ? 'neg' : 'pos') : '', T.temDesp && T.rec ? 'margem ' + (T.res / T.rec * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%' : 'precisa da despesa'));
+    const av = $('avisoDesp');
+    if(!T.temDesp){ av.textContent = 'Despesa e Resultado estão em "—" porque as despesas dos eventos vêm da tabela do financeiro (' + ARQ.sic + ', contas a pagar com o nº do evento) e ela ainda não foi carregada. Coloque esse arquivo na pasta do Drive (ou abra-o pelo 📂) e a despesa, o resultado e a OP aparecem sozinhos.'; av.hidden = false; } else av.hidden = true;
+    prepararGraficos().then(desenharGraficosGeral).catch(() => {});
+    // clientes
+    const cli = [...R.porCli.entries()].filter(([c, v]) => v).sort((a, b) => b[1] - a[1]).slice(0, 15);
+    $('tbClientes').innerHTML = '<table class="t"><thead><tr><th class="txt">Cliente</th><th>Receita</th><th>%</th></tr></thead><tbody>' + (cli.length ? cli.map(([c, v]) => '<tr class="cl" data-cli="' + esc(c) + '" title="Ver os eventos deste cliente"><td class="txt">' + esc(nomeCli(c)) + '</td><td>' + fmt(v) + '</td><td>' + (T.rec ? (v / T.rec * 100).toFixed(1).replace('.', ',') : '0') + '%</td></tr>').join('') : '<tr><td class="txt" colspan="3">Sem dados no período.</td></tr>') + '</tbody></table>';
+    const emp = [...R.porEmp.entries()].filter(([c, v]) => v).sort((a, b) => b[1] - a[1]).slice(0, 15);
+    $('tbPlanos').innerHTML = '<table class="t"><thead><tr><th class="txt">Empresa</th><th>Receita</th><th>%</th></tr></thead><tbody>' + (emp.length ? emp.map(([c, v]) => '<tr class="cl" data-emp="' + esc(c) + '" title="Ver os eventos desta empresa"><td class="txt">' + esc(nomeEmp(c)) + '</td><td>' + fmt(v) + '</td><td>' + (T.rec ? (v / T.rec * 100).toFixed(1).replace('.', ',') : '0') + '%</td></tr>').join('') : '<tr><td class="txt" colspan="3">Sem dados no período.</td></tr>') + '</tbody></table>';
+  }
+  function desenharGraficosGeral(){
+    if(!Chart || aberta !== 'geral') return;
+    const meses = new Map(); const get = (ym) => { let m = meses.get(ym); if(!m){ m = { rec: 0, pago: 0, desp: 0 }; meses.set(ym, m); } return m; };
+    R.linhas.forEach(r => r.meses.forEach(x => { const m = get(x.ym); m.rec += x.rec; m.pago += x.pago; m.desp += x.desp; }));
+    const ks = [...meses.keys()].sort(); cacheBarra.clear();
+    const camposMes = ['rec', 'pago', 'desp', 'res'], rotCampo = ['Receita', 'Recebido', 'Despesa', 'Resultado'];
+    BARRAS.gMes = (d, i) => { const k = ks[i], cmpo = camposMes[d], linhas = []; R.linhas.forEach(r => { const x = r.meses.find(m => m.ym === k); if(!x || !x[cmpo]) return; linhas.push(ehTit() ? montarLinhaAvulsa(r.e.id, x.ti, x.ds) : r); }); return { titulo: rotMes(k) + ' — ' + rotCampo[d] + ' por evento', linhas, valor: r => r[cmpo] }; };
+    const ds = [{ type: 'bar', label: 'Receita', data: ks.map(k => meses.get(k).rec), backgroundColor: '#1f6f4a' }, { type: 'bar', label: 'Recebido', data: ks.map(k => meses.get(k).pago), backgroundColor: '#2b6cb0' }];
+    if(R.T.temDesp){ ds.push({ type: 'bar', label: 'Despesa', data: ks.map(k => meses.get(k).desp), backgroundColor: '#8f3b33' }); ds.push({ type: 'line', label: 'Resultado', data: ks.map(k => meses.get(k).rec - meses.get(k).desp), borderColor: '#f2a93b', backgroundColor: '#f2a93b', tension: .25 }); }
+    grafico('gMes', { type: 'bar', data: { labels: ks.map(rotMes), datasets: ds }, options: opcoesBase(false, 'gMes') });
+    const tipos = new Map(); R.linhas.forEach(r => tipos.set(r.e.tipo, (tipos.get(r.e.tipo) || 0) + r.rec));
+    const tt = [...tipos.entries()].filter(([, v]) => v).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    BARRAS.gTipo = (d, i) => { const t = tt[i][0]; return { titulo: 'Tipo de evento: ' + t, linhas: R.linhas.filter(r => r.e.tipo === t && r.rec), valor: r => r.rec }; };
+    grafico('gTipo', { type: 'bar', data: { labels: tt.map(x => x[0]), datasets: [{ label: 'Receita', data: tt.map(x => x[1]), backgroundColor: '#1f6f4a' }] }, options: opcoesBase(true, 'gTipo', false) });
+    const st = [...R.porSetor.entries()].filter(([, v]) => v).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    BARRAS.gSetor = (d, i) => { const sn = st[i][0], linhas = []; R.linhas.forEach(r => { const ti = r.ti.filter(t => t.setor === sn), dd = r.ds.filter(t => t.setor === sn); if(ti.length || dd.length) linhas.push(montarLinhaAvulsa(r.e.id, ti, dd)); }); return { titulo: 'Setor: ' + sn, linhas: linhas.filter(r => r.rec), valor: r => r.rec }; };
+    grafico('gSetor', { type: 'bar', data: { labels: st.map(x => x[0]), datasets: [{ label: 'Receita', data: st.map(x => x[1]), backgroundColor: '#2b6cb0' }] }, options: opcoesBase(true, 'gSetor', false) });
+  }
+
+  // ----- eventos -----
+  const COLS_EV = [
+    { k: 'id', t: 'Nº', txt: true, v: r => +r.e.id || 0, f: r => esc(r.e.id) }, { k: 'nome', t: 'Evento', txt: true, v: r => r.e.nome, f: r => esc(r.e.nome) }, { k: 'tipo', t: 'Tipo', txt: true, v: r => r.e.tipo, f: r => esc(r.e.tipo) },
+    { k: 'cli', t: 'Cliente', txt: true, v: r => nomeCli(r.e.cli), f: r => esc(nomeCli(r.e.cli)) }, { k: 'fim', t: 'Finalização', v: r => r.e.fim, f: r => fmtDia(r.e.fim) },
+    { k: 'rec', t: 'Receita', v: r => r.rec, f: r => fmt(r.rec) }, { k: 'pago', t: 'Recebido', v: r => r.pago, f: r => fmt(r.pago) }, { k: 'aberto', t: 'A receber', v: r => r.aberto, f: r => fmt(r.aberto) },
+    { k: 'desp', t: 'Despesa', v: r => r.desp, f: r => R.T.temDesp ? fmt(r.desp) : '—' }, { k: 'res', t: 'Resultado', v: r => r.res, f: r => R.T.temDesp ? '<span class="' + (r.res < 0 ? 'neg' : '') + '">' + fmt(r.res) + '</span>' : '—' }];
+  let evOrd = { k: 'fim', dir: -1 }, evMais = 300;
+  function linhasEventos(){
+    const q = semAcento($('evBusca').value);
+    let l = q ? R.linhas.filter(r => semAcento([r.e.id, r.e.nome, r.e.tipo, nomeCli(r.e.cli), r.e.oper, nomeEmp(r.e.emp), r.e.local].join(' ')).includes(q)) : R.linhas.slice();
+    return ordenarLinhas(l, evOrd);
+  }
+  function ordenarLinhas(l, ord){
+    const col = COLS_EV.find(c => c.k === ord.k) || COLS_EV[4];
+    l.sort((a, b) => { const x = col.v(a), y = col.v(b); const c = typeof x === 'number' ? x - y : cmp(x, y); return (c || (+a.e.id - +b.e.id)) * ord.dir; });
+    return l;
+  }
+  function tabelaEventos(box, linhas, opcoes){
+    opcoes = opcoes || {};
+    const mostrar = linhas.slice(0, evMais), tot = linhas.reduce((s, r) => ({ rec: s.rec + r.rec, pago: s.pago + r.pago, aberto: s.aberto + r.aberto, desp: s.desp + r.desp, res: s.res + r.res }), { rec: 0, pago: 0, aberto: 0, desp: 0, res: 0 });
+    let h = '<table class="t"><thead><tr>' + COLS_EV.map(c => '<th class="' + (c.txt ? 'txt ' : '') + 'ord" data-ord="' + c.k + '">' + c.t + (evOrd.k === c.k ? (evOrd.dir > 0 ? ' ▲' : ' ▼') : '') + '</th>').join('') + '</tr></thead><tbody>';
+    h += mostrar.map(r => '<tr class="cl" data-ev="' + esc(r.e.id) + '">' + COLS_EV.map(c => '<td class="' + (c.txt ? 'txt' : '') + '">' + c.f(r) + '</td>').join('') + '</tr>').join('') || '<tr><td class="txt" colspan="' + COLS_EV.length + '">Nenhum evento com esses filtros.</td></tr>';
+    h += '</tbody><tfoot><tr class="tot"><td class="txt" colspan="5">TOTAL (' + linhas.length.toLocaleString('pt-BR') + ' evento(s)' + (linhas.length > mostrar.length ? ', mostrando ' + mostrar.length : '') + ')</td><td>' + fmt(tot.rec) + '</td><td>' + fmt(tot.pago) + '</td><td>' + fmt(tot.aberto) + '</td><td>' + (R.T.temDesp ? fmt(tot.desp) : '—') + '</td><td>' + (R.T.temDesp ? fmt(tot.res) : '—') + '</td></tr></tfoot></table>';
+    if(linhas.length > mostrar.length) h += '<div class="barra-h"><button class="btn sec mini" data-mais="1" type="button">Mostrar mais 300</button></div>';
+    box.innerHTML = h;
+  }
+  function desenharEventos(){ tabelaEventos($('tbEventos'), linhasEventos()); }
+
+  // ----- agrupamentos -----
+  function chaveGrupo(modo, r){
+    if(modo === 'mes') return { k: r.d ? r.d.slice(0, 7) : '', rot: rotMes(r.d ? r.d.slice(0, 7) : '') };
+    if(modo === 'ano') return { k: r.d ? r.d.slice(0, 4) : '', rot: r.d ? r.d.slice(0, 4) : 'Sem data' };
+    if(modo === 'tipo') return { k: r.e.tipo, rot: r.e.tipo };
+    if(modo === 'emp') return { k: r.e.emp, rot: nomeEmp(r.e.emp) };
+    if(modo === 'cli') return { k: r.e.cli, rot: nomeCli(r.e.cli) };
+    return { k: r.e.oper, rot: r.e.oper || SEM_OPER };
+  }
+  let grupoAtual = [];
+  function montarGrupos(){
+    const modo = $('grAgrupar').value, m = new Map();
+    const somar = (g, r) => { g.rec += r.rec; g.tit += r.tit; g.pago += r.pago; g.aberto += r.aberto; g.desp += r.desp; g.res += r.res; };
+    if(modo === 'mes' || modo === 'ano'){
+      R.linhas.forEach(r => r.meses.forEach(x => {
+        const k = modo === 'mes' ? x.ym : x.ym.slice(0, 4); let g = m.get(k);
+        if(!g){ g = { k, rot: modo === 'mes' ? rotMes(x.ym) : (k || 'Sem data'), n: 0, rec: 0, tit: 0, pago: 0, aberto: 0, desp: 0, res: 0, linhas: [], partes: new Map() }; m.set(k, g); }
+        let p = g.partes.get(r.e.id); if(!p){ p = { ti: [], ds: [] }; g.partes.set(r.e.id, p); } p.ti.push(...x.ti); p.ds.push(...x.ds);
+      }));
+      m.forEach(g => { g.partes.forEach((p, id) => { const lin = montarLinhaAvulsa(id, p.ti, p.ds); g.linhas.push(lin); g.n++; somar(g, lin); }); delete g.partes; });
+    } else {
+      R.linhas.forEach(r => { const c = chaveGrupo(modo, r); let g = m.get(c.k); if(!g){ g = { k: c.k, rot: c.rot, n: 0, rec: 0, tit: 0, pago: 0, aberto: 0, desp: 0, res: 0, linhas: [] }; m.set(c.k, g); } g.n++; somar(g, r); g.linhas.push(r); });
+    }
+    let l = [...m.values()]; if(modo === 'mes' || modo === 'ano') l.sort((a, b) => (a.k === '') - (b.k === '') || cmp(a.k, b.k)); else l.sort((a, b) => b.rec - a.rec);
+    if(modo === 'cli') l = l.slice(0, 200);
+    return { modo, l };
+  }
+  function desenharGrupos(){
+    const { modo, l } = montarGrupos(); grupoAtual = l;
+    const tot = l.reduce((s, g) => ({ n: s.n + g.n, rec: s.rec + g.rec, tit: s.tit + g.tit, pago: s.pago + g.pago, aberto: s.aberto + g.aberto, desp: s.desp + g.desp, res: s.res + g.res }), { n: 0, rec: 0, tit: 0, pago: 0, aberto: 0, desp: 0, res: 0 });
+    const d = R.T.temDesp, tit = { mes: 'Mês', ano: 'Ano', tipo: 'Tipo de evento', emp: 'Empresa', cli: 'Cliente', oper: 'Operador do evento' }[modo];
+    $('tbGrupos').innerHTML = '<table class="t"><thead><tr><th class="txt">' + tit + '</th><th>Eventos</th><th>Receita</th><th>Recebido</th><th>A receber</th><th>Despesa</th><th>Resultado</th><th>Margem</th></tr></thead><tbody>' +
+      l.map((g, i) => '<tr class="cl" data-g="' + i + '"><td class="txt">' + esc(g.rot) + '</td><td>' + g.n + '</td><td>' + fmt(g.rec) + '</td><td>' + fmt(g.pago) + '</td><td>' + fmt(g.aberto) + '</td><td>' + (d ? fmt(g.desp) : '—') + '</td><td class="' + (d && g.res < 0 ? 'neg' : '') + '">' + (d ? fmt(g.res) : '—') + '</td><td>' + (d && g.rec ? (g.res / g.rec * 100).toFixed(1).replace('.', ',') + '%' : '—') + '</td></tr>').join('') +
+      '</tbody><tfoot><tr class="tot"><td class="txt">TOTAL</td><td>' + tot.n + '</td><td>' + fmt(tot.rec) + '</td><td>' + fmt(tot.pago) + '</td><td>' + fmt(tot.aberto) + '</td><td>' + (d ? fmt(tot.desp) : '—') + '</td><td>' + (d ? fmt(tot.res) : '—') + '</td><td>' + (d && tot.rec ? (tot.res / tot.rec * 100).toFixed(1).replace('.', ',') + '%' : '—') + '</td></tr></tfoot></table>';
+  }
+
+  // ----- inclusão e operador -----
+  function registrosInclusao(){
+    const [de, ate] = limitesDe(INC), dentro = (d) => d && (!de || d >= de) && (!ate || d <= ate);
+    const ok = (id) => { const e = EV.get(id); return e ? passaAtributos(e) : FIL.empOff.size === 0 && FIL.tipoOff.size === 0 && FIL.adm === 'todos'; };
+    const ops = new Map(); const op = (nome) => { const k = nome || SEM_OPER; let o = ops.get(k); if(!o){ o = { op: k, evC: new Set(), tiN: 0, tiEv: new Set(), tiV: 0, mes: new Map() }; ops.set(k, o); } return o; };
+    const mes = (o, ym, campo, v, item) => { let m = o.mes.get(ym); if(!m){ m = { ev: 0, tit: 0, evIds: [], tis: [] }; o.mes.set(ym, m); } m[campo] += v; if(campo === 'ev') m.evIds.push(item); else m.tis.push(item); };
+    EV.forEach(e => { if(!passaAtributos(e) || !dentro(e.atend)) return; const o = op(e.oper); o.evC.add(e.id); mes(o, e.atend.slice(0, 7), 'ev', 1, e.id); });
+    TI.forEach(t => { if(!dentro(t.inc) || !ok(t.ev) || (FIL.opTipo === 'pg' && FIL.opPgOff.has(t.oper || ''))) return; const o = op(t.oper); o.tiN++; o.tiEv.add(t.ev); o.tiV += valTit(t); mes(o, t.inc.slice(0, 7), 'tit', valTit(t), t); });
+    return { ops: [...ops.values()].sort((a, b) => b.tiV - a.tiV || b.evC.size - a.evC.size), de, ate };
+  }
+  let incAtual = null;
+  function desenharInclusao(){
+    if(aberta !== 'inclusao' && !incAtual){ /* calcula só quando a aba abre */ }
+    if(aberta !== 'inclusao') return;
+    const I = incAtual = registrosInclusao(), ops = I.ops;
+    const tot = ops.reduce((s, o) => ({ ev: s.ev + o.evC.size, tiN: s.tiN + o.tiN, tiV: s.tiV + o.tiV }), { ev: 0, tiN: 0, tiV: 0 });
+    $('tbOper').innerHTML = '<table class="t"><thead><tr><th class="txt">Operador</th><th>Eventos criados</th><th>Pagamentos incluídos</th><th>Eventos com pagamento incluído</th><th>Valor dos pagamentos</th></tr></thead><tbody>' +
+      (ops.length ? ops.map((o, i) => '<tr><td class="txt">' + esc(o.op) + '</td><td class="cl" data-i="' + i + '" data-t="ev">' + o.evC.size + '</td><td>' + o.tiN + '</td><td class="cl" data-i="' + i + '" data-t="ti">' + o.tiEv.size + '</td><td>' + fmt(o.tiV) + '</td></tr>').join('') : '<tr><td class="txt" colspan="5">Nada incluído nesse período.</td></tr>') +
+      '</tbody><tfoot><tr class="tot"><td class="txt">TOTAL</td><td>' + tot.ev + '</td><td>' + tot.tiN + '</td><td></td><td>' + fmt(tot.tiV) + '</td></tr></tfoot></table>';
+    // mês x operador
+    const campo = INC.medida, meses = new Set(); ops.forEach(o => o.mes.forEach((_, ym) => meses.add(ym))); const ks = [...meses].sort();
+    const valor = (o, ym) => { const m = o.mes.get(ym); return m ? m[campo] : 0; }, fm = (v) => campo === 'ev' ? String(v || 0) : fmt(v);
+    const ord = ops.slice().sort((a, b) => ks.reduce((s, k) => s + valor(b, k), 0) - ks.reduce((s, k) => s + valor(a, k), 0));
+    $('tbOperMes').innerHTML = '<table class="t"><thead><tr><th class="txt">Operador</th>' + ks.map(k => '<th>' + rotMes(k) + '</th>').join('') + '<th>Total</th></tr></thead><tbody>' +
+      (ord.length ? ord.map(o => '<tr><td class="txt">' + esc(o.op) + '</td>' + ks.map(k => '<td>' + (valor(o, k) ? fm(valor(o, k)) : '') + '</td>').join('') + '<td><b>' + fm(ks.reduce((s, k) => s + valor(o, k), 0)) + '</b></td></tr>').join('') : '<tr><td class="txt" colspan="' + (ks.length + 2) + '">Sem dados.</td></tr>') + '</tbody></table>';
+    prepararGraficos().then(() => {
+      if(aberta !== 'inclusao') return; const top = ord.slice(0, 8); cacheBarra.clear();
+      BARRAS.gOper = (d, i) => {
+        const o = top[d], k = ks[i], m = o && o.mes.get(k), tit = o ? o.op + ' — ' + rotMes(k) + (campo === 'ev' ? ' (eventos criados)' : ' (pagamentos incluídos)') : '';
+        if(!m) return { titulo: tit, linhas: [], valor: r => r.rec };
+        let linhas;
+        if(campo === 'ev') linhas = [...new Set(m.evIds)].map(id => montarLinhaAvulsa(id)).filter(Boolean);
+        else { const por = new Map(); m.tis.forEach(t => { if(!EV.has(t.ev)) return; if(!por.has(t.ev)) por.set(t.ev, []); por.get(t.ev).push(t); }); linhas = [...por.entries()].map(([id, tis]) => montarLinhaAvulsa(id, tis, [])); }
+        return { titulo: tit, linhas, valor: r => r.rec };
+      };
+      const opt = opcoesBase(false, 'gOper');
+      opt.scales = { x: { stacked: true }, y: { stacked: true, ticks: { callback: (v) => campo === 'ev' ? v : fmtCurto(v) } } };
+      opt.plugins.tooltip.callbacks.label = (c) => ' ' + c.dataset.label + ': ' + (campo === 'ev' ? c.parsed.y : fmtR(c.parsed.y));
+      grafico('gOper', { type: 'bar', data: { labels: ks.map(rotMes), datasets: top.map((o, i) => ({ label: o.op, data: ks.map(k => valor(o, k)), backgroundColor: PALETA[i % PALETA.length] })) }, options: opt });
+    }).catch(() => {});
+  }
+  function eventosDoOperador(o, tipo){
+    const I = incAtual; const dentro = (d) => d && (!I.de || d >= I.de) && (!I.ate || d <= I.ate);
+    const ids = tipo === 'ev' ? o.evC : o.tiEv;
+    return [...ids].map(id => R && R.linhas.find(r => r.e.id === id) || montarLinhaAvulsa(id)).filter(Boolean);
+  }
+  function montarLinhaAvulsa(id, tiLista, dsLista){
+    const e = EV.get(id); if(!e) return null; const r = { e, d: e.fim, ti: tiLista || TIpor.get(id) || [], ds: dsLista || DSpor.get(id) || [], tit: 0, pago: 0, aberto: 0, vencido: 0, desp: 0, despPago: 0 };
+    const hojeIso = hoje();
+    r.ti.forEach(t => { const v = valTit(t); r.tit += v; if(t.pago) r.pago += v; else { r.aberto += v; if(t.venc && t.venc < hojeIso) r.vencido += v; } }); r.ds.forEach(t => { r.desp += valTit(t); });
+    r.rec = r.tit; r.res = r.rec - r.desp; return r;
+  }
+
+  // ----- conferência -----
+  function desenharConferencia(){
+    const L = R.linhas;
+    const tiOrfas = TI.filter(t => !t.ev), tiSemEv = TI.filter(t => t.ev && !EV.has(t.ev)), semFin = TI.filter(t => !t.temFin);
+    const semPag = L.filter(r => !r.ti.length), venc = L.filter(r => r.vencido > 0);
+    const foraEv = TI.filter(t => !t.ev || !EV.has(t.ev));
+    const k = $('kpisConf'); k.replaceChildren();
+    k.append(kpi('Receita (pagamentos)', fmtR(R.T.rec), '', 'do período filtrado'), kpi('Recebido', fmtR(R.T.pago), 'pos', R.T.rec ? Math.round(R.T.pago / R.T.rec * 100) + '% da receita' : ''),
+      kpi('Vencido a receber', fmtR(R.T.vencido), R.T.vencido ? 'neg' : 'pos', venc.length.toLocaleString('pt-BR') + ' evento(s)'),
+      kpi('Eventos sem pagamento', semPag.length.toLocaleString('pt-BR'), semPag.length ? 'neg' : 'pos', 'de ' + L.length.toLocaleString('pt-BR') + ' no período'),
+      kpi('Pagamentos sem evento válido', foraEv.length.toLocaleString('pt-BR'), foraEv.length ? 'neg' : 'pos', fmtR(foraEv.reduce((s, t) => s + t.v, 0)) + ' (arquivo todo, fora da receita)'),
+      kpi('Pagamentos sem data de inclusão', semFin.length.toLocaleString('pt-BR'), semFin.length ? 'neg' : '', fmtR(semFin.reduce((s, t) => s + t.v, 0)) + ' (arquivo todo)'),
+      kpi('Eventos sem data de término válida', ((qual.ev && qual.ev.semFim) || 0).toLocaleString('pt-BR'), qual.ev && qual.ev.semFim ? 'neg' : '', 'ex.: 31/12/9999'));
+    $('tbDif').innerHTML = '<table class="t"><thead><tr><th class="txt">Evento</th><th>Receita</th><th>Recebido</th><th>Vencido</th></tr></thead><tbody>' +
+      (venc.length ? venc.slice().sort((a, b) => b.vencido - a.vencido).slice(0, 40).map(r => '<tr class="cl" data-ev="' + esc(r.e.id) + '"><td class="txt">' + esc(r.e.id + ' · ' + r.e.nome) + '</td><td>' + fmt(r.rec) + '</td><td>' + fmt(r.pago) + '</td><td class="neg">' + fmt(r.vencido) + '</td></tr>').join('') : '<tr><td class="txt" colspan="4">Nenhum valor vencido a receber.</td></tr>') + '</tbody></table>' + (venc.length > 40 ? '<div class="nota">Mostrando os 40 maiores de ' + venc.length + '.</div>' : '');
+    $('tbSemOrc').innerHTML = '<table class="t"><thead><tr><th class="txt">Evento</th><th class="txt">Tipo</th></tr></thead><tbody>' +
+      (semPag.length ? semPag.slice(0, 40).map(r => '<tr class="cl" data-ev="' + esc(r.e.id) + '"><td class="txt">' + esc(r.e.id + ' · ' + r.e.nome) + '</td><td class="txt">' + esc(r.e.tipo) + '</td></tr>').join('') : '<tr><td class="txt" colspan="2">Nenhum.</td></tr>') + '</tbody></table>' + (semPag.length > 40 ? '<div class="nota">Mostrando 40 de ' + semPag.length + '.</div>' : '');
+    $('tbSemTit').innerHTML = '<table class="t"><thead><tr><th class="txt">Título</th><th class="txt">Evento no arquivo</th><th>Valor</th></tr></thead><tbody>' +
+      (foraEv.length ? foraEv.slice().sort((a, b) => b.v - a.v).slice(0, 30).map(t => '<tr><td class="txt">' + esc(t.titulo || '—') + '</td><td class="txt">' + esc(t.ev || '(vazio)') + '</td><td>' + fmt(t.v) + '</td></tr>').join('') : '<tr><td class="txt" colspan="3">Nenhum.</td></tr>') + '</tbody></table>' + (foraEv.length > 30 ? '<div class="nota">Mostrando os 30 maiores de ' + foraEv.length + '.</div>' : '');
+  }
+
+  // ----- sobre os dados -----
+  function preencherDados(){
+    const ul = $('dadosLista'); ul.replaceChildren(); const li = (t) => ul.appendChild(el('li', '', t));
+    const n = (x) => (x || 0).toLocaleString('pt-BR');
+    li('Eventos: ' + n(qual.ev && qual.ev.total) + ' (' + n(qual.ev && qual.ev.semFim) + ' sem data de término válida; ' + n(qual.ev && qual.ev.fimAntesIni) + ' com término antes do início).');
+    li('Pagamentos do evento (receita): ' + n(qual.pag && qual.pag.total) + ' linhas (' + n(qual.pag && qual.pag.semEvento) + ' sem evento; ' + n(qual.pag && qual.pag.semInclusao) + ' sem data de inclusão no financeiro).');
+    li(qual.cus ? 'Consumo do almoxarifado (' + ARQ.cus + '): ' + n(qual.cus.total) + ' linhas — ' + n(qual.cus.estoque) + ' de estoque ligadas a eventos, somando ' + fmtR(qual.cus.valor) + ' às despesas (' + n(qual.cus.semEvento) + ' sem evento, ' + fmtR(qual.cus.semEventoValor) + ', ficaram de fora; ' + n(qual.cus.outros) + ' linhas que não são de estoque foram ignoradas, pois os pagamentos vêm da tabela do financeiro).' : 'Consumo do almoxarifado: arquivo ' + ARQ.cus + ' não carregado — as despesas não incluem as saídas de estoque.');
+    li(qual.sic ? 'Tabela do financeiro (' + ARQ.sic + '): ' + n(qual.sic.total) + ' linhas — ' + n(qual.sic.pagar) + ' contas a pagar e ' + n(qual.sic.receber) + ' a receber ligadas a eventos (' + n(qual.sic.semEvento) + ' sem evento e ' + n(qual.sic.zerados) + ' com valor zero ficaram de fora). As contas a pagar são as despesas dos eventos (valor = TOTAL, já dividido por setor); de lá vem também o nº da OP.' : 'Despesas e OP: arquivo ' + ARQ.sic + ' não carregado' + (DS.length ? ' (despesas vindas de ' + ARQ.desp + ').' : '.'));
+    if(DS.length) li('Despesas dos eventos: ' + n(DS.length) + ' linhas.');
+    li('Data base por pagamento/despesa (Vencimento, Pagamento ou Vencimento/pagamento): o período vale para a data de CADA pagamento/despesa, não para o evento — entram só os valores dentro do período, e os gráficos por mês usam essas datas. "Vencimento / pagamento" usa a data do pagamento nos pagos e o vencimento nos em aberto. Operadores: o filtro vale para o operador do evento (cadastro) ou do pagamento/despesa (inclusão).');
+    li('Data base: o período vale para a data escolhida no filtro (padrão: finalização do evento, Dt_fim). Datas fora de 2000–2100 (ex.: 31/12/9999) contam como "sem data" e só aparecem com o período "Tudo".');
+    li('O arquivo de pagamentos tem uma linha por baixa e repete o VALOR do título em todas elas; por isso o painel usa a baixa de cada pagamento (VLR_FINA) e, nos títulos em aberto, o saldo (valor do título − baixas). O orçamento só aparece no DRE do evento.');
+    li('Receita = soma dos pagamentos (títulos) do evento — o orçamento não entra na receita do painel. Recebido = pagamentos com data de pagamento; A receber = sem pagamento; Vencido = a receber com vencimento anterior a hoje. O setor é o campo Descrição do pagamento.');
+    li('A empresa de cada evento vem do código emp_financeiro; o nome é o mais usado nos pagamentos desse código.');
+    li('Inclusão e operador: evento = início do atendimento + Uso_cadastro; pagamento = data/hora de inclusão + Operador (o 2º campo "Operador" do arquivo de pagamentos).');
+  }
+
+  // ===================== popup =====================
+  let pilha = [];
+  function abrirPopup(titulo, kpis, nodes, voltar){
+    $('popTitulo').textContent = titulo; const k = $('popKpis'); k.replaceChildren();
+    (kpis || []).forEach(([t, v]) => { const s = el('span'); s.appendChild(document.createTextNode(t + ' ')); s.appendChild(el('b', '', v)); k.appendChild(s); });
+    const c = $('popCorpo'); c.replaceChildren(); (Array.isArray(nodes) ? nodes : [nodes]).forEach(n => c.appendChild(n));
+    $('popVoltar').hidden = !voltar; $('popVoltar').onclick = voltar || null; $('popup').hidden = false; document.body.style.overflow = 'hidden';
+  }
+  function fecharPopup(){ $('popup').hidden = true; document.body.style.overflow = ''; pilha = []; }
+  function div(html, cls){ const d = el('div', cls || ''); d.innerHTML = html; return d; }
+  function abrirEvento(id, voltar){
+    const e = EV.get(id); if(!e) return; const r = montarLinhaAvulsa(id), hojeIso = hoje();
+    const ti = (TIpor.get(id) || []).slice().sort((a, b) => cmp(a.venc, b.venc)), ds = (DSpor.get(id) || []).slice().sort((a, b) => cmp(a.venc, b.venc));
+    const sit = (t) => t.pago ? 'Pago em ' + fmtDia(t.pago) + (t.venc && t.pago > t.venc ? ' (' + (dias(t.pago) - dias(t.venc)) + ' d de atraso)' : '') : (t.venc && t.venc < hojeIso ? 'Vencido há ' + (dias(hojeIso) - dias(t.venc)) + ' d' : 'Em aberto');
+    const opCel = (op) => op ? '<td class="op" data-op="' + esc(op) + '" title="Ver itens e títulos desta OP">' + esc(op) + '</td>' : '<td>—</td>';
+    const linhasTit = (arr, rotulo) => div('<div class="rol-lanc"><table class="lanc"><thead><tr><th>Vencimento</th><th>OP</th><th class="txt">Situação</th><th>Valor</th><th>Valor no financeiro</th><th class="txt">Cliente / fornecedor</th><th class="txt">Título</th><th>Forma</th><th class="txt">Setor</th><th class="txt">Operador</th><th>Inclusão</th></tr></thead><tbody>' +
+      (arr.length ? arr.map(t => '<tr' + (!t.pago && t.venc && t.venc < hojeIso ? ' class="atraso"' : '') + '><td>' + fmtDia(t.venc) + '</td>' + opCel(opDe(t)) + '<td class="txt">' + esc(sit(t)) + '</td><td>' + fmt(t.v) + '</td><td>' + fmt(t.vf) + '</td><td class="txt">' + esc(t.nome) + '</td><td class="txt">' + esc(t.titulo) + '</td><td>' + esc(t.forma) + '</td><td class="txt">' + esc(t.setor) + '</td><td class="txt">' + esc(t.oper) + '</td><td>' + fmtDia(t.inc) + '</td></tr>').join('') : '<tr><td class="txt" colspan="11">' + rotulo + '</td></tr>') + '</tbody></table></div>');
+    const h4 = (t) => el('h4', '', t);
+    abrirPopup(e.id + ' · ' + (e.nome || 'Evento'), [['Tipo:', e.tipo], ['Empresa:', nomeEmp(e.emp)], ['Cliente:', nomeCli(e.cli)], ['Início:', fmtDia(e.ini)], ['Finalização:', fmtDia(e.fim)], ['Operador:', e.oper || '—'], ['Receita:', fmtR(r.rec)], ['Recebido:', fmtR(r.pago)], ['A receber:', fmtR(r.aberto)], ['Despesa:', DS.length ? fmtR(r.desp) : '—'], ['Resultado:', DS.length ? fmtR(r.res) : '—']],
+      [(() => { const w = el('div'); w.style.margin = '4px 0 8px'; const b = el('button', 'btn', '📄 DRE do evento'); b.type = 'button'; b.addEventListener('click', () => abrirDre(id)); w.appendChild(b); return w; })(), h4('Pagamentos do evento (' + ti.length + ')'), linhasTit(ti, 'Sem pagamentos.'), ...(DS.length ? [h4('Despesas (' + ds.length + ')'), linhasTit(ds, 'Sem despesas.')] : [])], voltar);
+  }
+  function abrirListaEventos(titulo, linhas, est){
+    est = est || { sel: null, q: '', ord: { k: 'rec', dir: -1 }, mais: 300 };   // guarda o filtro para o "← Voltar" do evento
+    const somar = (lst) => lst.reduce((x, r) => ({ rec: x.rec + r.rec, pago: x.pago + r.pago, aberto: x.aberto + r.aberto, venc: x.venc + (r.vencido || 0), desp: x.desp + r.desp, res: x.res + r.res }), { rec: 0, pago: 0, aberto: 0, venc: 0, desp: 0, res: 0 });
+    const kpisDe = (lst) => { const T = somar(lst), k = [['Eventos:', lst.length.toLocaleString('pt-BR')], ['Receita:', fmtR(T.rec)], ['Recebido:', fmtR(T.pago)], ['A receber:', fmtR(T.aberto)]]; if(T.venc) k.push(['Vencido:', fmtR(T.venc)]); if(R && R.T.temDesp) k.push(['Despesa:', fmtR(T.desp)], ['Resultado:', fmtR(T.res)]); return k; };
+    const T = somar(linhas);
+    const agrupa = (chave) => { const m = new Map(); linhas.forEach(r => m.set(chave(r), (m.get(chave(r)) || 0) + r.rec)); return [...m.entries()].filter(([, v]) => v).sort((a, b) => b[1] - a[1]); };
+    const cli = agrupa(r => r.e.cli).slice(0, 8), emp = agrupa(r => r.e.emp);
+    const tabGrupo = (tipo, titulo2, rotulo, lista, nomeFn, chave) => '<h4>' + titulo2 + '</h4><div class="rol-lanc" style="max-height:24vh"><table class="lanc"><thead><tr><th class="txt">' + rotulo + '</th><th>Eventos</th><th>Receita</th><th>%</th></tr></thead><tbody>' +
+      lista.map(([c, v]) => '<tr class="cl" data-sel="' + tipo + '" data-k="' + esc(c) + '" title="Clique para filtrar a lista abaixo"><td class="txt">' + esc(nomeFn(c)) + '</td><td>' + linhas.filter(r => chave(r) === c && r.rec).length + '</td><td>' + fmt(v) + '</td><td>' + (T.rec ? (v / T.rec * 100).toFixed(1).replace('.', ',') : '0') + '%</td></tr>').join('') + '</tbody></table></div>';
+    const blocos = el('div', 'duas-col');
+    blocos.appendChild(div(cli.length ? tabGrupo('cli', 'Principais clientes', 'Cliente', cli, nomeCli, r => r.e.cli) : '<h4>Principais clientes</h4><div class="op-obs">Sem receita.</div>'));
+    if(emp.length > 1) blocos.appendChild(div(tabGrupo('emp', 'Empresas', 'Empresa', emp, nomeEmp, r => r.e.emp)));
+    const chip = el('div', 'filtro-chip'); chip.hidden = true;
+    const barra = el('div', 'barra-h'); barra.style.padding = '10px 0 4px';
+    const h4 = el('h4', '', 'Eventos (clique para abrir)'); h4.style.margin = '0'; h4.style.flex = '1'; barra.appendChild(h4);
+    const busca = document.createElement('input'); busca.type = 'search'; busca.className = 'busca'; busca.placeholder = 'Buscar nesta lista…'; busca.value = est.q; busca.style.minWidth = '160px'; barra.appendChild(busca);
+    const bCsv = el('button', 'btn sec mini', '⬇ CSV'); bCsv.type = 'button'; barra.appendChild(bCsv);
+    const bXls = el('button', 'btn sec mini', '⬇ Excel'); bXls.type = 'button'; barra.appendChild(bXls);
+    const box = el('div'), wrap = el('div', 'rol-lanc'); wrap.style.maxHeight = '46vh'; wrap.appendChild(box);
+    const visiveis = () => {
+      let l = linhas;
+      if(est.sel) l = l.filter(r => (est.sel.tipo === 'cli' ? r.e.cli : r.e.emp) === est.sel.k);
+      const q = semAcento(est.q); if(q) l = l.filter(r => semAcento([r.e.id, r.e.nome, r.e.tipo, nomeCli(r.e.cli), r.e.oper, nomeEmp(r.e.emp), r.e.local].join(' ')).includes(q));
+      return ordenarLinhas(l.slice(), est.ord);
+    };
+    const desenhar = () => {
+      const l = visiveis(), svM = evMais, svO = evOrd; evMais = est.mais; evOrd = est.ord; tabelaEventos(box, l); evMais = svM; evOrd = svO;
+      blocos.querySelectorAll('tr[data-sel]').forEach(tr => tr.classList.toggle('sel-ativa', !!est.sel && tr.dataset.sel === est.sel.tipo && tr.dataset.k === est.sel.k));
+      chip.hidden = !est.sel; chip.replaceChildren();
+      if(est.sel){ const t = somar(l); chip.appendChild(el('span', '', 'Filtrando ' + (est.sel.tipo === 'cli' ? 'o cliente' : 'a empresa') + ': ' + (est.sel.tipo === 'cli' ? nomeCli(est.sel.k) : nomeEmp(est.sel.k)) + ' — ' + l.length.toLocaleString('pt-BR') + ' evento(s), receita ' + fmtR(t.rec)));
+        const x = el('button', 'btn sec mini', '× tirar filtro'); x.type = 'button'; x.addEventListener('click', () => { est.sel = null; est.mais = 300; desenhar(); }); chip.appendChild(x); }
+      const k = $('popKpis'); k.replaceChildren(); kpisDe(l).forEach(([t, v]) => { const sp = el('span'); sp.appendChild(document.createTextNode(t + ' ')); sp.appendChild(el('b', '', v)); k.appendChild(sp); });
+    };
+    blocos.addEventListener('click', (ev) => { const tr = ev.target.closest('tr[data-sel]'); if(!tr) return; const igual = est.sel && est.sel.tipo === tr.dataset.sel && est.sel.k === tr.dataset.k; est.sel = igual ? null : { tipo: tr.dataset.sel, k: tr.dataset.k }; est.mais = 300; desenhar(); });
+    busca.addEventListener('input', () => { est.q = busca.value; est.mais = 300; desenhar(); });
+    wrap.addEventListener('click', (ev) => {
+      const th = ev.target.closest('th[data-ord]');
+      if(th){ est.ord = { k: th.dataset.ord, dir: est.ord.k === th.dataset.ord ? -est.ord.dir : (['nome', 'tipo', 'cli'].includes(th.dataset.ord) ? 1 : -1) }; desenhar(); return; }
+      if(ev.target.closest('[data-mais]')){ est.mais += 300; desenhar(); return; }
+      const tr = ev.target.closest('tr[data-ev]'); if(tr) abrirEvento(tr.dataset.ev, () => abrirListaEventos(titulo, linhas, est));
+    });
+    const slug = semAcento(titulo).replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40) || 'lista';
+    bCsv.addEventListener('click', () => { const d = dadosEventosExport(visiveis()); baixarCsv(nomeArq('eventos_' + slug), d.cab, d.l); });
+    bXls.addEventListener('click', async () => { const d = dadosEventosExport(visiveis()); try { await baixarXlsx(nomeArq('eventos_' + slug), 'Eventos', d.cab, d.l, d.moeda); } catch(err){ alert('Não consegui gerar o Excel: ' + err.message); } });
+    abrirPopup(titulo, kpisDe(linhas), [blocos, chip, barra, wrap]);
+    desenhar();
+  }
+
+  // ===================== exportação =====================
+  function baixarBlob(blob, nome){ const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = nome; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000); }
+  function baixarCsv(nome, cab, linhas){ const cel = (s) => typeof s === 'number' ? String(s).replace('.', ',') : '"' + String(s == null ? '' : s).replace(/"/g, '""') + '"'; baixarBlob(new Blob(['﻿' + [cab, ...linhas].map(l => l.map(cel).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' }), nome + '.csv'); }
+  async function baixarXlsx(nome, aba, cab, linhas, colsMoeda){
+    await carregarScript('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js');
+    const wb = new ExcelJS.Workbook(); wb.creator = 'Servir'; const ws = wb.addWorksheet(aba, { views: [{ state: 'frozen', ySplit: 1 }] });
+    ws.addRow(cab); linhas.forEach(l => ws.addRow(l));
+    const lado = { style: 'thin', color: { argb: 'FF000000' } }, moeda = '"R$" #,##0.00;[Red]-"R$" #,##0.00';
+    ws.eachRow((row, nl) => row.eachCell({ includeEmpty: true }, (cell, nc) => { if(nc > cab.length) return; cell.border = { top: lado, left: lado, bottom: lado, right: lado };
+      if(nl === 1){ cell.font = { bold: true }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE4E7EA' } }; cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true }; }
+      else if(colsMoeda.includes(nc - 1) && typeof cell.value === 'number') cell.numFmt = moeda; }));
+    cab.forEach((c, i) => { ws.getColumn(i + 1).width = colsMoeda.includes(i) ? 16 : Math.max(10, Math.min(46, c.length + 6)); });
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: cab.length } };
+    baixarBlob(new Blob([await wb.xlsx.writeBuffer()], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nome + '.xlsx');
+  }
+  const r2 = (n) => Math.round(n * 100) / 100;
+  function dadosEventosExport(lista){
+    const cab = ['Nº', 'Evento', 'Tipo', 'Empresa', 'Cliente', 'Operador', 'Início', 'Finalização', 'Receita', 'Recebido', 'A receber', 'Vencido', 'Despesa', 'Resultado'];
+    const l = (lista || linhasEventos()).map(r => [r.e.id, r.e.nome, r.e.tipo, nomeEmp(r.e.emp), nomeCli(r.e.cli), r.e.oper, fmtDia(r.e.ini), fmtDia(r.e.fim), r2(r.rec), r2(r.pago), r2(r.aberto), r2(r.vencido), R.T.temDesp ? r2(r.desp) : '', R.T.temDesp ? r2(r.res) : '']);
+    return { cab, l, moeda: [8, 9, 10, 11, 12, 13] };
+  }
+  function dadosGruposExport(){
+    const { modo, l } = montarGrupos(); const d = R.T.temDesp;
+    return { cab: [{ mes: 'Mês', ano: 'Ano', tipo: 'Tipo de evento', emp: 'Empresa', cli: 'Cliente', oper: 'Operador do evento' }[modo], 'Eventos', 'Receita', 'Recebido', 'A receber', 'Despesa', 'Resultado'],
+      l: l.map(g => [g.rot, g.n, r2(g.rec), r2(g.pago), r2(g.aberto), d ? r2(g.desp) : '', d ? r2(g.res) : '']), moeda: [2, 3, 4, 5] };
+  }
+  const nomeArq = (p) => p + '_' + (R.de || 'inicio') + '_a_' + (R.ate || hoje());
+
+  // ===================== carga =====================
+  function aviso(tipo, msg){ const a = $('aviso'); a.className = 'aviso' + (tipo ? ' ' + tipo : ''); a.textContent = msg || ''; a.hidden = !msg; }
+  function aplicar(){
+    reconstruir(); $('inicio').replaceChildren(); $('app').hidden = false;
+    const s = lerLS(K_FILTROS, {});
+    if(!FILTROS_PRONTOS){ FILTROS_PRONTOS = true; ['base', 'periodo', 'adm'].forEach(k => { if(s[k]) FIL[k] = s[k]; }); if(s.iPeriodo) INC.periodo = s.iPeriodo; if(s.iMedida === 'tit' || s.iMedida === 'ev') INC.medida = s.iMedida; }
+    $('fBase').value = FIL.base; $('fPeriodo').value = FIL.periodo; $('fAdm').value = FIL.adm; $('iPeriodo').value = INC.periodo; $('iMedida').value = INC.medida;
+    desenharPaineis(); preencherDados(); lerCamposFiltro(); calcular(); render();
+  }
+  const LIMITE_LEITURA_DIRETA = 3 * 1024 * 1024;
+  const mb = (b) => (b / 1048576).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + ' MB';
+  function dicaScriptGoogle(msg){ if(/permiss|authoriz|autoriz|external_request/i.test(msg)) return ' — No script do Google, rode a função "autorizar" uma vez (menu Executar) e reimplante (Implantar → Gerenciar implantações → ✏️ → Nova versão).'; return ''; }
+  async function baixarEmPartes(n, bytes){
+    for(let tentativa = 0; tentativa < 3; tentativa++){
+      let inicio = 0, atualizado = null, mudou = false; const partes = [];
+      while(true){
+        let r; try { r = await chamar('&acao=parte&arquivo=' + encodeURIComponent(n) + '&inicio=' + inicio); } catch(err){ throw new Error(err.message + dicaScriptGoogle(err.message)); }
+        if(r.proximo === undefined) throw new Error('O script do Google está desatualizado e não sabe ler arquivos grandes em partes. Cole a versão nova de google-apps-script-coletor.gs, rode "autorizar" e reimplante.');
+        if(atualizado && r.atualizado !== atualizado){ mudou = true; break; }
+        atualizado = r.atualizado; partes.push(r.texto);
+        $('rodape').textContent = 'Baixando ' + n + '… ' + mb(Math.min(r.proximo, r.total)) + ' de ' + mb(r.total || bytes);
+        if(r.proximo >= r.total) break; if(r.proximo <= inicio) throw new Error('A leitura em partes de ' + n + ' não avançou.'); inicio = r.proximo;
+      }
+      if(!mudou) return { texto: partes.join(''), atualizado };
+    }
+    throw new Error('O arquivo ' + n + ' mudou várias vezes durante a leitura — tente atualizar de novo em instantes.');
+  }
+  async function baixarArquivo(n, bytes){
+    if(!(bytes > LIMITE_LEITURA_DIRETA)){
+      const r = await chamar('&acao=ler&arquivos=' + encodeURIComponent(n)); const f = r.arquivos[n];
+      if(f && f.texto != null) return { texto: f.texto, atualizado: f.atualizado };
+      if(!(f && (f.grande || /exced|maxim|too large/i.test(f.erro || '')))) return null;
+    }
+    return baixarEmPartes(n, bytes);
+  }
+  async function carregar(){
+    if(!cfg.url || !cfg.token){ if(!qual.ev) mostrarInicio(); return; }
+    const btn = $('btnAtualizar'); btn.classList.add('girando'); btn.disabled = true; detOp = null; detOpPromessa = null;
+    try {
+      if(!bd) bd = await abrirBd();
+      const lista = await chamar('&acao=listar'); const quando = {}, tamanho = {}; lista.arquivos.forEach(a => { quando[a.arquivo] = a.atualizado; tamanho[a.arquivo] = a.bytes; });
+      if(!quando[ARQ.ev]) throw new Error('O arquivo ' + ARQ.ev + ' não está na pasta do Drive.');
+      const textos = {};
+      for(const n of [ARQ.ev, ARQ.pag, ARQ.desp, ARQ.sic, ARQ.cus, ARQ.orc, ARQ.iev, ARQ.status].filter(n => quando[n])){
+        const c = await cacheGet(cacheUn + n); if(c && c.atualizado === quando[n]){ textos[n] = c.texto; continue; }
+        $('rodape').textContent = 'Baixando ' + n + '…'; const f = await baixarArquivo(n, tamanho[n]);
+        if(f && f.texto != null){ textos[n] = f.texto; await cachePut(cacheUn + n, { atualizado: quando[n], texto: f.texto }); }
+      }
+      $('rodape').textContent = ''; const falhas = [];
+      const tenta = (n, fn, rot) => { if(textos[n]){ try { fn(textos[n]); } catch(e){ falhas.push(e.message); } } else if(rot) falhas.push('Não encontrei/li ' + n + ' — ' + rot); };
+      tenta(ARQ.ev, montarEventos); tenta(ARQ.pag, montarPagamentos, 'sem os pagamentos (receita) dos eventos.'); tenta(ARQ.desp, montarDespesas); tenta(ARQ.sic, montarSicon); tenta(ARQ.cus, montarCustos); tenta(ARQ.orc, montarOrcamentos); tenta(ARQ.iev, montarItensEvento);
+      if(!qual.ev) throw new Error(falhas.join(' '));
+      aplicar();
+      $('rodape').textContent = 'Dados do Drive — ' + [ARQ.ev, ARQ.pag, ARQ.desp, ARQ.sic, ARQ.cus, ARQ.orc, ARQ.iev].filter(n => quando[n]).map(n => n + ' ' + new Date(quando[n]).toLocaleString('pt-BR')).join(' · ');
+      avisoColeta(textos[ARQ.status], falhas);
+    } catch(err){
+      console.error(err); aviso('erro', (qual.ev ? 'Não consegui atualizar agora (mostrando os últimos dados): ' : '') + err.message); if(!qual.ev) $('inicio').replaceChildren();
+    } finally { btn.classList.remove('girando'); btn.disabled = false; }
+  }
+  function avisoColeta(statusTexto, falhas){
+    let msg = (falhas || []).join(' '), tipo = 'alerta';
+    try { if(statusTexto){ const s = JSON.parse(statusTexto), q = new Date(s.executado_em), h = (Date.now() - q.getTime()) / 3600000;
+      if(s.ok === false){ msg += ' A última coleta (' + q.toLocaleString('pt-BR') + ') teve erro em algum arquivo — os dados podem estar desatualizados.'; tipo = 'erro'; }
+      else if(h > 3) msg += ' A coleta no computador da empresa não roda desde ' + q.toLocaleString('pt-BR') + ' — os dados podem estar desatualizados.'; } } catch(e){}
+    aviso(tipo, msg.trim());
+  }
+  function mostrarInicio(){
+    const v = el('div', 'vazio'); v.appendChild(el('div', '', 'Nenhum dado carregado.'));
+    v.appendChild(el('div', '', 'Entre pelo Servir (o endereço do script do Google fica guardado na unidade) ou abra os CSV deste computador (📂): analise_eventos.csv, analise_pagamentos_eventos.csv e (para despesas e OP) analise_pagamentos_sicon.csv.'));
+    $('inicio').replaceChildren(v); $('app').hidden = true;
+  }
+  $('arquivosCsv').addEventListener('change', async (ev) => {
+    const arqs = [...ev.target.files]; if(!arqs.length) return;
+    const ignorados = [];
+    try {
+      for(const f of arqs){
+        const texto = await f.text(), cab = semAcento(texto.slice(0, texto.search(/\r|\n/) > 0 ? texto.search(/\r|\n/) : 2000)), nome = semAcento(f.name);
+        if(nome.includes('desp')) montarDespesas(texto);
+        else if(nome.includes('itens_evento')) montarItensEvento(texto);
+        else if(nome.includes('custos') || (cab.includes('titulospagos') && cab.includes('cliente'))) montarCustos(texto);
+        else if(cab.includes('tipo_cta') && cab.includes('evento') && cab.includes('total')) montarSicon(texto);
+        else if(cab.includes('inicio_atendimento') && cab.includes('dt_fim')) montarEventos(texto);
+        else if(cab.includes('valor_total') && cab.includes('plano_contas')) montarOrcamentos(texto);
+        else if(cab.includes('dt_venc') || cab.includes('dthrincliu') || cab.includes('tipo_mov')) montarPagamentos(texto);
+        else throw new Error('Não reconheci o arquivo ' + f.name + ' (esperado: analise_eventos, analise_pagamentos_eventos, analise_orcamentos_eventos ou analise_pagamentos_sicon).');
+      }
+      if(!qual.ev) throw new Error('Falta o arquivo de eventos (analise_eventos.csv).');
+      aplicar(); aviso(ignorados.length ? 'alerta' : '', ignorados.length ? 'O arquivo de orçamentos (' + ignorados.join(', ') + ') foi ignorado: a receita do painel vem só dos pagamentos do evento.' : ''); $('rodape').textContent = 'Arquivo(s) aberto(s) neste computador: ' + arqs.filter(f => !ignorados.includes(f.name)).map(f => f.name).join(', ');
+    } catch(err){ aviso('erro', err.message); }
+    ev.target.value = '';
+  });
+
+  // ===================== detalhe da OP: itens/produtos (itens_op.csv) e títulos (titulos_op.csv) =====================
+  // Só é carregado quando alguém clica numa OP (os dois arquivos podem ser grandes); fica no cache local como o arquivo principal.
+  const CP1252 = { 0x20AC: 0x80, 0x201A: 0x82, 0x0192: 0x83, 0x201E: 0x84, 0x2026: 0x85, 0x2020: 0x86, 0x2021: 0x87, 0x02C6: 0x88, 0x2030: 0x89, 0x0160: 0x8A, 0x2039: 0x8B, 0x0152: 0x8C, 0x017D: 0x8E,
+    0x2018: 0x91, 0x2019: 0x92, 0x201C: 0x93, 0x201D: 0x94, 0x2022: 0x95, 0x2013: 0x96, 0x2014: 0x97, 0x02DC: 0x98, 0x2122: 0x99, 0x0161: 0x9A, 0x203A: 0x9B, 0x0153: 0x9C, 0x017E: 0x9E, 0x0178: 0x9F };
+  // texto com acento "duplicado" (ex.: "INCLUSÃƒO" no lugar de "INCLUSÃO"): desfaz a dupla codificação; se não for o caso, devolve igual
+  function repararAcentos(t){
+    if(!/[ÃÂ][\u0080-\u00BF\u0152\u0153\u0160\u0161\u0178\u017D\u017E\u0192\u02C6\u02DC\u2013-\u203A\u20AC\u2122]/.test(t)) return t;
+    try {
+      const b = new Uint8Array(t.length);
+      for(let i = 0; i < t.length; i++){ const c = t.charCodeAt(i), m = c < 256 ? c : CP1252[c]; if(m === undefined) return t; b[i] = m; }
+      return new TextDecoder('utf-8', { fatal: true }).decode(b);
+    } catch(e){ return t; }
+  }
+  const normOp = (s) => String(s == null ? '' : s).trim().replace(/^0+(?=\d)/, '');
+  function indexarItens(texto){
+    const { achadas, linhas } = lerCsvColunas(repararAcentos(texto), ['op', 'desc_produto', 'qtd', 'vlr_liq', 'tipo']);
+    if(!achadas.op || !achadas.desc_produto) throw new Error('O arquivo não parece ser o itens_op.csv (faltam as colunas OP e Desc_Produto).');
+    const mapa = new Map();
+    for(const r of linhas){ const k = normOp(r[0]); if(!k) continue; let a = mapa.get(k); if(!a){ a = []; mapa.set(k, a); } a.push({ d: String(r[1]).trim(), q: num(r[2]), v: num(r[3]), tp: String(r[4]).trim().toUpperCase() }); }
+    return mapa;
+  }
+  function indexarTitulos(texto){
+    const { achadas, linhas } = lerCsvColunas(repararAcentos(texto), ['op', 'total', 'datav', 'dtpagto', 'situacao', 'historico', 'descmoeda', 'conta_pagamento']);
+    if(!achadas.op || !achadas.datav) throw new Error('O arquivo não parece ser o titulos_op.csv (faltam as colunas OP e DATAV).');
+    const mapa = new Map();
+    for(const r of linhas){
+      const k = normOp(r[0]); if(!k) continue; let a = mapa.get(k); if(!a){ a = []; mapa.set(k, a); }
+      a.push({ v: num(r[1]), venc: isoData(r[2]), vencTxt: String(r[2]).trim(), pg: isoData(r[3]), sit: String(r[4]).trim().toUpperCase(), h: String(r[5]).trim(), forma: String(r[6]).trim(), conta: String(r[7]).trim() });
+    }
+    return mapa;
+  }
+  let detOp = null, detOpPromessa = null;      // índice carregado (zera ao atualizar os dados)
+  const detLocal = { itens: null, tit: null };  // arquivos abertos neste computador (📂 do popup)
+  async function carregarDetalheOp(){
+    if(detOp) return detOp;
+    if(detOpPromessa) return detOpPromessa;
+    detOpPromessa = (async () => {
+      const det = { itens: detLocal.itens, tit: detLocal.tit, faltam: [], erros: [], semDrive: !(cfg.url && cfg.token) };
+      if(!(det.itens && det.tit) && !det.semDrive){
+        try {
+          if(!bd) bd = await abrirBd();
+          const lista = await chamar('&acao=listar'), quando = {}, tamanho = {};
+          lista.arquivos.forEach(a => { quando[a.arquivo] = a.atualizado; tamanho[a.arquivo] = a.bytes; });
+          for(const [chave, nome] of [['itens', ARQ.itens], ['tit', ARQ.tit]]){
+            if(det[chave]) continue;
+            if(!quando[nome]){ det.faltam.push(nome); continue; }
+            let texto = null; const c = await cacheGet(cacheUn + nome);
+            if(c && c.atualizado === quando[nome]) texto = c.texto;
+            else { const f = await baixarArquivo(nome, tamanho[nome]); if(f && f.texto != null){ texto = f.texto; await cachePut(cacheUn + nome, { atualizado: quando[nome], texto }); } }
+            if(texto == null){ det.erros.push('Não consegui ler ' + nome + '.'); continue; }
+            try { det[chave] = chave === 'itens' ? indexarItens(texto) : indexarTitulos(texto); } catch(err){ det.erros.push(nome + ': ' + err.message); }
+          }
+        } catch(err){ det.erros.push(err.message + dicaScriptGoogle(err.message)); }
+      }
+      detOp = det; return det;
+    })();
+    try { return await detOpPromessa; } finally { detOpPromessa = null; }
+  }
+  const diasEntre = (a, b) => Math.round((Date.UTC(+b.slice(0, 4), +b.slice(5, 7) - 1, +b.slice(8, 10)) - Date.UTC(+a.slice(0, 4), +a.slice(5, 7) - 1, +a.slice(8, 10))) / 86400000);
+  const plural = (n, um, varios) => n + ' ' + (n === 1 ? um : varios);
+  function situacaoTitulo(t){
+    const quitado = t.sit === 'Q', aberto = t.sit === 'A' || (!t.sit && !t.pg);
+    const dv = t.venc || '';
+    let prazo = '', cls = '';
+    if(quitado && dv && t.pg){ const d = diasEntre(dv, t.pg); if(d > 0){ prazo = 'pago com ' + plural(d, 'dia', 'dias') + ' de atraso'; cls = 'neg'; } else prazo = 'pago no prazo'; }
+    else if(!quitado && aberto && dv){ const d = diasEntre(dv, hoje()); if(d > 0){ prazo = 'vencido há ' + plural(d, 'dia', 'dias'); cls = 'neg'; } else if(d === 0) prazo = 'vence hoje'; else prazo = 'vence em ' + plural(-d, 'dia', 'dias'); }
+    return { rot: quitado ? 'Quitado' : aberto ? 'Em aberto' : (t.sit ? 'Situação ' + t.sit : 'Em aberto'), quitado, aberto: !quitado, prazo, cls };
+  }
+  let opAberta = '';
+  function fecharOp(){ $('popupOp').hidden = true; opAberta = ''; }
+  async function abrirOp(opBruto){
+    const op = normOp(opBruto); if(!op) return;
+    opAberta = op;
+    $('opTitulo').textContent = 'OP ' + op; $('opKpis').replaceChildren();
+    $('opCorpo').replaceChildren(el('div', 'vazio', 'Carregando itens e títulos da OP…'));
+    $('popupOp').hidden = false; $('popupOp').scrollTop = 0;
+    let det;
+    try { det = await carregarDetalheOp(); }
+    catch(err){ if(opAberta === op) $('opCorpo').replaceChildren(el('div', 'vazio', err.message)); return; }
+    if(opAberta === op) desenharOp(op, det);
+  }
+  function desenharOp(op, det){
+    const itens = det.itens ? (det.itens.get(op) || []) : null, tits = det.tit ? (det.tit.get(op) || []).slice() : null;
+    const corpo = $('opCorpo'); corpo.replaceChildren();
+    const k = $('opKpis'); k.replaceChildren();
+    const par = (t, v) => { const sp = el('span'); sp.appendChild(document.createTextNode(t + ' ')); sp.appendChild(el('b', '', v)); k.appendChild(sp); };
+    // ----- itens / produtos -----
+    const secItens = el('div'); secItens.appendChild(el('h4', '', 'Itens / produtos da OP'));
+    if(!itens) secItens.appendChild(el('div', 'op-obs', 'O arquivo ' + ARQ.itens + ' não foi carregado' + (det.faltam.includes(ARQ.itens) ? ' (não está na pasta do Drive).' : '.')));
+    else if(!itens.length) secItens.appendChild(el('div', 'op-obs', 'Nenhum item encontrado para esta OP em ' + ARQ.itens + '.'));
+    else {
+      const porTipo = new Map(); itens.forEach(i => porTipo.set(i.tp || '—', (porTipo.get(i.tp || '—') || 0) + i.v));
+      const t = el('table', 'lanc');
+      t.innerHTML = '<thead><tr><th class="txt">Produto / descrição</th><th>Qtd</th><th>Valor líquido (R$)</th><th>Tipo</th></tr></thead><tbody>' +
+        itens.map(i => '<tr><td class="txt" style="white-space:normal">' + esc(i.d) + '</td><td>' + i.q.toLocaleString('pt-BR', { maximumFractionDigits: 3 }) + '</td><td>' + fmt(i.v) + '</td><td>' + esc(i.tp) + '</td></tr>').join('') +
+        '</tbody><tfoot>' + [...porTipo].map(([tp, v]) => '<tr><td class="txt" colspan="2">Total ' + esc(tp) + '</td><td>' + fmt(v) + '</td><td></td></tr>').join('') + '</tfoot>';
+      const w = el('div', 'rol-lanc'); w.appendChild(t); secItens.appendChild(w);
+      par('Itens:', String(itens.length)); porTipo.forEach((v, tp) => par('Total ' + tp + ':', fmtR(v)));
+    }
+    corpo.appendChild(secItens);
+    // ----- títulos por vencimento -----
+    const secTit = el('div'); secTit.appendChild(el('h4', '', 'Títulos, por data de vencimento'));
+    if(!tits) secTit.appendChild(el('div', 'op-obs', 'O arquivo ' + ARQ.tit + ' não foi carregado' + (det.faltam.includes(ARQ.tit) ? ' (não está na pasta do Drive).' : '.')));
+    else if(!tits.length) secTit.appendChild(el('div', 'op-obs', 'Nenhum título encontrado para esta OP em ' + ARQ.tit + '.'));
+    else {
+      tits.sort((a, b) => cmp(a.venc || a.vencTxt || '9', b.venc || b.vencTxt || '9'));
+      const sit = tits.map(situacaoTitulo);
+      const tot = tits.reduce((s, x) => s + x.v, 0), pago = tits.reduce((s, x, i) => s + (sit[i].quitado ? x.v : 0), 0);
+      const t = el('table', 'lanc');
+      t.innerHTML = '<thead><tr><th>Vencimento</th><th>Valor (R$)</th><th class="txt">Situação</th><th>Data do pagamento</th><th class="txt">Prazo</th><th class="txt">Forma de pagamento</th><th>Conta</th><th class="txt">Histórico</th></tr></thead><tbody>' +
+        tits.map((x, i) => '<tr class="' + (sit[i].quitado ? '' : 't-aberto') + '"><td>' + (x.venc ? fmtDia(x.venc) : esc(x.vencTxt) || '—') + '</td><td>' + fmt(x.v) + '</td><td class="txt">' + esc(sit[i].rot) + '</td><td>' + (x.pg ? fmtDia(x.pg) : '—') + '</td><td class="txt ' + sit[i].cls + '">' + esc(sit[i].prazo) + '</td><td class="txt">' + esc(x.forma) + '</td><td>' + esc(x.conta) + '</td><td class="hist">' + esc(x.h) + '</td></tr>').join('') +
+        '</tbody><tfoot><tr><td>Total</td><td>' + fmt(tot) + '</td><td class="txt" colspan="6">Pago: ' + fmtR(pago) + ' · Em aberto: ' + fmtR(tot - pago) + '</td></tr></tfoot>';
+      const w = el('div', 'rol-lanc'); w.appendChild(t); secTit.appendChild(w);
+      par('Títulos:', String(tits.length)); par('Valor dos títulos:', fmtR(tot)); par('Pago:', fmtR(pago)); if(tot - pago > 0.005) par('Em aberto:', fmtR(tot - pago));
+    }
+    corpo.appendChild(secTit);
+    if(det.erros.length) corpo.appendChild(el('div', 'op-obs', '⚠ ' + det.erros.join(' · ')));
+    if(det.semDrive && !(det.itens || det.tit)) corpo.appendChild(el('div', 'op-obs', 'Entre pelo Servir (o endereço do script do Google fica guardado na unidade) ou abra os arquivos deste computador pelo botão abaixo.'));
+  }
+
+  // ===================== filtro por evento =====================
+  function eventosParaBusca(q){
+    const t = semAcento(q).trim(), palavras = t ? t.split(/\s+/) : []; let l = [...EV.values()];
+    if(palavras.length) l = l.filter(e => { const base = semAcento(e.id + ' ' + e.nome + ' ' + e.local + ' ' + nomeCli(e.cli)); return palavras.every(p => base.includes(p)); });
+    l.sort((a, b) => (b.fim || b.ini || '').localeCompare(a.fim || a.ini || '') || (+b.id - +a.id));
+    return l.slice(0, 10);
+  }
+  function renderBuscaEvento(){
+    const box = $('fEventoRes'), l = eventosParaBusca($('fEvento').value); box.replaceChildren();
+    if(!l.length){ box.appendChild(el('div', 'vazio-busca', 'Nenhum evento encontrado.')); box.hidden = false; return; }
+    l.forEach(e => { const it = el('div', 'item-resultado', e.id + ' · ' + (e.nome || 'Evento') + (e.fim ? ' · ' + fmtDia(e.fim) : '') + ' · ' + nomeCli(e.cli)); it.dataset.id = e.id; box.appendChild(it); });
+    box.hidden = false;
+  }
+  function escolherEvento(id){
+    const e = EV.get(id); FIL.evento = e ? id : ''; $('fEvento').value = e ? e.id + ' · ' + e.nome : ''; $('fEventoRes').hidden = true; $('campoDreEvento').hidden = !e; atualizar();
+  }
+  $('fEvento').addEventListener('input', renderBuscaEvento); $('fEvento').addEventListener('focus', () => { if(!FIL.evento) renderBuscaEvento(); }); $('fEvento').addEventListener('click', () => { if(!FIL.evento) renderBuscaEvento(); });
+  $('fEvento').addEventListener('blur', () => setTimeout(() => { $('fEventoRes').hidden = true; if(!FIL.evento) $('fEvento').value = ''; else if(!$('fEvento').value.trim()){ FIL.evento = ''; $('campoDreEvento').hidden = true; atualizar(); } }, 200));
+  $('fEventoRes').addEventListener('mousedown', (ev) => { ev.preventDefault(); const it = ev.target.closest('.item-resultado'); if(it) escolherEvento(it.dataset.id); });
+  $('btnLimparEvento').addEventListener('click', () => { FIL.evento = ''; $('fEvento').value = ''; $('campoDreEvento').hidden = true; atualizar(); });
+  $('btnDre').addEventListener('click', () => { if(FIL.evento) abrirDre(FIL.evento); });
+
+  // ===================== DRE do evento =====================
+  const DRE = { pct: 50, id: '' };
+  try { const v = parseFloat(localStorage.getItem('pe_dre_prov_v1')); if(isFinite(v) && v >= 0) DRE.pct = v; } catch(e){}
+  const somaV = (l, f) => l.reduce((x, t) => x + f(t), 0);
+  function dadosDre(id){
+    const e = EV.get(id); if(!e) return null;
+    const usaItens = ITENSpor.size > 0, fonteOrc = usaItens ? ARQ.iev : ARQ.orc, orcTodos = (usaItens ? ITENSpor : ORCpor).get(id) || [], orc = orcTodos.filter(l => l.fech).sort((a, b) => cmp(a.setor, b.setor) || cmp(a.serv, b.serv));
+    const rec = (TIpor.get(id) || []).slice().sort((a, b) => cmp(a.emp, b.emp) || cmp(a.venc || '9', b.venc || '9') || cmp(a.titulo, b.titulo));
+    const ds = DSpor.get(id) || [], setores = new Map();
+    ds.forEach(t => {
+      const st = t.setor || SEM_SETOR, n1 = t.n1 || 'DESPESAS / SAÍDAS', n2 = t.n2 || '(sem grupo)', pk = t.plano || '—';
+      let S = setores.get(st); if(!S){ S = { nome: st, n1: new Map(), pago: 0, aberto: 0 }; setores.set(st, S); }
+      let N1 = S.n1.get(n1); if(!N1){ N1 = new Map(); S.n1.set(n1, N1); }
+      let N2 = N1.get(n2); if(!N2){ N2 = { nome: n2, planos: new Map(), pago: 0, aberto: 0 }; N1.set(n2, N2); }
+      let P = N2.planos.get(pk); if(!P){ P = { cod: t.plano || '', nome: t.planoNome || '', pago: 0, aberto: 0 }; N2.planos.set(pk, P); }
+      const v = t.v; if(t.pago){ P.pago += v; N2.pago += v; S.pago += v; } else { P.aberto += v; N2.aberto += v; S.aberto += v; }
+    });
+    const custoPago = somaV(ds.filter(t => t.pago), t => t.v), custoAberto = somaV(ds.filter(t => !t.pago), t => t.v);
+    const recTot = somaV(rec, t => t.v), recPago = somaV(rec.filter(t => t.pago), t => t.v);
+    const orcTot = somaV(orc, l => l.v);
+    return { e, orc, orcTot, orcNaoFechadas: orcTodos.length - orc.length, rec, recTot, recPago, recAberto: recTot - recPago, fonteOrc, orcLinhasTodas: orcTodos.length, setores: [...setores.values()].sort((a, b) => cmp(a.nome, b.nome)), custoPago, custoAberto, custoTot: custoPago + custoAberto, estoqueTot: somaV(ds.filter(t => t.almox), t => t.v), temCus: !!qual.cus, temSic: SIC.length > 0, temOrc: (usaItens ? ITENSpor : ORCpor).size > 0, usaItens };
+  }
+  // blocos neutros (servem para a tela e para o PDF): { titulo, cols:[{t,num}], rows:[{cells, estilo, span}], nota }
+  function blocosDre(d){
+    const B = [], dinh = fmtR;
+    const colsOrc = [{ t: 'Principal' }, { t: 'Produto' }, { t: 'Contrato' }, { t: 'Qtd', num: 1 }, { t: 'Vlr unit.', num: 1 }, { t: 'Valor', num: 1 }];
+    const rowsOrc = d.orc.map(l => ({ cells: [l.setor, l.serv, l.cto || '', l.qtd ? String(l.qtd).replace('.', ',') : '', fmt(l.vu), fmt(l.v)] }));
+    let vazio = '';
+    if(!d.temOrc) vazio = 'Arquivo ' + d.fonteOrc + ' não carregado.';
+    else if(!d.orcLinhasTodas) vazio = 'O arquivo ' + d.fonteOrc + ' não tem nenhum item do evento ' + d.e.id + (!d.usaItens && qual.orc && qual.orc.ultimo ? ' (o último evento com itens nele é o ' + qual.orc.ultimo + ')' : '') + '.';
+    else vazio = 'Nenhum item fechado: o arquivo tem ' + d.orcLinhasTodas + ' item(ns) deste evento, mas nenhum com status fechado.';
+    if(!rowsOrc.length) rowsOrc.push({ cells: [vazio, '', '', '', '', ''] });
+    rowsOrc.push({ estilo: 'tot', span: 5, cells: ['TOTAL ORÇAMENTO FECHADO', dinh(d.orcTot)] }, { estilo: 'tot', span: 5, cells: ['TOTAL EVENTO', dinh(d.orcTot)] });
+    let notaOrc = d.orcNaoFechadas ? d.orcNaoFechadas + ' item(ns) não fechado(s) ficaram de fora. ' : '';
+    if(d.recTot > 0 && Math.abs(d.orcTot - d.recTot) > d.recTot * 0.1) notaOrc += 'Atenção: o orçamento (' + dinh(d.orcTot) + ', do arquivo ' + d.fonteOrc + ') difere bastante dos recebimentos (' + dinh(d.recTot) + ') — confira se o arquivo traz todos os itens do contrato deste evento.';
+    B.push({ titulo: 'Orçamento', cols: colsOrc, rows: rowsOrc, nota: notaOrc.trim() });
+    // recebimentos por empresa
+    const colsRec = [{ t: 'Vencimento' }, { t: 'Forma' }, { t: 'Cliente' }, { t: 'Setor' }, { t: 'Título' }, { t: 'Valor', num: 1 }, { t: 'Data' }, { t: 'Pagamento' }, { t: 'Vlr financ.', num: 1 }], rowsRec = [];
+    const porEmp = new Map(); d.rec.forEach(t => { const k = t.emp || 'Sem empresa'; if(!porEmp.has(k)) porEmp.set(k, []); porEmp.get(k).push(t); });
+    if(!d.rec.length) rowsRec.push({ cells: ['Nenhum recebimento neste evento.', '', '', '', '', '', '', '', ''] });
+    porEmp.forEach((l, emp) => {
+      rowsRec.push({ estilo: 'grupo', span: 9, cells: ['Empresa: ' + emp] });
+      l.forEach(t => rowsRec.push({ cells: [fmtDia(t.venc), FORMAR.get(t.titulo + '|' + t.ev) || '', (t.cli ? t.cli + ' - ' : '') + (t.nome || ''), t.setor, t.titulo, fmt(t.vraw), fmtDia(t.datap), t.pago ? fmtDia(t.pago) : 'a receber', fmt(t.v)] }));
+      rowsRec.push({ estilo: 'sub', span: 8, cells: ['Subtotal ' + emp, fmt(somaV(l, t => t.v))] });
+    });
+    rowsRec.push({ estilo: 'tot', span: 8, cells: ['TOTAL RECEBIMENTOS', dinh(d.recTot)] }, { estilo: 'sub', span: 8, cells: ['  Recebido', dinh(d.recPago)] }, { estilo: 'sub', span: 8, cells: ['  A receber', dinh(d.recAberto)] });
+    B.push({ titulo: 'Recebimentos (por empresa)', cols: colsRec, rows: rowsRec, nota: 'Valor = valor do título; Vlr financ. = o que foi baixado em cada pagamento (a soma das baixas é a receita). Em aberto aparece o saldo do título.' });
+    // custos por setor e plano de contas
+    const colsC = [{ t: 'Plano de contas' }, { t: 'Pagos', num: 1 }, { t: 'A pagar', num: 1 }, { t: 'Total títulos', num: 1 }], rowsC = [];
+    if(!d.setores.length) rowsC.push({ cells: [d.temSic ? 'Nenhuma despesa lançada neste evento.' : 'Tabela do financeiro (' + ARQ.sic + ') não carregada.', '', '', ''] });
+    d.setores.forEach(S => {
+      rowsC.push({ estilo: 'grupo', span: 4, cells: [S.nome] });
+      S.n1.forEach((N1, n1) => {
+        rowsC.push({ estilo: 'n1', span: 4, cells: [n1] });
+        [...N1.values()].sort((a, b) => cmp(a.nome, b.nome)).forEach(N2 => {
+          [...N2.planos.values()].sort((a, b) => cmp(a.cod, b.cod)).forEach(P => rowsC.push({ cells: [(P.cod ? P.cod + '  ' : '') + P.nome, fmt(P.pago), fmt(P.aberto), fmt(P.pago + P.aberto)] }));
+          rowsC.push({ estilo: 'sub', cells: [N2.nome, fmt(N2.pago), fmt(N2.aberto), fmt(N2.pago + N2.aberto)] });
+        });
+      });
+      rowsC.push({ estilo: 'tot', cells: ['TOTAL ' + S.nome, fmt(S.pago), fmt(S.aberto), fmt(S.pago + S.aberto)] });
+    });
+    rowsC.push({ estilo: 'tot', cells: ['TOTAL DE CUSTOS DO EVENTO', fmt(d.custoPago), fmt(d.custoAberto), fmt(d.custoTot)] });
+    const prov = d.recTot * DRE.pct / 100;
+    rowsC.push({ estilo: 'sub', span: 3, cells: ['CUSTO PROVISIONADO (' + String(DRE.pct).replace('.', ',') + '% das receitas)', dinh(prov)] }, { estilo: 'sub', span: 3, cells: ['DIFERENÇA (provisionado - custo real)', dinh(prov - d.custoTot)] });
+    const notaC = d.estoqueTot ? 'Inclui ' + dinh(d.estoqueTot) + ' de consumo do almoxarifado (grupo DESPESAS / ALMOXARIFADO), já considerado pago na data da saída.' : (d.temCus ? '' : 'O consumo do almoxarifado não está incluído: o arquivo ' + ARQ.cus + ' não foi carregado.');
+    B.push({ titulo: 'Custos do evento — setor e plano de contas', cols: colsC, rows: rowsC, nota: notaC });
+    // resultado
+    const res = d.recTot - d.custoTot, caixa = d.recPago - d.custoPago;
+    B.push({ titulo: 'Resultado do evento', cols: [{ t: 'Descrição' }, { t: 'Valor', num: 1 }], rows: [
+      { cells: ['Receitas (recebimentos)', dinh(d.recTot)] }, { cells: ['(-) Custos (pagos + a pagar)', dinh(d.custoTot)] },
+      { estilo: 'tot', cells: ['RESULTADO DO EVENTO', dinh(res)] }, { cells: ['Margem sobre as receitas', d.recTot ? (res / d.recTot * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%' : '—'] },
+      { cells: ['Resultado realizado (recebido - pago)', dinh(caixa)] }, { cells: ['A receber', dinh(d.recAberto)] }, { cells: ['A pagar', dinh(d.custoAberto)] }], nota: '' });
+    return B;
+  }
+  function htmlBlocoDre(b){
+    const cab = '<thead><tr>' + b.cols.map(c => '<th class="' + (c.num ? '' : 'txt') + '">' + esc(c.t) + '</th>').join('') + '</tr></thead>';
+    const corpo = b.rows.map(r => {
+      const cls = r.estilo ? ' class="e-' + r.estilo + '"' : '';
+      const falta = b.cols.length - (r.span || 0);
+      return '<tr' + cls + '>' + r.cells.map((cel, i) => {
+        const span = r.span && i === 0 ? ' colspan="' + r.span + '"' : '';
+        const colIdx = r.span ? (i === 0 ? 0 : r.span + i - 1) : i, num = b.cols[colIdx] && b.cols[colIdx].num && !(r.span && i === 0);
+        return '<td' + span + ' class="' + (num ? '' : 'txt') + '" style="white-space:normal">' + esc(cel) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    return '<h4>' + esc(b.titulo) + '</h4><div class="rol-lanc" style="max-height:none"><table class="lanc">' + cab + '<tbody>' + corpo + '</tbody></table></div>' + (b.nota ? '<div class="op-obs">' + esc(b.nota) + '</div>' : '');
+  }
+  function desenharDre(){
+    const d = dadosDre(DRE.id); if(!d) return;
+    const e = d.e, res = d.recTot - d.custoTot;
+    $('dreTitulo').textContent = 'DRE do evento · ' + e.id + ' - ' + (e.nome || '');
+    const k = $('dreKpis'); k.replaceChildren();
+    [['Receitas:', fmtR(d.recTot)], ['Custos:', fmtR(d.custoTot)], ['Resultado:', fmtR(res)], ['Margem:', d.recTot ? (res / d.recTot * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%' : '—']].forEach(([t, v]) => { const sp = el('span'); sp.appendChild(document.createTextNode(t + ' ')); sp.appendChild(el('b', '', v)); k.appendChild(sp); });
+    const cab = '<div class="dre-cab"><div><span>Tipo</span>' + esc((e.tipo || '').toUpperCase()) + '</div><div><span>Dt evento</span>' + fmtDia(e.ini) + (e.fim && e.fim !== e.ini ? ' a ' + fmtDia(e.fim) : '') + '</div><div><span>Cliente</span>' + esc(nomeCli(e.cli)) + '</div><div><span>Local</span>' + esc(e.local || '—') + '</div><div><span>Assessoria</span>' + esc(e.assess || '—') + '</div><div><span>Competência</span>todo o período</div></div>';
+    $('dreCorpo').innerHTML = cab + blocosDre(d).map(htmlBlocoDre).join('');
+    $('dreProv').value = DRE.pct;
+  }
+  function abrirDre(id){ if(!EV.get(id)) return; DRE.id = id; $('popupDre').hidden = false; $('popupDre').scrollTop = 0; document.body.style.overflow = 'hidden'; desenharDre(); }
+  function fecharDre(){ $('popupDre').hidden = true; if($('popup').hidden) document.body.style.overflow = ''; }
+  $('dreFechar').addEventListener('click', fecharDre); $('dreSair').addEventListener('click', fecharDre);
+  $('popupDre').addEventListener('click', (ev) => { if(ev.target === $('popupDre')) fecharDre(); });
+  $('dreProv').addEventListener('input', () => { const v = parseFloat($('dreProv').value); if(isFinite(v) && v >= 0){ DRE.pct = v; try { localStorage.setItem('pe_dre_prov_v1', String(v)); } catch(e){} const sc = $('popupDre').scrollTop; desenharDre(); $('popupDre').scrollTop = sc; $('dreProv').focus(); } });
+
+  // PDF do DRE (A4 retrato, no formato do relatório do Sicon) + janela Visualizar / Baixar / Compartilhar
+  async function gerarPdfDre(id){
+    await carregarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+    await carregarScript('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+    const d = dadosDre(id); if(!d) throw new Error('Evento não encontrado.');
+    const B = blocosDre(d), { jsPDF } = window.jspdf, doc = new jsPDF({ unit: 'pt', format: 'a4' });
+    const W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), M = 28, e = d.e; let y = 40;
+    const texto = (t, x, yy, tam, estilo, op) => { doc.setFont('helvetica', estilo || 'normal'); doc.setFontSize(tam || 8); doc.text(String(t), x, yy, op || {}); };
+    texto('D.R.E  Evento', M, y, 14, 'bold'); texto('COMPETENCIA: todo o periodo', W - M, y, 8.5, 'normal', { align: 'right' });
+    y += 16; texto((e.tipo || '').toUpperCase(), M, y, 10, 'bold');
+    doc.autoTable({ startY: y + 6, margin: { left: M, right: M }, theme: 'grid', styles: { fontSize: 7.5, cellPadding: 3, lineWidth: 0.2 }, headStyles: { fillColor: [228, 231, 234], textColor: 20, fontStyle: 'bold' },
+      head: [['Dt evento', 'Cod - Descricao', 'Local', 'Assessoria', 'Cliente']], body: [[fmtDia(e.ini), e.id + ' - ' + (e.nome || ''), e.local || '', e.assess || '', nomeCli(e.cli)]] });
+    y = doc.lastAutoTable.finalY + 14;
+    B.forEach((b, bi) => {
+      if(bi === 2 || y > H - 120){ doc.addPage(); y = 40; }
+      texto(b.titulo.toUpperCase().replace('—', '-'), M, y, 9.5, 'bold');
+      const colunas = {}; b.cols.forEach((c, i) => { if(c.num) colunas[i] = { halign: 'right' }; });
+      doc.autoTable({ startY: y + 5, margin: { left: M, right: M }, theme: 'grid', styles: { fontSize: b.cols.length > 6 ? 6.4 : 7.5, cellPadding: 2.4, lineWidth: 0.15, overflow: 'linebreak' }, headStyles: { fillColor: [228, 231, 234], textColor: 20, fontStyle: 'bold' }, columnStyles: colunas,
+        head: [b.cols.map(c => c.t)],
+        body: b.rows.map(r => r.span ? [{ content: r.cells[0], colSpan: r.span }, ...r.cells.slice(1)] : r.cells),
+        didParseCell: (h) => { if(h.section !== 'body') return; const r = b.rows[h.row.index]; if(r && r.estilo){ h.cell.styles.fontStyle = 'bold'; if(r.estilo === 'grupo' || r.estilo === 'tot') h.cell.styles.fillColor = [236, 238, 240]; } } });
+      y = doc.lastAutoTable.finalY + 6;
+      if(b.nota){ doc.setTextColor(90); const ls = doc.splitTextToSize(b.nota, W - 2 * M); texto(ls.join('\n'), M, y + 6, 7, 'italic'); doc.setTextColor(0); y += 6 + ls.length * 8; }
+      y += 10;
+    });
+    const n = doc.getNumberOfPages(), quando = new Date().toLocaleString('pt-BR');
+    for(let p = 1; p <= n; p++){ doc.setPage(p); doc.setTextColor(90); texto('Gerado em ' + quando, M, H - 18, 7); texto('Pagina ' + p + ' de ' + n, W - M, H - 18, 7, 'normal', { align: 'right' }); }
+    return doc.output('blob');
+  }
+  let pdfAtual = null;
+  async function abrirPdfDre(id){
+    const btn = $('drePdf'), antes = btn.textContent; btn.disabled = true; btn.textContent = 'Gerando…';
+    try {
+      const blob = await gerarPdfDre(id); pdfAtual = { blob, nome: 'dre_evento_' + id + '.pdf' };
+      $('pdfTitulo').textContent = 'DRE do evento ' + id; $('pdfInfo').textContent = 'PDF pronto (' + Math.max(1, Math.round(blob.size / 1024)) + ' KB). Escolha o que fazer:'; $('popupPdf').hidden = false;
+    } catch(err){ alert('Não consegui gerar o PDF: ' + err.message); }
+    finally { btn.disabled = false; btn.textContent = antes; }
+  }
+  $('drePdf').addEventListener('click', () => abrirPdfDre(DRE.id));
+  $('pdfFechar').addEventListener('click', () => { $('popupPdf').hidden = true; });
+  $('popupPdf').addEventListener('click', (ev) => { if(ev.target === $('popupPdf')) $('popupPdf').hidden = true; });
+  $('pdfVer').addEventListener('click', () => { if(!pdfAtual) return; const url = URL.createObjectURL(pdfAtual.blob); window.open(url, '_blank'); setTimeout(() => URL.revokeObjectURL(url), 60000); });
+  $('pdfBaixar').addEventListener('click', () => { if(pdfAtual) baixarBlob(pdfAtual.blob, pdfAtual.nome); });
+  $('pdfCompartilhar').addEventListener('click', async () => {
+    if(!pdfAtual) return; const f = new File([pdfAtual.blob], pdfAtual.nome, { type: 'application/pdf' });
+    try { if(navigator.canShare && navigator.canShare({ files: [f] })) await navigator.share({ files: [f], title: pdfAtual.nome }); else { alert('Este aparelho não compartilha arquivos direto; vou baixar o PDF.'); baixarBlob(pdfAtual.blob, pdfAtual.nome); } }
+    catch(err){ if(err && err.name !== 'AbortError') alert('Não consegui compartilhar: ' + err.message); }
+  });
+
+
+  // ===================== eventos de interface =====================
+  $('btnAtualizar').addEventListener('click', carregar);
+  ['fBase', 'fPeriodo', 'fAdm', 'iPeriodo', 'iMedida'].forEach(id => $(id).addEventListener('change', atualizar));
+  ['fDe', 'fAte'].forEach(id => $(id).addEventListener('change', () => { $('fPeriodo').value = 'pers'; atualizar(); }));
+  ['iDe', 'iAte'].forEach(id => $(id).addEventListener('change', () => { $('iPeriodo').value = 'pers'; atualizar(); }));
+  $('fOpTipo').addEventListener('change', () => { FIL.opTipo = $('fOpTipo').value; desenharPaineis(); atualizar(); });
+  $('btnPadrao').addEventListener('click', () => { Object.assign(FIL, PADRAO); FIL.empOff.clear(); FIL.tipoOff.clear(); FIL.setOff.clear(); FIL.opEvOff.clear(); FIL.opPgOff.clear(); FIL.opTipo = 'ev'; $('fOpTipo').value = 'ev'; $('fBase').value = PADRAO.base; $('fPeriodo').value = PADRAO.periodo; $('fAdm').value = PADRAO.adm; FIL.evento = ''; $('fEvento').value = ''; $('campoDreEvento').hidden = true; desenharPaineis(); atualizar(); });
+  document.addEventListener('click', (e) => { const t = e.target.closest('[data-todas],[data-nenhuma]'); if(t) marcar(t.dataset.todas || t.dataset.nenhuma, !!t.dataset.todas); });
+  $('abas').addEventListener('click', (e) => { const b = e.target.closest('button[data-aba]'); if(!b) return; aberta = b.dataset.aba;
+    document.querySelectorAll('#abas button').forEach(x => x.classList.toggle('ativa', x === b)); document.querySelectorAll('.aba').forEach(a => { a.hidden = a.id !== 'aba-' + aberta; });
+    if(aberta === 'geral') desenharGeral(); else if(aberta === 'inclusao') desenharInclusao(); });
+  $('evBusca').addEventListener('input', () => { evMais = 300; desenharEventos(); });
+  $('tbEventos').addEventListener('click', (e) => { const th = e.target.closest('th[data-ord]'); if(th){ evOrd = { k: th.dataset.ord, dir: evOrd.k === th.dataset.ord ? -evOrd.dir : (th.dataset.ord === 'nome' || th.dataset.ord === 'tipo' || th.dataset.ord === 'cli' ? 1 : -1) }; desenharEventos(); return; }
+    if(e.target.closest('[data-mais]')){ evMais += 300; desenharEventos(); return; } const tr = e.target.closest('tr[data-ev]'); if(tr) abrirEvento(tr.dataset.ev); });
+  $('evCsv').addEventListener('click', () => { const d = dadosEventosExport(); baixarCsv(nomeArq('eventos'), d.cab, d.l); });
+  $('evXlsx').addEventListener('click', async () => { const d = dadosEventosExport(); try { await baixarXlsx(nomeArq('eventos'), 'Eventos', d.cab, d.l, d.moeda); } catch(err){ alert('Não consegui gerar o Excel: ' + err.message); } });
+  $('tbClientes').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-cli]'); if(!tr || !R) return; const c = tr.dataset.cli; abrirListaEventos('Cliente: ' + nomeCli(c), R.linhas.filter(r => r.e.cli === c)); });
+  $('tbPlanos').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-emp]'); if(!tr || !R) return; const c = tr.dataset.emp; abrirListaEventos('Empresa: ' + nomeEmp(c), R.linhas.filter(r => r.e.emp === c)); });
+  $('grAgrupar').addEventListener('change', desenharGrupos);
+  $('grCsv').addEventListener('click', () => { const d = dadosGruposExport(); baixarCsv(nomeArq('resultado_por_' + $('grAgrupar').value), d.cab, d.l); });
+  $('grXlsx').addEventListener('click', async () => { const d = dadosGruposExport(); try { await baixarXlsx(nomeArq('resultado_por_' + $('grAgrupar').value), 'Resultado', d.cab, d.l, d.moeda); } catch(err){ alert('Não consegui gerar o Excel: ' + err.message); } });
+  $('tbGrupos').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-g]'); if(!tr) return; const g = grupoAtual[+tr.dataset.g]; if(g) abrirListaEventos($('grAgrupar').selectedOptions[0].text + ': ' + g.rot, g.linhas); });
+  $('tbOper').addEventListener('click', (e) => { const td = e.target.closest('td[data-i]'); if(!td || !incAtual) return; const o = incAtual.ops[+td.dataset.i]; const ls = eventosDoOperador(o, td.dataset.t);
+    abrirListaEventos(o.op + ' — ' + ({ ev: 'eventos criados', ti: 'eventos com pagamentos incluídos' }[td.dataset.t]), ls); });
+  ['tbDif', 'tbSemOrc', 'tbSemTit'].forEach(id => $(id).addEventListener('click', (e) => { const tr = e.target.closest('tr[data-ev]'); if(tr) abrirEvento(tr.dataset.ev); }));
+  $('popFechar').addEventListener('click', fecharPopup); $('popSair').addEventListener('click', fecharPopup);
+  $('popup').addEventListener('click', (e) => { if(e.target === $('popup')) fecharPopup(); });
+  $('popCorpo').addEventListener('click', (e) => { const td = e.target.closest('td[data-op]'); if(td) abrirOp(td.dataset.op); });
+  $('opFechar').addEventListener('click', fecharOp); $('opSair').addEventListener('click', fecharOp);
+  $('popupOp').addEventListener('click', (e) => { if(e.target === $('popupOp')) fecharOp(); });
+  $('opCopiar').addEventListener('click', () => {
+    if(!opAberta) return; const b = $('opCopiar'), antes = b.textContent;
+    try { navigator.clipboard.writeText(opAberta).then(() => { b.textContent = '✔ copiado'; setTimeout(() => { b.textContent = antes; }, 900); }, () => {}); } catch(err){}
+  });
+  $('opLocal').addEventListener('click', () => $('arquivoOp').click());
+  $('arquivoOp').addEventListener('change', async (ev) => {
+    const files = [...ev.target.files]; ev.target.value = ''; if(!files.length) return;
+    try {
+      for(const f of files){
+        const texto = await f.text(), cab = semAcento(texto.slice(0, 600));
+        if(cab.includes('desc_produto')) detLocal.itens = indexarItens(texto);
+        else if(cab.includes('datav')) detLocal.tit = indexarTitulos(texto);
+        else throw new Error('O arquivo ' + f.name + ' não parece ser o itens_op.csv nem o titulos_op.csv.');
+      }
+      detOp = null; detOpPromessa = null;
+      if(opAberta) abrirOp(opAberta);
+    } catch(err){ $('opCorpo').replaceChildren(el('div', 'vazio', err.message)); }
+  });
+
+  document.addEventListener('keydown', (e) => { if(e.key !== 'Escape') return; if(!$('popupPdf').hidden) $('popupPdf').hidden = true; else if(!$('popupOp').hidden) fecharOp(); else if(!$('popupDre').hidden) fecharDre(); else if(!$('popup').hidden) fecharPopup(); });
+
+  window.__pe = { montarEventos, montarPagamentos, montarDespesas, montarSicon, montarCustos, montarOrcamentos, montarItensEvento, abrirOp, abrirDre, dadosDre, blocosDre, gerarPdfDre, escolherEvento, aplicar, calcular, atualizar, FIL, INC, lerCsvTabela, setChamar: (f) => { chamar = f; }, get R(){ return R; }, get EV(){ return EV; }, get TI(){ return TI; }, get DS(){ return DS; }, registrosInclusao, abrirEvento, nomeEmp };
+
+  // acesso: login do Servir + credenciais da unidade (mesmo módulo do Painel financeiro)
+  (async function iniciar(){
+    bd = await abrirBd();
+    ServirAcesso.preparar({
+      modulo: 'painel_financeiro',
+      legado: () => !!(cfg.url && cfg.token),
+      aoLegado: () => carregar(),
+      aoPronto: (cred, ctx) => {
+        cfg.url = cred.url; cfg.token = cred.token; cacheUn = ctx.unidade.id + ':'; nomeUnidade = (ctx.unidade && (ctx.unidade.nome || ctx.unidade.nome_fantasia)) || '';
+        const a = cred.arquivos || {};
+        if(a.cruzada) ARQ.sic = a.cruzada; if(a.orcamentos_eventos) ARQ.orc = a.orcamentos_eventos; if(a.itens_evento) ARQ.iev = a.itens_evento; if(a.itens_op) ARQ.itens = a.itens_op; if(a.titulos_op) ARQ.tit = a.titulos_op; if(a.eventos) ARQ.ev = a.eventos; if(a.pagamentos_eventos) ARQ.pag = a.pagamentos_eventos; if(a.despesas_eventos) ARQ.desp = a.despesas_eventos; if(a.custos_eventos) ARQ.cus = a.custos_eventos;
+        carregar();
+      }
+    });
+  })();
+})();
+</script>
+</body>
+</html>
