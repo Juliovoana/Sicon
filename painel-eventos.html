@@ -166,7 +166,7 @@
         <div class="campo"><label for="fBase">Data base do evento</label>
           <select id="fBase"><option value="fim">Finalização do evento (Dt_fim)</option><option value="ini">Início do evento (Dt_inicio)</option><option value="atend">Início do atendimento (inclusão do evento)</option><option value="venc">Vencimento do pagamento/despesa (DT_VENC)</option><option value="pagto">Data do pagamento/despesa (DTPAGTO)</option><option value="vp">Vencimento / pagamento (pago = data do pagamento; em aberto = vencimento)</option></select></div>
         <div class="campo"><label for="fPeriodo">Período</label>
-          <select id="fPeriodo"><option value="ano">Ano atual</option><option value="anoAnt">Ano anterior</option><option value="12m">Últimos 12 meses</option><option value="mes">Mês atual</option><option value="mesAnt">Mês anterior</option><option value="tudo">Tudo</option><option value="pers">Personalizado</option></select></div>
+          <select id="fPeriodo"><option value="ano">Ano atual</option><option value="anoAnt">Ano anterior</option><option value="12m">Últimos 12 meses</option><option value="mes">Mês atual</option><option value="mesAnt">Mês anterior</option><option value="3m">Últimos 3 meses</option><option value="s1">1º semestre (ano atual)</option><option value="s2">2º semestre (ano atual)</option><option value="t1">1º trimestre (ano atual)</option><option value="t2">2º trimestre (ano atual)</option><option value="t3">3º trimestre (ano atual)</option><option value="t4">4º trimestre (ano atual)</option><option value="tudo">Tudo</option><option value="pers">Personalizado</option></select></div>
         <div class="campo"><label for="fDe">De</label><input type="date" id="fDe"></div>
         <div class="campo"><label for="fAte">Até</label><input type="date" id="fAte"></div>
         <div class="campo" style="position:relative"><label for="fEvento">Evento (nº ou nome)</label>
@@ -199,8 +199,8 @@
       <div class="kpis" id="kpis"></div>
       <div class="bloco"><h2>Por mês (data base)</h2><div class="graf"><canvas id="gMes"></canvas></div></div>
       <div class="grade2">
-        <div class="bloco"><h2>Receita por tipo de evento</h2><div class="graf"><canvas id="gTipo"></canvas></div></div>
-        <div class="bloco"><h2>Receita por setor</h2><div class="graf"><canvas id="gSetor"></canvas></div></div>
+        <div class="bloco"><h2><span id="gTipoTit">Receita por tipo de evento</span><span class="ac"><select id="gTipoMed" aria-label="Medida do gráfico por tipo"><option value="rec">Receita</option><option value="desp">Despesa</option><option value="res">Resultado</option></select><label style="font-weight:600;font-size:.8rem"><input type="checkbox" id="gTipoPct"> <span id="gTipoPctRot">Mostrar %</span></label></span></h2><div class="graf"><canvas id="gTipo"></canvas></div></div>
+        <div class="bloco"><h2><span id="gSetorTit">Receita por setor</span><span class="ac"><select id="gSetorMed" aria-label="Medida do gráfico por setor"><option value="rec">Receita</option><option value="desp">Despesa</option><option value="res">Resultado</option></select><label style="font-weight:600;font-size:.8rem"><input type="checkbox" id="gSetorPct"> <span id="gSetorPctRot">Mostrar %</span></label></span></h2><div class="graf"><canvas id="gSetor"></canvas></div></div>
       </div>
       <div class="grade2">
         <div class="bloco"><h2>Maiores clientes</h2><div class="rolagem" id="tbClientes"></div></div>
@@ -229,7 +229,7 @@
       <div class="filtros">
         <div class="linha-filtros">
           <div class="campo"><label for="iPeriodo">Período da inclusão</label>
-            <select id="iPeriodo"><option value="mes">Mês atual</option><option value="mesAnt">Mês anterior</option><option value="90d">Últimos 90 dias</option><option value="ano">Ano atual</option><option value="anoAnt">Ano anterior</option><option value="tudo">Tudo</option><option value="pers">Personalizado</option></select></div>
+            <select id="iPeriodo"><option value="mes">Mês atual</option><option value="mesAnt">Mês anterior</option><option value="90d">Últimos 90 dias</option><option value="3m">Últimos 3 meses</option><option value="s1">1º semestre (ano atual)</option><option value="s2">2º semestre (ano atual)</option><option value="t1">1º trimestre (ano atual)</option><option value="t2">2º trimestre (ano atual)</option><option value="t3">3º trimestre (ano atual)</option><option value="t4">4º trimestre (ano atual)</option><option value="ano">Ano atual</option><option value="anoAnt">Ano anterior</option><option value="tudo">Tudo</option><option value="pers">Personalizado</option></select></div>
           <div class="campo"><label for="iDe">De</label><input type="date" id="iDe"></div>
           <div class="campo"><label for="iAte">Até</label><input type="date" id="iAte"></div>
           <div class="campo"><label for="iMedida">Medida por mês</label>
@@ -409,7 +409,9 @@
   if(cfg.url && !URL_SCRIPT_OK.test(cfg.url)) cfg.url = '';
   const lerLS = (k, padrao) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : padrao; } catch(e){ return padrao; } };
   const gravarLS = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} };
-  const K_FILTROS = 'pe_filtros_v1';
+  const K_FILTROS = 'pe_filtros_v1', K_GRAF = 'pe_graf_v1';
+  const GRAF = lerLS(K_GRAF, {});   // gráficos por tipo e por setor: medida (rec | desp | res) e se mostra o percentual
+  ['gTipo', 'gSetor'].forEach(k => { GRAF[k] = Object.assign({ m: 'rec', pct: true }, GRAF[k]); if(!['rec', 'desp', 'res'].includes(GRAF[k].m)) GRAF[k].m = 'rec'; });
 
   // ===================== cache (IndexedDB — o mesmo banco dos outros painéis) =====================
   let bd = null, cacheUn = '', nomeUnidade = '';
@@ -602,6 +604,10 @@
     if(p === 'anoAnt') return [(y - 1) + '-01-01', (y - 1) + '-12-31'];
     if(p === '12m') return [somaDias(h, -365), h];
     if(p === '90d') return [somaDias(h, -90), h];
+    if(p === '3m'){ const mm = m > 3 ? m - 3 : m + 9, yy = m > 3 ? y : y - 1, dd = Math.min(+h.slice(8, 10), ult(yy, mm)); return [yy + '-' + pad2(mm) + '-' + pad2(dd), h]; }   // de 3 meses atrás (mesmo dia) até hoje
+    if(p === 's1') return [y + '-01-01', y + '-06-30'];
+    if(p === 's2') return [y + '-07-01', y + '-12-31'];
+    if(/^t[1-4]$/.test(p)){ const q = +p.charAt(1), mi = (q - 1) * 3 + 1, mf = mi + 2; return [y + '-' + pad2(mi) + '-01', y + '-' + pad2(mf) + '-' + pad2(ult(y, mf))]; }
     if(p === 'mes') return [y + '-' + pad2(m) + '-01', y + '-' + pad2(m) + '-' + pad2(ult(y, m))];
     if(p === 'mesAnt'){ const yy = m === 1 ? y - 1 : y, mm = m === 1 ? 12 : m - 1; return [yy + '-' + pad2(mm) + '-01', yy + '-' + pad2(mm) + '-' + pad2(ult(yy, mm))]; }
     return ['', ''];
@@ -774,13 +780,45 @@
     const ds = [{ type: 'bar', label: 'Receita', data: ks.map(k => meses.get(k).rec), backgroundColor: '#1f6f4a' }, { type: 'bar', label: 'Recebido', data: ks.map(k => meses.get(k).pago), backgroundColor: '#2b6cb0' }];
     if(R.T.temDesp){ ds.push({ type: 'bar', label: 'Despesa', data: ks.map(k => meses.get(k).desp), backgroundColor: '#8f3b33' }); ds.push({ type: 'line', label: 'Resultado', data: ks.map(k => meses.get(k).rec - meses.get(k).desp), borderColor: '#f2a93b', backgroundColor: '#f2a93b', tension: .25 }); }
     grafico('gMes', { type: 'bar', data: { labels: ks.map(rotMes), datasets: ds }, options: opcoesBase(false, 'gMes') });
-    const tipos = new Map(); R.linhas.forEach(r => tipos.set(r.e.tipo, (tipos.get(r.e.tipo) || 0) + r.rec));
-    const tt = [...tipos.entries()].filter(([, v]) => v).sort((a, b) => b[1] - a[1]).slice(0, 10);
-    BARRAS.gTipo = (d, i) => { const t = tt[i][0]; return { titulo: 'Tipo de evento: ' + t, linhas: R.linhas.filter(r => r.e.tipo === t && r.rec), valor: r => r.rec }; };
-    grafico('gTipo', { type: 'bar', data: { labels: tt.map(x => x[0]), datasets: [{ label: 'Receita', data: tt.map(x => x[1]), backgroundColor: '#1f6f4a' }] }, options: opcoesBase(true, 'gTipo', false) });
-    const st = [...R.porSetor.entries()].filter(([, v]) => v).sort((a, b) => b[1] - a[1]).slice(0, 10);
-    BARRAS.gSetor = (d, i) => { const sn = st[i][0], linhas = []; R.linhas.forEach(r => { const ti = r.ti.filter(t => t.setor === sn), dd = r.ds.filter(t => t.setor === sn); if(ti.length || dd.length) linhas.push(montarLinhaAvulsa(r.e.id, ti, dd)); }); return { titulo: 'Setor: ' + sn, linhas: linhas.filter(r => r.rec), valor: r => r.rec }; };
-    grafico('gSetor', { type: 'bar', data: { labels: st.map(x => x[0]), datasets: [{ label: 'Receita', data: st.map(x => x[1]), backgroundColor: '#2b6cb0' }] }, options: opcoesBase(true, 'gSetor', false) });
+    desenharAgrupado('gTipo'); desenharAgrupado('gSetor');
+  }
+  // gráficos por tipo de evento e por setor: receita, despesa ou resultado; o % é a parte no total (receita/despesa) ou a margem sobre a receita (resultado)
+  const pctTxt = (x) => x.toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
+  const pluginPct = { id: 'rotulosPct', afterDatasetsDraw(chart, args, opt){
+    const tx = opt && opt.ativo && opt.textos; if(!tx) return;
+    const ctx = chart.ctx, meta = chart.getDatasetMeta(0), dados = chart.data.datasets[0].data;
+    ctx.save(); ctx.font = '600 11px system-ui, sans-serif'; ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#222'; ctx.textBaseline = 'middle';
+    meta.data.forEach((b, i) => { if(!tx[i]) return; if(dados[i] < 0){ ctx.textAlign = 'right'; ctx.fillText(tx[i], b.x - 6, b.y); } else { ctx.textAlign = 'left'; ctx.fillText(tx[i], b.x + 6, b.y); } });
+    ctx.restore();
+  } };
+  function dadosAgrupado(id){
+    const m = R.T.temDesp ? GRAF[id].m : 'rec', mapa = new Map(), acc = (k) => { let x = mapa.get(k); if(!x){ x = { rec: 0, desp: 0 }; mapa.set(k, x); } return x; };
+    R.linhas.forEach(r => {
+      if(id === 'gTipo'){ const x = acc(r.e.tipo); x.rec += r.rec; x.desp += r.desp; }
+      else { r.ti.forEach(t => { acc(t.setor).rec += valTit(t); }); r.ds.forEach(t => { acc(t.setor).desp += valTit(t); }); }
+    });
+    let l = [...mapa.entries()].map(([k, x]) => ({ k, rec: x.rec, desp: x.desp, v: m === 'rec' ? x.rec : m === 'desp' ? x.desp : x.rec - x.desp })).filter(x => x.v);
+    const total = l.reduce((s, x) => s + x.v, 0);
+    l = l.sort((a, b) => Math.abs(b.v) - Math.abs(a.v)).slice(0, 10).sort((a, b) => b.v - a.v);
+    return { m, l, total };
+  }
+  function desenharAgrupado(id){
+    const { m, l, total } = dadosAgrupado(id), g = GRAF[id], porTipo = id === 'gTipo', rot = { rec: 'Receita', desp: 'Despesa', res: 'Resultado' }[m];
+    $(id + 'Tit').textContent = rot + ' por ' + (porTipo ? 'tipo de evento' : 'setor');
+    $(id + 'Med').value = m; [...$(id + 'Med').options].forEach(o => { o.disabled = o.value !== 'rec' && !R.T.temDesp; });
+    $(id + 'Pct').checked = !!g.pct; $(id + 'PctRot').textContent = m === 'res' ? 'Mostrar % (margem)' : 'Mostrar % (do total)';
+    const textos = l.map(x => m === 'res' ? (x.rec ? pctTxt(x.v / x.rec * 100) : '') : (total ? pctTxt(x.v / total * 100) : ''));
+    const ok = (r) => m === 'rec' ? r.rec : m === 'desp' ? r.desp : (r.rec || r.desp), valor = (r) => m === 'rec' ? r.rec : m === 'desp' ? r.desp : r.res;
+    BARRAS[id] = (d, i) => {
+      const k = l[i].k;
+      if(porTipo) return { titulo: 'Tipo de evento: ' + k + ' — ' + rot, linhas: R.linhas.filter(r => r.e.tipo === k && ok(r)), valor };
+      const linhas = []; R.linhas.forEach(r => { const ti = r.ti.filter(t => t.setor === k), dd = r.ds.filter(t => t.setor === k); if(ti.length || dd.length) linhas.push(montarLinhaAvulsa(r.e.id, ti, dd)); });
+      return { titulo: 'Setor: ' + k + ' — ' + rot, linhas: linhas.filter(ok), valor };
+    };
+    const base = porTipo ? '#1f6f4a' : '#2b6cb0', cor = m === 'desp' ? '#8f3b33' : m === 'res' ? l.map(x => x.v < 0 ? '#8f3b33' : '#1f6f4a') : base;
+    const o = opcoesBase(true, id, false); o.scales.x.grace = '15%'; o.plugins.rotulosPct = { ativo: !!g.pct, textos };
+    o.plugins.tooltip.callbacks.label = (c) => ' ' + c.dataset.label + ': ' + fmtR(c.parsed.x) + (textos[c.dataIndex] ? ' (' + textos[c.dataIndex] + (m === 'res' ? ' de margem' : ' do total') + ')' : '');
+    grafico(id, { type: 'bar', data: { labels: l.map(x => x.k), datasets: [{ label: rot, data: l.map(x => x.v), backgroundColor: cor }] }, options: o, plugins: [pluginPct] });
   }
 
   // ----- eventos -----
@@ -1480,6 +1518,11 @@
   $('tbGrupos').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-g]'); if(!tr) return; const g = grupoAtual[+tr.dataset.g]; if(g) abrirListaEventos($('grAgrupar').selectedOptions[0].text + ': ' + g.rot, g.linhas); });
   $('tbOper').addEventListener('click', (e) => { const td = e.target.closest('td[data-i]'); if(!td || !incAtual) return; const o = incAtual.ops[+td.dataset.i]; const ls = eventosDoOperador(o, td.dataset.t);
     abrirListaEventos(o.op + ' — ' + ({ ev: 'eventos criados', ti: 'eventos com pagamentos incluídos' }[td.dataset.t]), ls); });
+  ['gTipo', 'gSetor'].forEach(id => {
+    const redesenhar = () => { gravarLS(K_GRAF, GRAF); if(R){ cacheBarra.clear(); desenharAgrupado(id); } };
+    $(id + 'Med').addEventListener('change', () => { GRAF[id].m = $(id + 'Med').value; redesenhar(); });
+    $(id + 'Pct').addEventListener('change', () => { GRAF[id].pct = $(id + 'Pct').checked; redesenhar(); });
+  });
   $('vSit').addEventListener('change', () => { vendaMais = 300; desenharVenda(); });
   $('vTol').addEventListener('input', () => { vendaMais = 300; desenharVenda(); });
   $('tbVenda').addEventListener('click', (e) => { if(e.target.closest('[data-vmais]')){ e.preventDefault(); vendaMais += 300; desenharVenda(); } });
