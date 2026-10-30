@@ -772,14 +772,26 @@
   }
   function desenharGraficosGeral(){
     if(!Chart || aberta !== 'geral') return;
-    const meses = new Map(); const get = (ym) => { let m = meses.get(ym); if(!m){ m = { rec: 0, pago: 0, desp: 0 }; meses.set(ym, m); } return m; };
-    R.linhas.forEach(r => r.meses.forEach(x => { const m = get(x.ym); m.rec += x.rec; m.pago += x.pago; m.desp += x.desp; }));
+    const meses = new Map(); const get = (ym) => { let m = meses.get(ym); if(!m){ m = { rec: 0, pago: 0, desp: 0, ev: 0 }; meses.set(ym, m); } return m; };
+    R.linhas.forEach(r => r.meses.forEach(x => { const m = get(x.ym); m.rec += x.rec; m.pago += x.pago; m.desp += x.desp; m.ev++; }));
     const ks = [...meses.keys()].sort(); cacheBarra.clear();
-    const camposMes = ['rec', 'pago', 'desp', 'res'], rotCampo = ['Receita', 'Recebido', 'Despesa', 'Resultado'];
-    BARRAS.gMes = (d, i) => { const k = ks[i], cmpo = camposMes[d], linhas = []; R.linhas.forEach(r => { const x = r.meses.find(m => m.ym === k); if(!x || !x[cmpo]) return; linhas.push(ehTit() ? montarLinhaAvulsa(r.e.id, x.ti, x.ds) : r); }); return { titulo: rotMes(k) + ' — ' + rotCampo[d] + ' por evento', linhas, valor: r => r[cmpo] }; };
+    // um campo por série do gráfico, na ordem em que entram (a despesa e o resultado só existem com as despesas carregadas)
+    const campos = ['rec', 'pago']; if(R.T.temDesp) campos.push('desp', 'res'); campos.push('ev');
+    const rotCampo = { rec: 'Receita', pago: 'Recebido', desp: 'Despesa', res: 'Resultado', ev: 'Eventos' };
+    BARRAS.gMes = (d, i) => { const k = ks[i], cmpo = campos[d], linhas = []; R.linhas.forEach(r => { const x = r.meses.find(m => m.ym === k); if(!x || (cmpo !== 'ev' && !x[cmpo])) return; linhas.push(ehTit() ? montarLinhaAvulsa(r.e.id, x.ti, x.ds) : r); }); return { titulo: rotMes(k) + ' — ' + (cmpo === 'ev' ? 'eventos do mês' : rotCampo[cmpo] + ' por evento'), linhas, valor: cmpo === 'ev' ? (r => r.rec) : (r => r[cmpo]) }; };
     const ds = [{ type: 'bar', label: 'Receita', data: ks.map(k => meses.get(k).rec), backgroundColor: '#1f6f4a' }, { type: 'bar', label: 'Recebido', data: ks.map(k => meses.get(k).pago), backgroundColor: '#2b6cb0' }];
     if(R.T.temDesp){ ds.push({ type: 'bar', label: 'Despesa', data: ks.map(k => meses.get(k).desp), backgroundColor: '#8f3b33' }); ds.push({ type: 'line', label: 'Resultado', data: ks.map(k => meses.get(k).rec - meses.get(k).desp), borderColor: '#f2a93b', backgroundColor: '#f2a93b', tension: .25 }); }
-    grafico('gMes', { type: 'bar', data: { labels: ks.map(rotMes), datasets: ds }, options: opcoesBase(false, 'gMes') });
+    ds.push({ type: 'bar', label: 'Eventos', data: ks.map(k => meses.get(k).ev), backgroundColor: '#6b5b95', yAxisID: 'yEv' });   // quantidade, no eixo da direita (escala diferente do dinheiro)
+    const oMes = opcoesBase(false, 'gMes');
+    oMes.scales.yEv = { position: 'right', beginAtZero: true, suggestedMax: Math.ceil(Math.max(1, ...ks.map(k => meses.get(k).ev)) * 1.8), grid: { drawOnChartArea: false }, ticks: { precision: 0 }, title: { display: true, text: 'Eventos' } };   // teto folgado: a barra de quantidade fica em ~metade da altura e não esconde as de valor
+    oMes.plugins.legend.onClick = (e, item, legend) => {   // ocultar "Eventos" pela legenda também esconde o eixo da direita
+      Chart.defaults.plugins.legend.onClick(e, item, legend);
+      const c = legend.chart, i = c.data.datasets.findIndex(d => d.yAxisID === 'yEv');
+      if(i >= 0){ c.options.scales.yEv.display = c.isDatasetVisible(i); c.update(); }
+    };
+    const rotulo = oMes.plugins.tooltip.callbacks.label;
+    oMes.plugins.tooltip.callbacks.label = (c) => c.dataset.yAxisID === 'yEv' ? ' Eventos: ' + c.parsed.y.toLocaleString('pt-BR') : rotulo(c);
+    grafico('gMes', { type: 'bar', data: { labels: ks.map(rotMes), datasets: ds }, options: oMes });
     desenharAgrupado('gTipo'); desenharAgrupado('gSetor');
   }
   // gráficos por tipo de evento e por setor: receita, despesa ou resultado; o % é a parte no total (receita/despesa) ou a margem sobre a receita (resultado)
