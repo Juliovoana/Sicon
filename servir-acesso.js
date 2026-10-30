@@ -104,7 +104,7 @@
     return new Promise((resolve) => {
       const f = fundo(); const c = el('div', 'sa-card'); c.appendChild(el('h2', '', titulo || 'Escolha a unidade')); c.appendChild(el('p', '', 'Cada unidade tem os seus próprios dados.'));
       const lista = el('div', 'sa-lista');
-      unidades.forEach(u => { const b = el('button', 'sa-unid', u.nome); b.type = 'button'; b.addEventListener('click', () => { gravarLS(K_UNIDADE, u.id); resolve(u); }); lista.appendChild(b); });
+      [...unidades].sort((x, y) => String(x.nome || '').localeCompare(String(y.nome || ''), 'pt-BR', { sensitivity: 'base', numeric: true })).forEach(u => { const b = el('button', 'sa-unid', u.nome); b.type = 'button'; b.addEventListener('click', () => { gravarLS(K_UNIDADE, u.id); resolve(u); }); lista.appendChild(b); });
       c.appendChild(lista);
       f.appendChild(c);
     });
