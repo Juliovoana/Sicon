@@ -126,6 +126,15 @@
   }
   .seletor-agencia-card h3{ font-size:1.2rem; font-weight:700; margin-bottom:8px; }
   .seletor-agencia-card p{ font-size:.85rem; color:var(--muted); margin-bottom:22px; line-height:1.5; }
+  .usr-linha{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 2px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .usr-linha .usr-email{ font-size:.9rem; word-break:break-all; }
+  .usr-linha.inativo .usr-email{ color:var(--muted); text-decoration:line-through; }
+  .usr-tag{ display:inline-block; font-size:.7rem; font-weight:700; border-radius:20px; padding:2px 9px; margin-left:6px; background:var(--brand-soft); color:var(--brand-2); text-decoration:none; }
+  .usr-tag.inativo{ background:#EEE; color:#666; } .usr-tag.eu{ background:var(--accent); color:var(--accent-ink); }
+  .usr-acoes{ display:flex; gap:8px; }
+  .usr-btn{ border:1.5px solid var(--border); background:none; color:var(--muted); font-size:.76rem; font-weight:600; padding:5px 11px; border-radius:8px; cursor:pointer; }
+  .usr-btn:hover{ border-color:var(--brand-2); color:var(--brand-2); } .usr-btn.perigo{ border-color:var(--danger); color:var(--danger); } .usr-btn.perigo:hover{ background:var(--danger-soft); }
+  .usr-btn:disabled{ opacity:.5; cursor:default; }
   .lista-seletor-agencia{ display:flex; flex-direction:column; gap:10px; max-height:min(55vh, 460px); overflow-y:auto; padding:2px 6px 2px 2px; }
   .opcao-agencia{
     display:flex; align-items:center; padding:14px 16px; border-radius:12px;
@@ -360,6 +369,7 @@
         <span class="agencia-pill" id="agenciaPill">—</span>
         <button class="btn-sair-central" id="btnDadosUnidade" style="display:none;">Dados da unidade</button>
         <button class="btn-sair-central" id="btnConvidarColaborador" style="display:none;">Convidar colaborador</button>
+        <button class="btn-sair-central" id="btnUsuariosUnidade" style="display:none;">Usuários da unidade</button>
         <button class="btn-sair-central" id="btnTrocarAgencia" style="display:none;">Trocar unidade</button>
         <button class="btn-sair-central" id="btnCriarNovaUnidade">+ Criar nova unidade</button>
         <button class="btn-sair-central" id="btnSair">Sair</button>
@@ -555,6 +565,17 @@
       <div class="codigo-convite-display" id="codigoConviteDisplay">— — — —</div>
       <button class="btn-primary" id="btnCopiarCodigoConvite" style="margin-top:16px;">Copiar código</button>
       <button id="btnFecharModalConvite" style="margin-top:10px; width:100%; background:none; border:1.5px solid var(--border); color:var(--muted); padding:11px; border-radius:10px; cursor:pointer; font-weight:600; font-size:.85rem;">Fechar</button>
+    </div>
+  </div>
+
+
+  <div class="modal-lista-overlay" id="modalUsuariosOverlay">
+    <div class="seletor-agencia-card" style="max-width:680px; text-align:left;">
+      <h3>Usuários da unidade</h3>
+      <p style="margin-bottom:12px;"><b>Principal</b> tem acesso administrativo completo a esta unidade (você pode tornar ou tirar esse papel). <b>Inativar</b> tira o acesso da pessoa a esta unidade em todos os módulos, na hora (você pode reativar depois e ela volta como estava). <b>Excluir</b> remove o acesso e as permissões dela nesta unidade e não dá para desfazer. A conta de login dela não é apagada.</p>
+      <div id="usuariosAviso" style="display:none; font-size:.8rem; background:var(--danger-soft); color:var(--danger); padding:9px 11px; border-radius:8px; margin-bottom:10px;"></div>
+      <div id="usuariosLista" style="max-height:min(55vh, 460px); overflow-y:auto;"></div>
+      <button id="btnFecharModalUsuarios" style="margin-top:14px; width:100%; background:none; border:1.5px solid var(--border); color:var(--muted); padding:11px; border-radius:10px; cursor:pointer; font-weight:600; font-size:.85rem;">Fechar</button>
     </div>
   </div>
 
@@ -756,6 +777,7 @@
     document.getElementById('agenciaPill').textContent = agenciaNome;
     document.getElementById('btnTrocarAgencia').style.display = vinculosDoUsuario.length > 1 ? 'flex' : 'none';
     document.getElementById('btnConvidarColaborador').style.display = ehPrincipalAtual ? 'flex' : 'none';
+    document.getElementById('btnUsuariosUnidade').style.display = ehPrincipalAtual ? 'flex' : 'none';
     document.getElementById('btnDadosUnidade').style.display = ehPrincipalAtual ? 'flex' : 'none';
     document.getElementById('btnNovoModulo').style.display = ehPrincipalAtual ? '' : 'none';
     carregarDadosUnidade(); // aplica cor/fundo/logo da unidade atual automaticamente
@@ -1280,6 +1302,84 @@
     await sb.auth.signOut();
     location.reload();
   });
+
+  // =================================================================
+  // USUÁRIOS DA UNIDADE (só o principal): inativar, reativar e excluir colaboradores
+  // Precisa do SQL usuarios-inativacao-v2.sql. As regras valem no servidor (a tela só mostra os botões).
+  // =================================================================
+  let usuariosModal = [];
+  function mostrarAvisoUsuarios(msg){ const a = document.getElementById('usuariosAviso'); a.textContent = msg || ''; a.style.display = msg ? 'block' : 'none'; }
+  async function abrirUsuariosUnidade(){
+    document.getElementById('modalUsuariosOverlay').classList.add('show');
+    const box = document.getElementById('usuariosLista'); box.textContent = 'Carregando…'; mostrarAvisoUsuarios('');
+    const { data, error } = await sb.rpc('fn_unidade_listar_usuarios', { p_unidade_id: agenciaId });
+    if(error){
+      box.textContent = '';
+      mostrarAvisoUsuarios(/function|does not exist|schema cache/i.test(error.message) ? 'Falta uma configuração no banco para esta tela (arquivo usuarios-inativacao-v2.sql). Peça à Servir para aplicá-la.' : 'Não consegui carregar os usuários: ' + error.message);
+      return;
+    }
+    usuariosModal = Array.isArray(data) ? data : [];
+    renderUsuariosUnidade();
+  }
+  function renderUsuariosUnidade(){
+    const box = document.getElementById('usuariosLista'); box.replaceChildren();
+    if(!usuariosModal.length){ box.textContent = 'Nenhum usuário nesta unidade.'; return; }
+    usuariosModal.forEach(u => {
+      const inativo = u.ativo === false, linha = document.createElement('div'); linha.className = 'usr-linha' + (inativo ? ' inativo' : '');
+      const nome = document.createElement('span'); nome.className = 'usr-email';
+      nome.appendChild(document.createTextNode(u.email || ('usuário ' + String(u.user_id).slice(0, 8))));
+      const tag = (txt, cls) => { const t = document.createElement('span'); t.className = 'usr-tag ' + (cls || ''); t.textContent = txt; nome.appendChild(t); };
+      if(u.eh_principal) tag('Principal'); if(inativo) tag('Inativo', 'inativo'); if(u.sou_eu) tag('Você', 'eu');
+      linha.appendChild(nome);
+      const acoes = document.createElement('span'); acoes.className = 'usr-acoes';
+      if(u.sou_eu){ const n = document.createElement('span'); n.style.cssText = 'font-size:.75rem; color:var(--muted);'; n.textContent = 'seu acesso não é alterado aqui'; acoes.appendChild(n); }
+      else {
+        const bp = document.createElement('button'); bp.type = 'button'; bp.className = 'usr-btn'; bp.textContent = u.eh_principal ? 'Tirar de principal' : 'Tornar principal';
+        bp.addEventListener('click', () => alterarPrincipalUsuario(u, bp));
+        const b1 = document.createElement('button'); b1.type = 'button'; b1.className = 'usr-btn'; b1.textContent = inativo ? 'Reativar' : 'Inativar';
+        b1.addEventListener('click', () => alterarAtivoUsuario(u, b1));
+        const b2 = document.createElement('button'); b2.type = 'button'; b2.className = 'usr-btn perigo'; b2.textContent = 'Excluir';
+        b2.addEventListener('click', () => excluirUsuarioUnidade(u, b2));
+        if(inativo) acoes.append(b1, b2); else acoes.append(bp, b1, b2);
+      }
+      linha.appendChild(acoes); box.appendChild(linha);
+    });
+  }
+  async function alterarAtivoUsuario(u, btn){
+    const inativar = u.ativo !== false;
+    if(!confirm(inativar ? `Inativar ${u.email}?\n\nA pessoa perde o acesso a esta unidade na hora. Você pode reativar depois.` : `Reativar ${u.email}?\n\nA pessoa volta a ter acesso a esta unidade.`)) return;
+    btn.disabled = true; mostrarAvisoUsuarios('');
+    const { error } = await sb.rpc('fn_unidade_definir_ativo_usuario', { p_unidade_id: agenciaId, p_vinculo_id: String(u.vinculo_id), p_ativo: !inativar });
+    if(error){ mostrarAvisoUsuarios('Não consegui ' + (inativar ? 'inativar' : 'reativar') + ': ' + error.message); btn.disabled = false; return; }
+    u.ativo = !inativar; usuariosUnidadeCache = null;
+    registrarSentinelaCentral(inativar ? 'colaborador_inativado' : 'colaborador_reativado', `${inativar ? 'Inativou' : 'Reativou'} o acesso de ${u.email} a esta unidade`);
+    renderUsuariosUnidade();
+  }
+  async function alterarPrincipalUsuario(u, btn){
+    const tornar = !u.eh_principal;
+    if(!confirm(tornar
+      ? `Tornar ${u.email} principal desta unidade?\n\nPrincipal tem acesso administrativo completo: vê todos os módulos, gerencia usuários, dados da unidade e módulos restritos.`
+      : `Tirar ${u.email} de principal?\n\nA pessoa continua na unidade como colaborador, mas perde o acesso administrativo (usuários, dados da unidade, módulos restritos). Você pode torná-la principal de novo quando quiser.`)) return;
+    btn.disabled = true; mostrarAvisoUsuarios('');
+    const { error } = await sb.rpc('fn_unidade_definir_principal_usuario', { p_unidade_id: agenciaId, p_vinculo_id: String(u.vinculo_id), p_principal: tornar });
+    if(error){ mostrarAvisoUsuarios('Não consegui alterar o papel: ' + error.message); btn.disabled = false; return; }
+    u.eh_principal = tornar; usuariosUnidadeCache = null;
+    registrarSentinelaCentral(tornar ? 'colaborador_virou_principal' : 'principal_virou_colaborador', `${tornar ? 'Tornou principal' : 'Tirou de principal'}: ${u.email}`);
+    usuariosModal.sort((a, b) => (b.eh_principal - a.eh_principal) || String(a.email).localeCompare(String(b.email)));
+    renderUsuariosUnidade();
+  }
+  async function excluirUsuarioUnidade(u, btn){
+    if(!confirm(`Excluir ${u.email} desta unidade?\n\nO acesso e as permissões dela aqui são removidos e NÃO dá para desfazer. A conta de login não é apagada. Para só bloquear por um tempo, use Inativar.`)) return;
+    if((prompt('Para confirmar, digite EXCLUIR:') || '').trim().toUpperCase() !== 'EXCLUIR') return;
+    btn.disabled = true; mostrarAvisoUsuarios('');
+    const { error } = await sb.rpc('fn_unidade_excluir_usuario', { p_unidade_id: agenciaId, p_vinculo_id: String(u.vinculo_id) });
+    if(error){ mostrarAvisoUsuarios('Não consegui excluir: ' + error.message); btn.disabled = false; return; }
+    usuariosModal = usuariosModal.filter(x => x !== u); usuariosUnidadeCache = null;
+    registrarSentinelaCentral('colaborador_excluido', `Excluiu o acesso de ${u.email} a esta unidade${u.eh_principal ? ' (era principal)' : ''}`);
+    renderUsuariosUnidade();
+  }
+  document.getElementById('btnUsuariosUnidade').addEventListener('click', abrirUsuariosUnidade);
+  document.getElementById('btnFecharModalUsuarios').addEventListener('click', () => document.getElementById('modalUsuariosOverlay').classList.remove('show'));
 
   // =================================================================
 

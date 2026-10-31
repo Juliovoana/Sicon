@@ -107,10 +107,27 @@
 
   .lista-modulos label{display:flex; align-items:center; gap:10px; padding:9px 4px; cursor:pointer; font-size:.9rem;}
   .lista-modulos input{width:auto;}
+  .linha-usuario{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 4px; border-bottom:1px solid var(--border); flex-wrap:wrap;}
+  .linha-usuario .email{font-size:.9rem; word-break:break-all;}
+  .linha-usuario.inativo .email{color:var(--muted); text-decoration:line-through;}
+  .linha-usuario .acoes{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .linha-usuario .acoes label{padding:0; cursor:pointer; font-size:.8rem; color:var(--muted); display:flex; align-items:center; gap:5px;}
+  .btn-mini{padding:5px 11px; font-size:.78rem;}
 
   .vazio{text-align:center; padding:30px; color:var(--muted); font-size:.85rem;}
   @media (max-width:720px){ .linha-2{grid-template-columns:1fr;} table, thead{display:block;} thead{display:none;} tr{display:block; border-bottom:1px solid var(--border); padding:10px 0;} td{display:flex; justify-content:space-between; border:none; padding:4px 14px;} td::before{content:attr(data-rotulo); font-weight:600; color:var(--muted); font-size:.75rem;} }
 </style>
+<script>
+/* Aviso padrão quando o banco recusa a ação por falta de permissão (RLS) */
+(function(){
+  var MSG_SEM_PERMISSAO = '🔒 Usuário sem permissão para esta ação. Fale com o administrador da unidade.';
+  var alertOriginal = window.alert.bind(window);
+  window.alert = function(m){
+    if (/row-level security|permission denied/i.test(String(m))) m = MSG_SEM_PERMISSAO;
+    alertOriginal(m);
+  };
+})();
+</script>
 </head>
 <body>
 
@@ -364,7 +381,8 @@
         </div>
 
         <div class="aba-modal-conteudo" id="abaUsuarios">
-          <p style="font-size:.82rem; color:var(--muted); margin-bottom:10px;">Marcar como principal dá acesso administrativo completo a essa pessoa em todos os módulos dessa unidade.</p>
+          <p style="font-size:.82rem; color:var(--muted); margin-bottom:10px;">Marcar como principal dá acesso administrativo completo a essa pessoa em todos os módulos dessa unidade. <b>Inativar</b> tira o acesso dela a esta unidade em todos os módulos, na hora (dá para reativar e ela volta como estava); <b>Excluir</b> remove o acesso e as permissões dela nesta unidade. A conta de login não é apagada.</p>
+          <div id="avisoGestaoUsuarios" style="display:none; font-size:.8rem; background:var(--warn-soft); color:var(--warn); padding:8px 10px; border-radius:8px; margin-bottom:10px;">Para inativar ou excluir colaboradores, rode o arquivo <b>usuarios-inativacao-v2.sql</b> no Supabase (uma vez) e recarregue esta página.</div>
           <div class="lista-modulos" id="listaUsuariosUnidade"></div>
         </div>
       </div>
@@ -1220,25 +1238,45 @@
 
   let todosUsuarios = [];
 
+  // gestão de colaboradores (inativar/excluir) depende de usuarios-inativacao-v2.sql; sem ele, lista como antes e esconde os botões
+  let gestaoUsuariosAtiva = false;
   async function carregarUsuarios(){
-    const { data, error } = await sb.rpc('fn_listar_usuarios_plataforma');
-    if(error){ console.error('Erro ao carregar usuários:', error.message); return; }
-    todosUsuarios = data || [];
+    let r = await sb.rpc('fn_admin_listar_vinculos');
+    if(!r.error && Array.isArray(r.data)){ gestaoUsuariosAtiva = true; todosUsuarios = r.data; return; }
+    gestaoUsuariosAtiva = false;
+    r = await sb.rpc('fn_listar_usuarios_plataforma');
+    if(r.error){ console.error('Erro ao carregar usuários:', r.error.message); return; }
+    todosUsuarios = (r.data || []).map(u => Object.assign({ ativo: true }, u));
+  }
+
+  async function registrarSentinelaAdmin(unidadeId, tipoAcao, descricao){
+    try{
+      const { data: { session } } = await sb.auth.getSession();
+      await sb.from('servir_sentinela').insert({
+        unidade_negocio_id: unidadeId, modulo: 'admin_plataforma', tipo_acao: tipoAcao, descricao,
+        operador: session && session.user ? session.user.email : null, operador_user_id: session && session.user ? session.user.id : null
+      });
+    } catch(erro){ console.warn('Não consegui registrar na sentinela:', erro.message); }
   }
 
   function renderizarUsuariosDaUnidade(unidadeId){
     const doUnidade = todosUsuarios.filter(u => u.unidade_negocio_id === unidadeId);
     const lista = document.getElementById('listaUsuariosUnidade');
+    document.getElementById('avisoGestaoUsuarios').style.display = gestaoUsuariosAtiva ? 'none' : 'block';
     if(!doUnidade.length){ lista.innerHTML = '<div class="vazio">Nenhum usuário vinculado a essa unidade.</div>'; return; }
 
-    lista.innerHTML = doUnidade.map(u => `
-      <label style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding:9px 4px; cursor:pointer; border-bottom:1px solid var(--border);">
-        <span>${escapeHtml(u.email)}</span>
-        <span style="display:flex; align-items:center; gap:8px;">
-          <input type="checkbox" data-vinculo-id="${u.vinculo_id}" ${u.eh_principal ? 'checked' : ''} style="width:auto;">
-          ${u.eh_principal ? '<span class="pill pill-ativo">Principal</span>' : '<span style="color:var(--muted); font-size:.8rem;">Colaborador</span>'}
+    lista.innerHTML = doUnidade.map(u => {
+      const inativo = u.ativo === false, id = escapeHtml(String(u.vinculo_id));
+      return `
+      <div class="linha-usuario${inativo ? ' inativo' : ''}" data-linha="${id}">
+        <span class="email">${escapeHtml(u.email)} ${inativo ? '<span class="pill pill-cancelado">Inativo</span>' : ''}</span>
+        <span class="acoes">
+          <label title="Dá acesso administrativo completo nessa unidade"><input type="checkbox" data-vinculo-id="${id}" ${u.eh_principal ? 'checked' : ''} ${inativo ? 'disabled title="Reative a pessoa antes de mudar o papel"' : ''} style="width:auto;"> ${u.eh_principal ? '<span class="pill pill-ativo">Principal</span>' : 'Colaborador'}</label>
+          ${gestaoUsuariosAtiva ? `<button type="button" class="btn btn-secundario btn-mini" data-acao="ativo" data-id="${id}">${inativo ? 'Reativar' : 'Inativar'}</button>
+          <button type="button" class="btn btn-danger btn-mini" data-acao="excluir" data-id="${id}">Excluir</button>` : ''}
         </span>
-      </label>`).join('');
+      </div>`;
+    }).join('');
 
     lista.querySelectorAll('[data-vinculo-id]').forEach(chk => {
       chk.addEventListener('change', async () => {
@@ -1246,7 +1284,7 @@
         try{
           const { error } = await sb.rpc('fn_definir_principal', { p_vinculo_id: chk.dataset.vinculoId, p_eh_principal: chk.checked });
           if(error) throw new Error(error.message);
-          const registro = todosUsuarios.find(u => u.vinculo_id === chk.dataset.vinculoId);
+          const registro = todosUsuarios.find(u => String(u.vinculo_id) === chk.dataset.vinculoId);
           if(registro) registro.eh_principal = chk.checked;
           renderizarUsuariosDaUnidade(unidadeId);
         } catch(erro){
@@ -1254,6 +1292,38 @@
           chk.checked = !chk.checked;
         } finally{
           chk.disabled = false;
+        }
+      });
+    });
+
+    lista.querySelectorAll('[data-acao]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const u = todosUsuarios.find(x => String(x.vinculo_id) === btn.dataset.id); if(!u) return;
+        const unidade = (todasUnidades.find(x => x.id === unidadeId) || {}).nome || '';
+        if(btn.dataset.acao === 'ativo'){
+          const inativar = u.ativo !== false;
+          if(!confirm(inativar
+            ? `Inativar ${u.email}?\n\nA pessoa perde o acesso à unidade "${unidade}" na hora. O cadastro e o histórico ficam, e você pode reativar depois.`
+            : `Reativar ${u.email}?\n\nA pessoa volta a ter acesso à unidade "${unidade}".`)) return;
+          btn.disabled = true;
+          try{
+            const { error } = await sb.rpc('fn_admin_definir_ativo_vinculo', { p_vinculo_id: String(u.vinculo_id), p_ativo: !inativar });
+            if(error) throw new Error(error.message);
+            u.ativo = !inativar;
+            await registrarSentinelaAdmin(unidadeId, inativar ? 'colaborador_inativado' : 'colaborador_reativado', `${inativar ? 'Inativou' : 'Reativou'} o acesso de ${u.email} à unidade ${unidade}`);
+          } catch(erro){ alert('Não consegui ' + (inativar ? 'inativar' : 'reativar') + ': ' + erro.message); }
+          renderizarUsuariosDaUnidade(unidadeId);
+        } else {
+          if(!confirm(`Excluir ${u.email} da unidade "${unidade}"?\n\nO acesso e as permissões dela nesta unidade são removidos e NÃO dá para desfazer. A conta de login não é apagada. Para só bloquear por um tempo, use Inativar.`)) return;
+          if((prompt('Para confirmar, digite EXCLUIR:') || '').trim().toUpperCase() !== 'EXCLUIR') return;
+          btn.disabled = true;
+          try{
+            const { error } = await sb.rpc('fn_admin_excluir_vinculo', { p_vinculo_id: String(u.vinculo_id) });
+            if(error) throw new Error(error.message);
+            todosUsuarios = todosUsuarios.filter(x => x !== u);
+            await registrarSentinelaAdmin(unidadeId, 'colaborador_excluido', `Excluiu o acesso de ${u.email} à unidade ${unidade}${u.eh_principal ? ' (era principal)' : ''}`);
+          } catch(erro){ alert('Não consegui excluir: ' + erro.message); }
+          renderizarUsuariosDaUnidade(unidadeId);
         }
       });
     });
