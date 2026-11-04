@@ -51,6 +51,34 @@
   .pill-cancelado, .pill-cancelada{ background:#EEF0F1; color:var(--muted); }
   .btn-zap{ display:inline-block; margin-top:6px; background:#E3F6EA; color:#1E7A43; border-radius:8px; padding:5px 10px; font-size:.76rem; font-weight:700; text-decoration:none; }
   .btn-atualizar{ display:block; margin:0 auto; background:none; border:1.5px solid var(--border); color:var(--muted); border-radius:9px; padding:9px 18px; font-size:.82rem; font-weight:600; cursor:pointer; font-family:inherit; }
+  .dados{ display:grid; grid-template-columns:1fr 1fr; gap:12px 16px; font-size:.86rem; }
+  .dados .cheio{ grid-column:1 / -1; }
+  .dados dt{ font-size:.7rem; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.04em; }
+  .dados dd{ margin-top:2px; font-weight:500; word-break:break-word; }
+  .dados a{ color:var(--brand-2); font-weight:600; text-decoration:none; }
+  .sub-card{ font-size:.78rem; color:var(--muted); margin:-6px 0 12px; }
+  .kpis{ display:grid; grid-template-columns:1fr 1fr 1.3fr; gap:8px; margin-bottom:14px; }
+  .kpi{ background:var(--brand-soft); border-radius:12px; padding:9px 10px; min-width:0; }
+  .kpi .r{ font-size:.68rem; color:var(--muted); font-weight:600; line-height:1.25; }
+  .kpi .n{ font-size:.95rem; font-weight:700; margin-top:3px; color:var(--ink); white-space:nowrap; }
+  .grafico-wrap{ position:relative; }
+  .grafico-wrap svg{ display:block; }
+  .grafico-wrap .gl{ stroke:var(--border); stroke-width:1; }
+  .grafico-wrap .eixo{ fill:var(--muted); font-size:10px; }
+  .grafico-wrap .rot{ fill:var(--ink); font-size:10.5px; font-weight:600; }
+  .col .barra{ fill:var(--brand); transition:fill .12s; }
+  .col:hover .barra, .col.ativo .barra{ fill:var(--brand-2); }
+  .col:focus{ outline:none; }
+  .col:focus .hit{ stroke:var(--brand); stroke-width:1.5; }
+  .tip{ position:absolute; pointer-events:none; background:var(--ink); color:#fff; border-radius:9px; padding:7px 10px; font-size:.72rem; line-height:1.4; white-space:nowrap; transform:translate(-50%, -100%); opacity:0; transition:opacity .1s; z-index:5; }
+  .tip.on{ opacity:1; }
+  .tip strong{ display:block; font-size:.9rem; }
+  .tip span{ display:block; color:rgba(255,255,255,.78); }
+  .btn-tabela{ background:none; border:none; color:var(--brand-2); font-weight:600; font-size:.8rem; cursor:pointer; font-family:inherit; padding:10px 0 0; }
+  .tabela-mes{ width:100%; border-collapse:collapse; font-size:.82rem; margin-top:8px; font-variant-numeric:tabular-nums; }
+  .tabela-mes th{ text-align:right; font-size:.68rem; color:var(--muted); font-weight:600; padding:4px 0; border-bottom:1px solid var(--border); }
+  .tabela-mes td{ text-align:right; padding:6px 0; border-bottom:1px solid var(--border); }
+  .tabela-mes th:first-child, .tabela-mes td:first-child{ text-align:left; }
   .central{ text-align:center; padding:30px 10px; }
   .central .icone{ font-size:2.6rem; margin-bottom:14px; }
   .central h2{ font-size:1.2rem; font-weight:700; margin-bottom:8px; }
@@ -111,14 +139,185 @@
     conteudo.innerHTML = `<div class="card"><div class="central"><div class="icone">${icone}</div><h2>${escapeHtml(titulo)}</h2><p>${escapeHtml(texto)}</p></div></div>`;
   }
 
+  const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const MESES_LONGOS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const fnum = (n, dec) => (Number(n) || 0).toLocaleString('pt-BR', { maximumFractionDigits: dec });
+  // valor curto para telas pequenas: R$ 950 · R$ 12,3 mil · R$ 1,2 mi
+  function moedaCurta(v){ v = Number(v) || 0; return v >= 1e6 ? `R$ ${fnum(v / 1e6, 1)} mi` : v >= 1e4 ? `R$ ${fnum(v / 1e3, 1)} mil` : `R$ ${fnum(v, 0)}`; }
+  function formatarFone(t){
+    const d = String(t || '').replace(/\D/g, '');
+    if(d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+    if(d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+    return String(t || '');
+  }
+
+  function cardDados(p){
+    const zap = linkZap(p.whatsapp);
+    const linhas = [
+      ['Nome', escapeHtml(p.nome), true],
+      ['Empresa', escapeHtml(p.empresa)],
+      ['Ramo de atividade', escapeHtml(p.ramo)],
+      ['Cidade', escapeHtml(p.cidade)],
+      ['WhatsApp', p.whatsapp ? (zap ? `<a href="${zap}" target="_blank" rel="noopener">${escapeHtml(formatarFone(p.whatsapp))}</a>` : escapeHtml(formatarFone(p.whatsapp))) : ''],
+      ['Outro telefone', escapeHtml(p.telefone ? formatarFone(p.telefone) : '')],
+      ['E-mail', escapeHtml(p.email), true],
+      ['CPF / CNPJ', p.documento_final ? '••• final ' + escapeHtml(p.documento_final) : ''],
+      ['Especialidades', escapeHtml(p.especialidades), true]
+    ].filter(l => l[1]);
+    return `<div class="card"><h2>Seus dados</h2>
+      <dl class="dados">${linhas.map(([r, v, cheio]) => `<div${cheio ? ' class="cheio"' : ''}><dt>${r}</dt><dd>${v}</dd></div>`).join('')}</dl>
+      <div class="saldo-nota" style="margin-top:12px;">Algum dado errado? Fale com a loja para corrigir.</div></div>`;
+  }
+
+  // ---- dashboard: vendas indicadas por mês (últimos 12 meses, só confirmadas) ----
+  // usa d.vendas_mensais (função nova do banco); com a função antiga, monta pelas últimas 50 vendas da lista
+  function agruparVendas(vendas){
+    const mapa = {};
+    vendas.filter(v => v.status !== 'cancelada').forEach(v => {
+      const k = String(v.data_venda || '').slice(0, 7); if(!k) return;
+      const x = mapa[k] || (mapa[k] = { mes: k, qtd: 0, total: 0, recompensa: 0 });
+      x.qtd++; x.total += Number(v.valor_venda) || 0; x.recompensa += Number(v.valor_recompensa) || 0;
+    });
+    return Object.values(mapa);
+  }
+  function serieMensal(d){
+    const base = Array.isArray(d.vendas_mensais) ? d.vendas_mensais : agruparVendas(d.vendas || []);
+    const mapa = {}; base.forEach(x => { mapa[x.mes] = x; });
+    const hoje = new Date(), serie = [];
+    for(let i = 11; i >= 0; i--){
+      const dt = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+      const chave = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`, x = mapa[chave] || {};
+      serie.push({ chave, ano: dt.getFullYear(), mes: dt.getMonth(), qtd: Number(x.qtd) || 0, total: Number(x.total) || 0, recompensa: Number(x.recompensa) || 0 });
+    }
+    return serie;
+  }
+  function cardVendasMes(serie){
+    const qtd = serie.reduce((a, m) => a + m.qtd, 0), total = serie.reduce((a, m) => a + m.total, 0);
+    if(!qtd) return `<div class="card"><h2>Vendas por mês</h2><div class="vazio">Nenhuma venda indicada nos últimos 12 meses. Quando a loja registrar uma venda indicada por você, ela aparece aqui.</div></div>`;
+    const linhas = serie.slice().reverse().map(m => `<tr><td>${MESES_CURTOS[m.mes]}/${m.ano}</td><td>${m.qtd}</td><td>${moeda(m.total)}</td><td>${moeda(m.recompensa)}</td></tr>`).join('');
+    return `<div class="card"><h2>Vendas por mês</h2>
+      <div class="sub-card">Valor vendido nos últimos 12 meses (só vendas confirmadas)</div>
+      <div class="kpis">
+        <div class="kpi"><div class="r">Neste mês</div><div class="n">${moedaCurta(serie[serie.length - 1].total)}</div></div>
+        <div class="kpi"><div class="r">Vendas indicadas</div><div class="n">${qtd}</div></div>
+        <div class="kpi"><div class="r">Total em 12 meses</div><div class="n">${moedaCurta(total)}</div></div>
+      </div>
+      <div class="grafico-wrap" id="graficoVendas"></div>
+      <button type="button" class="btn-tabela" id="btnTabelaMes">Ver em tabela</button>
+      <div id="tabelaMes" hidden><table class="tabela-mes"><thead><tr><th>Mês</th><th>Vendas</th><th>Valor vendido</th><th>Recompensa</th></tr></thead><tbody>${linhas}</tbody></table></div></div>`;
+  }
+
+  let serieGrafico = [];
+  function passoBonito(max){
+    const alvo = max / 4, e = Math.pow(10, Math.floor(Math.log10(alvo))), f = alvo / e;
+    return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e;
+  }
+  function esconderTip(){
+    const wrap = document.getElementById('graficoVendas'); if(!wrap) return;
+    wrap.querySelectorAll('.col.ativo').forEach(x => x.classList.remove('ativo'));
+    const tip = wrap.querySelector('.tip'); if(tip) tip.classList.remove('on');
+  }
+  function desenharGrafico(){
+    const wrap = document.getElementById('graficoVendas'); if(!wrap || !serieGrafico.length) return;
+    const serie = serieGrafico;
+    const W = Math.max(260, Math.floor(wrap.clientWidth)), H = 190, ml = 46, mr = 6, mt = 22, mb = 32;
+    const maxVal = Math.max(...serie.map(m => m.total)), passo = passoBonito(maxVal), yMax = passo * 4;
+    const plotH = H - mt - mb, slot = (W - ml - mr) / 12, barW = Math.min(24, Math.round(slot * 0.6));
+    const yDe = v => mt + plotH - (v / yMax) * plotH;
+    const idxMax = serie.findIndex(m => m.total === maxVal);
+    let svg = `<svg width="${W}" height="${H}" role="group" aria-label="Valor vendido por mês nos últimos 12 meses">`;
+    for(let k = 0; k <= 4; k++){
+      const v = passo * k, y = yDe(v);
+      svg += `<line class="gl" x1="${ml}" x2="${W - mr}" y1="${y}" y2="${y}"/>`;
+      svg += `<text class="eixo" x="${ml - 6}" y="${y + 3.5}" text-anchor="end">${yMax >= 1e4 ? (v ? fnum(v / 1e3, 1) + ' mil' : '0') : fnum(v, 2)}</text>`;
+    }
+    serie.forEach((m, i) => {
+      const cx = ml + slot * i + slot / 2, x = cx - barW / 2, h = (m.total / yMax) * plotH, y = mt + plotH - h, r = Math.min(4, h);
+      const rotulo = `${MESES_LONGOS[m.mes]} de ${m.ano}: ${m.qtd ? moeda(m.total) + ', ' + m.qtd + (m.qtd === 1 ? ' venda' : ' vendas') : 'sem vendas'}`;
+      svg += `<g class="col" data-i="${i}" tabindex="0" role="img" aria-label="${rotulo}">`;
+      if(h > 0) svg += `<path class="barra" d="M${x},${mt + plotH} V${y + r} a${r},${r} 0 0 1 ${r},-${r} H${x + barW - r} a${r},${r} 0 0 1 ${r},${r} V${mt + plotH} Z"/>`;
+      svg += `<rect class="hit" x="${ml + slot * i}" y="${mt}" width="${slot}" height="${plotH}" fill="transparent" pointer-events="all"/></g>`;
+      svg += `<text class="eixo" x="${cx}" y="${mt + plotH + 14}" text-anchor="middle">${MESES_CURTOS[m.mes]}</text>`;
+      if(i === 0 || m.mes === 0) svg += `<text class="eixo" x="${cx}" y="${mt + plotH + 26}" text-anchor="middle" style="font-size:9px">’${String(m.ano).slice(2)}</text>`;
+      if(i === idxMax && h > 0){
+        const txt = moedaCurta(m.total), meia = txt.length * 3.3, tx = Math.min(Math.max(cx, ml + meia), W - mr - meia);
+        svg += `<text class="rot" x="${tx}" y="${y - 6}" text-anchor="middle">${txt}</text>`;
+      }
+    });
+    svg += '</svg><div class="tip" id="tipVendas"></div>';
+    wrap.innerHTML = svg;
+    wrap.__geo = { W, ml, mt, slot, barW, yDe };
+  }
+  function mostrarTip(g){
+    const wrap = document.getElementById('graficoVendas'), tip = wrap.querySelector('.tip'), geo = wrap.__geo;
+    const m = serieGrafico[Number(g.dataset.i)];
+    wrap.querySelectorAll('.col.ativo').forEach(x => x.classList.remove('ativo'));
+    g.classList.add('ativo');
+    const forte = document.createElement('strong'); forte.textContent = m.qtd ? moeda(m.total) : 'Sem vendas';
+    const mes = document.createElement('span'); mes.textContent = `${MESES_LONGOS[m.mes]} de ${m.ano}`;
+    tip.replaceChildren(forte, mes);
+    if(m.qtd){
+      const det1 = document.createElement('span'); det1.textContent = `${m.qtd} ${m.qtd === 1 ? 'venda indicada' : 'vendas indicadas'}`;
+      const det2 = document.createElement('span'); det2.textContent = `Recompensa ${moeda(m.recompensa)}`;
+      tip.append(det1, det2);
+    }
+    const cx = geo.ml + geo.slot * Number(g.dataset.i) + geo.slot / 2, w = tip.offsetWidth;
+    const topoBarra = geo.yDe(m.total);
+    if(topoBarra - 8 >= tip.offsetHeight + 2){   // cabe acima da barra
+      tip.style.transform = 'translate(-50%, -100%)';
+      tip.style.left = Math.min(Math.max(cx, w / 2 + 2), geo.W - w / 2 - 2) + 'px';
+      tip.style.top = (topoBarra - 8) + 'px';
+    } else {                                      // barra alta: o balão fica ao lado, sem cobrir a barra
+      tip.style.transform = 'none';
+      tip.style.left = (cx > geo.W / 2 ? Math.max(2, cx - geo.barW / 2 - 8 - w) : Math.min(geo.W - w - 2, cx + geo.barW / 2 + 8)) + 'px';
+      tip.style.top = (geo.mt + 2) + 'px';
+    }
+    tip.classList.add('on');
+  }
+  function iniciarGrafico(serie){
+    const wrap = document.getElementById('graficoVendas'); if(!wrap) return;
+    serieGrafico = serie;
+    desenharGrafico();
+    wrap.addEventListener('pointerover', e => { const g = e.target.closest('.col'); if(g) mostrarTip(g); });
+    wrap.addEventListener('pointerleave', e => { if(e.pointerType === 'mouse') esconderTip(); });
+    wrap.addEventListener('focusin', e => { const g = e.target.closest('.col'); if(g) mostrarTip(g); });
+    wrap.addEventListener('focusout', esconderTip);
+    document.getElementById('btnTabelaMes').addEventListener('click', () => {
+      const t = document.getElementById('tabelaMes'); t.hidden = !t.hidden;
+      document.getElementById('btnTabelaMes').textContent = t.hidden ? 'Ver em tabela' : 'Ocultar tabela';
+    });
+  }
+  let temporizadorRedesenho = null;
+  window.addEventListener('resize', () => { clearTimeout(temporizadorRedesenho); temporizadorRedesenho = setTimeout(desenharGrafico, 120); });
+  // toque fora do gráfico fecha o balão (no toque não existe "sair do mouse")
+  document.addEventListener('pointerdown', e => { if(!e.target.closest('#graficoVendas')) esconderTip(); });
+
+  // cartão de visita do parceiro como imagem de fundo do topo (mesmo efeito da imagem de fundo da empresa:
+  // foto no bucket público parceiros-cartoes sob um degradê escuro, pro texto branco continuar legível).
+  // Tem prioridade sobre a imagem da empresa; sem cartão (ou se o arquivo não carregar) vale a da empresa.
+  function aplicarFundoCartao(path){
+    if(!path) return;
+    const url = sb.storage.from('parceiros-cartoes').getPublicUrl(path).data.publicUrl;
+    if(!/^https:\/\//.test(url || '')) return;
+    const teste = new Image();
+    teste.onload = () => {
+      document.querySelector('.topo').style.backgroundImage =
+        `linear-gradient(155deg, rgba(15,43,34,.72) 0%, rgba(15,43,34,.55) 100%), url('${encodeURI(url).replace(/'/g, '%27')}')`;
+    };
+    teste.src = url;   // se der erro, o fundo da empresa continua
+  }
+
   function render(d){
     const p = d.parceiro, ehCom = p.tipo_recompensa === 'comissao';
     document.title = `Minhas indicações — ${d.unidade?.nome || ''}`;
     document.getElementById('marcaTopo').textContent = d.unidade?.nome || 'Parceiros';
-    document.getElementById('tituloTopo').textContent = `Olá, ${String(p.nome || '').trim().split(/\s+/)[0]}!`;
+    document.getElementById('tituloTopo').textContent = String(p.nome || '').trim() || 'Parceiro';
     document.getElementById('subtituloTopo').textContent = [p.empresa, p.ramo].filter(Boolean).join(' · ');
+    document.querySelector('.topo').style.backgroundImage = '';
     aplicarPersonalizacao(d.unidade?.cor_principal, d.unidade?.imagem_fundo_url);
+    aplicarFundoCartao(p.cartao_path);
     const saldo = Number(d.saldo) || 0;
+    const serie = serieMensal(d);
 
     const lancs = (d.lancamentos || []).map(l => `
       <div class="item"><div><div class="t">${escapeHtml(TIPO_LANC[l.tipo] || l.tipo)}</div><div class="s">${escapeHtml(l.descricao || '')} · ${data(l.criado_em)}</div></div>
@@ -142,13 +341,16 @@
         <div class="saldo-rotulo">${ehCom ? 'Comissão a receber' : 'Cashback disponível'}</div>
         <div class="saldo-valor ${saldo < 0 ? 'negativo' : ''}">${moeda(saldo)}</div>
         <div class="saldo-nota">${ehCom ? 'Você recebe' : 'Você ganha'} <strong>${Number(p.percentual) || 0}%</strong> sobre as vendas que indicar. ${ehCom ? 'A loja acerta o valor com você em dinheiro.' : 'O crédito pode ser usado em compras na loja.'}</div>
-        <div class="codigo-box">Seu código de parceiro: <strong>#${escapeHtml(p.codigo)}</strong><br>Cite esse código (ou seu nome) no balcão quando indicar um cliente.</div>
+        <div class="codigo-box">Seu código de parceiro: <strong>${p.codigo_externo ? escapeHtml(p.codigo_externo) : '#' + escapeHtml(p.codigo)}</strong><br>Cite esse código (ou seu nome) no balcão quando indicar um cliente.</div>
       </div>
+      ${cardDados(p)}
+      ${cardVendasMes(serie)}
       <div class="card"><h2>Serviços que a loja indicou pra você</h2>${servicos}</div>
       <div class="card"><h2>Vendas que você indicou</h2>${vendas}</div>
       <div class="card"><h2>Extrato</h2>${lancs}</div>
       <button class="btn-atualizar" id="btnAtualizar">↻ Atualizar</button>`;
     document.getElementById('btnAtualizar').addEventListener('click', carregar);
+    iniciarGrafico(serie);
   }
 
   async function carregar(){

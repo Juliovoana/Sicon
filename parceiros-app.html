@@ -657,6 +657,7 @@
                 <select id="pf_tipo"><option value="comissao">Comissão (paga em dinheiro)</option><option value="cashback">Cashback (crédito na loja)</option></select></div>
             <div class="campo"><label>Percentual próprio (%)</label><input type="number" step="0.1" min="0" max="100" id="pf_percentual"><span class="dica" id="pf_dica_percentual"></span></div>
         </div>
+        <div class="campo"><label>Código externo (sistema da loja)</label><input type="text" id="pf_codigo_externo" maxlength="40" placeholder="Ex: código do vendedor no ERP da loja"><span class="dica">Código deste parceiro no sistema da loja (ERP, PDV ou outro aplicativo). É por ele que o parceiro é ligado às vendas reais, e é o código que o parceiro vê na página dele (no lugar do número interno). Opcional; não pode repetir entre parceiros.</span></div>
         <div class="grade hidden" id="blocoVitrineForm">
             <label class="campo-check" style="align-self:end;"><input type="checkbox" id="pf_vitrine" checked> Exibir na vitrine da TV</label>
             <div class="campo"><label>Segundos na vitrine</label><input type="number" min="3" max="120" id="pf_vitrine_segundos"><span class="dica">Em branco = padrão da vitrine. Só aparece com a autorização de divulgação marcada.</span></div>
@@ -1360,13 +1361,19 @@ ligarCampoRamo('parcFiltroRamo', () => renderizarParceiros());
 ligarCampoRamo('svcRamo', () => renderizarSugestoesServico());
 ligarCampoRamo('pf_ramo', null);
 
+// código externo comparado sem maiúsculas/espaços e sem zeros à esquerda quando é só número ("001" = "1" = o mesmo vendedor no ERP)
+function chaveCodigoExterno(v) {
+    const t = String(v || '').trim().toLowerCase();
+    return /^\d+$/.test(t) ? (t.replace(/^0+/, '') || '0') : t;
+}
+
 function parceirosFiltrados() {
     const t = normalizar($('parcBusca').value.trim());
     const ramo = $('parcFiltroRamo').value;
     const st = $('parcFiltroStatus').value;
     return parceiros.filter(p =>
         (!st || p.status === st) && (!ramo || p.ramo_id === ramo) &&
-        (!t || normalizar([p.nome, p.empresa, p.codigo, p.whatsapp, p.telefone, p.cidade, p.especialidades, ramoTexto(p)].join(' ')).includes(t))
+        (!t || normalizar([p.nome, p.empresa, p.codigo, p.codigo_externo, p.whatsapp, p.telefone, p.cidade, p.especialidades, ramoTexto(p)].join(' ')).includes(t))
     ).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 }
 
@@ -1380,7 +1387,7 @@ function cardParceiro(p) {
         <div class="parc-info">
             <div class="parc-nome">${escapeHtml(p.nome)}</div>
             <div class="parc-meta">${escapeHtml([p.empresa, ramoTexto(p)].filter(Boolean).join(' · ') || '—')}</div>
-            <div class="parc-meta">#${p.codigo ?? '—'}${p.cidade ? ' · ' + escapeHtml(p.cidade) : ''}</div>
+            <div class="parc-meta">#${p.codigo ?? '—'}${p.codigo_externo ? ' · Cód. ext. ' + escapeHtml(p.codigo_externo) : ''}${p.cidade ? ' · ' + escapeHtml(p.cidade) : ''}</div>
             <div class="parc-rodape">
                 <span class="pill pill-${p.status}">${STATUS_PARCEIRO[p.status] || p.status}</span>
                 ${aval ? `${estrelas(aval.media)}<small style="color:var(--muted)">(${aval.qtd})</small>` : ''}
@@ -1463,6 +1470,7 @@ function abrirFormParceiro(id) {
     $('pf_tipo').value = p?.tipo_recompensa || config?.tipo_recompensa_padrao || 'comissao';
     $('pf_percentual').value = p?.percentual_recompensa ?? '';
     $('pf_dica_percentual').textContent = `Em branco = padrão da loja (${Number(config?.percentual_padrao || 0)}%).`;
+    $('pf_codigo_externo').value = p?.codigo_externo || '';
     $('pf_observacao').value = p?.observacao || '';
     $('pf_autorizou').checked = !!p?.autorizou_divulgacao;
     $('blocoVitrineForm').classList.toggle('hidden', !vitrineDisponivel());
@@ -1535,6 +1543,12 @@ $('btnSalvarParceiro').addEventListener('click', async () => {
         const dup = parceiros.find(p => p.id !== parceiroEmEdicaoId && p.status !== 'recusado' && soDigitos(p.whatsapp) === whatsapp);
         if (dup && !confirm(`Já existe um parceiro com esse WhatsApp: ${dup.nome} (#${dup.codigo}). Cadastrar mesmo assim?`)) return;
     }
+    const codExterno = $('pf_codigo_externo').value.trim();
+    if (codExterno) {
+        const chaveExt = chaveCodigoExterno(codExterno);
+        const dupExt = parceiros.find(p => p.id !== parceiroEmEdicaoId && p.codigo_externo && chaveCodigoExterno(p.codigo_externo) === chaveExt);
+        if (dupExt) return erro(`O código externo "${codExterno}" já é do parceiro #${dupExt.codigo} ${dupExt.nome}. Cada parceiro precisa de um código externo próprio.`);
+    }
     const atual = parceiroEmEdicaoId ? parceiroPorId(parceiroEmEdicaoId) : null;
     const btn = $('btnSalvarParceiro');
     btn.disabled = true; statusEl.className = 'status-msg'; statusEl.textContent = 'Salvando...';
@@ -1561,6 +1575,8 @@ $('btnSalvarParceiro').addEventListener('click', async () => {
         };
         // ramo escolhido: o texto digitado no autocadastro deixa de valer (coluna só existe após parceiros-ramo-livre.sql)
         if (atual && 'ramo_informado' in atual) payload.ramo_informado = null;
+        // coluna só existe depois de rodar parceiros-codigo-externo.sql: só envia se há valor ou se a coluna já veio (pra poder limpar)
+        if (codExterno || (atual && 'codigo_externo' in atual)) payload.codigo_externo = codExterno || null;
         // colunas da vitrine só existem depois de rodar parceiros-vitrine.sql
         if (vitrineDisponivel()) {
             payload.exibir_vitrine = $('pf_vitrine').checked; payload.vitrine_segundos = segVitrine;
@@ -1588,7 +1604,10 @@ $('btnSalvarParceiro').addEventListener('click', async () => {
     } catch (e) {
         if (pathNovoEnviado) { try { await sb.storage.from(BUCKET_CARTOES).remove([pathNovoEnviado]); } catch (e2) { /* ignora */ } }
         const dicaLayout = /vitrine_layout/.test(e.message || '') ? ' — rode de novo o parceiros-vitrine.sql no Supabase (coluna do modo Plus).' : '';
-        erro('Erro ao salvar: ' + (e.message || e) + dicaLayout);
+        const msgErro = String(e.message || e);
+        const dicaExt = /uq_parceiros_codigo_externo/.test(msgErro) ? ' — esse código externo já está em uso por outro parceiro.'
+            : (/codigo_externo/.test(msgErro) ? ' — rode o parceiros-codigo-externo.sql no Supabase (coluna do código externo).' : '');
+        erro('Erro ao salvar: ' + msgErro + dicaLayout + dicaExt);
     } finally { btn.disabled = false; }
 });
 
@@ -1642,6 +1661,7 @@ function abrirDetalhe(id) {
             ${linha('Outro telefone', escapeHtml(p.telefone || ''))}
             ${linha('E-mail', escapeHtml(p.email || ''))}
             ${linha('CPF / CNPJ', escapeHtml(p.documento || ''))}
+            ${linha('Código externo (loja)', escapeHtml(p.codigo_externo || ''))}
             ${linha('Cidade', escapeHtml(p.cidade || ''))}
             ${linha('Endereço', escapeHtml(p.endereco || ''))}
             ${linha('Especialidades', escapeHtml(p.especialidades || ''), true)}
@@ -1918,7 +1938,7 @@ $('btnConfirmarConcluir').addEventListener('click', async () => {
 // ---------------------------------------------------------------
 let vndParceiroSelecionadoId = null;
 ligarBusca($('vndParceiroBusca'), $('vndParceiroResultados'),
-    () => parceiros.filter(p => p.status === 'ativo').map(p => ({ ...p, busca: `${p.whatsapp || ''} ${p.telefone || ''} ${p.documento || ''}` })),
+    () => parceiros.filter(p => p.status === 'ativo').map(p => ({ ...p, busca: `${p.whatsapp || ''} ${p.telefone || ''} ${p.documento || ''} ${p.codigo_externo || ''}` })),
     p => `#${p.codigo} ${p.nome}`,
     p => [p.empresa, ramoNome(p.ramo_id), p.whatsapp ? formatarFone(p.whatsapp) : ''].filter(Boolean).join(' · '),
     p => { vndParceiroSelecionadoId = p ? p.id : null; renderizarPreviewVenda(); });
@@ -2675,7 +2695,7 @@ async function excluirPropaganda(id) {
 // ---------------------------------------------------------------
 const AJUDA_PARCEIROS = {
     titulo: 'Parceiros Comerciais',
-    ultimaRevisao: '06/10/2026',
+    ultimaRevisao: '04/11/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>Módulo pra lojas (de material de construção, por exemplo) que recebem profissionais
@@ -2690,7 +2710,9 @@ const AJUDA_PARCEIROS = {
             <p>O parceiro entra pelo <strong>balcão</strong> (a equipe cadastra, com foto do cartão de
             visita) ou pelo <strong>link/QR de autocadastro</strong> (ele mesmo preenche; a loja aprova).
             Depois de ativo, ele tem um <strong>link pessoal</strong> pra consultar saldo e indicações
-            sem precisar perguntar na loja.</p>
+            sem precisar perguntar na loja. A página mostra também os <strong>dados do cadastro dele</strong>
+            (CPF/CNPJ só com os 3 últimos dígitos) e um <strong>gráfico de vendas indicadas por mês</strong>
+            (últimos 12 meses, só vendas confirmadas), com opção de ver em tabela.</p>
         ` },
         { id: 'dashboard', titulo: 'Dashboard', corpo: `
             <p>Visão rápida: parceiros ativos, cadastros esperando aprovação (clique no cartão pra
@@ -2720,6 +2742,10 @@ const AJUDA_PARCEIROS = {
                 <strong>Tirar foto</strong> (câmera do celular) e <strong>Escolher arquivo</strong> — troca e
                 remove também. Na aba Vitrine aparece a lista dos ativos sem cartão, com os mesmos atalhos.
                 O cartão é o que aparece em destaque no slide da TV.</li>
+                <li><strong>Código externo</strong>: o código do parceiro no sistema da loja (por exemplo, o código
+                dele como vendedor no ERP). É o elo entre o parceiro e as <strong>vendas reais</strong> da loja: com ele,
+                as vendas e quitações do sistema da loja são atribuídas ao parceiro certo. Opcional, mas cada código só
+                pode pertencer a um parceiro ("001" e "1" valem como o mesmo código). Também entra na busca da lista.</li>
                 <li>Aprovar um autocadastro oferece enviar, pelo WhatsApp, o link pessoal do parceiro.
                 <strong>Inativar</strong> não apaga o saldo e desliga o link pessoal.</li>
                 <li><strong>Ramo digitado pelo parceiro</strong>: no formulário de autocadastro o ramo é um campo de
