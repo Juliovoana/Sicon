@@ -36,6 +36,9 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 .tab{flex:1;padding:10px 0;font-size:11px;font-weight:500;text-align:center;cursor:pointer;color:var(--tx2);border:none;border-bottom:2px solid transparent;background:none;display:flex;align-items:center;justify-content:center;gap:3px}
 .tab.on{color:var(--nv);border-bottom-color:var(--nv)}
 .screen{display:none}.screen.on{display:block}
+/* Recuperar (resumo e detalhado): zebrado por VEÍCULO -- troca de cor quando muda a placa; vários checklists do mesmo veículo ficam na mesma cor */
+.rec-lin{background:var(--sf);border-left:4px solid transparent}
+.rec-lin.par{background:#e4ebf5;border-left-color:#7f9bbd}
 
 /* ══════════ DESKTOP (≥900px) ══════════ */
 @media (min-width:900px){
@@ -103,6 +106,11 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 
 @media (min-width:1300px){
   .app{max-width:1320px;grid-template-columns:250px 1fr}
+}
+/* Recuperar no computador: sem a coluna estreita centralizada -- usa a largura toda, um veículo por linha (as duas colunas foram testadas e dispensadas) */
+@media (min-width:900px){
+  #s-rec #recbody,#s-rec .hbusca{max-width:none;margin-left:0;margin-right:0}
+  #s-rec #recbody{padding-left:12px;padding-right:12px}
 }
 .card{background:var(--sf);border-bottom:1px solid var(--bd);padding:13px 16px}
 .lbl{font-size:11px;font-weight:600;color:var(--tx3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
@@ -225,6 +233,9 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 .fi-mini-alert.neutro{color:var(--tx3);background:var(--bg);border-color:var(--bd);font-weight:500}
 .fi-man{display:flex;flex-wrap:wrap;gap:4px}
 .fi.clicavel{cursor:pointer}
+/* Painel: cada veículo numa linha bem demarcada (moldura + faixa à esquerda + respiro entre as linhas), sem zebrado */
+#dash-lista .fi-dash{margin:7px 12px;border:1px solid #c5d0e0;border-left:5px solid var(--nv);border-radius:8px;box-shadow:0 1px 3px rgba(26,58,92,.10)}
+#dash-lista .fi-dash:hover{background:#f4f8fd}
 .fi.clicavel:active{background:var(--nvl)}
 .fi.clicavel .fiseta{margin-left:auto;color:var(--tx3);font-size:16px}
 .dcard{cursor:pointer;transition:background .15s}
@@ -338,6 +349,7 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
       <span style="font-size:12px;color:var(--tx2)" id="dash-info">—</span>
       <button class="sbtn" onclick="sincFrota()"><i class="ti ti-refresh"></i> Atualizar</button>
     </div>
+    <div id="dash-resumo"></div>
     <div id="dash-cards" class="ctr" style="flex-wrap:wrap"></div>
     <div class="hbusca" style="padding-top:10px;padding-bottom:6px">
       <div class="sw">
@@ -1134,7 +1146,9 @@ function htmlManutencaoResumo(resumo, placaClicavel){
   const emDia = lista.filter(m=>m.status==='ok');
   if(emDia.length){
     const titulo = emDia.map(m=>m.tipo+(m.kmProx!=null?' · próx. '+fmtKm(m.kmProx)+' km':'')+(m.dataProx?' · '+m.dataProx:'')).join('\n');
-    selos.push(`<span class="fi-mini-alert ok" title="${escapeAttr(titulo)}"><i class="ti ti-circle-check"></i> ${emDia.length} em dia</span>`);
+    // na lista clicável (Recuperar) o selo "em dia" também abre: dá pra corrigir KM/data mesmo sem estar vencido
+    const clicOk = placaClicavel ? ` data-man-placa="${escapeAttr(placaClicavel)}" data-man-emdia="1" style="cursor:pointer" title="${escapeAttr(titulo+'\n\nToque para alterar a KM / data da realização')}"` : ` title="${escapeAttr(titulo)}"`;
+    selos.push(`<span class="fi-mini-alert ok"${clicOk}><i class="ti ti-circle-check"></i> ${emDia.length} em dia</span>`);
   }
   return `<div class="fi-man">${selos.join('')}</div>`;
 }
@@ -1152,7 +1166,7 @@ function htmlManutencaoResumo(resumo, placaClicavel){
    ══════════════════════════════════════════════════════════════════ */
 const AJUDA_FROTA = {
   titulo: 'Checklist Frota',
-  ultimaRevisao: '17/10/2026',
+  ultimaRevisao: '05/11/2026',
   secoes: [
     { id: 'geral', titulo: 'Visão geral', corpo: `
       <p>Registra o checklist diário de cada veículo da frota (Van, Micro Ônibus, Utilitário,
@@ -1173,6 +1187,11 @@ const AJUDA_FROTA = {
     { id: 'dash', titulo: 'Painel', corpo: `
       <p>Visão geral da frota, pensada pra abrir um checklist rápido:</p>
       <ul>
+        <li>No topo, a faixa <strong>"Frota hoje"</strong> resume a situação atual: quantas
+        <strong>manutenções estão vencidas</strong> (e em quantos veículos), quantas estão a vencer, quantas
+        <strong>OS estão em aberto</strong> (Urgente, Aberta e Em andamento) e quantas são
+        <strong>urgentes</strong>. Só conta veículos ativos; as OS aparecem quando terminam de carregar.</li>
+        <li>Cada veículo é uma <strong>linha com moldura e faixa azul à esquerda</strong>, para separar bem um do outro.</li>
         <li><strong>Cards de resumo</strong> (total + por tipo de veículo) são clicáveis —
         tocar num card filtra a lista abaixo só pro tipo escolhido; tocar em "Total" limpa o
         filtro.</li>
@@ -1185,6 +1204,11 @@ const AJUDA_FROTA = {
         e a situação das manutenções: selo <strong>vermelho</strong> pra cada manutenção
         vencida, <strong>amarelo</strong> quando falta pouco (7 dias ou menos, ou 500 km ou
         menos) e um selo verde com quantas estão em dia. A conta usa o KM do último checklist.</li>
+        <li>Logo abaixo aparecem também as <strong>OS abertas</strong> do veículo (Urgente em vermelho; Aberta e
+        Em andamento em amarelo), do mesmo jeito que na aba Recuperar. <strong>Tocar numa etiqueta</strong> (de OS ou
+        de manutenção, inclusive o selo verde "N em dia") abre a ação dela — mudar o status da OS / marcar como
+        Concluída, ou informar a realização da manutenção (só administrador) — <strong>sem abrir o checklist</strong>;
+        tocar no resto da linha continua abrindo o checklist. A OS concluída ou cancelada some da lista.</li>
         <li>Se você estiver logado como administrador, cada linha ganha um botão de editar o
         cadastro do veículo direto dali (sem precisar navegar até Frota → Gerenciar).</li>
       </ul>
@@ -1243,10 +1267,16 @@ const AJUDA_FROTA = {
       (Urgente em vermelho; Aberta e Em andamento em amarelo, com o número e o serviço) e o topo conta quantos veículos têm
       OS aberta. Toque numa <strong>etiqueta de OS</strong> para mudar o status ou informar a realização (“Concluída”) — o popup mostra a <strong>observação</strong> e as <strong>peças/produtos destinados</strong> à OS (com quantidade, valor e total) para você conferir se tudo foi atendido antes de concluir — e numa
       <strong>etiqueta de manutenção</strong> para informar a realização (data, km e próximo vencimento — só o
-      administrador, logado na barra acima). Quando não há placa informada, o resumo mostra os botões <strong>Todos / Fizeram / Pendentes</strong> e a contagem “N sem checklist” no topo (toque para ver só os veículos que ainda não fizeram checklist no dia). O botão <strong>PDF do resumo</strong> gera o mesmo resumo da tela (quem fez e quem está sem checklist, com motorista, hora, km, manutenção e OS), respeitando o filtro Todos / Fizeram / Pendentes escolhido. O botão <strong>PDF de pendências</strong> gera o relatório da frota com
+      administrador, logado na barra acima). A etiqueta verde <strong>“N em dia”</strong> também é clicável: abre a lista dos itens em dia (ou o formulário direto, se for um só) para corrigir a KM ou a data mesmo sem estar vencido. Quando não há placa informada, o resumo mostra os botões <strong>Todos / Fizeram / Pendentes</strong> e a contagem “N sem checklist” no topo (toque para ver só os veículos que ainda não fizeram checklist no dia). O botão <strong>PDF do resumo</strong> gera o mesmo resumo da tela (quem fez e quem está sem checklist, com motorista, hora, km, manutenção e OS), respeitando o filtro Todos / Fizeram / Pendentes escolhido. O botão <strong>PDF para manutenção</strong> gera, para enviar à oficina/equipe de manutenção, a lista <em>por veículo</em>
+      do que precisa ser feito — OS abertas (Urgente, Aberta, Em andamento) e manutenções vencidas/a vencer — com prioridade,
+      observação, quem abriu (na OS urgente, o motorista do checklist), fornecedor, km atual e uma coluna em branco de
+      "Retorno / visto"; veículos com urgência ou manutenção vencida vêm primeiro. O botão <strong>PDF de pendências</strong> gera o relatório da frota com
       as manutenções vencidas/a vencer e as OS abertas de cada veículo. A manutenção é a situação <em>atual</em> do veículo (calculada com o último
       km registrado), não a de quando o checklist foi feito. A escolha fica lembrada neste aparelho; desmarcando,
-      volta a lista completa (com itens, fotos e os botões de editar/corrigir KM/excluir).</p>
+      volta a lista completa (com itens, fotos e os botões de editar/corrigir KM/excluir).
+      Nos dois modos as linhas têm <strong>fundo alternado (zebrado) por veículo</strong>: a cor troca quando muda a placa, e
+      vários checklists do mesmo veículo ficam na mesma cor, para não confundir um veículo com o seguinte. No computador a lista usa a <strong>largura toda da tela</strong> (sem as margens laterais grandes),
+      sempre com um veículo por linha.</p>
     ` },
     { id: 'fr', titulo: 'Frota', corpo: `
       <p><strong>Ver frota</strong> e o <strong>Painel</strong>: veículos agrupados em dois
@@ -2098,7 +2128,8 @@ function resumoManutencaoRec(placa){
 }
 // OS abertas (Urgente / Aberta / Em andamento) do veículo -- mesma lista da aba OS (getOrdensServico), carregada em silêncio
 const STATUS_OS_ABERTA=['Urgente','Aberta','Em andamento'];
-let osResumoRecEm=0, osResumoRecCarregando=false;
+let osResumoRecEm=0, osResumoRecCarregando=false, osNovasRec=false;
+function painelAbertoRec(){ const s=document.getElementById('s-dash'); return !!(s&&s.classList.contains('on')); }
 function osAbertasRec(placa){
   const k=placaChaveRec(placa);
   return (osCache||[]).filter(o=>STATUS_OS_ABERTA.includes(o.status)&&placaChaveRec(o.veiculo)===k)
@@ -2120,10 +2151,12 @@ async function carregarOSResumoRec(){
   try{
     const r=await fetch(cfg.url+'?action=getOrdensServico');
     const d=await r.json();
-    if(Array.isArray(d.ordens)){ osCache=d.ordens; osResumoRecEm=Date.now(); }
+    if(Array.isArray(d.ordens)){ osCache=d.ordens; osResumoRecEm=Date.now(); osNovasRec=true; }
   }catch(e){ /* o resumo funciona sem as OS */ }
   osResumoRecCarregando=false;
   if(recUltimaBusca && modoResumoRec()) desenharRecuperados();
+  // Painel aberto: mostra as OS que acabaram de chegar (só em sucesso -- a nova chamada do renderDash cai na trava de 60 s)
+  if(osNovasRec){ osNovasRec=false; if(painelAbertoRec()) renderDash(); }
 }
 function temPendenciaManutRec(res){
   if(!res) return false;
@@ -2150,10 +2183,13 @@ function renderResumoRec(busca, body){
   const filtro=(!busca.placa&&sem.length)?recFiltroResumo:'todos';
   const cab=`<div style="padding:12px 16px;background:var(--nvl);border-bottom:1px solid var(--bd);font-size:13px;color:var(--nv);font-weight:600">
       <i class="ti ti-list-check"></i> ${dataBRRec(busca.data)} · ${lista.length} checklist(s) · ${veiculosFeitos} veículo(s)${comPend?` · <span style="color:#b91c1c"><i class="ti ti-alert-triangle"></i> ${comPend} com manutenção pendente</span>`:''}${(sem.length&&!busca.placa)?` · <span style="color:#92400e;cursor:pointer;text-decoration:underline" onclick="mudarFiltroResumoRec('pendentes')"><i class="ti ti-clipboard-x"></i> ${sem.length} sem checklist</span>`:''}${comOS?` · <span style="color:#b45309"><i class="ti ti-tool"></i> ${comOS} com OS aberta</span>`:''}</div>`;
+  let grupoRec=-1, placaAnteriorRec=null;   // zebrado: a cor troca quando muda o veículo
   const linhas=lista.map(c=>{
     const res=resumoManutencaoRec(c.placa);
+    const chavePlaca=placaChaveRec(c.placa);
+    if(chavePlaca!==placaAnteriorRec){ grupoRec++; placaAnteriorRec=chavePlaca; }
     return `
-    <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 16px;border-bottom:1px solid var(--bdl);background:var(--sf)">
+    <div class="rec-lin${grupoRec%2?' par':''}" style="display:flex;align-items:flex-start;gap:10px;padding:10px 16px;border-bottom:1px solid var(--bd)">
       <div style="flex:1;min-width:0">
         <div style="font-size:14px;font-weight:600;color:var(--tx)">${escRec(c.placa)}<span style="font-weight:400;color:var(--tx2)"> · ${escRec(c.modelo)}</span></div>
         <div style="font-size:12px;color:var(--tx2);margin-top:2px"><i class="ti ti-user" style="font-size:12px"></i> ${escRec(c.motorista||'—')}${c.hora?` · <i class="ti ti-clock" style="font-size:12px"></i> ${escRec(c.hora)}`:''}</div>
@@ -2168,15 +2204,16 @@ function renderResumoRec(busca, body){
     if(sem.length){
       faltam=`<div id="rec-sem-checklist" style="padding:12px 16px;background:#fffbeb;border-top:1px solid #fde68a;border-bottom:1px solid #fde68a;font-size:13px;color:#92400e;font-weight:600;margin-top:8px">
           <i class="ti ti-alert-triangle"></i> Sem checklist neste dia (${sem.length})</div>`
-        + sem.map(v=>{
+        + '<div class="rec-grade">' + sem.map((v,i)=>{
             const res=resumoManutencaoRec(v.placa);
             const ult=res&&res.ultimoKm!=null?`<div style="font-size:12px;color:var(--tx2);white-space:nowrap;text-align:right">último: <b>${Number(res.ultimoKm).toLocaleString('pt-BR')} km</b>${res.ultimaData?`<br>${escRec(res.ultimaData)}`:''}</div>`:'';
-            return `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 16px;border-bottom:1px solid var(--bdl);background:var(--sf)">
+            return `<div class="rec-lin${i%2?' par':''}" style="display:flex;align-items:flex-start;gap:10px;padding:8px 16px;border-bottom:1px solid var(--bd)">
               <div style="flex:1;min-width:0;font-size:13px;color:var(--tx)">${escRec(v.placa)}<span style="color:var(--tx2)"> · ${escRec(v.modelo||'')}</span>${htmlManutencaoResumo(res, v.placa)}${htmlOSAbertasRec(v.placa)}</div>${ult}</div>`;
-          }).join('');
+          }).join('') + '</div>';
     }
   }
   const barra=`<div style="padding:8px 16px;background:var(--sf);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <button type="button" class="sbtn" onclick="gerarPdfManutencaoRec()" title="Lista por veículo do que precisa ser feito (OS abertas e manutenções vencidas), pronta para enviar à manutenção" style="background:var(--nv);color:#fff;border:1px solid var(--nv);border-radius:var(--rs);padding:7px 12px;font-weight:600"><i class="ti ti-tool"></i> PDF para manutenção</button>
       <button type="button" class="sbtn" onclick="gerarPdfPendenciasRec()" style="border:1px solid var(--bd);border-radius:var(--rs);padding:7px 12px"><i class="ti ti-file-type-pdf"></i> PDF de pendências</button>
       <button type="button" class="sbtn" onclick="gerarPdfResumoRec()" style="border:1px solid var(--bd);border-radius:var(--rs);padding:7px 12px"><i class="ti ti-file-type-pdf"></i> PDF do resumo</button>
       <span style="font-size:11px;color:var(--tx3);flex:1;min-width:160px">Toque numa etiqueta de manutenção ou de OS para informar a realização / mudar o status.</span></div>`;
@@ -2184,7 +2221,7 @@ function renderResumoRec(busca, body){
   const barraFiltro=(!busca.placa&&sem.length)?`<div style="padding:8px 16px;background:var(--sf);border-bottom:1px solid var(--bd);display:flex;gap:6px;flex-wrap:wrap">
       ${opc('todos','Todos')}${opc('feitos','Fizeram ('+veiculosFeitos+')')}${opc('pendentes','⚠ Pendentes ('+sem.length+')')}</div>`:'';
   const vazio='<div class="empty"><i class="ti ti-search-off"></i>Nenhum checklist enviado neste dia</div>';
-  const parteFeitos=lista.length?linhas:vazio;
+  const parteFeitos=lista.length?'<div class="rec-grade">'+linhas+'</div>':vazio;
   const corpo=filtro==='pendentes'?faltam:(filtro==='feitos'?parteFeitos:parteFeitos+faltam);
   body.innerHTML=cab+barra+barraFiltro+corpo;
 }
@@ -2193,12 +2230,33 @@ function renderResumoRec(busca, body){
    • etiqueta de OS  -> mudar o status / marcar como concluída (mesma ação atualizarStatusOS da aba OS)
    • etiqueta de manutenção -> informar a realização (data, km, próximo vencimento) = gravarManutencao,
      que SÓ o administrador pode (o servidor também exige a senha) */
-document.getElementById('recbody').addEventListener('click', e=>{
+function cliqueEtiquetaRec(e){
   const os=e.target.closest('[data-os-linha]');
-  if(os){ abrirAcaoOSRec(os.dataset.osLinha); return; }
+  if(os){ abrirAcaoOSRec(os.dataset.osLinha); return true; }
+  const emDia=e.target.closest('[data-man-emdia]');
+  if(emDia){ abrirEmDiaManRec(emDia.dataset.manPlaca); return true; }
   const man=e.target.closest('[data-man-tipo]');
-  if(man){ abrirAcaoManRec(man.dataset.manPlaca, man.dataset.manTipo); }
-});
+  if(man){ abrirAcaoManRec(man.dataset.manPlaca, man.dataset.manTipo); return true; }
+  return false;
+}
+document.getElementById('recbody').addEventListener('click', cliqueEtiquetaRec);
+// o Painel usa as mesmas etiquetas (manutenção e OS) com o mesmo comportamento
+document.getElementById('dash-lista').addEventListener('click', cliqueEtiquetaRec);
+
+// etiqueta "N em dia": com um item só abre direto o formulário de realização; com vários, lista os itens pra escolher
+function abrirEmDiaManRec(placa){
+  const res=resumoManutencaoRec(placa);
+  const lista=((res&&res.manutencoes)||[]).filter(m=>m.status==='ok');
+  if(!lista.length) return;
+  if(lista.length===1||!ehAdminMan()){ abrirAcaoManRec(placa, lista[0].tipo); return; }
+  const fk=n=>Number(n).toLocaleString('pt-BR');
+  const ov=abrirModalRec(`<i class="ti ti-circle-check"></i> Manutenções em dia · ${escRec(placa)}`, `
+    <div style="font-size:12.5px;color:var(--tx2);margin-bottom:10px">Toque no item para alterar a KM / data da realização.</div>
+    ${lista.map((m,i)=>`<button class="sbtn" data-em-dia="${i}" style="width:100%;text-align:left;padding:10px 12px;margin-bottom:6px;display:block">
+      <b>${escRec(m.tipo)}</b><br><span style="font-size:11.5px;color:var(--tx2)">${escRec([m.kmProx!=null?'próx. '+fk(m.kmProx)+' km':'',m.dataProx?'até '+m.dataProx:''].filter(Boolean).join(' · ')||'sem previsão')}</span></button>`).join('')}
+    <button class="sbtn" onclick="fecharAcaoRec()" style="width:100%;padding:8px;margin-top:4px">Fechar</button>`);
+  ov.querySelectorAll('[data-em-dia]').forEach(b=>{ b.onclick=()=>abrirAcaoManRec(placa, lista[Number(b.dataset.emDia)].tipo); });
+}
 
 function fecharAcaoRec(){ const a=document.getElementById('modal-rec-acao'); if(a) a.remove(); }
 function abrirModalRec(titulo, corpoHtml){
@@ -2236,7 +2294,12 @@ function htmlConferenciaOSRec(os){
 function abrirAcaoOSRec(linha){
   const os=(osCache||[]).find(o=>String(o.linha)===String(linha));
   if(!os){ toast('OS não encontrada — atualize a lista'); return; }
+  // quem preencheu: na OS urgente gerada pelo checklist, "responsavel" é o motorista que fez o checklist -- destaque grande no topo
+  const quem=(os.responsavel||'').toString().trim();
+  const rotQuem=os.status==='Urgente'?'Motorista que preencheu o checklist':'Responsável';
+  const bQuem=quem?`<div style="display:flex;align-items:center;gap:12px;background:#fef3c7;border:1px solid #f59e0b;border-radius:var(--rs);padding:10px 14px;margin-bottom:12px"><i class="ti ti-user-circle" style="font-size:36px;color:#b45309;flex-shrink:0"></i><div style="min-width:0"><div style="font-size:10.5px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em">${rotQuem}</div><div style="font-size:22px;font-weight:800;color:#451a03;line-height:1.15;word-break:break-word">${escRec(quem)}</div></div></div>`:'';
   abrirModalRec(`<i class="ti ti-tool"></i> OS ${escRec(os.numero)} · ${escRec(os.veiculo)}`, `
+    ${bQuem}
     <div style="font-size:13px;color:var(--tx);margin-bottom:4px">${escRec(os.servico||'')}</div>
     <div style="font-size:12px;color:var(--tx2);margin-bottom:12px">Aberta em ${escRec(os.data||'')}${os.fornecedor?' · '+escRec(os.fornecedor):''} · status atual: <b>${escRec(os.status)}</b></div>
     ${htmlConferenciaOSRec(os)}
@@ -2260,6 +2323,7 @@ async function salvarStatusOSRec(os, novo){
     fecharAcaoRec();
     toast('✓ OS '+os.numero+': '+novo);
     if(recUltimaBusca && modoResumoRec()) desenharRecuperados();
+    if(painelAbertoRec()) renderDash();
   }catch(e){ toast('Erro de conexão'); }
 }
 
@@ -2474,6 +2538,67 @@ async function gerarPdfResumoRec(){
     mostrarPopupPdfRec(doc.output('blob'), 'resumo-checklists-'+busca.data+'.pdf');
   }catch(e){ toast('Não consegui gerar o PDF: '+(e.message||e)); }
 }
+/* PDF PARA A MANUTENÇÃO: o que precisa ser feito em cada veículo -- OS abertas + manutenções vencidas / a vencer --, em blocos por veículo,
+   com prioridade, observação, quem abriu, fornecedor e uma coluna em branco pro retorno da oficina. Veículos com urgência/vencida primeiro. */
+async function gerarPdfManutencaoRec(){
+  if(!window.jspdf){ toast('Biblioteca de PDF indisponível (sem internet?)'); return; }
+  toast('Montando o PDF…');
+  try{
+    osResumoRecEm=0; // força dados atuais
+    await Promise.all([carregarResumoFrota(), carregarOSResumoRec(), carregarAutoTableRec()]);
+    const VERM=[185,28,28], AMAR=[180,83,9];
+    const blocos=[];
+    (frota||[]).filter(v=>v&&v.placa&&String(v.ativo||'').toLowerCase()!=='não'&&String(v.ativo||'').toLowerCase()!=='nao')
+      .sort((a,b)=>String(a.placa).localeCompare(String(b.placa),'pt-BR')).forEach(v=>{
+        const res=resumoManutencaoRec(v.placa); const linhas=[];
+        osAbertasRec(v.placa).forEach(o=>{
+          const det=[]; const obs=String(o.observacao||'').trim(); const quem=String(o.responsavel||'').trim();
+          if(obs) det.push(obs);
+          if(quem) det.push((o.status==='Urgente'?'Motorista do checklist: ':'Responsável: ')+quem);
+          if(o.data) det.push('Aberta em '+o.data);
+          linhas.push({prio:o.status, cor:o.status==='Urgente'?VERM:AMAR, grave:o.status==='Urgente', os:'OS '+o.numero, servico:o.servico||'', det:det.join('\n')||'—', forn:o.fornecedor||'—'});
+        });
+        if(res&&Array.isArray(res.manutencoes)){
+          res.manutencoes.filter(m=>m.status==='vencida').forEach(m=>linhas.push({prio:'Manutenção vencida', cor:VERM, grave:true, os:'—', servico:m.tipo, det:motivoManRec(m), forn:'—'}));
+          res.manutencoes.filter(m=>m.status==='proximo').forEach(m=>linhas.push({prio:'Manutenção a vencer', cor:AMAR, grave:false, os:'—', servico:m.tipo, det:motivoManRec(m), forn:'—'}));
+        } else if(res&&res.manutencaoVencida) linhas.push({prio:'Manutenção vencida', cor:VERM, grave:true, os:'—', servico:'(sem detalhe — atualize o Worker)', det:'—', forn:'—'});
+        if(!linhas.length) return;
+        blocos.push({titulo:v.placa+(v.modelo?' · '+v.modelo:''), km:res&&res.ultimoKm!=null?Number(res.ultimoKm).toLocaleString('pt-BR')+' km':'km não informado', ult:res&&res.ultimaData?res.ultimaData:'', linhas, grave:linhas.some(l=>l.grave)});
+      });
+    blocos.sort((a,b)=>(b.grave?1:0)-(a.grave?1:0)||a.titulo.localeCompare(b.titulo,'pt-BR'));
+
+    const {jsPDF}=window.jspdf; const doc=new jsPDF({orientation:'landscape'});
+    const empresa=(dadosEmpresaCache&&dadosEmpresaCache.RazaoSocial)||'';
+    const mg=10;
+    const totOS=blocos.reduce((n,b)=>n+b.linhas.filter(l=>l.os!=='—').length,0);
+    const totUrg=blocos.reduce((n,b)=>n+b.linhas.filter(l=>l.prio==='Urgente').length,0);
+    const totPrev=blocos.reduce((n,b)=>n+b.linhas.filter(l=>l.os==='—').length,0);
+    doc.setFontSize(15); doc.setFont(undefined,'bold'); doc.text('Solicitação de manutenção — frota', mg, 14);
+    doc.setFontSize(9); doc.setFont(undefined,'normal'); doc.setTextColor(90);
+    doc.text((empresa?empresa+' · ':'')+'Gerado em '+new Date().toLocaleString('pt-BR')+' · situação atual (km = último checklist registrado)', mg, 20);
+    doc.setTextColor(0); doc.setFontSize(10);
+    doc.text(blocos.length+' veículo(s) · '+totOS+' OS aberta(s)'+(totUrg?' ('+totUrg+' urgente(s))':'')+' · '+totPrev+' manutenção(ões) preventiva(s) vencida(s) ou a vencer', mg, 26);
+    if(!blocos.length){ doc.setFontSize(12); doc.text('Nenhuma OS aberta nem manutenção vencida na frota.', mg, 38); }
+    else {
+      const corpo=[];
+      blocos.forEach(b=>{
+        corpo.push([{content:b.titulo+'   —   '+b.km+(b.ult?' (último checklist em '+b.ult+')':''), colSpan:6, styles:{fillColor:b.grave?[254,226,226]:[219,234,254], fontStyle:'bold', textColor:[26,58,92]}}]);
+        b.linhas.forEach(l=>corpo.push([{content:l.prio, styles:{textColor:l.cor, fontStyle:'bold'}}, l.os, l.servico, l.det, l.forn, '']));
+      });
+      doc.autoTable({startY:30, margin:{left:mg,right:mg},
+        head:[['Prioridade','OS','Serviço / manutenção','Detalhe / observação','Fornecedor','Retorno / visto']], body:corpo,
+        styles:{fontSize:8.5,cellPadding:1.8,valign:'top'}, headStyles:{fillColor:[26,58,92]},
+        columnStyles:{0:{cellWidth:27},1:{cellWidth:16},2:{cellWidth:66},3:{cellWidth:88},4:{cellWidth:36}}});
+      let y=(doc.lastAutoTable&&doc.lastAutoTable.finalY?doc.lastAutoTable.finalY:30)+12;
+      if(y>190){ doc.addPage(); y=20; }
+      doc.setFontSize(9); doc.setTextColor(60);
+      doc.text('Recebido por: ______________________________        Data: ____/____/________', mg, y);
+    }
+    const n=doc.getNumberOfPages();
+    for(let i=1;i<=n;i++){ doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text('Página '+i+' de '+n, 297-mg, 205, {align:'right'}); }
+    mostrarPopupPdfRec(doc.output('blob'), 'manutencao-frota-'+new Date().toLocaleDateString('sv-SE')+'.pdf');
+  }catch(e){ toast('Não consegui gerar o PDF: '+(e.message||e)); }
+}
 function mostrarPopupPdfRec(blob, nome){
   const ov=abrirModalRec('📄 PDF pronto', `
     <div style="font-size:12px;color:var(--tx2);margin:0 0 12px">O que você quer fazer com o PDF?</div>
@@ -2495,11 +2620,16 @@ function mostrarPopupPdfRec(blob, nome){
 
 function renderChecklists(checklists, body){
   body.innerHTML='';
+  const grade=document.createElement('div'); grade.className='rec-grade'; body.appendChild(grade);
+  let grupoCk=-1, placaAnteriorCk=null;   // zebrado: a cor troca quando muda o veículo
   checklists.forEach(ck=>{
     const nok=ck.itens.filter(x=>x.status==='nok').length;
     const ok=ck.itens.filter(x=>x.status==='ok').length;
+    const chavePlacaCk=placaChaveRec(ck.placa);
+    if(chavePlacaCk!==placaAnteriorCk){ grupoCk++; placaAnteriorCk=chavePlacaCk; }
     const card=document.createElement('div');
-    card.style.cssText='background:var(--sf);border-bottom:1px solid var(--bd);padding:13px 16px';
+    card.className='rec-lin'+(grupoCk%2?' par':'');
+    card.style.cssText='border-bottom:1px solid var(--bd);padding:13px 16px';
     card.innerHTML=`
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">
         <div>
@@ -2546,7 +2676,7 @@ function renderChecklists(checklists, body){
       }
       card.appendChild(d2);
     });
-    body.appendChild(card);
+    grade.appendChild(card);
   });
 }
 
@@ -2964,14 +3094,47 @@ function updSub(){ document.getElementById('hsub').textContent=cfg.url?'Conexão
 let dashFiltroCategoria=null; // categoria (tipo_veiculo) selecionada no Painel
 let dashFiltroTipo=null; // tipo (checklist) selecionado dentro da categoria — null+null = "Total", sem filtro
 
+// Faixa de resumo no topo do Painel (mesmo estilo do cabeçalho da Recuperar): manutenções vencidas, OS em aberto e urgentes
+function htmlResumoPainel(){
+  if(!Object.keys(resumoFrota||{}).length) return '';   // ainda não chegou o resumo da frota: não afirma nada
+  const ativos=(frota||[]).filter(v=>v&&v.placa&&String(v.ativo||'').toLowerCase()!=='não'&&String(v.ativo||'').toLowerCase()!=='nao');
+  let venc=0, veicVenc=0, aVencer=0;
+  ativos.forEach(v=>{
+    const res=resumoManutencaoRec(v.placa); if(!res) return;
+    if(Array.isArray(res.manutencoes)){
+      const nv=res.manutencoes.filter(m=>m.status==='vencida').length;
+      venc+=nv; if(nv) veicVenc++;
+      aVencer+=res.manutencoes.filter(m=>m.status==='proximo').length;
+    } else if(res.manutencaoVencida){ venc++; veicVenc++; }
+  });
+  const partes=[];
+  partes.push(venc
+    ? `<span style="color:#b91c1c"><i class="ti ti-alert-triangle"></i> ${venc} manutenção(ões) vencida(s) em ${veicVenc} veículo(s)</span>`
+    : `<span style="color:#166534"><i class="ti ti-circle-check"></i> Nenhuma manutenção vencida</span>`);
+  if(aVencer) partes.push(`<span style="color:#854d0e"><i class="ti ti-clock"></i> ${aVencer} a vencer</span>`);
+  if(osResumoRecEm>0||(osCache||[]).length){   // OS só entram depois de carregadas
+    const abertas=(osCache||[]).filter(o=>STATUS_OS_ABERTA.includes(o.status));
+    const urg=abertas.filter(o=>o.status==='Urgente').length;
+    partes.push(abertas.length
+      ? `<span style="color:#b45309"><i class="ti ti-tool"></i> ${abertas.length} OS em aberto</span>`
+      : `<span style="color:#166534"><i class="ti ti-circle-check"></i> Nenhuma OS em aberto</span>`);
+    if(urg) partes.push(`<span style="color:#b91c1c;font-weight:700"><i class="ti ti-flame"></i> ${urg} urgente(s)</span>`);
+  }
+  return `<div style="padding:12px 16px;background:var(--nvl);border-bottom:1px solid var(--bd);font-size:13px;color:var(--nv);font-weight:600"><i class="ti ti-report"></i> Frota hoje: ${partes.join(' · ')}</div>`;
+}
+
 function renderDash(){
+  carregarOSResumoRec();   // OS abertas das etiquetas (com trava de 60 s; sem internet/URL não faz nada)
   const cards=document.getElementById('dash-cards'), info=document.getElementById('dash-info'), lista=document.getElementById('dash-lista');
+  const faixaResumo=document.getElementById('dash-resumo');
   if(!frota||!frota.length){
+    if(faixaResumo) faixaResumo.innerHTML='';
     cards.innerHTML='';
     info.textContent='Nenhum veículo cadastrado ainda';
     lista.innerHTML='<div class="empty"><i class="ti ti-bus"></i>Nenhum veículo encontrado</div>';
     return;
   }
+  if(faixaResumo) faixaResumo.innerHTML=htmlResumoPainel();
   info.innerHTML = cfg.url && localStorage.getItem(FK)
     ? '<span style="color:#16a34a">✓ '+frota.length+' veículos</span>'
     : frota.length+' veículos · dados de demonstração';
@@ -3029,15 +3192,18 @@ function renderDash(){
     }
     const podeEditar = !!(adminSenha && nivelAcesso==='admin');
     g[tipo].forEach(v=>{
-      const d=document.createElement('div'); d.className='fi clicavel';
-      const resumo = resumoFrota[v.placa];
+      const d=document.createElement('div'); d.className='fi clicavel fi-dash';
+      const resumo = resumoManutencaoRec(v.placa);
       const infoUltimo = resumo && (resumo.ultimaData || resumo.ultimoMotorista)
         ? `<div class="fisb2">${resumo.ultimaData ? 'Último checklist: '+resumo.ultimaData : 'Sem checklist ainda'}${resumo.ultimoMotorista ? ' · '+resumo.ultimoMotorista : ''}${resumo.ultimoKm!=null ? ' · <b>'+Number(resumo.ultimoKm).toLocaleString('pt-BR')+' km</b>' : ''}</div>` : '';
-      const alertaManutencao = htmlManutencaoResumo(resumo);
+      const alertaManutencao = htmlManutencaoResumo(resumo, v.placa) + htmlOSAbertasRec(v.placa);   // etiquetas clicáveis, igual à tela Recuperar
       d.innerHTML=`<div class="fiic"><i class="ti ${TPI[v.tipo]||'ti-car'}"></i></div><div><div class="fipl">${v.placa}</div><div class="fisb">${v.modelo} · ${v.ano}</div>${infoUltimo}${alertaManutencao}</div>`
         +(podeEditar ? `<button type="button" class="fi-btn" title="Editar veículo" data-editar-placa="${escapeAttr(v.placa)}"><i class="ti ti-edit"></i></button>` : '')
         +`<i class="ti ti-chevron-right fiseta"></i>`;
-      d.addEventListener('click',()=>abrirChecklistVeiculo(v.placa));
+      d.addEventListener('click',(e)=>{
+        if(e.target.closest('[data-os-linha],[data-man-tipo],[data-man-emdia]')) return;   // clique numa etiqueta abre a ação dela, não o checklist
+        abrirChecklistVeiculo(v.placa);
+      });
       if(podeEditar){
         d.querySelector('[data-editar-placa]').addEventListener('click',(e)=>{
           e.stopPropagation(); // não deixa o clique "vazar" pro clique da linha, que abriria o checklist em vez da edição
