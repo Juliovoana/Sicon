@@ -280,6 +280,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
             <span class="nav-label">Vendas indicadas</span>
         </button>
+        <button class="nav-item tab-app-btn" data-app-tab="erp">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+            <span class="nav-label">Vendas do ERP</span>
+        </button>
         <button class="nav-item tab-app-btn" data-app-tab="recompensas">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             <span class="nav-label">Recompensas</span>
@@ -331,6 +335,12 @@
                 <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg></div>
                 <div class="label">Vendas indicadas no mês</div>
                 <div class="value" id="statVendasMes">—</div>
+                <div class="label" id="statVendasMesErp" style="margin-top:2px;"></div>
+            </div>
+            <div class="stat-card" title="Calculada: valor dos pedidos do ERP do mês × percentual de cada parceiro. Ainda não entra no saldo/extrato do parceiro.">
+                <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
+                <div class="label">Comissão do ERP no mês (calculada)</div>
+                <div class="value" id="statComissaoErp">—</div>
             </div>
             <div class="stat-card">
                 <div class="icon-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
@@ -345,7 +355,7 @@
         </div>
         <div class="chart-box">
             <h3>Top parceiros por vendas indicadas</h3>
-            <div class="chart-sub" id="subTopParceiros">Últimos 12 meses, só vendas confirmadas.</div>
+            <div class="chart-sub" id="subTopParceiros">Últimos 12 meses: vendas confirmadas lançadas no app + pedidos do ERP gravados.</div>
             <div id="graficoTopParceiros"></div>
         </div>
         <div class="chart-box">
@@ -459,6 +469,11 @@
                 <div class="campo"><label>Nº do pedido / NF / cupom</label><input type="text" id="vndReferencia"></div>
                 <div class="campo"><label>O que foi vendido</label><input type="text" id="vndDescricao"></div>
             </div>
+            <div class="campo"><label>Loja / filial</label>
+                <input type="text" id="vndLoja" list="listaLojasVenda" maxlength="60" autocomplete="off" placeholder="Em qual loja do grupo a venda foi feita? Ex: Matriz, Filial Centro">
+                <datalist id="listaLojasVenda"></datalist>
+                <span class="dica">Escolha uma já usada ou digite uma nova. Use o mesmo nome/código da loja do sistema da empresa. Fica lembrada para a próxima venda.</span>
+            </div>
             <div class="preview-recompensa hidden" id="vndPreview"></div>
             <button class="btn btn-principal btn-inline" id="btnRegistrarVenda">Registrar venda indicada</button>
             <div class="status-msg" id="statusVenda"></div>
@@ -472,12 +487,84 @@
                     <option value="cancelada">Canceladas</option>
                     <option value="">Todas</option>
                 </select>
+                <select id="vndFiltroLoja"><option value="">Todas as lojas</option></select>
             </div>
             <div class="tabela-scroll"><table class="tabela">
                 <thead><tr><th>Data</th><th>Parceiro</th><th>Cliente / referência</th><th class="num">Venda</th><th class="num">Recompensa</th><th>Situação</th><th></th></tr></thead>
                 <tbody id="corpoVendas"></tbody>
             </table></div>
             <div class="vazio" style="padding-top:10px; font-size:.78rem;" id="notaLimiteVendas"></div>
+        </div>
+    </div>
+
+    <!-- ---------- VENDAS DO ERP (CSV do Drive) ---------- -->
+    <div class="panel-app" id="app-panel-erp">
+        <div class="cartao">
+            <h2>Vendas do sistema da loja (ERP)</h2>
+            <p class="desc">Lê o arquivo <strong>vendas_parceiros.csv</strong> que o coletor envia ao Drive, liga cada pedido ao parceiro pelo <strong>código externo</strong> do cadastro e calcula a comissão com o percentual do parceiro (ou o padrão da loja). Ao carregar do Drive, os pedidos também são gravados no banco para aparecerem na página do parceiro e no Dashboard.</p>
+            <div class="toolbar">
+                <button class="btn btn-principal btn-inline" id="erpBtnCarregar">⟳ Carregar do Drive</button>
+                <label class="btn btn-cinza btn-sm" for="erpArquivo" style="cursor:pointer;">📂 Abrir CSV deste computador</label>
+                <input type="file" id="erpArquivo" accept=".csv,text/csv" class="hidden">
+                <button class="btn btn-cinza btn-sm" id="erpBtnGravar" title="Grava os pedidos no banco para a página do parceiro e o Dashboard" disabled>⇪ Gravar para a página dos parceiros</button>
+                <button class="btn btn-cinza btn-sm" id="erpBtnExportar">⬇ Exportar comissões (CSV)</button>
+            </div>
+            <span class="dica" id="erpFonte"></span>
+            <div class="status-msg" id="erpStatus"></div>
+        </div>
+        <div id="erpConteudo" class="hidden">
+            <div class="cartao">
+                <div class="grade">
+                    <div class="campo"><label>Período</label>
+                        <select id="erpPeriodo">
+                            <option value="12m">Últimos 12 meses</option>
+                            <option value="mes">Este mês</option>
+                            <option value="mesant">Mês anterior</option>
+                            <option value="3m">Últimos 3 meses</option>
+                            <option value="tudo">Tudo que está no arquivo</option>
+                            <option value="pers">Personalizado</option>
+                        </select></div>
+                    <div class="campo"><label>Loja</label><select id="erpLoja"><option value="">Todas as lojas</option></select></div>
+                </div>
+                <div class="grade hidden" id="erpPersGrade">
+                    <div class="campo"><label>De</label><input type="date" id="erpDe"></div>
+                    <div class="campo"><label>Até</label><input type="date" id="erpAte"></div>
+                </div>
+                <div class="grade">
+                    <div class="campo"><label>Data de referência do período</label>
+                        <select id="erpRef"><option value="venda">Data da venda</option><option value="baixa">Data da baixa (liquidação)</option></select></div>
+                    <div>
+                        <label class="campo-check"><input type="checkbox" id="erpSoBaixados" checked> Contar só pedidos baixados</label>
+                        <label class="campo-check"><input type="checkbox" id="erpIgnorarProprio"> Ignorar compras do próprio indicador</label>
+                    </div>
+                </div>
+                <div class="dica" style="margin-top:6px;">A data de referência e as duas regras acima também valem para a <strong>página do parceiro</strong> e o <strong>Dashboard</strong> (ficam salvas na unidade).</div>
+                <div class="dica" id="erpNotas" style="margin-top:6px;"></div>
+            </div>
+            <div class="stat-cards" id="erpCards"></div>
+            <div class="cartao">
+                <h2>Comissão por parceiro</h2>
+                <p class="desc">Toque numa linha para ver os pedidos.</p>
+                <div class="tabela-scroll"><table class="tabela">
+                    <thead><tr><th>Cód. externo</th><th>Parceiro</th><th class="num">Pedidos</th><th class="num">Valor vendido</th><th class="num">%</th><th class="num">Comissão</th><th>Última venda</th></tr></thead>
+                    <tbody id="erpCorpoParceiros"></tbody>
+                </table></div>
+            </div>
+            <div class="cartao hidden" id="erpBlocoSem">
+                <h2>Indicadores do ERP sem parceiro cadastrado</h2>
+                <p class="desc">Esses códigos aparecem nos pedidos, mas nenhum parceiro tem esse <strong>código externo</strong>. Cadastre o parceiro (ou preencha o código externo no cadastro dele) para a venda passar a contar.</p>
+                <div class="tabela-scroll"><table class="tabela">
+                    <thead><tr><th>Cód. externo</th><th>Indicador no ERP</th><th class="num">Pedidos</th><th class="num">Valor</th></tr></thead>
+                    <tbody id="erpCorpoSem"></tbody>
+                </table></div>
+            </div>
+            <div class="cartao">
+                <h2>Por mês</h2>
+                <div class="tabela-scroll"><table class="tabela">
+                    <thead><tr><th>Mês</th><th class="num">Pedidos</th><th class="num">Valor vendido</th><th class="num">Comissão</th><th class="num">Sem parceiro</th></tr></thead>
+                    <tbody id="erpCorpoMeses"></tbody>
+                </table></div>
+            </div>
         </div>
     </div>
 
@@ -687,6 +774,17 @@
 </div>
 
 <!-- ================= MODAL DETALHE DO PARCEIRO ================= -->
+<div class="modal-overlay" id="modal-erp">
+    <div class="modal-caixa" style="max-width:860px;">
+        <h3 id="erpDetTitulo"></h3>
+        <p class="sub" id="erpDetSub"></p>
+        <div class="tabela-scroll"><table class="tabela">
+            <thead><tr><th>Venda</th><th>Baixa</th><th>Loja</th><th>Pedido</th><th>Cliente</th><th class="num">Valor</th></tr></thead>
+            <tbody id="erpDetCorpo"></tbody>
+        </table></div>
+        <div class="acoes-linha" style="margin-top:14px;"><button class="btn btn-cinza" id="erpDetFechar">Fechar</button></div>
+    </div>
+</div>
 <div class="modal-overlay" id="modal-detalhe">
     <div class="modal-caixa" style="max-width:620px;">
         <div id="detalheCorpo"></div>
@@ -1127,8 +1225,10 @@ async function iniciarApp() {
     sqlPendente = false;
     await carregarConfig();
     if (sqlPendente) { mostrarAvisoSqlPendente(); return; }
-    await Promise.all([carregarRamos(), carregarParceiros(), carregarSaldos(), carregarIndServicos(), carregarIndVendas(), carregarPropagandas()]);
+    await Promise.all([carregarRamos(), carregarParceiros(), carregarSaldos(), carregarIndServicos(), carregarIndVendas(), carregarPropagandas(), carregarErpDb()]);
+    erpLerPrefs(); erpPrefsLidas = true;   // as regras do ERP vêm da configuração da unidade
     $('vndData').value = hojeISO();
+    $('vndLoja').value = ultimaLoja();
     renderizarTudo();
 }
 
@@ -1213,7 +1313,7 @@ function linkCadastroPublico() { return `${URL_BASE_PUBLICA}parceiros-cadastro.h
 // ---------------------------------------------------------------
 // NAVEGAÇÃO (menu lateral)
 // ---------------------------------------------------------------
-const TITULOS_ABA = { dashboard: 'Dashboard', parceiros: 'Parceiros', servicos: 'Indicar serviço', vendas: 'Vendas indicadas', recompensas: 'Recompensas', vitrine: 'Vitrine (TV)', parametros: 'Parâmetros' };
+const TITULOS_ABA = { dashboard: 'Dashboard', parceiros: 'Parceiros', servicos: 'Indicar serviço', vendas: 'Vendas indicadas', erp: 'Vendas do ERP', recompensas: 'Recompensas', vitrine: 'Vitrine (TV)', parametros: 'Parâmetros' };
 function irParaAba(aba) {
     document.querySelectorAll('.tab-app-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.panel-app').forEach(p => p.classList.remove('active'));
@@ -1225,6 +1325,7 @@ function irParaAba(aba) {
     if (aba === 'parceiros') renderizarParceiros();
     if (aba === 'servicos') { renderizarSugestoesServico(); renderizarTabelaServicos(); }
     if (aba === 'vendas') { renderizarPreviewVenda(); renderizarTabelaVendas(); }
+    if (aba === 'erp') erpAbrirAba();
     if (aba === 'recompensas') renderizarRecompensas();
     if (aba === 'vitrine') renderizarVitrine();
     if (aba === 'parametros') renderizarParametros();
@@ -1977,12 +2078,18 @@ $('btnRegistrarVenda').addEventListener('click', async () => {
     const btn = $('btnRegistrarVenda');
     btn.disabled = true; statusEl.className = 'status-msg'; statusEl.textContent = 'Registrando...';
     try {
-        const { data: id, error } = await sb.rpc('parceiros_registrar_venda', {
+        const params = {
             p_parceiro_id: p.id, p_cliente_nome: $('vndCliente').value.trim(), p_cliente_contato: $('vndContato').value.trim(),
             p_descricao: $('vndDescricao').value.trim(), p_valor_venda: valor, p_data: $('vndData').value || hojeISO(),
             p_referencia: $('vndReferencia').value.trim(), p_criado_por: meuPerfil.email,
-        });
+        };
+        // só envia a loja quando preenchida: sem rodar o parceiros-loja.sql a venda sem loja continua registrando normalmente
+        const loja = $('vndLoja').value.trim();
+        if (loja) params.p_loja = loja;
+        const { data: id, error } = await sb.rpc('parceiros_registrar_venda', params);
         if (error) throw error;
+        salvarUltimaLoja(loja);
+        $('vndLoja').value = loja;
         await Promise.all([carregarIndVendas(), carregarSaldos()]);
         const nova = indVendas.find(v => v.id === id);
         await registrarSentinela('venda_indicada', `Registrou venda indicada de ${formatarMoeda(valor)} pelo parceiro #${p.codigo} "${p.nome}"${nova ? ` (${TIPO_RECOMPENSA[nova.tipo_recompensa]} ${formatarMoeda(nova.valor_recompensa)})` : ''}`);
@@ -1990,20 +2097,44 @@ $('btnRegistrarVenda').addEventListener('click', async () => {
         statusEl.textContent = nova && Number(nova.valor_recompensa) > 0 ? `Venda registrada. ${TIPO_RECOMPENSA[nova.tipo_recompensa]} de ${formatarMoeda(nova.valor_recompensa)} lançada no extrato de ${p.nome}.` : 'Venda registrada (sem recompensa, percentual 0%).';
         ['vndValor', 'vndCliente', 'vndContato', 'vndReferencia', 'vndDescricao'].forEach(i => { $(i).value = ''; });
         renderizarPreviewVenda(); renderizarTabelaVendas(); renderizarRecompensas(); renderizarDashboard();
-    } catch (e) { erro('Erro: ' + (e.message || e)); } finally { btn.disabled = false; }
+    } catch (e) {
+        const msg = String(e.message || e);
+        erro('Erro: ' + msg + (/p_loja|parceiros_registrar_venda/.test(msg) && $('vndLoja').value.trim() ? ' — rode o parceiros-loja.sql no Supabase (campo loja da venda) ou registre a venda sem loja.' : ''));
+    } finally { btn.disabled = false; }
 });
 
+// ---- loja / filial da venda (texto livre; as já usadas viram sugestão e filtro) ----
+const chaveUltimaLoja = () => `parceiros_ultima_loja_${meuPerfil.unidadeId}`;
+function ultimaLoja() { try { return localStorage.getItem(chaveUltimaLoja()) || ''; } catch (e) { return ''; } }
+function salvarUltimaLoja(v) { try { if (v) localStorage.setItem(chaveUltimaLoja(), v); else localStorage.removeItem(chaveUltimaLoja()); } catch (e) { /* sem armazenamento: só não lembra */ } }
+function lojasUsadas() {
+    return [...new Set(indVendas.map(v => String(v.loja || '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+}
+let lojasListadas = null;
+function atualizarListasLoja() {
+    const lojas = lojasUsadas(), chave = lojas.join('\u0001');
+    if (chave === lojasListadas) return;
+    lojasListadas = chave;
+    $('listaLojasVenda').innerHTML = lojas.map(l => `<option value="${escapeHtml(l)}"></option>`).join('');
+    const sel = $('vndFiltroLoja'), atual = sel.value;
+    sel.innerHTML = '<option value="">Todas as lojas</option>' + lojas.map(l => `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join('');
+    sel.value = lojas.includes(atual) ? atual : '';
+    sel.classList.toggle('hidden', !lojas.length);
+}
+
 function renderizarTabelaVendas() {
+    atualizarListasLoja();
     const t = normalizar($('vndFiltroBusca').value.trim());
     const st = $('vndFiltroStatus').value;
-    const lista = indVendas.filter(v => (!st || v.status === st) &&
-        (!t || normalizar([parceiroPorId(v.parceiro_id)?.nome, v.cliente_nome, v.referencia, v.descricao].join(' ')).includes(t)));
+    const lj = $('vndFiltroLoja').value;
+    const lista = indVendas.filter(v => (!st || v.status === st) && (!lj || String(v.loja || '').trim() === lj) &&
+        (!t || normalizar([parceiroPorId(v.parceiro_id)?.nome, v.cliente_nome, v.referencia, v.descricao, v.loja].join(' ')).includes(t)));
     $('corpoVendas').innerHTML = lista.map(v => {
         const p = parceiroPorId(v.parceiro_id);
         return `<tr>
             <td>${formatarDataSemFuso(v.data_venda)}</td>
             <td>${p ? `<a href="#" data-abrir-parc="${p.id}">#${p.codigo} ${escapeHtml(p.nome)}</a>` : '—'}</td>
-            <td>${escapeHtml(v.cliente_nome || '—')}${v.referencia ? `<small class="sub">${escapeHtml(v.referencia)}</small>` : ''}${v.descricao ? `<small class="sub">${escapeHtml(v.descricao)}</small>` : ''}</td>
+            <td>${escapeHtml(v.cliente_nome || '—')}${v.loja ? `<small class="sub">Loja: ${escapeHtml(v.loja)}</small>` : ''}${v.referencia ? `<small class="sub">${escapeHtml(v.referencia)}</small>` : ''}${v.descricao ? `<small class="sub">${escapeHtml(v.descricao)}</small>` : ''}</td>
             <td class="num">${formatarMoeda(v.valor_venda)}</td>
             <td class="num"><span class="pill pill-${v.tipo_recompensa}">${TIPO_RECOMPENSA[v.tipo_recompensa]} ${Number(v.percentual_aplicado)}%</span><br>${formatarMoeda(v.valor_recompensa)}</td>
             <td><span class="pill pill-${v.status}">${v.status === 'confirmada' ? 'Confirmada' : 'Cancelada'}</span>${v.motivo_cancelamento ? `<small class="sub">${escapeHtml(v.motivo_cancelamento)}</small>` : ''}</td>
@@ -2016,6 +2147,7 @@ function renderizarTabelaVendas() {
 }
 $('vndFiltroBusca').addEventListener('input', renderizarTabelaVendas);
 $('vndFiltroStatus').addEventListener('change', renderizarTabelaVendas);
+$('vndFiltroLoja').addEventListener('change', renderizarTabelaVendas);
 
 async function cancelarVendaIndicada(id) {
     const v = indVendas.find(x => x.id === id);
@@ -2234,7 +2366,15 @@ function renderizarDashboard() {
     const mes = hojeISO().slice(0, 7);
     const confirmadas = indVendas.filter(v => v.status === 'confirmada');
     const doMes = confirmadas.filter(v => (v.data_venda || '').startsWith(mes));
-    $('statVendasMes').textContent = `${doMes.length} · ${formatarMoeda(doMes.reduce((a, v) => a + Number(v.valor_venda || 0), 0))}`;
+    // pedidos do ERP gravados no banco (só de parceiros com código externo cadastrado; mesmas regras da aba "Vendas do ERP")
+    const hoje = hojeISO(); let ay = +hoje.slice(0, 4), am = +hoje.slice(5, 7) - 11;
+    while (am < 1) { am += 12; ay--; }
+    const erp12 = erpFiltrar(erpDb, `${ay}-${String(am).padStart(2, '0')}-01`, hoje, '').lista.filter(o => o.p);
+    const erpMes = erp12.filter(o => o.dref.startsWith(mes));
+    const valorErpMes = erpMes.reduce((a, o) => a + o.v, 0);
+    $('statVendasMes').textContent = `${doMes.length + erpMes.length} · ${formatarMoeda(doMes.reduce((a, v) => a + Number(v.valor_venda || 0), 0) + valorErpMes)}`;
+    $('statVendasMesErp').textContent = erpMes.length ? `inclui ${erpMes.length} do ERP (${formatarMoeda(valorErpMes)})` : '';
+    $('statComissaoErp').textContent = erpDb.length ? formatarMoeda(arredondar2(erpMes.reduce((a, o) => a + o.v * percentualEfetivo(o.p) / 100, 0))) : '—';
     let com = 0, cash = 0;
     parceiros.forEach(p => { const s = saldoDe(p.id); if (s > 0) { if (p.tipo_recompensa === 'comissao') com += s; else cash += s; } });
     $('statAPagar').textContent = formatarMoeda(com);
@@ -2245,6 +2385,10 @@ function renderizarDashboard() {
     confirmadas.forEach(v => {
         const g = porParceiro[v.parceiro_id] || (porParceiro[v.parceiro_id] = { valor: 0, qtd: 0, rec: 0 });
         g.valor += Number(v.valor_venda || 0); g.qtd += 1; g.rec += Number(v.valor_recompensa || 0);
+    });
+    erp12.forEach(o => {
+        const g = porParceiro[o.p.id] || (porParceiro[o.p.id] = { valor: 0, qtd: 0, rec: 0 });
+        g.valor += o.v; g.qtd += 1; g.rec += o.v * percentualEfetivo(o.p) / 100;
     });
     const top = Object.entries(porParceiro).sort((a, b) => b[1].valor - a[1].valor).slice(0, 8).map(([id, g]) => {
         const p = parceiroPorId(id);
@@ -2693,9 +2837,455 @@ async function excluirPropaganda(id) {
 // ---------------------------------------------------------------
 // MODAL DE AJUDA
 // ---------------------------------------------------------------
+// ---------------------------------------------------------------
+// VENDAS DO ERP -- lê o vendas_parceiros.csv (pasta do Drive, enviado pelo coletor) e calcula a comissão por parceiro.
+// O Drive é só lido; os pedidos lidos são gravados em parceiros_vendas_erp (página do parceiro e Dashboard leem de lá). O pedido é ligado ao parceiro pelo CÓDIGO EXTERNO do cadastro.
+// ---------------------------------------------------------------
+const ERP_ARQUIVO = 'vendas_parceiros.csv';
+const ERP_URL_OK = /^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/;
+const ERP_NOME_OK = /^[A-Za-z0-9_.\- ]{1,80}\.csv$/;
+const ERP_LIMITE_DIRETO = 3 * 1024 * 1024;
+const ERP_MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const erpPrefs = { ref: 'venda', soBaixados: true, ignorarProprio: false };   // regras de cálculo (lembradas neste aparelho)
+let erpPedidos = [];
+let erpOrigem = '';
+let erpOrigemTipo = '';   // 'drive' | 'local' | 'banco'
+let erpTentouDrive = false;
+let erpPrefsLidas = false;
+// let (e não const) só para poder ser trocada em teste
+let erpJsonp = (url) => new Promise((resolve, reject) => {
+    const cb = 'erp_' + Date.now() + '_' + Math.floor(Math.random() * 1e6);
+    const s = document.createElement('script'); let fim = false;
+    const limpar = () => { delete window[cb]; s.remove(); clearTimeout(t); };
+    const t = setTimeout(() => { if (!fim) { fim = true; limpar(); reject(new Error('Tempo esgotado ao falar com o script do Google.')); } }, 120000);
+    window[cb] = (d) => { if (fim) return; fim = true; limpar(); resolve(d); };
+    s.onerror = () => { if (fim) return; fim = true; limpar(); reject(new Error('Não consegui falar com o script do Google.')); };
+    s.src = url + (url.includes('?') ? '&' : '?') + 'callback=' + cb; document.body.appendChild(s);
+});
+
+// Regras de cálculo: ficam na configuração da unidade (parceiros_config) para valerem também na página do parceiro e no Dashboard.
+// Se o SQL parceiros-vendas-erp.sql ainda não rodou (colunas ausentes), cai para o que estiver lembrado neste aparelho.
+const erpChavePrefs = () => `parceiros_erp_prefs_${meuPerfil.unidadeId}`;
+const erpPrefsNoBanco = () => !!config && config.erp_so_baixados !== undefined;
+function erpLerPrefs() {
+    if (erpPrefsNoBanco()) {
+        erpPrefs.ref = config.erp_ref === 'baixa' ? 'baixa' : 'venda';
+        erpPrefs.soBaixados = config.erp_so_baixados !== false;
+        erpPrefs.ignorarProprio = config.erp_ignorar_proprio === true;
+        return;
+    }
+    try { Object.assign(erpPrefs, JSON.parse(localStorage.getItem(erpChavePrefs()) || '{}')); } catch (e) { /* sem armazenamento: usa o padrão */ }
+}
+async function erpSalvarPrefs() {
+    try { localStorage.setItem(erpChavePrefs(), JSON.stringify(erpPrefs)); } catch (e) { /* ignora */ }
+    if (!erpPrefsNoBanco()) return;
+    const campos = { erp_ref: erpPrefs.ref, erp_so_baixados: !!erpPrefs.soBaixados, erp_ignorar_proprio: !!erpPrefs.ignorarProprio };
+    const { error } = await sb.from('parceiros_config').update(campos).eq('unidade_negocio_id', meuPerfil.unidadeId);
+    if (error) { erpMsg('erro', 'Não consegui gravar a regra de cálculo: ' + error.message); return; }
+    Object.assign(config, campos);
+    registrarSentinela('parceiros_erp_regras', `Regras das vendas do ERP: data ${erpPrefs.ref === 'baixa' ? 'da baixa' : 'da venda'}; só baixados ${erpPrefs.soBaixados ? 'SIM' : 'NÃO'}; ignorar compra do próprio indicador ${erpPrefs.ignorarProprio ? 'SIM' : 'NÃO'}`);
+    renderizarDashboard();
+}
+
+// ---- pedidos gravados no banco (o que a página do parceiro e o Dashboard enxergam) ----
+let erpDb = [];
+let erpDbSyncEm = null;
+let erpDbSqlPendente = false;
+async function carregarErpDb() {
+    try {
+        const linhas = await buscarTudo(() => sb.from('parceiros_vendas_erp').select('chave_codigo,codigo_externo,indicador,loja_codigo,loja,referencia,data_venda,data_baixa,cliente,vendedor,qtd_itens,valor_pedido,compra_propria,sincronizado_em')
+            .eq('unidade_negocio_id', meuPerfil.unidadeId).order('data_venda', { ascending: false }).order('id'));
+        erpDbSqlPendente = false;
+        erpDbSyncEm = null;
+        erpDb = linhas.map(l => {
+            if (l.sincronizado_em && (!erpDbSyncEm || l.sincronizado_em > erpDbSyncEm)) erpDbSyncEm = l.sincronizado_em;
+            return { cod: l.codigo_externo, chave: l.chave_codigo, ind: l.indicador || '', loja: l.loja || l.loja_codigo || '(sem loja)', lojaCod: l.loja_codigo || '',
+                ref: l.referencia, dv: l.data_venda, db: l.data_baixa || '', cli: l.cliente || '', ven: l.vendedor || '', itens: l.qtd_itens || 0, v: Number(l.valor_pedido) || 0, propria: !!l.compra_propria };
+        });
+    } catch (erro) {
+        erpDb = []; erpDbSyncEm = null;
+        erpDbSqlPendente = erroDeTabelaAusente(erro);
+        if (!erpDbSqlPendente) console.error(erro);
+    }
+}
+
+// ---- leitura do CSV (aceita , ou ; e ponto/vírgula decimal) ----
+function erpCsvLinhas(texto) {
+    texto = String(texto || '').replace(/^﻿/, '');
+    const primeira = texto.split(/\r?\n/, 1)[0] || '';
+    const sep = primeira.split(';').length > primeira.split(',').length ? ';' : ',';
+    const linhas = []; let campo = '', linha = [], aspas = false;
+    for (let i = 0; i < texto.length; i++) {
+        const ch = texto[i];
+        if (aspas) {
+            if (ch === '"') { if (texto[i + 1] === '"') { campo += '"'; i++; } else aspas = false; }
+            else campo += ch;
+        } else if (ch === '"') aspas = true;
+        else if (ch === sep) { linha.push(campo); campo = ''; }
+        else if (ch === '\n' || ch === '\r') {
+            if (ch === '\r' && texto[i + 1] === '\n') i++;
+            linha.push(campo); campo = '';
+            if (linha.length > 1 || linha[0] !== '') linhas.push(linha);
+            linha = [];
+        } else campo += ch;
+    }
+    if (campo !== '' || linha.length) { linha.push(campo); if (linha.length > 1 || linha[0] !== '') linhas.push(linha); }
+    return linhas;
+}
+function erpNum(s) {
+    s = String(s == null ? '' : s).replace(/[R$\s]/g, '');
+    if (!s) return 0;
+    const v = s.includes(',') ? (s.includes('.') ? s.replace(/\./g, '').replace(',', '.') : s.replace(',', '.')) : s;
+    const n = parseFloat(v);
+    return isNaN(n) ? 0 : n;
+}
+function erpData(s) {
+    s = String(s || '').trim();
+    let m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    return m ? `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}` : '';
+}
+function erpMontarPedidos(texto) {
+    const linhas = erpCsvLinhas(texto);
+    if (linhas.length < 2) throw new Error('O arquivo está vazio.');
+    const idx = {};
+    linhas[0].forEach((c, i) => { idx[normalizar(c).trim().replace(/[^a-z0-9_]+/g, '_')] = i; });
+    const col = (...nomes) => { for (const n of nomes) if (idx[n] !== undefined) return idx[n]; return -1; };
+    const c = {
+        cod: col('codigo_externo', 'cod_externo', 'espe_codigo'), ind: col('indicador', 'espe_descricao'), loja: col('loja', 'unid_nome'),
+        lojaCod: col('loja_codigo', 'unid_codigo'), ref: col('referencia', 'pedido', 'pvec_numero'), dv: col('data_venda', 'data'),
+        db: col('data_baixa'), cli: col('cliente'), ven: col('vendedor'), itens: col('qtd_itens'), val: col('valor_pedido', 'valor')
+    };
+    if (c.cod < 0 || c.val < 0 || c.dv < 0) throw new Error('O arquivo não tem as colunas codigo_externo, data_venda e valor_pedido. Confira se é o ' + ERP_ARQUIVO + '.');
+    const at = (r, i) => (i < 0 || r[i] == null) ? '' : String(r[i]).trim();
+    const pedidos = []; let semData = 0, semCodigo = 0;
+    for (let i = 1; i < linhas.length; i++) {
+        const r = linhas[i];
+        const cod = at(r, c.cod);
+        if (!cod) { semCodigo++; continue; }
+        const dv = erpData(at(r, c.dv));
+        if (!dv) { semData++; continue; }
+        pedidos.push({
+            cod, chave: chaveCodigoExterno(cod), ind: at(r, c.ind), loja: at(r, c.loja) || at(r, c.lojaCod) || '(sem loja)', lojaCod: at(r, c.lojaCod),
+            ref: at(r, c.ref), dv, db: erpData(at(r, c.db)), cli: at(r, c.cli), ven: at(r, c.ven), itens: parseInt(at(r, c.itens), 10) || 0, v: erpNum(at(r, c.val))
+        });
+    }
+    return { pedidos, semData, semCodigo, linhas: linhas.length - 1 };
+}
+
+// ---- Drive (mesmo caminho dos painéis: fn_dash_credenciais + script do Google) ----
+async function erpCredenciais() {
+    // usa a mesma permissão do Painel financeiro (principal da unidade ou "visualizador" dele)
+    const { data, error } = await sb.rpc('fn_dash_credenciais', { p_unidade: meuPerfil.unidadeId, p_modulo: 'painel_financeiro' });
+    if (error) {
+        if (/sem_acesso/.test(error.message || '')) throw new Error('Você não tem acesso aos arquivos do Drive desta unidade. Peça ao principal para liberar o Painel financeiro para o seu usuário.');
+        throw new Error('Não consegui buscar o endereço do Drive: ' + error.message);
+    }
+    const r = Array.isArray(data) ? data[0] : data;
+    if (!r || !r.url || !r.token) throw new Error('Esta unidade ainda não tem o endereço do script do Google cadastrado (o principal cadastra em dashboards-acesso.html).');
+    if (!ERP_URL_OK.test(r.url)) throw new Error('O endereço do script do Google cadastrado na unidade é inválido.');
+    return r;
+}
+async function erpBaixar(chamar, nome, bytes) {
+    if (!(bytes > ERP_LIMITE_DIRETO)) {
+        const r = await chamar('&acao=ler&arquivos=' + encodeURIComponent(nome));
+        const f = r.arquivos && r.arquivos[nome];
+        if (f && f.texto != null) return { texto: f.texto, atualizado: f.atualizado };
+        if (!(f && (f.grande || /exced|maxim|too large/i.test(f.erro || '')))) throw new Error((f && f.erro) || 'Não consegui ler o arquivo ' + nome + '.');
+    }
+    const partes = []; let inicio = 0, atualizado = null;
+    while (true) {
+        const r = await chamar('&acao=parte&arquivo=' + encodeURIComponent(nome) + '&inicio=' + inicio);
+        if (r.proximo === undefined) throw new Error('O script do Google está desatualizado e não lê arquivos grandes em partes (cole a versão nova do google-apps-script-coletor.gs).');
+        atualizado = atualizado || r.atualizado; partes.push(r.texto);
+        if (r.proximo >= r.total) break;
+        if (r.proximo <= inicio) throw new Error('A leitura em partes não avançou.');
+        inicio = r.proximo;
+    }
+    return { texto: partes.join(''), atualizado };
+}
+function erpMsg(tipo, texto) {
+    const el = $('erpStatus'); el.className = 'status-msg' + (tipo ? ' ' + tipo : ''); el.textContent = texto || '';
+}
+async function erpCarregarDrive() {
+    const btn = $('erpBtnCarregar'); btn.disabled = true; erpTentouDrive = true;
+    erpMsg('', 'Buscando o arquivo no Drive...');
+    try {
+        const cred = await erpCredenciais();
+        const chamar = (q) => erpJsonp(cred.url + '?token=' + encodeURIComponent(cred.token) + q)
+            .then(r => { if (!r || !r.ok) throw new Error((r && r.erro) || 'Resposta inesperada do script do Google.'); return r; });
+        const nome = (cred.arquivos && ERP_NOME_OK.test(cred.arquivos.vendas_parceiros || '')) ? cred.arquivos.vendas_parceiros : ERP_ARQUIVO;
+        const lista = await chamar('&acao=listar');
+        const info = (lista.arquivos || []).find(a => a.arquivo === nome);
+        if (!info) throw new Error(`O arquivo ${nome} não está na pasta do Drive. Confira se o item do coletor já rodou.`);
+        const f = await erpBaixar(chamar, nome, info.bytes);
+        const r = erpMontarPedidos(f.texto);
+        erpPedidos = r.pedidos; erpOrigemTipo = 'drive';
+        const quando = info.atualizado ? new Date(info.atualizado) : null;
+        erpOrigem = `Drive: ${nome}` + (quando ? ` — arquivo atualizado em ${quando.toLocaleString('pt-BR')}` : '') + ` — ${r.pedidos.length} pedidos lidos`;
+        const horas = quando ? (Date.now() - quando.getTime()) / 3600000 : 0;
+        const extra = [];
+        if (horas > 6) extra.push(`O arquivo não é atualizado há ${Math.round(horas)} horas — confira se o coletor está rodando.`);
+        if (r.semData || r.semCodigo) extra.push(`${r.semCodigo} linha(s) sem código externo e ${r.semData} sem data foram ignoradas.`);
+        erpMsg(extra.length ? 'erro' : 'sucesso', extra.length ? extra.join(' ') : 'Dados carregados do Drive.');
+        erpRenderizar();
+        // grava no banco para a página do parceiro e o Dashboard (mantém o aviso acima se houver)
+        const avisoLeitura = extra.join(' ');
+        const gravou = await erpSincronizar({ apagarAusentes: true, silencioso: true });
+        if (gravou && avisoLeitura) erpMsg('erro', avisoLeitura + ' ' + $('erpStatus').textContent.replace(/^Dados carregados do Drive\.\s*/, ''));
+    } catch (e) {
+        const msg = (e && e.message) || String(e);
+        if (!erpPedidos.length && erpDb.length) {
+            // sem acesso ao Drive: mostra o que já está gravado no banco (última sincronização)
+            erpPedidos = erpDb.slice(); erpOrigemTipo = 'banco';
+            erpOrigem = `Banco do sistema — pedidos gravados na última atualização (${erpDbSyncEm ? new Date(erpDbSyncEm).toLocaleString('pt-BR') : 'data desconhecida'}) — ${erpPedidos.length} pedidos`;
+            erpMsg('erro', msg + ' Mostrando os pedidos já gravados no banco.');
+        } else erpMsg('erro', msg);
+    } finally { btn.disabled = false; }
+    erpRenderizar();
+}
+async function erpAbrirArquivoLocal(arquivo) {
+    try {
+        const r = erpMontarPedidos(await arquivo.text());
+        erpPedidos = r.pedidos; erpOrigemTipo = 'local';
+        erpOrigem = `Arquivo deste computador: ${arquivo.name} — ${r.pedidos.length} pedidos lidos (ainda NÃO gravado para a página dos parceiros)`;
+        erpMsg((r.semData || r.semCodigo) ? 'erro' : 'sucesso', (r.semData || r.semCodigo) ? `${r.semCodigo} linha(s) sem código externo e ${r.semData} sem data foram ignoradas.` : 'Arquivo aberto.');
+    } catch (e) { erpMsg('erro', (e && e.message) || String(e)); }
+    erpRenderizar();
+}
+async function erpGravarClique() {
+    if (!erpPedidos.length) return;
+    if (erpOrigemTipo === 'banco') { erpMsg('', 'Estes pedidos já estão gravados no banco.'); return; }
+    if (erpOrigemTipo === 'local' && !confirm('Gravar os pedidos DESTE ARQUIVO para a página dos parceiros e o Dashboard? Os pedidos iguais são atualizados e os outros que já estão gravados não são apagados.')) return;
+    await erpSincronizar({ apagarAusentes: erpOrigemTipo === 'drive' });
+}
+
+// ---- regras e cálculo ----
+function erpIntervalo() {
+    const sel = $('erpPeriodo').value, hoje = hojeISO();
+    const a = +hoje.slice(0, 4), m = +hoje.slice(5, 7), p2 = (n) => String(n).padStart(2, '0');
+    const primeiro = (ano, mes) => { while (mes < 1) { mes += 12; ano--; } return `${ano}-${p2(mes)}-01`; };
+    if (sel === 'mes') return { de: primeiro(a, m), ate: hoje };
+    if (sel === 'mesant') { const ini = primeiro(a, m - 1); return { de: ini, ate: new Date(Date.UTC(a, m - 1, 0)).toISOString().slice(0, 10) }; }
+    if (sel === '3m') return { de: primeiro(a, m - 2), ate: hoje };
+    if (sel === '12m') return { de: primeiro(a, m - 11), ate: hoje };
+    if (sel === 'pers') return { de: $('erpDe').value || '', ate: $('erpAte').value || '' };
+    return { de: '', ate: '' };
+}
+// o cliente é o próprio indicador? (nome igual, ou nome do parceiro/indicador contido no nome do cliente)
+function erpCompraPropria(ped, p) {
+    const limpo = (t) => normalizar(t).replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const cli = limpo(ped.cli);
+    if (!cli) return false;
+    const nomes = new Set();
+    if (p && p.nome) nomes.add(limpo(p.nome));
+    String(ped.ind || '').split(/\s*-\s*/).forEach(t => { const n = limpo(t); if (n) nomes.add(n); });
+    for (const n of nomes) {
+        if (!n) continue;
+        if (cli === n) return true;
+        if (n.split(' ').length >= 2 && cli.includes(n)) return true;
+        if (cli.split(' ').length >= 2 && n.includes(cli)) return true;
+    }
+    return false;
+}
+const erpMapaParceiros = () => { const m = {}; parceiros.forEach(p => { if (p.codigo_externo) m[chaveCodigoExterno(p.codigo_externo)] = p; }); return m; };
+// aplica período, loja e as regras (data de referência, só baixados, compra própria) a uma lista de pedidos
+function erpFiltrar(pedidos, de, ate, loja) {
+    const porChave = erpMapaParceiros();
+    const usaBaixa = erpPrefs.ref === 'baixa';
+    let descartaNaoBaixado = 0, descartaPropria = 0, descartaValorNB = 0, descartaValorPr = 0;
+    const lista = [];
+    pedidos.forEach(ped => {
+        const dref = usaBaixa ? ped.db : ped.dv;
+        if (!dref) return;
+        if ((de && dref < de) || (ate && dref > ate)) return;
+        if (loja && ped.loja !== loja) return;
+        const p = porChave[ped.chave] || null;
+        if (erpPrefs.soBaixados && !ped.db) { descartaNaoBaixado++; descartaValorNB += ped.v; return; }
+        const propria = erpCompraPropria(ped, p);
+        if (erpPrefs.ignorarProprio && propria) { descartaPropria++; descartaValorPr += ped.v; return; }
+        lista.push({ ...ped, dref, p, propria });
+    });
+    return { lista, descartaNaoBaixado, descartaPropria, descartaValorNB, descartaValorPr };
+}
+function erpAplicar() {
+    const { de, ate } = erpIntervalo();
+    return erpFiltrar(erpPedidos, de, ate, $('erpLoja').value);
+}
+
+// ---- grava os pedidos no banco: a página do parceiro e o Dashboard leem de lá (o token do Drive nunca vai ao navegador do parceiro) ----
+let erpSincronizando = false;
+async function erpSincronizar(opcoes) {
+    const { apagarAusentes = false, silencioso = false } = opcoes || {};
+    if (erpSincronizando) return false;
+    if (!erpPedidos.length) { erpMsg('erro', 'Carregue os pedidos antes de gravar.'); return false; }
+    erpSincronizando = true;
+    const btn = $('erpBtnGravar'); btn.disabled = true;
+    try {
+        const ts = new Date().toISOString();
+        const porChave = erpMapaParceiros();
+        const mapa = new Map(); let semReferencia = 0;
+        erpPedidos.forEach(ped => {
+            if (!ped.ref) { semReferencia++; return; }
+            const lojaCod = ped.lojaCod || ped.loja || '';
+            mapa.set(lojaCod + '\u0001' + ped.ref, {
+                unidade_negocio_id: meuPerfil.unidadeId, chave_codigo: ped.chave, codigo_externo: ped.cod, indicador: ped.ind || null,
+                loja_codigo: lojaCod, loja: ped.loja || null, referencia: ped.ref, data_venda: ped.dv, data_baixa: ped.db || null,
+                cliente: ped.cli || null, vendedor: ped.ven || null, qtd_itens: ped.itens || null, valor_pedido: ped.v,
+                compra_propria: erpCompraPropria(ped, porChave[ped.chave] || null), sincronizado_em: ts
+            });
+        });
+        const linhas = [...mapa.values()];
+        if (!linhas.length) throw new Error('Nenhum pedido com número de referência para gravar.');
+        for (let i = 0; i < linhas.length; i += 500) {
+            erpMsg('', `Gravando para a página dos parceiros... ${Math.min(i + 500, linhas.length)} de ${linhas.length}`);
+            const { error } = await sb.from('parceiros_vendas_erp').upsert(linhas.slice(i, i + 500), { onConflict: 'unidade_negocio_id,loja_codigo,referencia' });
+            if (error) {
+                if (erroDeTabelaAusente(error)) throw new Error('A tabela parceiros_vendas_erp ainda não existe. Rode o arquivo parceiros-vendas-erp.sql no SQL Editor do Supabase.');
+                throw new Error('Não consegui gravar os pedidos: ' + error.message);
+            }
+        }
+        // pedidos que sumiram do arquivo (ex: cancelados no ERP) dentro do período que o arquivo cobre
+        let removidos = 0, aviso = '';
+        if (apagarAusentes) {
+            const minData = linhas.reduce((m, l) => (l.data_venda < m ? l.data_venda : m), linhas[0].data_venda);
+            const filtro = (q) => q.eq('unidade_negocio_id', meuPerfil.unidadeId).gte('data_venda', minData).lt('sincronizado_em', ts);
+            const { count, error: eCont } = await filtro(sb.from('parceiros_vendas_erp').select('id', { count: 'exact', head: true }));
+            if (eCont) aviso = ' Não consegui conferir pedidos antigos para remover.';
+            else if (count > 0) {
+                if (count > linhas.length) aviso = ` ${count} pedidos gravados antes não estão neste arquivo e NÃO foram removidos (são mais que o arquivo todo: confira se é o arquivo certo).`;
+                else {
+                    const { error: eDel } = await filtro(sb.from('parceiros_vendas_erp').delete());
+                    if (eDel) aviso = ' Não consegui remover os pedidos que saíram do arquivo.'; else removidos = count;
+                }
+            }
+        }
+        await carregarErpDb();
+        renderizarDashboard();
+        registrarSentinela('parceiros_erp_sincronizado', `Gravou ${linhas.length} pedidos do ERP para a página dos parceiros${removidos ? `; removeu ${removidos} que saíram do arquivo` : ''}${semReferencia ? `; ${semReferencia} sem número de pedido ignorados` : ''}`);
+        const txt = `Gravado: ${linhas.length.toLocaleString('pt-BR')} pedidos agora aparecem na página dos parceiros e no Dashboard` + (removidos ? ` (removidos por não estarem mais no arquivo: ${removidos})` : '') + (semReferencia ? `; ${semReferencia} sem número de pedido ficaram de fora` : '') + '.' + aviso;
+        if (!silencioso || aviso || semReferencia) erpMsg(aviso ? 'erro' : 'sucesso', txt);
+        else erpMsg('sucesso', 'Dados carregados do Drive. ' + txt);
+        return true;
+    } catch (e) {
+        erpMsg('erro', (silencioso ? 'Dados lidos, mas NÃO gravados para a página dos parceiros: ' : '') + ((e && e.message) || String(e)));
+        return false;
+    } finally { erpSincronizando = false; btn.disabled = !erpPedidos.length || erpOrigemTipo === 'banco'; }
+}
+function erpAgrupar(lista) {
+    const grupos = {}, meses = {};
+    lista.forEach(o => {
+        const g = grupos[o.chave] || (grupos[o.chave] = { chave: o.chave, cod: o.cod, ind: o.ind, p: o.p, pedidos: [], valor: 0, ultima: '' });
+        g.pedidos.push(o); g.valor += o.v; if (o.dref > g.ultima) g.ultima = o.dref;
+        const pct = o.p ? percentualEfetivo(o.p) : 0;
+        const m = meses[o.dref.slice(0, 7)] || (meses[o.dref.slice(0, 7)] = { n: 0, valor: 0, com: 0, nSem: 0, valorSem: 0 });
+        if (o.p) { m.n++; m.valor += o.v; m.com += o.v * pct / 100; } else { m.nSem++; m.valorSem += o.v; }
+    });
+    Object.values(grupos).forEach(g => { g.pct = g.p ? percentualEfetivo(g.p) : 0; g.com = arredondar2(g.valor * g.pct / 100); });
+    return { grupos: Object.values(grupos), meses };
+}
+
+// ---- tela ----
+function erpRenderizar() {
+    $('erpFonte').textContent = erpOrigem;
+    $('erpBtnGravar').disabled = !erpPedidos.length || erpOrigemTipo === 'banco' || erpSincronizando;
+    const box = $('erpConteudo');
+    if (!erpPedidos.length) { box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+    // lojas disponíveis
+    const lojas = [...new Set(erpPedidos.map(p => p.loja))].sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
+    const selLoja = $('erpLoja'), lojaAtual = selLoja.value;
+    selLoja.innerHTML = '<option value="">Todas as lojas</option>' + lojas.map(l => `<option value="${escapeHtml(l)}">${escapeHtml(l)}</option>`).join('');
+    selLoja.value = lojas.includes(lojaAtual) ? lojaAtual : '';
+    $('erpPersGrade').classList.toggle('hidden', $('erpPeriodo').value !== 'pers');
+    $('erpRef').value = erpPrefs.ref; $('erpSoBaixados').checked = !!erpPrefs.soBaixados; $('erpIgnorarProprio').checked = !!erpPrefs.ignorarProprio;
+
+    const r = erpAplicar();
+    const { grupos, meses } = erpAgrupar(r.lista);
+    const comP = grupos.filter(g => g.p), semP = grupos.filter(g => !g.p);
+    const valorTot = r.lista.reduce((a, o) => a + o.v, 0);
+    const valorComP = comP.reduce((a, g) => a + g.valor, 0);
+    const comissaoTot = arredondar2(comP.reduce((a, g) => a + g.com, 0));
+    const nPedComP = comP.reduce((a, g) => a + g.pedidos.length, 0), nPedSemP = semP.reduce((a, g) => a + g.pedidos.length, 0);
+    $('erpCards').innerHTML = `
+        <div class="stat-card"><div class="label">Pedidos no período</div><div class="value">${r.lista.length.toLocaleString('pt-BR')}</div></div>
+        <div class="stat-card"><div class="label">Valor vendido</div><div class="value">${formatarMoeda(valorTot)}</div></div>
+        <div class="stat-card"><div class="label">Comissão calculada</div><div class="value">${formatarMoeda(comissaoTot)}</div></div>
+        <div class="stat-card"><div class="label">Parceiros com venda</div><div class="value">${comP.length}</div></div>
+        <div class="stat-card ${semP.length ? 'clicavel' : ''}" id="erpCardSem"><div class="label">Sem parceiro cadastrado</div><div class="value ${semP.length ? 'alerta' : ''}">${nPedSemP} pedido(s)</div></div>`;
+    const notas = [];
+    if (erpPrefs.soBaixados && r.descartaNaoBaixado) notas.push(`${r.descartaNaoBaixado} pedido(s) sem baixa (${formatarMoeda(r.descartaValorNB)}) ficaram de fora.`);
+    if (erpPrefs.ignorarProprio && r.descartaPropria) notas.push(`${r.descartaPropria} compra(s) do próprio indicador (${formatarMoeda(r.descartaValorPr)}) foram ignoradas.`);
+    if (!erpPrefs.ignorarProprio) { const n = r.lista.filter(o => o.propria).length; if (n) notas.push(`${n} pedido(s) parecem compra do próprio indicador (marcados na lista); marque "Ignorar compras do próprio indicador" se não devem gerar comissão.`); }
+    $('erpNotas').textContent = notas.join(' ');
+
+    $('erpCorpoParceiros').innerHTML = comP.sort((a, b) => b.valor - a.valor).map(g => `
+        <tr data-erp-parc="${escapeHtml(g.chave)}" style="cursor:pointer;">
+            <td>${escapeHtml(g.cod)}</td>
+            <td><strong>${escapeHtml(g.p.nome)}</strong>${ramoNome(g.p.ramo_id) ? `<small class="sub">${escapeHtml(ramoNome(g.p.ramo_id))}</small>` : ''}</td>
+            <td class="num">${g.pedidos.length}</td><td class="num">${formatarMoeda(g.valor)}</td>
+            <td class="num">${g.pct}%</td><td class="num"><strong>${formatarMoeda(g.com)}</strong></td><td>${formatarDataSemFuso(g.ultima)}</td>
+        </tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhum pedido de parceiro cadastrado neste período/filtro.</td></tr>';
+    $('erpCorpoSem').innerHTML = semP.sort((a, b) => b.valor - a.valor).map(g => `
+        <tr data-erp-parc="${escapeHtml(g.chave)}" style="cursor:pointer;">
+            <td>${escapeHtml(g.cod)}</td><td>${escapeHtml(g.ind || '—')}</td>
+            <td class="num">${g.pedidos.length}</td><td class="num">${formatarMoeda(g.valor)}</td></tr>`).join('');
+    $('erpBlocoSem').classList.toggle('hidden', !semP.length);
+    $('erpCorpoMeses').innerHTML = Object.keys(meses).sort().reverse().map(k => { const m = meses[k]; const [a, mm] = k.split('-'); return `
+        <tr><td>${ERP_MESES[+mm - 1]}/${a}</td><td class="num">${m.n}</td><td class="num">${formatarMoeda(m.valor)}</td><td class="num">${formatarMoeda(arredondar2(m.com))}</td>
+        <td class="num">${m.nSem ? m.nSem + ' (' + formatarMoeda(m.valorSem) + ')' : '—'}</td></tr>`; }).join('') || '<tr><td colspan="5" class="vazio">Sem pedidos.</td></tr>';
+    erpUltimo = { grupos, r };
+}
+let erpUltimo = null;
+
+function erpDetalhe(chave) {
+    if (!erpUltimo) return;
+    const g = erpUltimo.grupos.find(x => x.chave === chave);
+    if (!g) return;
+    const linhas = g.pedidos.slice().sort((a, b) => b.dref.localeCompare(a.dref) || String(b.ref).localeCompare(String(a.ref), 'pt-BR', { numeric: true }));
+    $('erpDetTitulo').textContent = g.p ? `${g.p.nome}` : `Indicador ${g.cod} (sem parceiro cadastrado)`;
+    $('erpDetSub').textContent = `Código externo ${g.cod} · ${g.pedidos.length} pedido(s) · ${formatarMoeda(g.valor)}` + (g.p ? ` · ${g.pct}% = ${formatarMoeda(g.com)}` : '') + (g.p ? '' : ` · ${g.ind || ''}`);
+    $('erpDetCorpo').innerHTML = linhas.map(o => `
+        <tr><td>${formatarDataSemFuso(o.dv)}</td><td>${o.db ? formatarDataSemFuso(o.db) : '<span class="pill pill-pendente">sem baixa</span>'}</td>
+        <td>${escapeHtml(o.loja)}</td><td>${escapeHtml(o.ref)}</td>
+        <td>${escapeHtml(o.cli || '—')}${o.propria ? ' <span class="pill pill-recusado">compra própria?</span>' : ''}</td>
+        <td class="num">${formatarMoeda(o.v)}</td></tr>`).join('');
+    $('modal-erp').classList.add('aberto');
+}
+function erpExportar() {
+    if (!erpUltimo) return;
+    const cel = (t) => '"' + String(t == null ? '' : t).replace(/"/g, '""') + '"';
+    const num = (n) => String(arredondar2(n)).replace('.', ',');
+    const linhas = [['Código externo', 'Parceiro', 'Ramo', 'Pedidos', 'Valor vendido', 'Percentual', 'Comissão']];
+    erpUltimo.grupos.filter(g => g.p).sort((a, b) => b.valor - a.valor).forEach(g => linhas.push([g.cod, g.p.nome, ramoNome(g.p.ramo_id) || '', g.pedidos.length, num(g.valor), num(g.pct), num(g.com)]));
+    const blob = new Blob(['﻿' + linhas.map(l => l.map(cel).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'comissao-parceiros-' + hojeISO() + '.csv'; a.click();
+}
+
+function erpAbrirAba() {
+    if (!erpPrefsLidas) { erpLerPrefs(); erpPrefsLidas = true; }
+    erpRenderizar();
+    if (!erpPedidos.length && !erpTentouDrive) erpCarregarDrive();   // na 1ª vez já tenta o Drive
+}
+$('erpBtnCarregar').addEventListener('click', erpCarregarDrive);
+$('erpArquivo').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) erpAbrirArquivoLocal(f); e.target.value = ''; });
+['erpPeriodo', 'erpLoja', 'erpDe', 'erpAte'].forEach(id => $(id).addEventListener('change', erpRenderizar));
+$('erpRef').addEventListener('change', () => { erpPrefs.ref = $('erpRef').value; erpSalvarPrefs(); erpRenderizar(); });
+$('erpSoBaixados').addEventListener('change', () => { erpPrefs.soBaixados = $('erpSoBaixados').checked; erpSalvarPrefs(); erpRenderizar(); });
+$('erpIgnorarProprio').addEventListener('change', () => { erpPrefs.ignorarProprio = $('erpIgnorarProprio').checked; erpSalvarPrefs(); erpRenderizar(); });
+$('erpBtnExportar').addEventListener('click', erpExportar);
+$('erpBtnGravar').addEventListener('click', erpGravarClique);
+$('erpDetFechar').addEventListener('click', () => $('modal-erp').classList.remove('aberto'));
+document.addEventListener('click', (e) => {
+    const tr = e.target.closest('[data-erp-parc]');
+    if (tr) { erpDetalhe(tr.dataset.erpParc); return; }
+    if (e.target.closest('#erpCardSem')) { const el = $('erpBlocoSem'); if (el && !el.classList.contains('hidden')) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+});
+
 const AJUDA_PARCEIROS = {
     titulo: 'Parceiros Comerciais',
-    ultimaRevisao: '04/11/2026',
+    ultimaRevisao: '06/11/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>Módulo pra lojas (de material de construção, por exemplo) que recebem profissionais
@@ -2780,8 +3370,37 @@ const AJUDA_PARCEIROS = {
                 <li><strong>Cancelar</strong> uma venda estorna a recompensa dela no extrato (se a comissão
                 já tinha sido paga, o saldo do parceiro pode ficar negativo — o ajuste é feito na
                 próxima recompensa).</li>
-                <li>O valor total da venda aparece só pra loja; no link pessoal o parceiro vê data, cliente,
+                <li><strong>Loja / filial</strong>: informe em qual loja do grupo a venda foi feita (as vendas do
+                grupo vêm somadas e este campo é o que separa por loja). É texto livre: escolha uma já usada ou
+                digite uma nova — use o mesmo nome/código da loja do sistema da empresa. A última loja usada fica
+                lembrada neste aparelho; a lista de vendas tem filtro e busca por loja.</li>
+                <li>O valor total da venda aparece só pra loja; no link pessoal o parceiro vê data, cliente, loja,
                 valor e a recompensa dele.</li>
+            </ul>
+        ` },
+        { id: 'erp', titulo: 'Vendas do ERP', corpo: `
+            <p>Mostra as vendas <strong>reais</strong> da loja (do sistema/ERP) feitas pelos parceiros e calcula a comissão de cada um.
+            Os dados vêm do arquivo <strong>vendas_parceiros.csv</strong>, que o coletor envia à pasta do Drive; o app só <strong>lê</strong> o
+            arquivo (o arquivo do Drive nunca é alterado).</p>
+            <ul>
+                <li>O pedido é ligado ao parceiro pelo <strong>código externo</strong> do cadastro (o código do indicador no ERP). Pedido cujo
+                código não tem parceiro cadastrado aparece em "Indicadores do ERP sem parceiro cadastrado".</li>
+                <li>A <strong>comissão</strong> é o valor do pedido × o percentual do parceiro (ou o padrão da loja, em Parâmetros). Se o percentual
+                mudar, o cálculo de meses passados também muda: os pedidos não são gravados.</li>
+                <li><strong>Contar só pedidos baixados</strong> (ligado por padrão) deixa de fora o pedido ainda sem baixa. A <strong>data de referência</strong>
+                escolhe se o período vale pela data da venda ou da baixa.</li>
+                <li><strong>Ignorar compras do próprio indicador</strong>: quando o cliente do pedido é o próprio indicador (mesmo nome), a compra pode não
+                gerar comissão. Os pedidos assim vêm marcados como "compra própria?" no detalhe e o aviso mostra quantos são.</li>
+                <li><strong>Carregar do Drive</strong> usa a mesma permissão do Painel financeiro (principal da unidade ou quem foi liberado lá).
+                Pelo <strong>📂 Abrir CSV deste computador</strong> dá para conferir um arquivo antes de ele ir ao Drive.</li>
+                <li><strong>Exportar comissões</strong> gera uma planilha (CSV) com a comissão de cada parceiro no período filtrado.</li>
+                <li><strong>Página do parceiro e Dashboard</strong>: ao carregar do Drive, o app <strong>grava os pedidos no banco</strong> (tabela própria) e a página
+                do parceiro (por onde ele vê as vendas) e o Dashboard passam a somar esses pedidos às vendas lançadas no app. Quem vê o Dashboard sempre vê o que foi
+                gravado na última atualização — se o coletor mandar dados novos, abra esta aba e carregue do Drive para atualizar. Pedidos que saíram do arquivo
+                (cancelados no ERP) são removidos na gravação. O botão <strong>⇪ Gravar para a página dos parceiros</strong> grava de novo (ou grava um arquivo aberto deste computador).</li>
+                <li>A data de referência e as regras <strong>"só pedidos baixados"</strong> e <strong>"ignorar compra do próprio indicador"</strong> ficam salvas na unidade e valem
+                também para a página do parceiro e o Dashboard — mudar aqui muda para todos. A comissão do ERP é <strong>calculada</strong> (valor × percentual atual do parceiro) e
+                <strong>não entra no saldo/extrato</strong> do parceiro; o acerto continua sendo feito com a loja. Se a loja também lançou na mão a mesma venda, ela conta duas vezes.</li>
             </ul>
         ` },
         { id: 'recompensas', titulo: 'Recompensas', corpo: `
