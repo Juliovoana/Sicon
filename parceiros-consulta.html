@@ -187,14 +187,24 @@
     for(let i = 11; i >= 0; i--){
       const dt = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
       const chave = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}`, x = mapa[chave] || {};
-      serie.push({ chave, ano: dt.getFullYear(), mes: dt.getMonth(), qtd: Number(x.qtd) || 0, total: Number(x.total) || 0, recompensa: Number(x.recompensa) || 0 });
+      const sep = x.qtd_lancadas != null;   // função nova do banco devolve as duas origens separadas; a antiga só tem lançadas
+      serie.push({ chave, ano: dt.getFullYear(), mes: dt.getMonth(), qtd: Number(x.qtd) || 0, total: Number(x.total) || 0, recompensa: Number(x.recompensa) || 0,
+        ql: Number(sep ? x.qtd_lancadas : x.qtd) || 0, tl: Number(sep ? x.total_lancadas : x.total) || 0, rl: Number(sep ? x.recompensa_lancadas : x.recompensa) || 0,
+        qe: Number(x.qtd_erp) || 0, te: Number(x.total_erp) || 0, re: Number(x.recompensa_erp) || 0, rf: Number(x.recompensa_erp_fechada) || 0 });
     }
     return serie;
   }
   function cardVendasMes(serie){
     const qtd = serie.reduce((a, m) => a + m.qtd, 0), total = serie.reduce((a, m) => a + m.total, 0);
     if(!qtd) return `<div class="card"><h2>Vendas por mês</h2><div class="vazio">Nenhuma venda indicada nos últimos 12 meses. Quando a loja registrar uma venda indicada por você, ela aparece aqui.</div></div>`;
-    const linhas = serie.slice().reverse().map(m => `<tr><td>${MESES_CURTOS[m.mes]}/${m.ano}</td><td>${m.qtd}</td><td>${moeda(m.total)}</td><td>${moeda(m.recompensa)}</td></tr>`).join('');
+    const linhas = serie.slice().reverse().flatMap(m => {
+      const mes = `${MESES_CURTOS[m.mes]}/${m.ano}`, r = [];
+      if(m.ql) r.push(`<tr><td>${mes}</td><td>Lançadas na loja</td><td>${m.ql}</td><td>${moeda(m.tl)}</td><td>${moeda(m.rl)}</td></tr>`);
+      if(m.qe) r.push(`<tr><td>${mes}</td><td>Sistema da loja (ERP)${m.rf > 0 ? (m.rf >= m.re - 0.005 ? ' <span class="pill pill-confirmada">creditada</span>' : ' <span class="pill pill-indicado">em parte creditada</span>') : ''}</td><td>${m.qe}</td><td>${moeda(m.te)}</td><td>${moeda(m.re)}</td></tr>`);
+      return r;
+    }).join('');
+    const soma = (f) => serie.reduce((a, m) => a + m[f], 0);
+    const resumo = `<div class="sub-card" style="margin-top:10px;">Lançadas na loja: <strong>${soma('ql')}</strong> venda(s), ${moeda(soma('tl'))}${soma('qe') ? ` · Sistema da loja (ERP): <strong>${soma('qe')}</strong> pedido(s), ${moeda(soma('te'))}` : ''}</div>`;
     return `<div class="card"><h2>Vendas por mês</h2>
       <div class="sub-card">Valor vendido nos últimos 12 meses (só vendas confirmadas)</div>
       <div class="kpis">
@@ -203,8 +213,9 @@
         <div class="kpi"><div class="r">Total em 12 meses</div><div class="n">${moedaCurta(total)}</div></div>
       </div>
       <div class="grafico-wrap" id="graficoVendas"></div>
+      ${resumo}
       <button type="button" class="btn-tabela" id="btnTabelaMes">Ver em tabela</button>
-      <div id="tabelaMes" hidden><table class="tabela-mes"><thead><tr><th>Mês</th><th>Vendas</th><th>Valor vendido</th><th>Recompensa</th></tr></thead><tbody>${linhas}</tbody></table></div></div>`;
+      <div id="tabelaMes" hidden><table class="tabela-mes"><thead><tr><th>Mês</th><th>Origem</th><th>Vendas</th><th>Valor vendido</th><th>Recompensa / comissão</th></tr></thead><tbody>${linhas}</tbody></table></div></div>`;
   }
 
   let serieGrafico = [];
@@ -323,10 +334,18 @@
       <div class="item"><div><div class="t">${escapeHtml(TIPO_LANC[l.tipo] || l.tipo)}</div><div class="s">${escapeHtml(l.descricao || '')} · ${data(l.criado_em)}</div></div>
       <div class="v ${Number(l.valor) < 0 ? 'neg' : 'pos'}">${moeda(l.valor)}</div></div>`).join('') || '<div class="vazio">Nenhum lançamento ainda.</div>';
 
-    const vendas = (d.vendas || []).map(v => `
+    const itemVenda = (v) => `
       <div class="item"><div><div class="t">${escapeHtml(v.cliente_nome || 'Cliente')} <span class="pill pill-${escapeHtml(v.status)}">${v.status === 'cancelada' ? 'Cancelada' : 'Confirmada'}</span></div>
-      <div class="s">${data(v.data_venda)} · venda de ${moeda(v.valor_venda)}${v.loja ? ' · ' + escapeHtml(v.loja) : ''}${v.erp ? (v.pedido ? ' · <strong>pedido nº ' + escapeHtml(v.pedido) + '</strong>' : ' · pedido do sistema da loja') : ''}</div></div>
-      <div class="v">${moeda(v.valor_recompensa)}</div></div>`).join('') || '<div class="vazio">Nenhuma venda indicada ainda.</div>';
+      <div class="s">${data(v.data_venda)} · venda de ${moeda(v.valor_venda)}${v.loja ? ' · ' + escapeHtml(v.loja) : ''}${v.erp ? (v.pedido ? ' · <strong>pedido nº ' + escapeHtml(v.pedido) + '</strong>' : ' · pedido do sistema da loja') : ''}${v.erp && v.fechado ? ' · <span class="pill pill-confirmada">creditada no saldo</span>' : ''}${v.erp && v.acordo && !v.fechado ? ' · % combinado' : ''}</div></div>
+      <div class="v">${moeda(v.valor_recompensa)}</div></div>`;
+    const vendasLancadas = (d.vendas || []).filter(v => !v.erp).map(itemVenda).join('') || '<div class="vazio">Nenhuma venda lançada na loja ainda.</div>';
+    const vendasErpLista = (d.vendas || []).filter(v => v.erp);
+    const vendasErp = vendasErpLista.map(itemVenda).join('') || '<div class="vazio">Nenhum pedido do sistema da loja ainda.</div>';
+    const temErp = vendasErpLista.length > 0 || !!d.erp_atualizado_em;
+    const erpMes = serie[serie.length - 1].re, erp12 = serie.reduce((a, m) => a + m.re, 0), pedErp12 = serie.reduce((a, m) => a + m.qe, 0);
+    // fechamento: parte da comissão do ERP já foi creditada no saldo/extrato; o resto ainda é "a creditar"
+    const erpCred12 = serie.reduce((a, m) => a + m.rf, 0), erpAcreditar12 = Math.max(0, Math.round((erp12 - erpCred12) * 100) / 100);
+    const ehFech = erpCred12 > 0 || vendasErpLista.some(v => v.fechado);
 
     const servicos = (d.servicos || []).map(s => {
       const zap = linkZap(s.cliente_contato);
@@ -338,17 +357,26 @@
 
     conteudo.innerHTML = `
       <div class="card">
-        <div class="saldo-rotulo">${ehCom ? 'Comissão a receber' : 'Cashback disponível'}</div>
+        <div class="saldo-rotulo">${ehCom ? (ehFech ? 'Comissão a receber' : 'Comissão a receber (vendas lançadas na loja)') : (ehFech ? 'Cashback disponível' : 'Cashback disponível (vendas lançadas na loja)')}</div>
         <div class="saldo-valor ${saldo < 0 ? 'negativo' : ''}">${moeda(saldo)}</div>
         <div class="saldo-nota">${ehCom ? 'Você recebe' : 'Você ganha'} <strong>${Number(p.percentual) || 0}%</strong> sobre as vendas que indicar. ${ehCom ? 'A loja acerta o valor com você em dinheiro.' : 'O crédito pode ser usado em compras na loja.'}</div>
+        ${temErp ? `<div style="border-top:1px solid var(--borda,#e5e7eb); margin-top:14px; padding-top:12px;">
+          <div class="saldo-rotulo">Comissão das vendas do sistema da loja (ERP)</div>
+          <div style="font-size:1.25rem; font-weight:700;">${moeda(erpMes)} <span style="font-size:.8rem; font-weight:500; color:#6b7280;">neste mês</span> · ${moeda(erp12)} <span style="font-size:.8rem; font-weight:500; color:#6b7280;">em 12 meses (${pedErp12} pedido${pedErp12 === 1 ? '' : 's'})</span></div>
+          <div class="saldo-nota">Percentual nas vendas do sistema da loja: <strong>${Number(p.percentual_erp != null ? p.percentual_erp : p.percentual) || 0}%</strong> (pedidos com % combinado podem ter outro valor).</div>
+          ${ehFech ? `<div class="saldo-nota"><strong>${moeda(erpCred12)}</strong> já creditado no saldo acima (fechamentos feitos pela loja) · <strong>${moeda(erpAcreditar12)}</strong> a creditar no próximo fechamento (ainda <strong>não</strong> entra no saldo acima). Confira pelo nº do pedido.</div></div>`
+            : `<div class="saldo-nota">Calculada pelo seu percentual sobre os pedidos do sistema da loja. <strong>Ainda não entra no saldo acima</strong>: a loja credita no fechamento, conferindo o nº do pedido.</div></div>`}` : ''}
         <div class="codigo-box">Seu código de parceiro: <strong>${p.codigo_externo ? escapeHtml(p.codigo_externo) : '#' + escapeHtml(p.codigo)}</strong><br>Cite esse código (ou seu nome) no balcão quando indicar um cliente.</div>
       </div>
       ${cardDados(p)}
       ${cardVendasMes(serie)}
       <div class="card"><h2>Serviços que a loja indicou pra você</h2>${servicos}</div>
-      <div class="card"><h2>Vendas que você indicou</h2>${vendas}
-        ${d.erp_atualizado_em ? `<div class="saldo-nota" style="margin-top:10px;">Pedidos do sistema da loja atualizados em ${data(d.erp_atualizado_em)}. A comissão desses pedidos é calculada pelo seu percentual atual e o acerto é feito com a loja.</div>` : ''}</div>
-      <div class="card"><h2>Extrato</h2>${lancs}</div>
+      ${temErp ? `<div class="card"><h2>Vendas do sistema da loja (ERP)</h2>${vendasErp}
+        ${d.erp_atualizado_em ? `<div class="saldo-nota" style="margin-top:10px;">Pedidos atualizados em ${data(d.erp_atualizado_em)}. Enquanto o pedido não é fechado, a comissão é calculada pelo seu percentual atual (ou o % combinado no pedido); depois do fechamento ela vira crédito no seu saldo.</div>` : ''}</div>` : ''}
+      <div class="card"><h2>Vendas lançadas na loja</h2>${vendasLancadas}</div>
+      <div class="card"><h2>${ehFech ? 'Extrato' : 'Extrato (vendas lançadas na loja)'}</h2>${lancs}
+        ${temErp ? (ehFech ? '<div class="saldo-nota" style="margin-top:10px;">O extrato mostra os créditos das vendas lançadas na loja, os créditos dos fechamentos das vendas do sistema da loja (e eventuais ajustes) e os pagamentos. As ainda não fechadas ficam no quadro "Vendas do sistema da loja (ERP)".</div>'
+          : '<div class="saldo-nota" style="margin-top:10px;">O extrato mostra só o que foi lançado na loja (créditos e pagamentos). As comissões das vendas do sistema da loja ficam no quadro "Vendas do sistema da loja (ERP)" até a loja fazer o fechamento e creditar no seu saldo.</div>') : ''}</div>
       <button class="btn-atualizar" id="btnAtualizar">↻ Atualizar</button>`;
     document.getElementById('btnAtualizar').addEventListener('click', carregar);
     iniciarGrafico(serie);

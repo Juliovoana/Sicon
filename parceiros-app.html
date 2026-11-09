@@ -284,6 +284,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
             <span class="nav-label">Vendas do ERP</span>
         </button>
+        <button class="nav-item tab-app-btn" data-app-tab="fechamento">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><polyline points="9 16 11 18 15 14"/></svg>
+            <span class="nav-label">Fechamento ERP</span>
+        </button>
         <button class="nav-item tab-app-btn" data-app-tab="recompensas">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
             <span class="nav-label">Recompensas</span>
@@ -501,7 +505,7 @@
     <div class="panel-app" id="app-panel-erp">
         <div class="cartao">
             <h2>Vendas do sistema da loja (ERP)</h2>
-            <p class="desc">Os pedidos chegam do ERP pelo <strong>coletor</strong> (programa Python que grava direto no banco). Aqui cada pedido é ligado ao parceiro pelo <strong>código externo</strong> do cadastro e a comissão é calculada com o percentual do parceiro (ou o padrão da loja). O Drive e o CSV continuam disponíveis como alternativa.</p>
+            <p class="desc">Os pedidos chegam do ERP pelo <strong>coletor</strong> (programa Python que grava direto no banco). Aqui cada pedido é ligado ao parceiro pelo <strong>código externo</strong> do cadastro e a comissão é calculada com o percentual do parceiro (ou o padrão do ERP da loja, em Parâmetros). O Drive e o CSV continuam disponíveis como alternativa.</p>
             <div class="toolbar">
                 <button class="btn btn-principal btn-inline" id="erpBtnBanco" title="Busca no banco os pedidos que o coletor gravou">↻ Atualizar do banco</button>
                 <button class="btn btn-cinza btn-sm" id="erpBtnCarregar" title="Alternativa: lê o vendas_parceiros.csv da pasta do Drive e grava no banco">⟳ Carregar do Drive (alternativa)</button>
@@ -566,6 +570,41 @@
                     <tbody id="erpCorpoMeses"></tbody>
                 </table></div>
             </div>
+        </div>
+    </div>
+
+    <!-- ---------- FECHAMENTO DAS VENDAS DO ERP (credita a comissão no saldo do parceiro) ---------- -->
+    <div class="panel-app" id="app-panel-fechamento">
+        <div class="aviso-pendentes hidden" id="avisoFechamentoSql" style="cursor:default;">⚠️ O fechamento ainda não existe no banco. Rode, nesta ordem, os arquivos parceiros-vendas-erp.sql e parceiros-fechamento-erp.sql no SQL Editor do Supabase e recarregue esta página.</div>
+        <div class="cartao">
+            <h2>Fechar um período e creditar no saldo</h2>
+            <p class="desc">Soma a comissão das vendas do sistema da loja (ERP) <strong>ainda não fechadas</strong> do período, <strong>um crédito por parceiro</strong>, e lança no saldo/extrato dele. Cada pedido fechado guarda o % e o valor creditados, então o mesmo pedido nunca é contado duas vezes. Se depois houver um acordo (num pedido ou no % do parceiro), use <strong>Refazer</strong>: só a diferença entra no extrato.</p>
+            <div class="grade">
+                <div class="campo"><label for="fechDe">De</label><input type="date" id="fechDe"></div>
+                <div class="campo"><label for="fechAte">Até</label><input type="date" id="fechAte"></div>
+            </div>
+            <div class="campo"><label for="fechObs">Observação (opcional)</label><input type="text" id="fechObs" maxlength="200" placeholder="ex.: Fechamento de outubro"></div>
+            <div class="dica" id="fechRegras" style="margin-bottom:10px;"></div>
+            <div class="toolbar">
+                <button class="btn btn-cinza btn-inline" id="fechBtnSimular">Simular (não grava nada)</button>
+                <button class="btn btn-principal btn-inline" id="fechBtnFechar" disabled>Fechar e creditar no saldo</button>
+            </div>
+            <div class="dica hidden" id="fechSoPrincipal">Só o usuário <strong>principal</strong> da unidade fecha, refaz ou desfaz. Você pode simular.</div>
+            <div class="status-msg" id="fechStatus"></div>
+            <div id="fechSimulacao" class="hidden">
+                <div class="tabela-scroll"><table class="tabela">
+                    <thead><tr><th>Cód. externo</th><th>Parceiro</th><th class="num">Pedidos</th><th class="num">Valor vendido</th><th class="num">Comissão</th></tr></thead>
+                    <tbody id="fechSimCorpo"></tbody>
+                </table></div>
+            </div>
+        </div>
+        <div class="cartao">
+            <h2>Fechamentos feitos</h2>
+            <p class="desc">Toque num fechamento para ver o que foi creditado a cada parceiro.</p>
+            <div class="tabela-scroll"><table class="tabela">
+                <thead><tr><th>Período</th><th>Situação</th><th class="num">Parceiros</th><th class="num">Pedidos</th><th class="num">Comissão creditada</th><th>Feito em</th><th></th></tr></thead>
+                <tbody id="fechCorpo"></tbody>
+            </table></div>
         </div>
     </div>
 
@@ -654,8 +693,10 @@
             <div class="grade">
                 <div class="campo"><label>Tipo padrão (pra novos parceiros)</label>
                     <select id="cfgTipoPadrao"><option value="comissao">Comissão (paga em dinheiro)</option><option value="cashback">Cashback (crédito na loja)</option></select></div>
-                <div class="campo"><label>Percentual padrão sobre a venda (%)</label><input type="number" step="0.1" min="0" max="100" id="cfgPercentualPadrao"></div>
+                <div class="campo"><label>Percentual padrão sobre a venda lançada na loja (%)</label><input type="number" step="0.1" min="0" max="100" id="cfgPercentualPadrao"></div>
+                <div class="campo"><label>Percentual padrão das vendas do ERP (%)</label><input type="number" step="0.1" min="0" max="100" id="cfgPercentualErp" placeholder="em branco = o mesmo do lado"></div>
             </div>
+            <div class="dica" id="cfgPercentualErpDica">O percentual do ERP vale só para parceiro sem percentual próprio e para pedidos do ERP <strong>ainda não fechados</strong> (muda a comissão calculada na hora). Fechamentos já feitos só mudam com <em>Refazer cálculo</em>. Em branco = usa o percentual padrão da venda lançada.</div>
             <button class="btn btn-principal btn-inline" id="btnSalvarCfgRecompensa">Salvar</button>
             <div class="status-msg" id="statusCfgRecompensa"></div>
         </div>
@@ -776,14 +817,43 @@
 
 <!-- ================= MODAL DETALHE DO PARCEIRO ================= -->
 <div class="modal-overlay" id="modal-erp">
-    <div class="modal-caixa" style="max-width:860px;">
+    <div class="modal-caixa" style="max-width:1020px;">
         <h3 id="erpDetTitulo"></h3>
         <p class="sub" id="erpDetSub"></p>
         <div class="tabela-scroll"><table class="tabela">
-            <thead><tr><th>Venda</th><th>Baixa</th><th>Loja</th><th>Pedido</th><th>Cliente</th><th class="num">Valor</th></tr></thead>
+            <thead><tr><th>Venda</th><th>Baixa</th><th>Loja</th><th>Pedido</th><th>Cliente</th><th class="num">Valor</th><th class="num">%</th><th class="num">Comissão</th><th></th></tr></thead>
             <tbody id="erpDetCorpo"></tbody>
         </table></div>
         <div class="acoes-linha" style="margin-top:14px;"><button class="btn btn-cinza" id="erpDetFechar">Fechar</button></div>
+    </div>
+</div>
+<div class="modal-overlay" id="modal-fech">
+    <div class="modal-caixa" style="max-width:860px;">
+        <h3 id="fechModTitulo"></h3>
+        <p class="sub" id="fechModSub"></p>
+        <div id="fechModCorpo"></div>
+        <div class="campo hidden" id="fechModMotivoBox" style="margin-top:12px;"><label for="fechModMotivo" id="fechModMotivoRotulo">Motivo</label>
+            <input type="text" id="fechModMotivo" maxlength="200"></div>
+        <div class="status-msg" id="fechModStatus"></div>
+        <div class="acoes-linha" style="margin-top:14px;">
+            <button class="btn btn-principal hidden" id="fechModOk"></button>
+            <button class="btn btn-cinza" id="fechModFechar">Fechar</button>
+        </div>
+    </div>
+</div>
+<div class="modal-overlay" id="modal-acordo">
+    <div class="modal-caixa" style="max-width:460px;">
+        <h3>% de acordo neste pedido</h3>
+        <p class="sub" id="erpAcordoSub"></p>
+        <div class="campo"><label for="erpAcordoPct">Percentual de comissão só deste pedido (%)</label>
+            <input type="text" inputmode="decimal" id="erpAcordoPct" placeholder="ex.: 7,5"></div>
+        <div class="dica">Vale só para este pedido; os demais seguem o % do parceiro. Depois de <strong>fechado</strong>, o pedido só muda com a opção "Refazer" do fechamento.</div>
+        <div class="status-msg" id="erpAcordoStatus"></div>
+        <div class="acoes-linha" style="margin-top:14px;">
+            <button class="btn btn-principal" id="erpAcordoSalvar">Salvar</button>
+            <button class="btn btn-cinza" id="erpAcordoRemover">Voltar ao % do parceiro</button>
+            <button class="btn btn-cinza" id="erpAcordoCancelar">Cancelar</button>
+        </div>
     </div>
 </div>
 <div class="modal-overlay" id="modal-detalhe">
@@ -1303,6 +1373,9 @@ const ramoNome = (id) => (ramos.find(r => r.id === id) || {}).nome || '';
 const ramoTexto = (p) => ramoNome(p.ramo_id) || (p.ramo_informado ? p.ramo_informado + ' (informado)' : '');
 const saldoDe = (id) => saldos[id] || 0;
 const percentualEfetivo = (p) => (p && p.percentual_recompensa != null) ? Number(p.percentual_recompensa) : Number(config?.percentual_padrao || 0);
+// vendas do ERP: % próprio do parceiro; senão o padrão do ERP da loja; senão o padrão geral
+const percentualErp = (p) => (p && p.percentual_recompensa != null) ? Number(p.percentual_recompensa)
+    : (config && config.erp_percentual_padrao != null ? Number(config.erp_percentual_padrao) : Number(config?.percentual_padrao || 0));
 function avaliacaoDe(parceiroId) {
     const notas = indServicos.filter(s => s.parceiro_id === parceiroId && s.avaliacao != null).map(s => Number(s.avaliacao));
     return notas.length ? { media: notas.reduce((a, b) => a + b, 0) / notas.length, qtd: notas.length } : null;
@@ -1314,7 +1387,7 @@ function linkCadastroPublico() { return `${URL_BASE_PUBLICA}parceiros-cadastro.h
 // ---------------------------------------------------------------
 // NAVEGAÇÃO (menu lateral)
 // ---------------------------------------------------------------
-const TITULOS_ABA = { dashboard: 'Dashboard', parceiros: 'Parceiros', servicos: 'Indicar serviço', vendas: 'Vendas indicadas', erp: 'Vendas do ERP', recompensas: 'Recompensas', vitrine: 'Vitrine (TV)', parametros: 'Parâmetros' };
+const TITULOS_ABA = { dashboard: 'Dashboard', parceiros: 'Parceiros', servicos: 'Indicar serviço', vendas: 'Vendas indicadas', erp: 'Vendas do ERP', fechamento: 'Fechamento das vendas do ERP', recompensas: 'Recompensas', vitrine: 'Vitrine (TV)', parametros: 'Parâmetros' };
 function irParaAba(aba) {
     document.querySelectorAll('.tab-app-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.panel-app').forEach(p => p.classList.remove('active'));
@@ -1327,6 +1400,7 @@ function irParaAba(aba) {
     if (aba === 'servicos') { renderizarSugestoesServico(); renderizarTabelaServicos(); }
     if (aba === 'vendas') { renderizarPreviewVenda(); renderizarTabelaVendas(); }
     if (aba === 'erp') erpAbrirAba();
+    if (aba === 'fechamento') fechAbrirAba();
     if (aba === 'recompensas') renderizarRecompensas();
     if (aba === 'vitrine') renderizarVitrine();
     if (aba === 'parametros') renderizarParametros();
@@ -1571,7 +1645,7 @@ function abrirFormParceiro(id) {
     $('pf_descricao').value = p?.descricao || '';
     $('pf_tipo').value = p?.tipo_recompensa || config?.tipo_recompensa_padrao || 'comissao';
     $('pf_percentual').value = p?.percentual_recompensa ?? '';
-    $('pf_dica_percentual').textContent = `Em branco = padrão da loja (${Number(config?.percentual_padrao || 0)}%).`;
+    $('pf_dica_percentual').textContent = `Em branco = padrão da loja (${Number(config?.percentual_padrao || 0)}%` + (config && config.erp_percentual_padrao != null ? `; nas vendas do ERP, ${Number(config.erp_percentual_padrao)}%` : '') + ').';
     $('pf_codigo_externo').value = p?.codigo_externo || '';
     $('pf_observacao').value = p?.observacao || '';
     $('pf_autorizou').checked = !!p?.autorizou_divulgacao;
@@ -2375,7 +2449,7 @@ function renderizarDashboard() {
     const valorErpMes = erpMes.reduce((a, o) => a + o.v, 0);
     $('statVendasMes').textContent = `${doMes.length + erpMes.length} · ${formatarMoeda(doMes.reduce((a, v) => a + Number(v.valor_venda || 0), 0) + valorErpMes)}`;
     $('statVendasMesErp').textContent = erpMes.length ? `inclui ${erpMes.length} do ERP (${formatarMoeda(valorErpMes)})` : '';
-    $('statComissaoErp').textContent = erpDb.length ? formatarMoeda(arredondar2(erpMes.reduce((a, o) => a + o.v * percentualEfetivo(o.p) / 100, 0))) : '—';
+    $('statComissaoErp').textContent = erpDb.length ? formatarMoeda(arredondar2(erpMes.reduce((a, o) => a + erpComissaoPedido(o), 0))) : '—';
     let com = 0, cash = 0;
     parceiros.forEach(p => { const s = saldoDe(p.id); if (s > 0) { if (p.tipo_recompensa === 'comissao') com += s; else cash += s; } });
     $('statAPagar').textContent = formatarMoeda(com);
@@ -2389,7 +2463,7 @@ function renderizarDashboard() {
     });
     erp12.forEach(o => {
         const g = porParceiro[o.p.id] || (porParceiro[o.p.id] = { valor: 0, qtd: 0, rec: 0 });
-        g.valor += o.v; g.qtd += 1; g.rec += o.v * percentualEfetivo(o.p) / 100;
+        g.valor += o.v; g.qtd += 1; g.rec += erpComissaoPedido(o);
     });
     const top = Object.entries(porParceiro).sort((a, b) => b[1].valor - a[1].valor).slice(0, 8).map(([id, g]) => {
         const p = parceiroPorId(id);
@@ -2429,9 +2503,17 @@ async function salvarConfig(campos, statusId) {
 $('btnSalvarCfgRecompensa').addEventListener('click', async () => {
     const pct = parseFloat($('cfgPercentualPadrao').value);
     if (isNaN(pct) || pct < 0 || pct > 100) { $('statusCfgRecompensa').className = 'status-msg erro'; $('statusCfgRecompensa').textContent = 'Percentual inválido (use de 0 a 100).'; return; }
-    if (await salvarConfig({ tipo_recompensa_padrao: $('cfgTipoPadrao').value, percentual_padrao: pct }, 'statusCfgRecompensa')) {
-        await registrarSentinela('parceiros_config', `Recompensa padrão: ${TIPO_RECOMPENSA[$('cfgTipoPadrao').value]} ${pct}%`);
-        renderizarPreviewVenda();
+    const txtErp = $('cfgPercentualErp').value.trim().replace(',', '.');
+    const pctErp = txtErp === '' ? null : Number(txtErp);
+    if (pctErp !== null && (!isFinite(pctErp) || pctErp < 0 || pctErp > 100)) { $('statusCfgRecompensa').className = 'status-msg erro'; $('statusCfgRecompensa').textContent = 'Percentual do ERP inválido (use de 0 a 100, ou deixe em branco).'; return; }
+    const campos = { tipo_recompensa_padrao: $('cfgTipoPadrao').value, percentual_padrao: pct };
+    // a coluna só existe depois de rodar o parceiros-vendas-erp.sql atualizado
+    if ('erp_percentual_padrao' in config) campos.erp_percentual_padrao = pctErp;
+    else if (pctErp !== null) { $('statusCfgRecompensa').className = 'status-msg erro'; $('statusCfgRecompensa').textContent = 'Rode o parceiros-vendas-erp.sql no Supabase (versão nova) para poder guardar o percentual do ERP.'; return; }
+    if (await salvarConfig(campos, 'statusCfgRecompensa')) {
+        await registrarSentinela('parceiros_config', `Recompensa padrão: ${TIPO_RECOMPENSA[$('cfgTipoPadrao').value]} ${pct}% (venda lançada)` + ('erp_percentual_padrao' in config ? `; vendas do ERP ${pctErp === null ? 'seguem o mesmo %' : pctErp + '%'}` : ''));
+        renderizarPreviewVenda(); renderizarDashboard();
+        if (erpPedidos.length) erpRenderizar();
     }
 });
 $('btnSalvarCfgAutocadastro').addEventListener('click', async () => {
@@ -2569,6 +2651,10 @@ function renderizarParametros() {
     if (!config) return;
     $('cfgTipoPadrao').value = config.tipo_recompensa_padrao;
     $('cfgPercentualPadrao').value = config.percentual_padrao;
+    const temColErp = 'erp_percentual_padrao' in config;
+    $('cfgPercentualErp').value = temColErp && config.erp_percentual_padrao != null ? config.erp_percentual_padrao : '';
+    $('cfgPercentualErp').disabled = !temColErp;
+    $('cfgPercentualErp').placeholder = temColErp ? 'em branco = o mesmo da venda lançada' : 'rode o parceiros-vendas-erp.sql';
     $('cfgAutocadastro').checked = !!config.autocadastro_ativo;
     $('cfgRamoLivre').checked = !!config.autocadastro_ramo_livre;
     $('cfgMensagem').value = config.mensagem_boas_vindas || '';
@@ -2892,16 +2978,38 @@ async function erpSalvarPrefs() {
 let erpDb = [];
 let erpDbSyncEm = null;
 let erpDbSqlPendente = false;
+let erpFechamentoSql = false;   // as colunas de acordo/fechamento existem no banco?
+// % e comissão de UM pedido: fechado = o que foi creditado no saldo; aberto = valor x (% de acordo do pedido, ou o % do parceiro)
+function erpPctPedido(o) {
+    if (o.fech && o.cpct != null) return o.cpct;
+    if (o.acordo != null) return o.acordo;
+    return o.p ? percentualErp(o.p) : 0;
+}
+function erpComissaoPedido(o) {
+    if (!o.p) return 0;
+    if (o.fech) return o.cvalor != null ? o.cvalor : 0;
+    return arredondar2(o.v * erpPctPedido(o) / 100);
+}
 async function carregarErpDb() {
     try {
-        const linhas = await buscarTudo(() => sb.from('parceiros_vendas_erp').select('chave_codigo,codigo_externo,indicador,loja_codigo,loja,referencia,data_venda,data_baixa,cliente,vendedor,qtd_itens,valor_pedido,compra_propria,sincronizado_em')
+        const base = 'chave_codigo,codigo_externo,indicador,loja_codigo,loja,referencia,data_venda,data_baixa,cliente,vendedor,qtd_itens,valor_pedido,compra_propria,sincronizado_em';
+        const consulta = (colunas) => buscarTudo(() => sb.from('parceiros_vendas_erp').select(colunas)
             .eq('unidade_negocio_id', meuPerfil.unidadeId).order('data_venda', { ascending: false }).order('id'));
+        let linhas;
+        try { linhas = await consulta(base + ',id,pct_acordo,fechamento_parceiro_id,comissao_pct,comissao_valor'); erpFechamentoSql = true; }
+        catch (e1) {
+            // colunas de acordo/fechamento ainda não existem (parceiros-vendas-erp.sql antigo): lê sem elas
+            if (!/pct_acordo|fechamento_parceiro_id|comissao_pct|comissao_valor/.test(String((e1 && e1.message) || ''))) throw e1;
+            linhas = await consulta(base); erpFechamentoSql = false;
+        }
         erpDbSqlPendente = false;
         erpDbSyncEm = null;
         erpDb = linhas.map(l => {
             if (l.sincronizado_em && (!erpDbSyncEm || l.sincronizado_em > erpDbSyncEm)) erpDbSyncEm = l.sincronizado_em;
-            return { cod: l.codigo_externo, chave: l.chave_codigo, ind: l.indicador || '', loja: l.loja || l.loja_codigo || '(sem loja)', lojaCod: l.loja_codigo || '',
-                ref: l.referencia, dv: l.data_venda, db: l.data_baixa || '', cli: l.cliente || '', ven: l.vendedor || '', itens: l.qtd_itens || 0, v: Number(l.valor_pedido) || 0, propria: !!l.compra_propria };
+            return { id: l.id || null, cod: l.codigo_externo, chave: l.chave_codigo, ind: l.indicador || '', loja: l.loja || l.loja_codigo || '(sem loja)', lojaCod: l.loja_codigo || '',
+                ref: l.referencia, dv: l.data_venda, db: l.data_baixa || '', cli: l.cliente || '', ven: l.vendedor || '', itens: l.qtd_itens || 0, v: Number(l.valor_pedido) || 0, propria: !!l.compra_propria,
+                acordo: l.pct_acordo == null ? null : Number(l.pct_acordo), fech: l.fechamento_parceiro_id || null,
+                cpct: l.comissao_pct == null ? null : Number(l.comissao_pct), cvalor: l.comissao_valor == null ? null : Number(l.comissao_valor) };
         });
     } catch (erro) {
         erpDb = []; erpDbSyncEm = null;
@@ -3151,7 +3259,7 @@ async function erpSincronizar(opcoes) {
         let removidos = 0, aviso = '';
         if (apagarAusentes) {
             const minData = linhas.reduce((m, l) => (l.data_venda < m ? l.data_venda : m), linhas[0].data_venda);
-            const filtro = (q) => q.eq('unidade_negocio_id', meuPerfil.unidadeId).gte('data_venda', minData).lt('sincronizado_em', ts);
+            const filtro = (q) => q.eq('unidade_negocio_id', meuPerfil.unidadeId).gte('data_venda', minData).lt('sincronizado_em', ts).is('fechamento_parceiro_id', null);
             const { count, error: eCont } = await filtro(sb.from('parceiros_vendas_erp').select('id', { count: 'exact', head: true }));
             if (eCont) aviso = ' Não consegui conferir pedidos antigos para remover.';
             else if (count > 0) {
@@ -3177,13 +3285,20 @@ async function erpSincronizar(opcoes) {
 function erpAgrupar(lista) {
     const grupos = {}, meses = {};
     lista.forEach(o => {
-        const g = grupos[o.chave] || (grupos[o.chave] = { chave: o.chave, cod: o.cod, ind: o.ind, p: o.p, pedidos: [], valor: 0, ultima: '' });
+        const g = grupos[o.chave] || (grupos[o.chave] = { chave: o.chave, cod: o.cod, ind: o.ind, p: o.p, pedidos: [], valor: 0, com: 0, fechados: 0, acordos: 0, ultima: '' });
         g.pedidos.push(o); g.valor += o.v; if (o.dref > g.ultima) g.ultima = o.dref;
-        const pct = o.p ? percentualEfetivo(o.p) : 0;
+        const com = erpComissaoPedido(o);
+        g.com += com; if (o.fech) g.fechados++; if (o.acordo != null && !o.fech) g.acordos++;
         const m = meses[o.dref.slice(0, 7)] || (meses[o.dref.slice(0, 7)] = { n: 0, valor: 0, com: 0, nSem: 0, valorSem: 0 });
-        if (o.p) { m.n++; m.valor += o.v; m.com += o.v * pct / 100; } else { m.nSem++; m.valorSem += o.v; }
+        if (o.p) { m.n++; m.valor += o.v; m.com += com; } else { m.nSem++; m.valorSem += o.v; }
     });
-    Object.values(grupos).forEach(g => { g.pct = g.p ? percentualEfetivo(g.p) : 0; g.com = arredondar2(g.valor * g.pct / 100); });
+    // % do parceiro; se algum pedido tem % de acordo (ou foi fechado com outro %), mostra o % médio efetivo
+    Object.values(grupos).forEach(g => {
+        g.com = arredondar2(g.com);
+        g.pctBase = g.p ? percentualErp(g.p) : 0;
+        g.pct = g.p && g.valor > 0 && (g.acordos || g.fechados) ? arredondar2(g.com / g.valor * 100) : g.pctBase;
+        g.variavel = !!(g.acordos || g.fechados);
+    });
     return { grupos: Object.values(grupos), meses };
 }
 
@@ -3208,11 +3323,13 @@ function erpRenderizar() {
     const valorTot = r.lista.reduce((a, o) => a + o.v, 0);
     const valorComP = comP.reduce((a, g) => a + g.valor, 0);
     const comissaoTot = arredondar2(comP.reduce((a, g) => a + g.com, 0));
+    const comissaoFechada = arredondar2(r.lista.filter(o => o.p && o.fech).reduce((a, o) => a + erpComissaoPedido(o), 0));
     const nPedComP = comP.reduce((a, g) => a + g.pedidos.length, 0), nPedSemP = semP.reduce((a, g) => a + g.pedidos.length, 0);
     $('erpCards').innerHTML = `
         <div class="stat-card"><div class="label">Pedidos no período</div><div class="value">${r.lista.length.toLocaleString('pt-BR')}</div></div>
         <div class="stat-card"><div class="label">Valor vendido</div><div class="value">${formatarMoeda(valorTot)}</div></div>
         <div class="stat-card"><div class="label">Comissão calculada</div><div class="value">${formatarMoeda(comissaoTot)}</div></div>
+        ${comissaoFechada ? `<div class="stat-card"><div class="label">Já creditada no saldo</div><div class="value">${formatarMoeda(comissaoFechada)}</div></div>` : ''}
         <div class="stat-card"><div class="label">Parceiros com venda</div><div class="value">${comP.length}</div></div>
         <div class="stat-card ${semP.length ? 'clicavel' : ''}" id="erpCardSem"><div class="label">Sem parceiro cadastrado</div><div class="value ${semP.length ? 'alerta' : ''}">${nPedSemP} pedido(s)</div></div>`;
     const notas = [];
@@ -3226,7 +3343,8 @@ function erpRenderizar() {
             <td>${escapeHtml(g.cod)}</td>
             <td><strong>${escapeHtml(g.p.nome)}</strong>${ramoNome(g.p.ramo_id) ? `<small class="sub">${escapeHtml(ramoNome(g.p.ramo_id))}</small>` : ''}</td>
             <td class="num">${g.pedidos.length}</td><td class="num">${formatarMoeda(g.valor)}</td>
-            <td class="num">${g.pct}%</td><td class="num"><strong>${formatarMoeda(g.com)}</strong></td><td>${formatarDataSemFuso(g.ultima)}</td>
+            <td class="num">${g.variavel ? '≈ ' : ''}${String(g.pct).replace('.', ',')}%</td>
+            <td class="num"><strong>${formatarMoeda(g.com)}</strong>${g.fechados ? `<small class="sub">${g.fechados === g.pedidos.length ? 'tudo' : g.fechados + ' ped.'} creditado no saldo</small>` : ''}${g.acordos ? `<small class="sub">${g.acordos} com % de acordo</small>` : ''}</td><td>${formatarDataSemFuso(g.ultima)}</td>
         </tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhum pedido de parceiro cadastrado neste período/filtro.</td></tr>';
     $('erpCorpoSem').innerHTML = semP.sort((a, b) => b.valor - a.valor).map(g => `
         <tr data-erp-parc="${escapeHtml(g.chave)}" style="cursor:pointer;">
@@ -3246,13 +3364,65 @@ function erpDetalhe(chave) {
     if (!g) return;
     const linhas = g.pedidos.slice().sort((a, b) => b.dref.localeCompare(a.dref) || String(b.ref).localeCompare(String(a.ref), 'pt-BR', { numeric: true }));
     $('erpDetTitulo').textContent = g.p ? `${g.p.nome}` : `Indicador ${g.cod} (sem parceiro cadastrado)`;
-    $('erpDetSub').textContent = `Código externo ${g.cod} · ${g.pedidos.length} pedido(s) · ${formatarMoeda(g.valor)}` + (g.p ? ` · ${g.pct}% = ${formatarMoeda(g.com)}` : '') + (g.p ? '' : ` · ${g.ind || ''}`);
-    $('erpDetCorpo').innerHTML = linhas.map(o => `
+    $('erpDetSub').textContent = `Código externo ${g.cod} · ${g.pedidos.length} pedido(s) · ${formatarMoeda(g.valor)}` + (g.p ? ` · ${g.variavel ? '≈ ' : ''}${String(g.pct).replace('.', ',')}% = ${formatarMoeda(g.com)}` : '') + (g.p ? '' : ` · ${g.ind || ''}`);
+    erpDetChave = chave;
+    // quem pode ajustar o % do pedido: pedido que veio do banco (tem id), ainda não fechado, e só com as colunas novas no banco
+    const podeAcordo = (o) => !!g.p && !!o.id && !o.fech && erpFechamentoSql;
+    $('erpDetCorpo').innerHTML = linhas.map(o => {
+        const pct = g.p ? erpPctPedido(o) : null;
+        const sel = o.fech ? '<span class="pill pill-confirmada" title="Já creditado no saldo do parceiro">creditado</span>'
+            : (o.acordo != null ? '<span class="pill pill-pendente" title="% combinado só para este pedido">acordo</span>' : '');
+        return `
         <tr><td>${formatarDataSemFuso(o.dv)}</td><td>${o.db ? formatarDataSemFuso(o.db) : '<span class="pill pill-pendente">sem baixa</span>'}</td>
         <td>${escapeHtml(o.loja)}</td><td>${escapeHtml(o.ref)}</td>
         <td>${escapeHtml(o.cli || '—')}${o.propria ? ' <span class="pill pill-recusado">compra própria?</span>' : ''}</td>
-        <td class="num">${formatarMoeda(o.v)}</td></tr>`).join('');
+        <td class="num">${formatarMoeda(o.v)}</td>
+        <td class="num">${pct == null ? '—' : String(pct).replace('.', ',') + '%'} ${sel}</td>
+        <td class="num">${g.p ? formatarMoeda(erpComissaoPedido(o)) : '—'}</td>
+        <td>${podeAcordo(o) ? `<button type="button" class="btn btn-cinza btn-sm" data-erp-acordo="${escapeHtml(o.id)}" title="Combinar um % diferente só para este pedido">% acordo</button>` : ''}</td></tr>`;
+    }).join('');
     $('modal-erp').classList.add('aberto');
+}
+let erpDetChave = null;
+// ---- % de acordo por pedido (só pedido ainda não fechado) ----
+let erpAcordoId = null;
+function erpAbrirAcordo(id) {
+    const o = erpDb.find(x => String(x.id) === String(id));
+    if (!o) return;
+    const p = erpMapaParceiros()[o.chave] || null;
+    erpAcordoId = o.id;
+    $('erpAcordoSub').textContent = `Pedido ${o.ref} · ${o.loja} · ${formatarMoeda(o.v)} · parceiro ${p ? p.nome : '(sem cadastro)'} (padrão do ERP ${p ? percentualErp(p) : 0}%)`;
+    $('erpAcordoPct').value = o.acordo != null ? String(o.acordo).replace('.', ',') : '';
+    $('erpAcordoRemover').classList.toggle('hidden', o.acordo == null);
+    $('erpAcordoStatus').textContent = ''; $('erpAcordoStatus').className = 'status-msg';
+    $('modal-acordo').classList.add('aberto');
+    setTimeout(() => $('erpAcordoPct').focus(), 50);
+}
+async function erpSalvarAcordo(remover) {
+    const o = erpDb.find(x => String(x.id) === String(erpAcordoId));
+    const st = $('erpAcordoStatus');
+    if (!o) return;
+    let novo = null;
+    if (!remover) {
+        const txt = $('erpAcordoPct').value.trim().replace(',', '.');
+        novo = txt === '' ? NaN : Number(txt);
+        if (!isFinite(novo) || novo < 0 || novo > 100) { st.className = 'status-msg erro'; st.textContent = 'Informe um percentual entre 0 e 100 (ou use "Voltar ao % do parceiro").'; return; }
+    }
+    $('erpAcordoSalvar').disabled = true; $('erpAcordoRemover').disabled = true;
+    try {
+        const { data, error } = await sb.from('parceiros_vendas_erp').update({ pct_acordo: novo })
+            .eq('id', o.id).eq('unidade_negocio_id', meuPerfil.unidadeId).is('fechamento_parceiro_id', null).select('id');
+        if (error) throw new Error(error.message);
+        if (!data || !data.length) throw new Error('Este pedido já foi fechado (ou não existe mais). Atualize a lista.');
+        const antes = o.acordo;
+        o.acordo = novo;
+        registrarSentinela('parceiros_erp_acordo', `Pedido ERP ${o.ref} (loja ${o.loja}, ${formatarMoeda(o.v)}, indicador ${o.cod}): % de acordo ${antes == null ? 'padrão' : antes + '%'} → ${novo == null ? 'padrão do parceiro' : novo + '%'}`);
+        $('modal-acordo').classList.remove('aberto');
+        renderizarDashboard(); erpRenderizar();
+        if (erpDetChave) erpDetalhe(erpDetChave);
+    } catch (e) {
+        st.className = 'status-msg erro'; st.textContent = (e && e.message) || String(e);
+    } finally { $('erpAcordoSalvar').disabled = false; $('erpAcordoRemover').disabled = false; }
 }
 function erpExportar() {
     if (!erpUltimo) return;
@@ -3294,15 +3464,209 @@ $('erpIgnorarProprio').addEventListener('change', () => { erpPrefs.ignorarPropri
 $('erpBtnExportar').addEventListener('click', erpExportar);
 $('erpBtnGravar').addEventListener('click', erpGravarClique);
 $('erpDetFechar').addEventListener('click', () => $('modal-erp').classList.remove('aberto'));
+$('erpAcordoSalvar').addEventListener('click', () => erpSalvarAcordo(false));
+$('erpAcordoRemover').addEventListener('click', () => erpSalvarAcordo(true));
+$('erpAcordoCancelar').addEventListener('click', () => $('modal-acordo').classList.remove('aberto'));
+$('erpAcordoPct').addEventListener('keydown', (e) => { if (e.key === 'Enter') erpSalvarAcordo(false); });
 document.addEventListener('click', (e) => {
+    const ac = e.target.closest('[data-erp-acordo]');
+    if (ac) { erpAbrirAcordo(ac.dataset.erpAcordo); return; }
     const tr = e.target.closest('[data-erp-parc]');
     if (tr) { erpDetalhe(tr.dataset.erpParc); return; }
     if (e.target.closest('#erpCardSem')) { const el = $('erpBlocoSem'); if (el && !el.classList.contains('hidden')) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
 });
 
+// ---------------------------------------------------------------
+// FECHAMENTO DAS VENDAS DO ERP: credita a comissão no saldo/extrato do parceiro (um crédito por parceiro por fechamento).
+// A conta é feita no banco (parceiros-fechamento-erp.sql); aqui só simulamos, pedimos confirmação e mostramos o resultado.
+// ---------------------------------------------------------------
+let fechLista = [], fechLinhas = [], fechSim = null, fechModAcao = null, fechSqlPendente = false, fechOcupado = false;
+const fechPor = () => meuPerfil.email || meuPerfil.nomeOperador || '';
+function fechMsg(tipo, texto) { const el = $('fechStatus'); el.className = 'status-msg' + (tipo ? ' ' + tipo : ''); el.textContent = texto || ''; }
+function fechPeriodoAnterior() {
+    const h = hojeISO(); let a = +h.slice(0, 4), m = +h.slice(5, 7) - 1;
+    if (m < 1) { m = 12; a--; }
+    const ult = new Date(Date.UTC(a, m, 0)).getUTCDate();
+    return { de: `${a}-${String(m).padStart(2, '0')}-01`, ate: `${a}-${String(m).padStart(2, '0')}-${String(ult).padStart(2, '0')}` };
+}
+function fechAtualizarBotoes() {
+    const ehP = !!meuPerfil.ehPrincipal;
+    const ok = fechSim && fechSim.de === $('fechDe').value && fechSim.ate === $('fechAte').value && fechSim.n > 0;
+    $('fechBtnFechar').disabled = !(ehP && ok) || fechOcupado;
+    $('fechBtnSimular').disabled = fechOcupado;
+    $('fechSoPrincipal').classList.toggle('hidden', ehP);
+}
+function fechAbrirAba() {
+    if (!erpPrefsLidas) { erpLerPrefs(); erpPrefsLidas = true; }
+    if (!$('fechDe').value || !$('fechAte').value) { const p = fechPeriodoAnterior(); $('fechDe').value = p.de; $('fechAte').value = p.ate; }
+    $('fechRegras').innerHTML = erpPrefsNoBanco()
+        ? `Regras usadas: data de referência <strong>${erpPrefs.ref === 'baixa' ? 'da baixa' : 'da venda'}</strong> · ${erpPrefs.soBaixados ? 'só pedidos baixados' : 'inclui pedidos sem baixa'} · ${erpPrefs.ignorarProprio ? 'ignora compra do próprio indicador' : 'conta compra do próprio indicador'} (mudam na aba <em>Vendas do ERP</em>). Entram só pedidos de parceiros <strong>ativos ou inativos</strong> com <strong>código externo</strong> cadastrado.`
+        : '⚠️ As regras de cálculo ainda não estão na configuração da unidade: rode o parceiros-vendas-erp.sql no Supabase antes de fechar.';
+    fechAtualizarBotoes();
+    fechCarregar();
+}
+async function fechCarregar() {
+    const { data: f, error } = await sb.from('parceiros_fechamentos_erp').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('criado_em', { ascending: false }).limit(120);
+    if (error) {
+        fechSqlPendente = erroDeTabelaAusente(error);
+        $('avisoFechamentoSql').classList.toggle('hidden', !fechSqlPendente);
+        if (!fechSqlPendente) fechMsg('erro', 'Não consegui ler os fechamentos: ' + error.message);
+        fechLista = []; fechLinhas = []; fechRenderizarLista(); return;
+    }
+    fechSqlPendente = false; $('avisoFechamentoSql').classList.add('hidden');
+    fechLista = f || [];
+    fechLinhas = [];
+    if (fechLista.length) {
+        try { fechLinhas = await buscarTudo(() => sb.from('parceiros_fechamentos_erp_parceiros').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('criado_em').order('id')); }
+        catch (e) { fechMsg('erro', 'Não consegui ler as linhas dos fechamentos: ' + e.message); }
+    }
+    fechRenderizarLista();
+}
+const fechDoFechamento = (id) => fechLinhas.filter(l => l.fechamento_id === id);
+function fechRenderizarLista() {
+    const ehP = !!meuPerfil.ehPrincipal;
+    $('fechCorpo').innerHTML = fechLista.map(f => {
+        const ls = fechDoFechamento(f.id);
+        const ped = ls.reduce((a, l) => a + (Number(l.pedidos) || 0), 0), tot = arredondar2(ls.reduce((a, l) => a + (Number(l.comissao) || 0), 0));
+        const feito = f.criado_em ? new Date(f.criado_em).toLocaleString('pt-BR') : '';
+        const refeitos = ls.reduce((a, l) => a + (l.refeitos || 0), 0);
+        const aberto = f.status === 'fechado';
+        return `<tr style="cursor:pointer;" data-fech-ver="${escapeHtml(f.id)}">
+            <td>${formatarDataSemFuso(f.periodo_de)} a ${formatarDataSemFuso(f.periodo_ate)}${f.observacao ? `<small class="sub">${escapeHtml(f.observacao)}</small>` : ''}</td>
+            <td>${aberto ? '<span class="pill pill-confirmada">Fechado</span>' : '<span class="pill pill-cancelado">Desfeito</span>'}${refeitos ? `<small class="sub">refeito ${refeitos}×</small>` : ''}</td>
+            <td class="num">${ls.length}</td><td class="num">${ped}</td>
+            <td class="num">${aberto ? `<strong>${formatarMoeda(tot)}</strong>` : '—'}</td>
+            <td>${escapeHtml(feito)}${f.criado_por ? `<small class="sub">${escapeHtml(f.criado_por)}</small>` : ''}</td>
+            <td style="white-space:nowrap;">${aberto && ehP ? `<button type="button" class="btn btn-cinza btn-sm" data-fech-refazer="${escapeHtml(f.id)}">Refazer cálculo</button> <button type="button" class="btn btn-cinza btn-sm" data-fech-desfazer="${escapeHtml(f.id)}">Desfazer</button>` : ''}</td></tr>`;
+    }).join('') || `<tr><td colspan="7" class="vazio">${fechSqlPendente ? 'Rode o SQL do fechamento para começar.' : 'Nenhum fechamento feito ainda.'}</td></tr>`;
+}
+async function fechExecutar(aplicar) {
+    if (fechOcupado || fechSqlPendente) return;
+    const de = $('fechDe').value, ate = $('fechAte').value;
+    if (!de || !ate) { fechMsg('erro', 'Informe o período (De e Até).'); return; }
+    if (ate < de) { fechMsg('erro', 'A data final não pode ser anterior à inicial.'); return; }
+    if (aplicar) {
+        if (!meuPerfil.ehPrincipal) { fechMsg('erro', 'Só o usuário principal da unidade fecha as vendas.'); return; }
+        if (!fechSim || fechSim.de !== de || fechSim.ate !== ate) { fechMsg('erro', 'Simule este período antes de fechar.'); return; }
+        if (!confirm(`Creditar ${formatarMoeda(fechSim.total)} no saldo de ${fechSim.n} parceiro(s), referente às vendas do ERP de ${formatarDataSemFuso(de)} a ${formatarDataSemFuso(ate)}?\n\nOs pedidos ficam marcados como fechados. Depois dá para refazer o cálculo ou desfazer.`)) return;
+    }
+    fechOcupado = true; fechAtualizarBotoes();
+    fechMsg('', aplicar ? 'Fechando...' : 'Simulando...');
+    try {
+        const { data, error } = await sb.rpc('parceiros_fechar_erp', { p_unidade: meuPerfil.unidadeId, p_de: de, p_ate: ate, p_aplicar: aplicar, p_por: fechPor(), p_obs: $('fechObs').value.trim() || null });
+        if (error) {
+            if (erroDeTabelaAusente(error)) { fechSqlPendente = true; $('avisoFechamentoSql').classList.remove('hidden'); }
+            throw new Error(error.message);
+        }
+        const linhas = data || [];
+        const total = arredondar2(linhas.reduce((a, l) => a + Number(l.comissao || 0), 0));
+        const pedidos = linhas.reduce((a, l) => a + (l.pedidos || 0), 0);
+        $('fechSimCorpo').innerHTML = linhas.map(l => `<tr><td>${escapeHtml(l.codigo_externo || '')}</td><td><strong>${escapeHtml(l.parceiro_nome || '')}</strong></td>
+            <td class="num">${l.pedidos}</td><td class="num">${formatarMoeda(l.valor_vendido)}</td><td class="num"><strong>${formatarMoeda(l.comissao)}</strong></td></tr>`).join('')
+            + (linhas.length ? `<tr><td colspan="2"><strong>Total</strong></td><td class="num"><strong>${pedidos}</strong></td><td></td><td class="num"><strong>${formatarMoeda(total)}</strong></td></tr>` : '');
+        $('fechSimulacao').classList.toggle('hidden', !linhas.length);
+        if (!aplicar) {
+            fechSim = { de, ate, n: linhas.length, total };
+            fechMsg(linhas.length ? 'sucesso' : 'erro', linhas.length
+                ? `Simulação: ${pedidos} pedido(s) em aberto, ${formatarMoeda(total)} de comissão para ${linhas.length} parceiro(s). Nada foi gravado.`
+                : 'Nenhum pedido em aberto neste período (já fechado, sem baixa, ou sem parceiro com código externo).');
+        } else {
+            fechSim = null;
+            registrarSentinela('parceiros_erp_fechamento', `Fechou as vendas do ERP de ${de} a ${ate}: ${formatarMoeda(total)} creditados a ${linhas.length} parceiro(s) (${pedidos} pedidos)`);
+            fechMsg('sucesso', `Fechado: ${formatarMoeda(total)} creditados no saldo de ${linhas.length} parceiro(s).`);
+            $('fechSimulacao').classList.add('hidden');
+            await fechAtualizarDepois();
+        }
+    } catch (e) { fechMsg('erro', (e && e.message) || String(e)); }
+    finally { fechOcupado = false; fechAtualizarBotoes(); }
+}
+// depois de fechar / refazer / desfazer: saldos, pedidos e telas dependentes
+async function fechAtualizarDepois() {
+    await Promise.all([carregarSaldos(), carregarErpDb(), fechCarregar()]);
+    if (erpOrigemTipo === 'banco') { erpPedidos = erpDb.slice(); }
+    renderizarDashboard(); renderizarRecompensas();
+    if (erpPedidos.length) erpRenderizar();
+}
+function fechAbrirModal(titulo, sub, corpoHtml, { botao, motivo, motivoRotulo, acao } = {}) {
+    $('fechModTitulo').textContent = titulo; $('fechModSub').textContent = sub || '';
+    $('fechModCorpo').innerHTML = corpoHtml;
+    $('fechModMotivoBox').classList.toggle('hidden', !motivo);
+    $('fechModMotivo').value = '';
+    $('fechModMotivoRotulo').textContent = motivoRotulo || 'Motivo';
+    $('fechModOk').classList.toggle('hidden', !botao);
+    $('fechModOk').textContent = botao || ''; $('fechModOk').disabled = false;
+    $('fechModStatus').className = 'status-msg'; $('fechModStatus').textContent = '';
+    fechModAcao = acao || null;
+    $('modal-fech').classList.add('aberto');
+}
+function fechVer(id) {
+    const f = fechLista.find(x => x.id === id); if (!f) return;
+    const ls = fechDoFechamento(id);
+    const corpo = `<div class="tabela-scroll"><table class="tabela"><thead><tr><th>Parceiro</th><th class="num">Pedidos</th><th class="num">Valor vendido</th><th class="num">Comissão</th><th>Refeito</th></tr></thead><tbody>`
+        + (ls.map(l => { const p = parceiroPorId(l.parceiro_id);
+            return `<tr><td><strong>${escapeHtml(p ? p.nome : 'Parceiro removido')}</strong></td><td class="num">${l.pedidos}</td><td class="num">${formatarMoeda(l.valor_vendido)}</td>
+            <td class="num"><strong>${formatarMoeda(l.comissao)}</strong></td><td>${l.refeitos ? `${l.refeitos}× · ${l.refeito_em ? new Date(l.refeito_em).toLocaleString('pt-BR') : ''}${l.ultimo_motivo ? `<small class="sub">${escapeHtml(l.ultimo_motivo)}</small>` : ''}` : '—'}</td></tr>`; }).join('') || '<tr><td colspan="5" class="vazio">Sem linhas.</td></tr>')
+        + `</tbody></table></div>`
+        + (f.status === 'desfeito' ? `<p class="dica" style="margin-top:10px;">Desfeito em ${f.desfeito_em ? new Date(f.desfeito_em).toLocaleString('pt-BR') : ''}${f.desfeito_por ? ' por ' + escapeHtml(f.desfeito_por) : ''}${f.motivo_desfazer ? ' — ' + escapeHtml(f.motivo_desfazer) : ''}. O extrato guarda o crédito e o estorno.</p>` : '')
+        + `<p class="dica" style="margin-top:10px;">No extrato de cada parceiro (aba Recompensas) aparecem o crédito e, se houver, os ajustes.</p>`;
+    fechAbrirModal(`Fechamento de ${formatarDataSemFuso(f.periodo_de)} a ${formatarDataSemFuso(f.periodo_ate)}`, f.status === 'fechado' ? 'Fechado' : 'Desfeito', corpo);
+}
+async function fechRefazer(id) {
+    const f = fechLista.find(x => x.id === id); if (!f) return;
+    fechMsg('', 'Recalculando...');
+    const { data, error } = await sb.rpc('parceiros_refazer_erp', { p_fechamento: id, p_aplicar: false });
+    if (error) { fechMsg('erro', error.message); return; }
+    fechMsg('', '');
+    const linhas = data || [];
+    const dif = arredondar2(linhas.reduce((a, l) => a + Number(l.diferenca || 0), 0));
+    const mudam = linhas.filter(l => Math.abs(Number(l.diferenca)) >= 0.01).length;
+    const corpo = `<div class="tabela-scroll"><table class="tabela"><thead><tr><th>Parceiro</th><th class="num">Pedidos</th><th class="num">Creditado</th><th class="num">Com os % de hoje</th><th class="num">Diferença</th></tr></thead><tbody>`
+        + linhas.map(l => `<tr><td><strong>${escapeHtml(l.parceiro_nome || '')}</strong></td><td class="num">${l.pedidos}</td><td class="num">${formatarMoeda(l.comissao_creditada)}</td>
+            <td class="num">${formatarMoeda(l.comissao_nova)}</td><td class="num"><strong style="color:${Number(l.diferenca) < 0 ? 'var(--danger)' : 'inherit'}">${Math.abs(Number(l.diferenca)) < 0.01 ? '—' : (Number(l.diferenca) > 0 ? '+' : '') + formatarMoeda(l.diferenca)}</strong></td></tr>`).join('')
+        + `</tbody></table></div>`
+        + `<p class="dica" style="margin-top:10px;">Refazer recalcula <strong>só os pedidos deste fechamento</strong> com o % de acordo de cada pedido ou, se não houver, o % atual do parceiro. Pedidos novos vão para o próximo fechamento. Só a <strong>diferença</strong> entra no extrato (tipo ajuste); nada é apagado.</p>`;
+    fechAbrirModal(`Refazer o fechamento de ${formatarDataSemFuso(f.periodo_de)} a ${formatarDataSemFuso(f.periodo_ate)}`,
+        mudam ? `${mudam} parceiro(s) mudam · diferença total ${dif > 0 ? '+' : ''}${formatarMoeda(dif)}` : 'Nada muda com os percentuais de hoje.', corpo,
+        { botao: mudam ? 'Confirmar e lançar a diferença' : '', motivo: !!mudam, motivoRotulo: 'Motivo do novo cálculo (vai para o extrato)', acao: async () => {
+            const { error: e2 } = await sb.rpc('parceiros_refazer_erp', { p_fechamento: id, p_aplicar: true, p_motivo: $('fechModMotivo').value.trim() || null, p_por: fechPor() });
+            if (e2) throw new Error(e2.message);
+            registrarSentinela('parceiros_erp_fechamento_refeito', `Refez o fechamento ${f.periodo_de} a ${f.periodo_ate}: diferença ${formatarMoeda(dif)} em ${mudam} parceiro(s)${$('fechModMotivo').value.trim() ? ' — ' + $('fechModMotivo').value.trim() : ''}`);
+            fechMsg('sucesso', `Fechamento refeito: diferença de ${dif > 0 ? '+' : ''}${formatarMoeda(dif)} lançada no extrato.`);
+        } });
+}
+function fechDesfazer(id) {
+    const f = fechLista.find(x => x.id === id); if (!f) return;
+    const ls = fechDoFechamento(id);
+    const tot = arredondar2(ls.reduce((a, l) => a + (Number(l.comissao) || 0), 0)), ped = ls.reduce((a, l) => a + (Number(l.pedidos) || 0), 0);
+    fechAbrirModal(`Desfazer o fechamento de ${formatarDataSemFuso(f.periodo_de)} a ${formatarDataSemFuso(f.periodo_ate)}`, '',
+        `<p>Isto <strong>estorna ${formatarMoeda(tot)}</strong> do saldo de ${ls.length} parceiro(s) e <strong>reabre os ${ped} pedido(s)</strong>, que voltam a contar no próximo fechamento. O crédito e o estorno continuam no extrato.</p>
+         <p class="dica">Se parte do valor já foi paga ao parceiro, o saldo dele pode ficar negativo.</p>`,
+        { botao: 'Desfazer o fechamento', motivo: true, motivoRotulo: 'Motivo (vai para o extrato)', acao: async () => {
+            const { error } = await sb.rpc('parceiros_desfazer_erp', { p_fechamento: id, p_motivo: $('fechModMotivo').value.trim() || null, p_por: fechPor() });
+            if (error) throw new Error(error.message);
+            registrarSentinela('parceiros_erp_fechamento_desfeito', `Desfez o fechamento ${f.periodo_de} a ${f.periodo_ate}: estornou ${formatarMoeda(tot)} (${ped} pedidos reabertos)${$('fechModMotivo').value.trim() ? ' — ' + $('fechModMotivo').value.trim() : ''}`);
+            fechMsg('sucesso', `Fechamento desfeito: ${formatarMoeda(tot)} estornados e ${ped} pedido(s) reabertos.`);
+        } });
+}
+$('fechBtnSimular').addEventListener('click', () => fechExecutar(false));
+$('fechBtnFechar').addEventListener('click', () => fechExecutar(true));
+['fechDe', 'fechAte'].forEach(id => $(id).addEventListener('change', () => { fechAtualizarBotoes(); }));
+$('fechModFechar').addEventListener('click', () => $('modal-fech').classList.remove('aberto'));
+$('fechModOk').addEventListener('click', async () => {
+    if (!fechModAcao) return;
+    const btn = $('fechModOk'); btn.disabled = true;
+    try { await fechModAcao(); $('modal-fech').classList.remove('aberto'); await fechAtualizarDepois(); }
+    catch (e) { $('fechModStatus').className = 'status-msg erro'; $('fechModStatus').textContent = (e && e.message) || String(e); btn.disabled = false; }
+});
+$('fechCorpo').addEventListener('click', (e) => {
+    const r = e.target.closest('[data-fech-refazer]'); if (r) { fechRefazer(r.dataset.fechRefazer); return; }
+    const d = e.target.closest('[data-fech-desfazer]'); if (d) { fechDesfazer(d.dataset.fechDesfazer); return; }
+    const v = e.target.closest('[data-fech-ver]'); if (v) fechVer(v.dataset.fechVer);
+});
+
 const AJUDA_PARCEIROS = {
     titulo: 'Parceiros Comerciais',
-    ultimaRevisao: '06/11/2026',
+    ultimaRevisao: '09/11/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>Módulo pra lojas (de material de construção, por exemplo) que recebem profissionais
@@ -3402,7 +3766,7 @@ const AJUDA_PARCEIROS = {
             <ul>
                 <li>O pedido é ligado ao parceiro pelo <strong>código externo</strong> do cadastro (o código do indicador no ERP). Pedido cujo
                 código não tem parceiro cadastrado aparece em "Indicadores do ERP sem parceiro cadastrado".</li>
-                <li>A <strong>comissão</strong> é o valor do pedido × o percentual do parceiro (ou o padrão da loja, em Parâmetros). Se o percentual
+                <li>A <strong>comissão</strong> é o valor do pedido × o percentual do parceiro (ou, se ele não tiver, o <strong>percentual padrão das vendas do ERP</strong>, em Parâmetros; em branco = o mesmo padrão da venda lançada). Se o percentual
                 mudar, o cálculo de meses passados também muda: os pedidos não são gravados.</li>
                 <li><strong>Contar só pedidos baixados</strong> (ligado por padrão) deixa de fora o pedido ainda sem baixa. A <strong>data de referência</strong>
                 escolhe se o período vale pela data da venda ou da baixa.</li>
@@ -3416,8 +3780,25 @@ const AJUDA_PARCEIROS = {
                 gravado na última atualização — se o coletor mandar dados novos, abra esta aba e carregue do Drive para atualizar. Pedidos que saíram do arquivo
                 (cancelados no ERP) são removidos na gravação. O botão <strong>⇪ Gravar para a página dos parceiros</strong> grava de novo (ou grava um arquivo aberto deste computador).</li>
                 <li>A data de referência e as regras <strong>"só pedidos baixados"</strong> e <strong>"ignorar compra do próprio indicador"</strong> ficam salvas na unidade e valem
-                também para a página do parceiro e o Dashboard — mudar aqui muda para todos. A comissão do ERP é <strong>calculada</strong> (valor × percentual atual do parceiro) e
-                <strong>não entra no saldo/extrato</strong> do parceiro; o acerto continua sendo feito com a loja. Se a loja também lançou na mão a mesma venda, ela conta duas vezes.</li>
+                também para a página do parceiro e o Dashboard — mudar aqui muda para todos. Enquanto o pedido está <strong>em aberto</strong>, a comissão é <strong>calculada</strong>
+                (valor × % de acordo do pedido, ou o % atual do parceiro) e <strong>ainda não está no saldo</strong>: ela só vai para o saldo/extrato no <strong>Fechamento ERP</strong>. Se a loja também lançou na mão a mesma venda, ela conta duas vezes.</li>
+                <li><strong>Valor do pedido = valor líquido dos produtos</strong> (base da comissão): soma dos itens <strong>com o desconto de cada linha (produto)</strong> descontado, menos o desconto do pedido, se houver.
+                <strong>Frete, taxa de entrega e despesas acessórias não entram.</strong> Isso é definido na consulta do coletor; pedidos já gravados passam a usar o novo valor na próxima coleta
+                (pedido já fechado só muda o crédito com <em>Refazer cálculo</em>).</li>
+                <li><strong>% de acordo</strong>: no detalhe do parceiro (toque na linha), o botão <em>% acordo</em> de um pedido em aberto combina um percentual só para aquele pedido.
+                Pedido <strong>creditado</strong> (já fechado) mostra o % e o valor que foram creditados e não aceita mudança direta: use <em>Refazer</em> no Fechamento ERP.</li>
+            </ul>
+        ` },
+        { id: 'fechamento', titulo: 'Fechamento ERP', corpo: `
+            <p>Passa a comissão das vendas do ERP para o <strong>saldo e extrato</strong> do parceiro, <strong>um crédito por parceiro</strong> a cada fechamento
+            (por exemplo, todo mês). Só o usuário <strong>principal</strong> da unidade fecha, refaz ou desfaz; qualquer usuário pode simular.</p>
+            <ul>
+                <li><strong>Simular</strong> mostra, sem gravar nada, quanto cada parceiro receberia no período. <strong>Fechar e creditar</strong> só libera depois de simular o mesmo período.</li>
+                <li>Cada pedido fechado guarda o <strong>% e o valor creditados</strong>; pedidos fechados não entram em outro fechamento (nunca contam duas vezes) e o coletor/app não os apagam, mesmo que sumam do ERP.</li>
+                <li>Entram os pedidos <strong>em aberto</strong> do período, de parceiros <strong>ativos ou inativos</strong> com <strong>código externo</strong>, seguindo as regras da aba <em>Vendas do ERP</em> (data de referência, só baixados, compra própria).</li>
+                <li><strong>Refazer cálculo</strong>: use quando houver um acordo (num pedido, com <em>% acordo</em>, ou no % geral do parceiro, no cadastro dele). Mostra a diferença por parceiro e, ao confirmar, lança no extrato <strong>só a diferença</strong> (tipo ajuste, positivo ou negativo) com o motivo. Recalcula somente os pedidos <strong>daquele fechamento</strong>; pedidos novos vão para o próximo.</li>
+                <li><strong>Desfazer</strong>: estorna o que foi creditado e <strong>reabre os pedidos</strong>. O crédito e o estorno continuam visíveis no extrato. Se parte já foi paga ao parceiro, o saldo dele pode ficar negativo.</li>
+                <li>Depois do crédito, o valor segue o fluxo normal de <em>Recompensas</em> (pagar gera o título no Financeiro). Na página do parceiro, a comissão do ERP já creditada aparece no saldo e no extrato; a ainda não fechada aparece como "a creditar".</li>
             </ul>
         ` },
         { id: 'recompensas', titulo: 'Recompensas', corpo: `
