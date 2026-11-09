@@ -501,9 +501,10 @@
     <div class="panel-app" id="app-panel-erp">
         <div class="cartao">
             <h2>Vendas do sistema da loja (ERP)</h2>
-            <p class="desc">Lê o arquivo <strong>vendas_parceiros.csv</strong> que o coletor envia ao Drive, liga cada pedido ao parceiro pelo <strong>código externo</strong> do cadastro e calcula a comissão com o percentual do parceiro (ou o padrão da loja). Ao carregar do Drive, os pedidos também são gravados no banco para aparecerem na página do parceiro e no Dashboard.</p>
+            <p class="desc">Os pedidos chegam do ERP pelo <strong>coletor</strong> (programa Python que grava direto no banco). Aqui cada pedido é ligado ao parceiro pelo <strong>código externo</strong> do cadastro e a comissão é calculada com o percentual do parceiro (ou o padrão da loja). O Drive e o CSV continuam disponíveis como alternativa.</p>
             <div class="toolbar">
-                <button class="btn btn-principal btn-inline" id="erpBtnCarregar">⟳ Carregar do Drive</button>
+                <button class="btn btn-principal btn-inline" id="erpBtnBanco" title="Busca no banco os pedidos que o coletor gravou">↻ Atualizar do banco</button>
+                <button class="btn btn-cinza btn-sm" id="erpBtnCarregar" title="Alternativa: lê o vendas_parceiros.csv da pasta do Drive e grava no banco">⟳ Carregar do Drive (alternativa)</button>
                 <label class="btn btn-cinza btn-sm" for="erpArquivo" style="cursor:pointer;">📂 Abrir CSV deste computador</label>
                 <input type="file" id="erpArquivo" accept=".csv,text/csv" class="hidden">
                 <button class="btn btn-cinza btn-sm" id="erpBtnGravar" title="Grava os pedidos no banco para a página do parceiro e o Dashboard" disabled>⇪ Gravar para a página dos parceiros</button>
@@ -3263,10 +3264,26 @@ function erpExportar() {
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'comissao-parceiros-' + hojeISO() + '.csv'; a.click();
 }
 
+// mostra os pedidos gravados no banco (pelo coletor Python ou pela carga via Drive/CSV)
+function erpUsarBanco() {
+    erpPedidos = erpDb.slice(); erpOrigemTipo = 'banco';
+    const quando = erpDbSyncEm ? new Date(erpDbSyncEm) : null;
+    erpOrigem = `Banco — pedidos gravados${quando ? ' em ' + quando.toLocaleString('pt-BR') : ''} — ${erpPedidos.length} pedidos`;
+    const horas = quando ? (Date.now() - quando.getTime()) / 3600000 : 0;
+    if (!erpPedidos.length) erpMsg('erro', erpDbSqlPendente ? 'A tabela de pedidos ainda não existe: rode o parceiros-vendas-erp.sql no Supabase.' : 'Ainda não há pedidos no banco. Rode o coletor (coletor_parceiros_erp.py) ou carregue do Drive / abra um CSV.');
+    else if (horas > 6) erpMsg('erro', `Os pedidos não são atualizados há ${Math.round(horas)} horas — confira se o coletor está rodando.`);
+    else erpMsg('sucesso', 'Pedidos carregados do banco.');
+}
+async function erpAtualizarBanco() {
+    const btn = $('erpBtnBanco'); btn.disabled = true;
+    try { await carregarErpDb(); erpUsarBanco(); renderizarDashboard(); } finally { btn.disabled = false; }
+    erpRenderizar();
+}
+$('erpBtnBanco').addEventListener('click', erpAtualizarBanco);
 function erpAbrirAba() {
     if (!erpPrefsLidas) { erpLerPrefs(); erpPrefsLidas = true; }
+    if (!erpPedidos.length) erpUsarBanco();   // o normal é ler do banco; Drive e CSV são alternativas
     erpRenderizar();
-    if (!erpPedidos.length && !erpTentouDrive) erpCarregarDrive();   // na 1ª vez já tenta o Drive
 }
 $('erpBtnCarregar').addEventListener('click', erpCarregarDrive);
 $('erpArquivo').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) erpAbrirArquivoLocal(f); e.target.value = ''; });
@@ -3380,8 +3397,8 @@ const AJUDA_PARCEIROS = {
         ` },
         { id: 'erp', titulo: 'Vendas do ERP', corpo: `
             <p>Mostra as vendas <strong>reais</strong> da loja (do sistema/ERP) feitas pelos parceiros e calcula a comissão de cada um.
-            Os dados vêm do arquivo <strong>vendas_parceiros.csv</strong>, que o coletor envia à pasta do Drive; o app só <strong>lê</strong> o
-            arquivo (o arquivo do Drive nunca é alterado).</p>
+            Os dados vêm do ERP pelo <strong>coletor</strong>, que grava direto no banco (a leitura do ERP é só de consulta). O arquivo
+            <strong>vendas_parceiros.csv</strong> do Drive continua como alternativa (o arquivo do Drive nunca é alterado).</p>
             <ul>
                 <li>O pedido é ligado ao parceiro pelo <strong>código externo</strong> do cadastro (o código do indicador no ERP). Pedido cujo
                 código não tem parceiro cadastrado aparece em "Indicadores do ERP sem parceiro cadastrado".</li>
@@ -3391,7 +3408,7 @@ const AJUDA_PARCEIROS = {
                 escolhe se o período vale pela data da venda ou da baixa.</li>
                 <li><strong>Ignorar compras do próprio indicador</strong>: quando o cliente do pedido é o próprio indicador (mesmo nome), a compra pode não
                 gerar comissão. Os pedidos assim vêm marcados como "compra própria?" no detalhe e o aviso mostra quantos são.</li>
-                <li><strong>Carregar do Drive</strong> usa a mesma permissão do Painel financeiro (principal da unidade ou quem foi liberado lá).
+                <li>Os pedidos vêm do <strong>coletor</strong> (<code>coletor_parceiros_erp.py</code>), que lê o ERP e grava direto no banco — a aba abre com o que está gravado e o botão <strong>↻ Atualizar do banco</strong> busca de novo. Se a última atualização tiver mais de 6 horas, a aba avisa. <strong>Carregar do Drive</strong> (alternativa) usa a mesma permissão do Painel financeiro (principal da unidade ou quem foi liberado lá).
                 Pelo <strong>📂 Abrir CSV deste computador</strong> dá para conferir um arquivo antes de ele ir ao Drive.</li>
                 <li><strong>Exportar comissões</strong> gera uma planilha (CSV) com a comissão de cada parceiro no período filtrado.</li>
                 <li><strong>Página do parceiro e Dashboard</strong>: ao carregar do Drive, o app <strong>grava os pedidos no banco</strong> (tabela própria) e a página
