@@ -1,0 +1,2431 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Servir — Agência de Viagens</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Crect width='200' height='200' rx='46' fill='%231B4332'/%3E%3Cg transform='translate(24 24) scale(6.5)'%3E%3Cpath d='M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z' fill='%23F2A93B' stroke='%23F0F4EE' stroke-width='.9' stroke-linejoin='round'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+    :root {
+        --ink:#171E1A; --bg:#F6F7F9; --surface:#FFFFFF; --border:#E8EAED;
+        --muted:#6B7280; --brand:#1B4332; --brand-2:#2D6A4F; --brand-soft:#EAF2EE; --brand-escuro:#122E23;
+        --accent:#F2A93B; --accent-ink:#8A5E12; --danger:#C0392B; --danger-soft:#FBEAE8;
+        --success-soft:#E8F3EC; --aviso-soft:#FEF3D8;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--ink); font-family: 'Inter', sans-serif; }
+    .hidden { display: none !important; }
+
+    #tela-login { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(160deg, var(--brand), var(--brand-escuro)); }
+    .caixa-login { background: var(--surface); border-radius: 16px; padding: 32px 28px; width: 100%; max-width: 360px; box-shadow: 0 12px 40px rgba(0,0,0,0.25); }
+    .caixa-login h1 { font-family: 'Inter', sans-serif; font-weight: 700; letter-spacing: -.015em; font-size: 1.35rem; color: var(--brand); margin: 0 0 4px 0; }
+    .caixa-login .subtitulo { color: var(--muted); font-size: 0.85rem; margin: 0 0 20px 0; }
+    .campo { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+    .campo label { font-size: 0.82rem; font-weight: 600; }
+    .campo .dica { font-size: .76rem; color: var(--muted); font-weight: 400; }
+    .campo input, .campo select, .campo textarea {
+        font-family: 'Inter', sans-serif; font-size: 0.92rem; padding: 10px 12px;
+        border: 1.5px solid var(--border); border-radius: 9px; width: 100%; background: var(--surface); color: var(--ink);
+    }
+    .campo textarea { resize: vertical; min-height: 64px; }
+    .campo input:focus, .campo select:focus, .campo textarea:focus { outline: none; border-color: var(--brand-2); }
+    .campo-check { display: flex; align-items: flex-start; gap: 9px; font-size: .84rem; margin-bottom: 14px; cursor: pointer; line-height: 1.4; }
+    .campo-check input { width: 17px; height: 17px; margin-top: 2px; accent-color: var(--brand); flex-shrink: 0; }
+    .btn { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 0.92rem; border: none; border-radius: 9px; padding: 11px 18px; cursor: pointer; }
+    .btn-principal { background: var(--brand); color: white; width: 100%; padding: 13px; }
+    .btn-principal:hover { background: var(--brand-2); }
+    .btn-principal:disabled { background: var(--muted); cursor: not-allowed; }
+    .btn-cinza { background: #EEF0F1; color: var(--ink); }
+    .btn-perigo { background: var(--danger-soft); color: var(--danger); }
+    .btn-sucesso { background: var(--success-soft); color: var(--brand-2); }
+    .btn-sm { padding: 7px 10px; font-size: 0.78rem; }
+    .btn-inline { width: auto; padding: 10px 18px; }
+    .status-msg { font-size: 0.85rem; margin-top: 10px; text-align: center; }
+    .status-msg.erro { color: var(--danger); }
+    .status-msg.sucesso { color: var(--brand-2); }
+
+    #app { display: none; }
+    .app-shell { display: flex; min-height: 100vh; }
+    .sidebar { width: 232px; flex-shrink: 0; background: var(--brand); color: #fff; display: flex; flex-direction: column; padding: 24px 16px; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+    .sidebar-brand { padding: 8px 10px 28px; font-weight: 700; font-size: 1.1rem; letter-spacing: -.01em; }
+    .sidebar-brand small { display: block; font-weight: 400; font-size: .74rem; color: rgba(255,255,255,.55); margin-top: 3px; }
+    .nav-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: none; color: rgba(255,255,255,.72); font-family: 'Inter', sans-serif; font-size: .88rem; font-weight: 500; padding: 10px 12px; border-radius: 9px; cursor: pointer; margin-bottom: 2px; transition: background .15s, color .15s; }
+    .nav-item svg { width: 17px; height: 17px; flex-shrink: 0; }
+    .nav-item:hover { background: rgba(255,255,255,.06); color: #fff; }
+    .nav-item.active { background: rgba(255,255,255,.12); color: #fff; }
+    .nav-badge { margin-left: auto; background: var(--accent); color: #3B2A06; border-radius: 10px; font-size: .68rem; font-weight: 700; padding: 1px 7px; }
+    .sidebar-spacer { flex: 1; }
+    .btn-sidebar-sair { display: flex; align-items: center; gap: 10px; background: none; border: 1px solid rgba(255,255,255,.18); color: rgba(255,255,255,.75); font-family: 'Inter', sans-serif; font-size: .85rem; padding: 10px 12px; border-radius: 9px; cursor: pointer; width: 100%; margin-bottom: 6px; }
+    .btn-sidebar-sair:hover { background: rgba(255,255,255,.06); color: #fff; }
+    .btn-sidebar-sair svg { width: 16px; height: 16px; }
+
+    .content-area { flex: 1; min-width: 0; }
+    .content-header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 22px 36px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+    .content-header h1 { font-size: 1.3rem; font-weight: 700; letter-spacing: -.01em; margin: 0; }
+    .content-header .unidade-pill { font-size: .78rem; color: var(--brand-2); background: var(--brand-soft); padding: 6px 12px; border-radius: 20px; font-weight: 600; }
+    main.app-main { max-width: 1100px; margin: 0 auto; padding: 28px 36px 60px; }
+    .panel-app { display: none; }
+    .panel-app.active { display: block; animation: fadeInParc .25s ease; }
+    @keyframes fadeInParc { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    @media (max-width: 760px) {
+        .sidebar { width: 64px; padding: 16px 8px; align-items: center; }
+        .sidebar-brand { display: none; }
+        .nav-item { justify-content: center; padding: 12px 0; gap: 0; position: relative; }
+        .nav-item .nav-label { display: none; }
+        .nav-badge { position: absolute; top: 2px; right: 4px; margin: 0; padding: 0 5px; }
+        .btn-sidebar-sair { justify-content: center; padding: 12px 0; gap: 0; }
+        .btn-sidebar-sair .nav-label { display: none; }
+        .content-header { padding: 16px 18px; }
+        main.app-main { padding: 20px 14px 48px; }
+    }
+
+    .stat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 24px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 8px; }
+    .stat-card .icon-badge { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; background: var(--brand-soft); color: var(--brand-2); }
+    .stat-card .icon-badge svg { width: 17px; height: 17px; }
+    .stat-card .label { font-size: .8rem; color: var(--muted); font-weight: 500; }
+    .stat-card .value { font-size: 1.4rem; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+    .stat-card .value.alerta { color: var(--accent-ink); }
+    .stat-card.clicavel { cursor: pointer; transition: box-shadow .12s ease, border-color .12s ease; }
+    .stat-card.clicavel:hover { border-color: var(--brand-2); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+
+    .chart-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
+    .chart-box h3 { font-size: .92rem; font-weight: 700; margin: 0 0 2px 0; }
+    .chart-box .chart-sub { font-size: .8rem; color: var(--muted); margin-bottom: 16px; }
+    .barra-linha { display: grid; grid-template-columns: 160px 1fr 230px; align-items: center; gap: 12px; padding: 7px 8px; border-radius: 8px; }
+    .barra-linha .rotulo { font-size: .85rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .barra-trilho { height: 12px; background: #F1EEF0; border-radius: 6px; overflow: hidden; }
+    .barra-fill { height: 100%; border-radius: 0 4px 4px 0; background: var(--brand-2); min-width: 0; transition: width .3s ease; }
+    .barra-fill.alerta { background: var(--accent); }
+    .barra-fill.perigo { background: var(--danger); }
+    .barra-linha .valores { font-size: .82rem; text-align: right; font-variant-numeric: tabular-nums; }
+    .barra-linha .valores small { display: block; color: var(--muted); font-size: .74rem; }
+    @media (max-width: 720px) { .barra-linha { grid-template-columns: 1fr; gap: 4px; } .barra-linha .valores { text-align: left; } }
+
+    .cartao { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 16px; }
+    .cartao h2 { font-size: 1.02rem; font-weight: 700; margin: 0 0 14px 0; }
+    .cartao .desc { color: var(--muted); font-size: .82rem; margin: -8px 0 14px 0; line-height: 1.45; }
+    .grade { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grade-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    @media (max-width: 640px) { .grade, .grade-3 { grid-template-columns: 1fr; } }
+
+    .toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 16px; }
+    .toolbar input, .toolbar select { padding: 10px 12px; border: 1.5px solid var(--border); border-radius: 9px; font-family: inherit; font-size: .88rem; background: var(--surface); color: var(--ink); }
+    .toolbar .busca { flex: 1; min-width: 200px; }
+
+    .aviso-pendentes { background: var(--aviso-soft); border: 1px solid var(--accent); color: var(--accent-ink); border-radius: 12px; padding: 12px 16px; font-size: .88rem; font-weight: 600; margin-bottom: 16px; cursor: pointer; }
+    .aviso-pendentes:hover { filter: brightness(.97); }
+
+    .parc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+    .parc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; cursor: pointer; display: flex; gap: 12px; transition: border-color .12s, box-shadow .12s; }
+    .parc-card:hover { border-color: var(--brand-2); box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+    .parc-avatar { width: 56px; height: 56px; border-radius: 12px; background: var(--brand-soft); color: var(--brand-2); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; overflow: hidden; flex-shrink: 0; }
+    .parc-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .parc-info { min-width: 0; flex: 1; }
+    .parc-nome { font-weight: 700; font-size: .93rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .parc-meta { font-size: .78rem; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .parc-rodape { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .btn-zap { background: #E3F6EA; color: #1E7A43; border: none; border-radius: 8px; padding: 4px 9px; font-size: .74rem; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+    .btn-zap:hover { background: #cfeedb; }
+    .estrelas { color: var(--accent); letter-spacing: 1px; font-size: .8rem; }
+    .estrelas .vazia { color: #D8DBDF; }
+
+    table.tabela { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    table.tabela th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); font-weight: 700; padding: 8px 10px; border-bottom: 2px solid var(--border); white-space: nowrap; }
+    table.tabela td { padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    table.tabela td.num, table.tabela th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    table.tabela tbody tr:hover { background: var(--brand-soft); }
+    table.tabela select { padding: 5px 7px; border: 1.5px solid var(--border); border-radius: 7px; font-family: inherit; font-size: .8rem; background: var(--surface); }
+    .tabela-scroll { overflow-x: auto; }
+    .vazio { text-align: center; padding: 24px 0; color: var(--muted); font-size: 0.88rem; }
+    .valor-pos { color: var(--brand-2); font-weight: 600; }
+    .valor-neg { color: var(--danger); font-weight: 600; }
+    small.sub { display: block; color: var(--muted); font-size: .74rem; }
+
+    .pill { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; white-space: nowrap; }
+    .pill-ativo, .pill-concluido, .pill-confirmada, .pill-credito { background: var(--success-soft); color: var(--brand-2); }
+    .pill-pendente, .pill-indicado, .pill-ajuste { background: var(--aviso-soft); color: var(--accent-ink); }
+    .pill-contratado { background: #E4EEFB; color: #1F4E8C; }
+    .pill-inativo, .pill-cancelado, .pill-cancelada { background: #EEF0F1; color: var(--muted); }
+    .pill-recusado, .pill-estorno { background: var(--danger-soft); color: var(--danger); }
+    .pill-comissao, .pill-pagamento { background: #E4EEFB; color: #1F4E8C; }
+    .pill-cashback, .pill-resgate { background: #F3E8FB; color: #6B2C91; }
+
+    .linha-busca { position: relative; }
+    .resultados-busca { position: absolute; top: 100%; left: 0; right: 0; z-index: 20; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; max-height: 240px; overflow-y: auto; display: none; margin-top: 4px; box-shadow: 0 6px 18px rgba(0,0,0,0.12); }
+    .resultados-busca.show { display: block; }
+    .resultado-item { padding: 10px 12px; cursor: pointer; font-size: 0.88rem; border-bottom: 1px solid var(--border); }
+    .resultado-item:last-child { border-bottom: none; }
+    .resultado-item:hover { background: var(--brand-soft); }
+    .resultado-item .sub, .sugestao .sub { font-size: .76rem; color: var(--muted); }
+    .sugestao-autocomplete-vazia { padding: 10px 12px; font-size: .85rem; color: var(--muted); }
+
+    .sugestoes { max-height: 270px; overflow-y: auto; border: 1.5px solid var(--border); border-radius: 10px; background: var(--surface); }
+    .sugestao { padding: 10px 12px; border-bottom: 1px solid var(--border); cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: .87rem; }
+    .sugestao:last-child { border-bottom: none; }
+    .sugestao:hover { background: var(--brand-soft); }
+    .sugestao.sel { background: var(--brand-soft); box-shadow: inset 3px 0 0 var(--brand-2); }
+    .preview-recompensa { background: var(--brand-soft); border-radius: 10px; padding: 11px 13px; font-size: .86rem; line-height: 1.45; margin-bottom: 14px; }
+    .preview-recompensa.aviso { background: var(--aviso-soft); color: var(--accent-ink); }
+
+    .detalhe-topo { display: flex; gap: 14px; align-items: flex-start; margin-bottom: 14px; }
+    .detalhe-topo .parc-avatar { width: 72px; height: 72px; font-size: 1.4rem; }
+    .detalhe-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; font-size: .86rem; margin-bottom: 14px; }
+    .detalhe-grid dt { color: var(--muted); font-size: .7rem; text-transform: uppercase; letter-spacing: .03em; font-weight: 700; margin: 0; }
+    .detalhe-grid dd { margin: 2px 0 0 0; word-break: break-word; }
+    .detalhe-grid .largo { grid-column: 1 / -1; }
+    @media (max-width: 560px) { .detalhe-grid { grid-template-columns: 1fr; } }
+    .link-box { display: flex; gap: 8px; }
+    .link-box input { flex: 1; min-width: 0; font-size: .78rem; padding: 9px 10px; border: 1.5px solid var(--border); border-radius: 9px; background: var(--bg); color: var(--muted); font-family: inherit; }
+    .acoes-linha { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    .foto-cartao { max-width: 100%; max-height: 220px; border-radius: 10px; border: 1px solid var(--border); cursor: zoom-in; display: block; }
+    .bloco-cartao { border: 1.5px solid var(--border); border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; }
+    .bloco-cartao-titulo { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); margin-bottom: 8px; }
+    .cartao-vazio { background: var(--aviso-soft); color: var(--accent-ink); border-radius: 9px; padding: 14px; font-size: .84rem; text-align: center; }
+    .sem-cartao-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: .86rem; }
+    .sem-cartao-item:last-child { border-bottom: none; }
+    .foto-form { display: flex; align-items: center; gap: 12px; }
+    .foto-form img { width: 90px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+
+    .ad-thumb { width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; background: #EEF0F1; overflow: hidden; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: .8rem; text-align: center; }
+    .ad-thumb span { padding: 10px; }
+    .ad-thumb img { width: 100%; height: 100%; object-fit: cover; }
+    .ramo-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); font-size: .86rem; }
+    .ramo-item.inativo { opacity: .55; }
+    .ramo-item .nome { flex: 1; }
+    .lista-ramos { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; margin-top: 12px; }
+    .qr-wrap { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; margin-top: 14px; }
+    #qrCadastro { background: #fff; padding: 10px; border: 1px solid var(--border); border-radius: 12px; min-width: 150px; min-height: 150px; }
+
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 100; align-items: center; justify-content: center; padding: 16px; }
+    .modal-overlay.aberto { display: flex; }
+    .modal-caixa { background: var(--surface); border-radius: 14px; padding: 24px; width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; }
+    .modal-caixa h3 { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 1.15rem; letter-spacing: -.01em; margin: 0 0 4px 0; color: var(--brand-escuro); }
+    .modal-caixa .sub { color: var(--muted); font-size: .82rem; margin: 0 0 16px 0; }
+    .modal-rodape { display: flex; gap: 10px; margin-top: 6px; flex-wrap: wrap; }
+
+    .btn-ajuda-modulo{ display:flex; align-items:center; gap:6px; background:none; border:1.5px solid var(--border); color:var(--muted); font-size:.8rem; font-weight:600; padding:7px 12px; border-radius:8px; cursor:pointer; flex-shrink:0; }
+    .modal-ajuda-head{ display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--border); }
+    .modal-ajuda-head h3{ font-family:'Inter', sans-serif; font-weight:700; letter-spacing:-.01em; margin:0; color:var(--brand-escuro); font-size:1.05rem; }
+    .modal-ajuda-body{ display:flex; flex:1; min-height:0; overflow:hidden; }
+    .modal-ajuda-nav{ width:210px; flex-shrink:0; border-right:1px solid var(--border); background:var(--surface); overflow-y:auto; padding:10px; }
+    .modal-ajuda-nav-item{ display:block; width:100%; text-align:left; background:none; border:none; color:var(--muted); font-size:.82rem; font-weight:600; padding:9px 10px; border-radius:8px; cursor:pointer; margin-bottom:2px; font-family:'Inter', sans-serif; }
+    .modal-ajuda-nav-item:hover{ background:var(--brand-soft); color:var(--ink); }
+    .modal-ajuda-nav-item.ativo{ background:var(--brand); color:#fff; }
+    .modal-ajuda-conteudo{ flex:1; overflow-y:auto; padding:22px 26px; font-size:.88rem; line-height:1.55; color:var(--ink); }
+    .modal-ajuda-conteudo h4{ font-size:1rem; font-weight:700; margin:0 0 10px 0; }
+    .modal-ajuda-conteudo p{ margin:0 0 10px 0; }
+    .modal-ajuda-conteudo ul{ margin:0 0 12px 18px; padding:0; }
+    .modal-ajuda-conteudo li{ margin-bottom:6px; }
+    .ajuda-atualizado{ font-size:.72rem; color:var(--muted); margin-top:18px; padding-top:12px; border-top:1px solid var(--border); }
+    #modal-ajuda .modal-caixa { max-width: 760px; padding: 0; display: flex; flex-direction: column; max-height: 82vh; }
+    @media (max-width:680px){ .modal-ajuda-body{ flex-direction:column; } .modal-ajuda-nav{ width:100%; border-right:none; border-bottom:1px solid var(--border); } }
+
+    /* ---- formulário do grupo: seções demarcadas ---- */
+    #modal-grupo .modal-caixa { max-width: 1180px; padding: 0; background: #E9EDEB; }
+    .gr-cab { position: sticky; top: 0; z-index: 6; background: var(--surface); padding: 16px 24px 12px; border-bottom: 3px solid var(--brand); border-radius: 14px 14px 0 0; }
+    .gr-cab h3 { font-size: 1.25rem; margin: 0 0 2px 0; }
+    .gr-cab .sub { margin: 0; }
+    .gr-corpo { padding: 18px 24px 24px; }
+    .sec-card { background: var(--surface); border: 1px solid #BFC8C4; border-radius: 12px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    .sec-card > .sec-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 16px; background: var(--brand-soft); border-bottom: 1px solid #BFC8C4; border-left: 5px solid var(--brand); border-radius: 11px 11px 0 0; font-size: .76rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--brand-escuro); }
+    .sec-card > .sec-cab small { font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--muted); font-size: .78rem; }
+    .sec-card > .sec-corpo { padding: 16px; }
+    .sec-card > .sec-corpo.sem-pad { padding: 0; }
+    .sec-card > .sec-rodape { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 12px 16px; background: #F6F8F7; border-top: 1px solid var(--border); border-radius: 0 0 11px 11px; }
+    .sec-card > .sec-rodape .status-msg { margin: 0 0 0 6px; text-align: left; }
+    .sec-card .tabela-scroll { border-radius: 0 0 11px 11px; }
+    .sec-card table.tabela th { background: #F6F8F7; }
+    .totais-box { background: var(--surface); border: 1px solid #BFC8C4; border-left: 5px solid var(--brand); }
+    .totais-box .tit { font-size: .72rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+    .com-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+    .com-grade .campo { margin-bottom: 4px; }
+    .par-com { display: grid; grid-template-columns: 1fr 96px; gap: 6px; }
+    /* ---- Agência de Viagens ---- */
+    .pill-orcamento, .pill-aberto { background: var(--aviso-soft); color: var(--accent-ink); }
+    .pill-fechado { background: #E4EEFB; color: #1F4E8C; }
+    .pill-aceito { background: var(--success-soft); color: var(--brand-2); }
+    .neg { color: var(--danger); font-weight: 600; }
+    .pos { color: var(--brand-2); font-weight: 600; }
+    .grp-grade { display: grid; grid-template-columns: 1fr 270px; gap: 18px; align-items: start; }
+    @media (max-width: 900px) { .grp-grade { grid-template-columns: 1fr; } }
+    .totais-box { border-radius: 12px; padding: 12px 14px; }
+    .totais-box .lin { display: flex; justify-content: space-between; gap: 10px; font-size: .88rem; padding: 4px 0; }
+    .totais-box .lin strong { font-variant-numeric: tabular-nums; }
+    .totais-box .lin.custo strong { color: var(--danger); }
+    .totais-box .lin.sep { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 8px; }
+    .linha-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 10px; align-items: end; }
+    .linha-form .campo { margin-bottom: 0; }
+    .linha-form .campo input[readonly] { background: #F3F4F6; }
+    .sec-titulo { font-size: .8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 0 8px 0; }
+    .sub-abas { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+    .sub-aba.ativa { background: var(--brand); color: #fff; }
+    table.tabela td .btn-sm { padding: 4px 8px; }
+    table.tabela tr.cancelado td { color: var(--muted); text-decoration: line-through; }
+    .aviso-linha { background: var(--aviso-soft); color: var(--accent-ink); border-radius: 9px; padding: 9px 12px; font-size: .82rem; margin: 8px 0; }
+    .hint-tarifa { font-size: .76rem; color: var(--brand-2); margin-top: 4px; min-height: 1em; }
+</style>
+<script>
+/* Aviso padrão quando o banco recusa a ação por falta de permissão (RLS) */
+(function(){
+  var MSG_SEM_PERMISSAO = '🔒 Usuário sem permissão para esta ação. Fale com o administrador da unidade.';
+  var alertOriginal = window.alert.bind(window);
+  window.alert = function(m){
+    if (/row-level security|permission denied/i.test(String(m))) m = MSG_SEM_PERMISSAO;
+    alertOriginal(m);
+  };
+})();
+</script>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="tela-login">
+    <div class="caixa-login">
+        <h1>✈️ Agência de Viagens</h1>
+        <p class="subtitulo">Servir — reservas, hospedagem e caixa da agência</p>
+        <div class="campo"><label>E-mail</label><input type="email" id="login-email"></div>
+        <div class="campo">
+            <label>Senha</label>
+            <div style="position:relative;">
+                <input type="password" id="login-senha" style="padding-right:38px;">
+                <button type="button" class="btn-olho-senha" data-alvo="login-senha" style="position:absolute; top:50%; right:5px; transform:translateY(-50%); background:none; border:none; padding:6px; cursor:pointer; color:var(--muted);"></button>
+            </div>
+        </div>
+        <button class="btn btn-principal" id="btn-login">Entrar</button>
+        <div style="text-align:center; margin-top:12px;"><a href="#" id="link-esqueci-senha" style="font-size:.82rem; color:var(--muted);">Esqueci minha senha</a></div>
+        <div class="status-msg" id="status-login"></div>
+    </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app">
+  <div class="app-shell">
+    <aside class="sidebar">
+        <div class="sidebar-brand">✈️ Viagens<small id="unidade-logada"></small></div>
+        <button class="nav-item tab-app-btn active" data-app-tab="dashboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+            <span class="nav-label">Dashboard</span>
+        </button>
+        <button class="nav-item tab-app-btn" data-app-tab="reservas">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="16" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M9 11v5"/><path d="M15 11v5"/></svg>
+            <span class="nav-label">Reservas</span>
+        </button>
+        <button class="nav-item tab-app-btn" data-app-tab="passagens">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/></svg>
+            <span class="nav-label">Passagens</span>
+        </button>
+        <button class="nav-item tab-app-btn" data-app-tab="caixa">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V8H6a2 2 0 0 1 0-4h12v4"/><path d="M4 6v12a2 2 0 0 0 2 2h14v-4"/><path d="M18 12a2 2 0 0 0 0 4h4v-4z"/></svg>
+            <span class="nav-label">Caixa</span>
+        </button>
+        <button class="nav-item tab-app-btn" data-app-tab="cadastros">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            <span class="nav-label">Cadastros</span>
+        </button>
+        <div class="sidebar-spacer"></div>
+        <button class="btn-sidebar-sair" id="btnAjudaModulo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <span class="nav-label">Ajuda</span>
+        </button>
+        <button class="btn-sidebar-sair" id="btn-trocar-unidade" style="display:none;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+            <span class="nav-label">Trocar unidade</span>
+        </button>
+        <button class="btn-sidebar-sair" id="btn-sair">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            <span class="nav-label">Sair</span>
+        </button>
+    </aside>
+
+    <div class="content-area">
+      <div class="content-header">
+        <h1 id="tituloConteudo">Dashboard</h1>
+        <span class="unidade-pill" id="unidadePillHeader">—</span>
+      </div>
+      <main class="app-main">
+
+
+    <!-- ---------- DASHBOARD ---------- -->
+    <div class="panel-app active" id="app-panel-dashboard">
+        <div class="stat-cards">
+            <div class="stat-card"><div class="label">Reservas com entrada no mês</div><div class="value" id="statGrupos">—</div></div>
+            <div class="stat-card"><div class="label">Vendido no mês</div><div class="value" id="statVendido">—</div></div>
+            <div class="stat-card"><div class="label">Comissão da agência no mês</div><div class="value" id="statComissao">—</div></div>
+            <div class="stat-card"><div class="label">A receber em aberto</div><div class="value alerta" id="statReceber">—</div></div>
+            <div class="stat-card"><div class="label">Passagens emitidas no mês</div><div class="value" id="statPassagens">—</div></div>
+            <div class="stat-card"><div class="label">Lucro das passagens no mês</div><div class="value" id="statLucroPassagens">—</div></div>
+            <div class="stat-card clicavel" id="cardCaixas" title="Caixas fechados que o programa de integração ainda não aceitou"><div class="label">Caixas aguardando aceite</div><div class="value" id="statCaixas">—</div></div>
+        </div>
+        <div class="chart-box">
+            <h3>Vendido por operadora</h3>
+            <div class="chart-sub">Últimos 12 meses, reservas não canceladas, pela data de entrada.</div>
+            <div id="graficoOperadoras"></div>
+        </div>
+        <div class="chart-box">
+            <h3>Vendido por hotel</h3>
+            <div class="chart-sub">Últimos 12 meses, reservas não canceladas, pela data de entrada.</div>
+            <div id="graficoHoteis"></div>
+        </div>
+        <div class="cartao">
+            <h2>Próximas entradas</h2>
+            <div class="tabela-scroll"><table class="tabela">
+                <thead><tr><th>Entrada</th><th>Grupo</th><th>Operadora</th><th>Hotel</th><th class="num">Saldo</th></tr></thead>
+                <tbody id="corpoProximas"></tbody>
+            </table></div>
+        </div>
+    </div>
+
+    <!-- ---------- RESERVAS ---------- -->
+    <div class="panel-app" id="app-panel-reservas">
+        <div class="cartao">
+            <h2>Reservas (grupos)</h2>
+            <p class="desc">Cada grupo é uma reserva num hotel, de uma operadora, com um ou vários hóspedes. Um passageiro individual é um grupo de uma pessoa. Toque numa linha para abrir.</p>
+            <div class="toolbar">
+                <label style="font-size:.82rem;font-weight:600;">Entre</label><input type="date" id="rsDe">
+                <label style="font-size:.82rem;font-weight:600;">e</label><input type="date" id="rsAte">
+                <select id="rsOperadora"><option value="">Todas as operadoras</option></select>
+                <select id="rsHotel"><option value="">Todos os hotéis</option></select>
+                <select id="rsStatus"><option value="">Qualquer situação</option><option value="confirmada">Confirmada</option><option value="orcamento">Orçamento</option><option value="cancelada">Cancelada</option></select>
+                <input type="text" class="busca" id="rsBusca" placeholder="Buscar por nome do grupo, código (inclusive externo), operadora ou hotel">
+                <button class="btn btn-principal btn-inline" id="btnNovoGrupo">+ Novo grupo</button>
+            </div>
+            <div class="status-msg" id="rsMsg"></div>
+            <div class="tabela-scroll"><table class="tabela">
+                <thead><tr><th>Cód.</th><th>Grupo</th><th>Operadora</th><th>Hotel</th><th>Período</th><th class="num">Total</th><th class="num">Recebido</th><th class="num">Saldo</th><th>Situação</th></tr></thead>
+                <tbody id="corpoGrupos"></tbody>
+                <tfoot id="rodapeGrupos"></tfoot>
+            </table></div>
+        </div>
+    </div>
+
+    <!-- ---------- PASSAGENS AÉREAS ---------- -->
+    <div class="panel-app" id="app-panel-passagens">
+        <div class="cartao">
+            <h2>Passagens aéreas</h2>
+            <p class="desc">A agência acompanha a venda do cliente, compra a passagem e ganha comissão direta da companhia. Cada linha é uma passagem vendida; toque numa linha para abrir.</p>
+            <div class="toolbar">
+                <label style="font-size:.82rem;font-weight:600;">Emitidas entre</label><input type="date" id="psDe">
+                <label style="font-size:.82rem;font-weight:600;">e</label><input type="date" id="psAte">
+                <select id="psOperadora"><option value="">Todas as companhias</option></select>
+                <select id="psStatus"><option value="">Qualquer situação</option><option value="emitida">Emitida</option><option value="cancelada">Cancelada</option></select>
+                <input type="text" class="busca" id="psBusca" placeholder="Buscar por passageiro, nº do bilhete, ficha ou código">
+                <button class="btn btn-principal btn-inline" id="btnNovaPassagem">+ Nova venda</button>
+            </div>
+            <div class="status-msg" id="psMsg"></div>
+            <div class="tabela-scroll"><table class="tabela">
+                <thead><tr><th>Cód.</th><th>Emissão</th><th>Companhia</th><th>Passageiro</th><th>Bilhete</th><th>Trecho</th><th class="num">Total</th><th class="num">Recebido</th><th class="num">Saldo</th><th class="num">Lucro</th><th>Situação</th></tr></thead>
+                <tbody id="corpoPassagens"></tbody>
+                <tfoot id="rodapePassagens"></tfoot>
+            </table></div>
+        </div>
+    </div>
+
+    <!-- ---------- CAIXA ---------- -->
+    <div class="panel-app" id="app-panel-caixa">
+        <div class="cartao">
+            <h2>Caixa do dia</h2>
+            <p class="desc">Os pagamentos lançados nas reservas entram no caixa da data em que foram recebidos. Ao <strong>fechar o caixa</strong>, os pagamentos do dia ficam travados e seguem para o aceite do programa de integração com o financeiro da empresa.</p>
+            <div class="toolbar">
+                <input type="date" id="cxData">
+                <span id="cxSituacao"></span>
+                <button class="btn btn-principal btn-inline" id="cxBtnFechar">Fechar caixa do dia</button>
+                <button class="btn btn-cinza btn-sm hidden" id="cxBtnReabrir">Reabrir caixa</button>
+            </div>
+            <div class="status-msg" id="cxMsg"></div>
+            <div class="stat-cards" id="cxCards"></div>
+            <div class="tabela-scroll"><table class="tabela">
+                <thead><tr><th>Grupo</th><th>Forma</th><th>Referência</th><th>Origem</th><th class="num">Valor</th><th>Situação</th></tr></thead>
+                <tbody id="cxCorpo"></tbody>
+            </table></div>
+        </div>
+        <div class="cartao">
+            <h2>Caixas recentes</h2>
+            <div class="tabela-scroll"><table class="tabela">
+                <thead><tr><th>Data</th><th>Situação</th><th class="num">Total</th><th>Fechado por</th><th>Aceite</th></tr></thead>
+                <tbody id="cxRecentes"></tbody>
+            </table></div>
+        </div>
+    </div>
+
+    <!-- ---------- CADASTROS ---------- -->
+    <div class="panel-app" id="app-panel-cadastros">
+        <div class="cartao">
+            <h2>Cadastros</h2>
+            <p class="desc">Operadoras, hotéis e os tipos de acomodação/serviço usados nas linhas das reservas. Itens em uso não são apagados, só desativados.</p>
+            <div class="sub-abas">
+                <button class="btn btn-cinza btn-sm sub-aba ativa" data-cad="operadoras">Operadoras</button>
+                <button class="btn btn-cinza btn-sm sub-aba" data-cad="hoteis">Hotéis</button>
+                <button class="btn btn-cinza btn-sm sub-aba" data-cad="servicos">Serviços</button>
+                <button class="btn btn-cinza btn-sm sub-aba" data-cad="aeroportos">Aeroportos</button>
+                <button class="btn btn-cinza btn-sm sub-aba" data-cad="companhias">Companhias</button>
+                <button class="btn btn-cinza btn-sm sub-aba" data-cad="maquinas">Máquinas / vendedores</button>
+                <button class="btn btn-cinza btn-sm sub-aba" data-cad="regras">Regras de comissão</button>
+            </div>
+            <div class="toolbar">
+                <button class="btn btn-principal btn-inline" id="btnNovoCad">+ Novo</button>
+                <button class="btn btn-cinza btn-sm hidden" id="btnCadPadrao">Criar acomodações padrão (SGL, DBL, TPL, QPL, QTL, SPL)</button>
+                <input type="text" class="busca" id="cadBusca" placeholder="Buscar por nome ou código" style="margin-left:auto;">
+            </div>
+            <div class="tabela-scroll"><table class="tabela" id="tabelaCad"><thead></thead><tbody></tbody></table></div>
+        </div>
+    </div>
+
+      </main>
+    </div>
+  </div>
+</div>
+
+<!-- ================= MODAL ESCOLHA UNIDADE ================= -->
+<!-- ================= MODAL ESCOLHA UNIDADE ================= -->
+<div class="modal-overlay" id="modal-unidade">
+    <div class="modal-caixa" style="max-width:420px;">
+        <h3>Escolha a unidade</h3>
+        <div id="lista-unidades-escolha" style="display:flex; flex-direction:column; gap:8px; margin-top:12px; max-height:min(55vh, 460px); overflow-y:auto; padding-right:6px;"></div>
+    </div>
+</div>
+
+<!-- ================= MODAL GRUPO (a tela "Vendas") ================= -->
+<div class="modal-overlay" id="modal-grupo">
+    <div class="modal-caixa">
+        <div class="gr-cab">
+            <h3 id="grupoTitulo">Novo grupo</h3>
+            <p class="sub" id="grupoSub">Preencha os dados do grupo e salve; depois lance os hóspedes.</p>
+        </div>
+        <div class="gr-corpo">
+
+            <div class="sec-card">
+                <div class="sec-cab"><span>Dados do grupo</span></div>
+                <div class="sec-corpo">
+                    <div class="grp-grade">
+                        <div>
+                            <div class="grade-3">
+                                <div class="campo"><label>Grupo *</label><input type="text" id="gNome" placeholder="Ex.: ABSLAN 30/09 A 03/10 ou nome do passageiro"></div>
+                                <div class="campo"><label>Código externo</label><input type="text" id="gCodExterno" maxlength="20" placeholder="Até 20 caracteres"></div>
+                                <div class="campo"><label>Situação</label>
+                                    <select id="gStatus"><option value="confirmada">Confirmada</option><option value="orcamento">Orçamento</option><option value="cancelada">Cancelada</option></select></div>
+                            </div>
+                            <div class="grade">
+                                <div class="campo"><label>Operadora</label>
+                                    <div style="display:flex; gap:6px;">
+                                        <div class="linha-busca" style="flex:1;"><input type="text" id="gOperadora_busca" placeholder="Digite parte do nome ou clique pra listar" autocomplete="off"><input type="hidden" id="gOperadora"><div class="resultados-busca" id="gOperadora_resultados"></div></div>
+                                        <button type="button" class="btn btn-cinza btn-sm" id="btnNovaOperadora" title="Cadastrar operadora">+</button>
+                                    </div></div>
+                                <div class="campo"><label>Hotel</label>
+                                    <div style="display:flex; gap:6px;">
+                                        <div class="linha-busca" style="flex:1;"><input type="text" id="gHotel_busca" placeholder="Digite parte do nome ou clique pra listar" autocomplete="off"><input type="hidden" id="gHotel"><div class="resultados-busca" id="gHotel_resultados"></div></div>
+                                        <button type="button" class="btn btn-cinza btn-sm" id="btnNovoHotel" title="Cadastrar hotel">+</button>
+                                    </div></div>
+                            </div>
+                            <div class="grade-3">
+                                <div class="campo" style="margin-bottom:0;"><label>Entrada do grupo *</label><input type="date" id="gDe"></div>
+                                <div class="campo" style="margin-bottom:0;"><label>Saída do grupo *</label><input type="date" id="gAte"></div>
+                                <div class="campo" style="margin-bottom:0;"><label>Observações</label><input type="text" id="gObs"></div>
+                            </div>
+                        </div>
+                        <div class="totais-box">
+                            <div class="tit">Totais do grupo</div>
+                            <div class="lin"><span>Total</span><strong id="tTotal">R$ 0,00</strong></div>
+                            <div class="lin"><span>Recebido</span><strong id="tReceb">R$ 0,00</strong></div>
+                            <div class="lin"><span>Saldo</span><strong id="tSaldo">R$ 0,00</strong></div>
+                            <div class="lin custo sep"><span>Custo</span><strong id="tCusto">R$ 0,00</strong></div>
+                            <div class="lin"><span>Comissão da agência</span><strong id="tComissao">R$ 0,00</strong></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sec-rodape">
+                    <button class="btn btn-principal btn-inline" id="btnSalvarGrupo">Salvar grupo</button>
+                    <button class="btn btn-cinza" id="btnRooming">📋 Rooming list (PDF)</button>
+                    <button class="btn btn-cinza" id="btnPagamentos">💳 Pagamentos</button>
+                    <button class="btn btn-perigo hidden" id="btnExcluirGrupo">Excluir grupo</button>
+                    <button class="btn btn-cinza" id="btnFecharGrupo">Fechar</button>
+                    <div class="status-msg" id="grupoMsg"></div>
+                </div>
+            </div>
+
+            <div id="blocoLinhas" class="hidden">
+                <div class="sec-card">
+                    <div class="sec-cab"><span id="tituloLinha">Lançar hóspede / acomodação</span></div>
+                    <div class="sec-corpo">
+                        <div class="linha-form">
+                            <div class="campo"><label>Hóspede *</label><input type="text" id="lnHospede"></div>
+                            <div class="campo"><label>Acompanhante</label><input type="text" id="lnAcompanhante"></div>
+                            <div class="campo"><label>Acomodação</label><div class="linha-busca"><input type="text" id="lnServico_busca" placeholder="SGL, DBL, TPL..." autocomplete="off"><input type="hidden" id="lnServico"><div class="resultados-busca" id="lnServico_resultados"></div></div></div>
+                            <div class="campo"><label>Regime</label><select id="lnRegime"></select></div>
+                            <div class="campo"><label>Entrada *</label><input type="date" id="lnDe"></div>
+                            <div class="campo"><label>Saída *</label><input type="date" id="lnAte"></div>
+                            <div class="campo"><label>Diárias</label><input type="text" id="lnDiarias" readonly></div>
+                            <div class="campo"><label>Qtd</label><input type="text" inputmode="numeric" id="lnQtd" value="1"></div>
+                            <div class="campo"><label>Valor venda (diária)</label><input type="text" inputmode="decimal" id="lnVenda" placeholder="0,00"></div>
+                            <div class="campo"><label>% comissão</label><input type="text" inputmode="decimal" id="lnPct" placeholder="0,00"></div>
+                            <div class="campo"><label>Valor custo (diária)</label><input type="text" inputmode="decimal" id="lnCusto" placeholder="0,00"></div>
+                            <div class="campo"><label>Obs.</label><input type="text" id="lnObs"></div>
+                        </div>
+                        <div class="hint-tarifa" id="lnHint"></div>
+                    </div>
+                    <div class="sec-rodape">
+                        <button class="btn btn-principal btn-inline" id="btnAdicionarLinha">Adicionar</button>
+                        <button class="btn btn-cinza hidden" id="btnCancelarEdicaoLinha">Cancelar edição</button>
+                        <div class="status-msg" id="linhaMsg"></div>
+                    </div>
+                </div>
+
+                <div class="sec-card">
+                    <div class="sec-cab"><span>Linhas do grupo</span><small id="qtdLinhas"></small></div>
+                    <div class="sec-corpo sem-pad">
+                        <div class="tabela-scroll"><table class="tabela">
+                            <thead><tr><th>Hóspede</th><th>Acompanhante</th><th>Acomodação</th><th>Regime</th><th class="num">Diárias</th><th>Entrada</th><th>Saída</th><th class="num">Qtd</th><th class="num">Venda</th><th class="num">Custo</th><th class="num">Total</th><th></th></tr></thead>
+                            <tbody id="corpoLinhas"></tbody>
+                        </table></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL EXTRAS DA LINHA ================= -->
+<div class="modal-overlay" id="modal-extras" style="z-index:105;">
+    <div class="modal-caixa" style="max-width:940px; background:#E9EDEB;">
+        <h3 id="extTitulo">Extras</h3>
+        <p class="sub" id="extSub"></p>
+
+        <div class="sec-card">
+            <div class="sec-cab"><span id="extTituloForm">Lançar serviço extra</span></div>
+            <div class="sec-corpo">
+                <div class="linha-form">
+                    <div class="campo" style="grid-column: span 2;"><label>Serviço *</label>
+                        <div style="display:flex; gap:6px;">
+                            <div class="linha-busca" style="flex:1;"><input type="text" id="exServico_busca" placeholder="Digite parte do nome ou do código, ou clique pra listar" autocomplete="off"><input type="hidden" id="exServico"><div class="resultados-busca" id="exServico_resultados"></div></div>
+                            <button type="button" class="btn btn-cinza btn-sm" id="btnNovoServicoExtra" title="Cadastrar serviço">+</button>
+                        </div></div>
+                    <div class="campo"><label>Qtd</label><input type="text" inputmode="numeric" id="exQtd" value="1"></div>
+                    <div class="campo"><label>Diárias</label><input type="text" id="exDiarias" readonly value="1"></div>
+                    <div class="campo"><label>&nbsp;</label><label class="campo-check" style="margin:0; padding:10px 0;"><input type="checkbox" id="exPorDiaria"> Cobrar por diária</label></div>
+                    <div class="campo"><label>Valor venda (unidade)</label><input type="text" inputmode="decimal" id="exVenda" placeholder="0,00"></div>
+                    <div class="campo"><label>% comissão</label><input type="text" inputmode="decimal" id="exPct" placeholder="0,00"></div>
+                    <div class="campo"><label>Valor custo (unidade)</label><input type="text" inputmode="decimal" id="exCusto" placeholder="0,00"></div>
+                    <div class="campo"><label>Obs.</label><input type="text" id="exObs"></div>
+                </div>
+            </div>
+            <div class="sec-rodape">
+                <button class="btn btn-principal btn-inline" id="btnAdicionarExtra">Adicionar extra</button>
+                <button class="btn btn-cinza hidden" id="btnCancelarExtra">Cancelar edição</button>
+                <div class="status-msg" id="extMsg"></div>
+            </div>
+        </div>
+
+        <div class="sec-card">
+            <div class="sec-cab"><span>Extras desta linha</span><small id="extQtd"></small></div>
+            <div class="sec-corpo sem-pad">
+                <div class="tabela-scroll"><table class="tabela">
+                    <thead><tr><th>Serviço</th><th class="num">Qtd</th><th class="num">Diárias</th><th class="num">Venda</th><th class="num">Custo</th><th class="num">Total</th><th></th></tr></thead>
+                    <tbody id="corpoExtras"></tbody>
+                    <tfoot id="rodapeExtras"></tfoot>
+                </table></div>
+            </div>
+        </div>
+        <div class="acoes-linha"><button class="btn btn-cinza" id="btnFecharExtras">Fechar</button></div>
+    </div>
+</div>
+
+<!-- ================= MODAL PASSAGEM AÉREA ================= -->
+<div class="modal-overlay" id="modal-passagem">
+    <div class="modal-caixa" style="max-width:1180px; padding:0; background:#E9EDEB;">
+        <div class="gr-cab">
+            <h3 id="psTitulo">Nova venda de passagem</h3>
+            <p class="sub" id="psSub">Preencha os dados e grave; depois lance os trechos e os pagamentos.</p>
+        </div>
+        <div class="gr-corpo">
+
+            <div class="sec-card">
+                <div class="sec-cab"><span>Emissão</span></div>
+                <div class="sec-corpo">
+                    <div class="grade-3">
+                        <div class="campo"><label>Companhia</label>
+                            <div style="display:flex; gap:6px;">
+                                <div class="linha-busca" style="flex:1;"><input type="text" id="pCompanhia_busca" placeholder="Digite parte do nome ou clique pra listar" autocomplete="off"><input type="hidden" id="pCompanhia"><div class="resultados-busca" id="pCompanhia_resultados"></div></div>
+                                <button type="button" class="btn btn-cinza btn-sm" id="btnNovaCompanhia" title="Cadastrar companhia">+</button>
+                            </div></div>
+                        <div class="campo"><label>Máquina / vendedor</label>
+                            <div style="display:flex; gap:6px;">
+                                <div class="linha-busca" style="flex:1;"><input type="text" id="pMaquina_busca" placeholder="Código ou nome" autocomplete="off"><input type="hidden" id="pMaquina"><div class="resultados-busca" id="pMaquina_resultados"></div></div>
+                                <button type="button" class="btn btn-cinza btn-sm" id="btnNovaMaquina" title="Cadastrar máquina / vendedor">+</button>
+                            </div></div>
+                        <div class="campo"><label>Data da emissão *</label><input type="date" id="pEmissao"></div>
+                    </div>
+                    <div class="grade-3">
+                        <div class="campo"><label>Nº do bilhete</label><input type="text" id="pBilhete"></div>
+                        <div class="campo"><label>Ficha</label><input type="text" id="pFicha"></div>
+                        <div class="campo"><label>Código externo</label><input type="text" id="pCodExterno" maxlength="20" placeholder="Até 20 caracteres"></div>
+                    </div>
+                    <div class="grade-3">
+                        <div class="campo" style="margin-bottom:0;"><label>Situação</label><select id="pStatus"><option value="emitida">Emitida</option><option value="cancelada">Cancelada</option></select></div>
+                        <div class="campo" style="margin-bottom:0; grid-column: span 2;"><label>Observação</label><input type="text" id="pObs"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sec-card">
+                <div class="sec-cab"><span>Passageiro e voo</span></div>
+                <div class="sec-corpo">
+                    <div class="grade-3">
+                        <div class="campo"><label>Nome do passageiro *</label><input type="text" id="pNome"></div>
+                        <div class="campo"><label>Sobrenome</label><input type="text" id="pSobrenome"></div>
+                        <div class="campo"><label>Agência indicadora</label><input type="text" id="pIndicador" placeholder="Em branco se não houver"></div>
+                    </div>
+                    <div class="grade" style="grid-template-columns: 1fr 1fr 170px 130px;">
+                        <div class="campo" style="margin-bottom:0;"><label>Origem</label>
+                            <div style="display:flex; gap:6px;"><div class="linha-busca" style="flex:1;"><input type="text" id="pOrigem_busca" placeholder="Sigla ou nome" autocomplete="off"><input type="hidden" id="pOrigem"><div class="resultados-busca" id="pOrigem_resultados"></div></div>
+                            <button type="button" class="btn btn-cinza btn-sm" id="btnNovoAeroOrigem" title="Cadastrar aeroporto">+</button></div></div>
+                        <div class="campo" style="margin-bottom:0;"><label>Destino</label>
+                            <div style="display:flex; gap:6px;"><div class="linha-busca" style="flex:1;"><input type="text" id="pDestino_busca" placeholder="Sigla ou nome" autocomplete="off"><input type="hidden" id="pDestino"><div class="resultados-busca" id="pDestino_resultados"></div></div>
+                            <button type="button" class="btn btn-cinza btn-sm" id="btnNovoAeroDestino" title="Cadastrar aeroporto">+</button></div></div>
+                        <div class="campo" style="margin-bottom:0;"><label>Data do voo</label><input type="date" id="pDataVoo"></div>
+                        <div class="campo" style="margin-bottom:0;"><label>Nº do voo</label><input type="text" id="pNumVoo"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sec-card">
+                <div class="sec-cab"><span>Valores e comissões</span></div>
+                <div class="sec-corpo">
+                    <div class="grp-grade">
+                        <div>
+                            <div class="linha-form" style="grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));">
+                                <div class="campo"><label>Valor da tarifa</label><input type="text" inputmode="decimal" id="pTarifa" placeholder="0,00"></div>
+                                <div class="campo"><label>Valor da taxa</label><input type="text" inputmode="decimal" id="pTaxa" placeholder="0,00"></div>
+                                <div class="campo"><label>Outros</label><input type="text" inputmode="decimal" id="pOutros" placeholder="0,00"></div>
+                            </div>
+                            <div class="sec-titulo" style="margin-top:14px;">Comissões e DU (valor ⇄ % sobre a tarifa)</div>
+                            <div class="com-grade">
+                                <div class="campo"><label>Comissão da empresa (companhia)</label><div class="par-com"><input type="text" inputmode="decimal" id="pComEmpresa" placeholder="R$ 0,00"><input type="text" inputmode="decimal" id="pPctEmpresa" placeholder="% 0,00"></div></div>
+                                <div class="campo"><label>Comissão de venda (vendedor)</label><div class="par-com"><input type="text" inputmode="decimal" id="pComVenda" placeholder="R$ 0,00"><input type="text" inputmode="decimal" id="pPctVenda" placeholder="% 0,00"></div></div>
+                                <div class="campo"><label>Comissão da agência indicadora</label><div class="par-com"><input type="text" inputmode="decimal" id="pComAgencia" placeholder="R$ 0,00"><input type="text" inputmode="decimal" id="pPctIndicador" placeholder="% 0,00"></div></div>
+                                <div class="campo"><label>DU (% da companhia; fica com a agência)</label><div class="par-com"><input type="text" inputmode="decimal" id="pDU" placeholder="R$ 0,00"><input type="text" inputmode="decimal" id="pPctDU" placeholder="% 0,00"></div></div>
+                            </div>
+                            <div class="hint-tarifa" id="pRegraHint"></div>
+                            <div class="hint-tarifa" id="pAviso" style="color:var(--danger);"></div>
+                        </div>
+                        <div class="totais-box">
+                            <div class="tit">Resultado da venda</div>
+                            <div class="lin"><span>Total do cliente</span><strong id="pTotal">R$ 0,00</strong></div>
+                            <div class="lin"><span>Recebido</span><strong id="pReceb">R$ 0,00</strong></div>
+                            <div class="lin"><span>Saldo</span><strong id="pSaldo">R$ 0,00</strong></div>
+                            <div class="lin sep"><span>Depósito à companhia</span><strong id="pDeposito">R$ 0,00</strong></div>
+                            <div class="lin"><span>Lucro da empresa</span><strong id="pLucro">R$ 0,00</strong></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sec-rodape">
+                    <button class="btn btn-principal btn-inline" id="btnGravarPassagem">Gravar</button>
+                    <button class="btn btn-cinza hidden" id="btnPagamentosPassagem">💳 Pagamentos</button>
+                    <button class="btn btn-perigo hidden" id="btnExcluirPassagem">Excluir</button>
+                    <button class="btn btn-cinza" id="btnFecharPassagem">Fechar</button>
+                    <div class="status-msg" id="psFormMsg"></div>
+                </div>
+            </div>
+
+            <div class="sec-card hidden" id="cartaoTrechos">
+                <div class="sec-cab"><span>Trechos e conexões</span><small id="qtdTrechos"></small></div>
+                <div class="sec-corpo">
+                    <div class="grade" style="grid-template-columns: 1fr 1fr 170px 130px;">
+                        <div class="campo" style="margin-bottom:0;"><label>Origem</label>
+                            <div class="linha-busca"><input type="text" id="trOrigem_busca" placeholder="Sigla ou nome" autocomplete="off"><input type="hidden" id="trOrigem"><div class="resultados-busca" id="trOrigem_resultados"></div></div></div>
+                        <div class="campo" style="margin-bottom:0;"><label>Destino</label>
+                            <div class="linha-busca"><input type="text" id="trDestino_busca" placeholder="Sigla ou nome" autocomplete="off"><input type="hidden" id="trDestino"><div class="resultados-busca" id="trDestino_resultados"></div></div></div>
+                        <div class="campo" style="margin-bottom:0;"><label>Data do voo</label><input type="date" id="trData"></div>
+                        <div class="campo" style="margin-bottom:0;"><label>Nº do voo</label><input type="text" id="trVoo"></div>
+                    </div>
+                    <div class="acoes-linha"><button class="btn btn-principal btn-inline" id="btnAdicionarTrecho">Lançar trecho</button><div class="status-msg" id="trMsg" style="margin:10px 0 0 6px; text-align:left;"></div></div>
+                </div>
+                <div class="sec-corpo sem-pad" style="border-top:1px solid var(--border);">
+                    <div class="tabela-scroll"><table class="tabela">
+                        <thead><tr><th class="num">#</th><th>Origem</th><th>Destino</th><th>Data do voo</th><th>Voo</th><th></th></tr></thead>
+                        <tbody id="corpoTrechos"></tbody>
+                    </table></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL PAGAMENTOS ================= -->
+<div class="modal-overlay" id="modal-pagamentos">
+    <div class="modal-caixa" style="max-width:820px;">
+        <h3 id="pagTitulo">Pagamentos</h3>
+        <p class="sub" id="pagSub"></p>
+        <div class="grade-3">
+            <div class="campo"><label>Data *</label><input type="date" id="pgData"></div>
+            <div class="campo"><label>Valor *</label><input type="text" inputmode="decimal" id="pgValor" placeholder="0,00"></div>
+            <div class="campo"><label>Forma</label><select id="pgForma"></select></div>
+        </div>
+        <div class="grade">
+            <div class="campo"><label>Referência (autorização, comprovante)</label><input type="text" id="pgRef"></div>
+            <div class="campo"><label>Observações</label><input type="text" id="pgObs"></div>
+        </div>
+        <div class="acoes-linha">
+            <button class="btn btn-principal btn-inline" id="btnLancarPagamento">Lançar pagamento</button>
+            <button class="btn btn-cinza" id="btnFecharPagamentos">Fechar</button>
+        </div>
+        <div class="status-msg" id="pagMsg"></div>
+        <div class="tabela-scroll"><table class="tabela">
+            <thead><tr><th>Data</th><th>Forma</th><th>Referência</th><th>Origem</th><th class="num">Valor</th><th>Situação</th><th></th></tr></thead>
+            <tbody id="corpoPagamentos"></tbody>
+        </table></div>
+    </div>
+</div>
+
+<!-- ================= MODAL CADASTRO GENÉRICO ================= -->
+<div class="modal-overlay" id="modal-cad" style="z-index:110;">
+    <div class="modal-caixa" style="max-width:520px;">
+        <h3 id="cadTitulo">Novo cadastro</h3>
+        <div id="cadCampos" style="margin-top:12px;"></div>
+        <div class="acoes-linha">
+            <button class="btn btn-principal btn-inline" id="btnSalvarCad">Salvar</button>
+            <button class="btn btn-cinza" id="btnFecharCad">Cancelar</button>
+        </div>
+        <div class="status-msg" id="cadMsg"></div>
+    </div>
+</div>
+
+
+<!-- ================= MODAL PDF (3 ações) ================= -->
+<!-- ================= MODAL PDF (3 ações) ================= -->
+<div class="modal-overlay" id="modalAcoesPdf">
+    <div class="modal-caixa" style="max-width:360px; text-align:center;">
+        <h3 id="tituloModalAcoesPdf">PDF gerado</h3>
+        <p class="sub">O que você quer fazer com o PDF?</p>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+            <button class="btn btn-principal" id="btnVisualizarPdfGerado">👁️ Visualizar</button>
+            <button class="btn btn-cinza" id="btnBaixarPdfGerado">⬇️ Baixar</button>
+            <button class="btn btn-cinza" id="btnCompartilharPdfGerado">📤 Compartilhar</button>
+            <button class="btn btn-cinza" id="btnFecharModalAcoesPdf" style="margin-top:6px;">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ================= MODAL AJUDA ================= -->
+<!-- ================= MODAL AJUDA ================= -->
+<div class="modal-overlay" id="modal-ajuda">
+    <div class="modal-caixa">
+        <div class="modal-ajuda-head">
+            <h3 id="modalAjudaTitulo">❓ Ajuda</h3>
+            <button class="btn btn-cinza btn-sm" id="btnFecharModalAjuda">Fechar</button>
+        </div>
+        <div class="modal-ajuda-body">
+            <div class="modal-ajuda-nav" id="ajudaModuloNav"></div>
+            <div class="modal-ajuda-conteudo" id="ajudaModuloConteudo"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ---------------------------------------------------------------
+// CONFIG
+// ---------------------------------------------------------------
+const SUPABASE_URL = 'https://frzvcrcshkpvjdbbqkhz.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_h-JuDyjYgb5YKGYFRKtLEg_8gnJor9w';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const $ = (id) => document.getElementById(id);
+
+function escapeHtml(texto) {
+    if (texto == null) return '';
+    const div = document.createElement('div');
+    div.textContent = String(texto);
+    return div.innerHTML;
+}
+function formatarMoeda(v) { return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+function formatarDataSemFuso(dataStr) {
+    if (!dataStr) return '';
+    const m = String(dataStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : dataStr;
+}
+function formatarDataHora(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return isNaN(d) ? '' : d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+function hojeISO() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function arredondar2(n) { return Math.round((Number(n) || 0) * 100) / 100; }
+function normalizar(s) { return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+function soDigitos(s) { return String(s == null ? '' : s).replace(/\D/g, ''); }
+function formatarFone(s) {
+    const d = soDigitos(s);
+    if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+    if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+    return s || '';
+}
+function linkWhatsApp(telefone, texto) {
+    let d = soDigitos(telefone);
+    if (d.length < 10) return null;
+    if (d.length <= 11) d = '55' + d;
+    return `https://wa.me/${d}${texto ? '?text=' + encodeURIComponent(texto) : ''}`;
+}
+function iniciais(nome) {
+    const partes = String(nome || '?').trim().split(/\s+/);
+    return ((partes[0] || '?')[0] + (partes.length > 1 ? partes[partes.length - 1][0] : '')).toUpperCase();
+}
+function primeiroNome(nome) { return String(nome || '').trim().split(/\s+/)[0] || ''; }
+function estrelas(nota) {
+    const n = Math.round(Number(nota) || 0);
+    return `<span class="estrelas">${'★'.repeat(n)}<span class="vazia">${'★'.repeat(5 - n)}</span></span>`;
+}
+function novoToken() {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+    return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// o PostgREST devolve no máximo 1000 linhas por consulta -- pagina
+// (fabrica() precisa devolver uma consulta NOVA a cada chamada)
+async function buscarTudo(fabrica) {
+    const TAM = 1000, todos = [];
+    for (let ini = 0; ; ini += TAM) {
+        const { data, error } = await fabrica().range(ini, ini + TAM - 1);
+        if (error) throw error;
+        todos.push(...(data || []));
+        if (!data || data.length < TAM) break;
+    }
+    return todos;
+}
+function erroDeTabelaAusente(error) {
+    return !!error && (error.code === '42P01' || error.code === 'PGRST205' || error.code === 'PGRST202' || /does not exist|schema cache|Could not find/i.test(error.message || ''));
+}
+
+// ---------------------------------------------------------------
+// SENTINELA (auditoria) -- mesmo padrão dos outros módulos
+// ---------------------------------------------------------------
+async function registrarSentinela(tipoAcao, descricao) {
+    try {
+        await sb.from('servir_sentinela').insert({
+            unidade_negocio_id: meuPerfil.unidadeId, modulo: 'viagens',
+            tipo_acao: tipoAcao, descricao, operador: meuPerfil.email, operador_user_id: meuPerfil.userId || null,
+        });
+    } catch (erro) {
+        console.warn('Não consegui registrar na sentinela:', erro.message);
+    }
+}
+
+// ---------------------------------------------------------------
+// olho de mostrar/ocultar senha
+// ---------------------------------------------------------------
+const svgOlhoAberto = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+const svgOlhoFechado = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+document.querySelectorAll('.btn-olho-senha').forEach(btn => {
+    btn.innerHTML = svgOlhoFechado;
+    btn.addEventListener('click', () => {
+        const input = $(btn.dataset.alvo);
+        if (!input) return;
+        const mostrando = input.type === 'text';
+        input.type = mostrando ? 'password' : 'text';
+        btn.innerHTML = mostrando ? svgOlhoFechado : svgOlhoAberto;
+    });
+});
+
+// ---------------------------------------------------------------
+// LOGIN / SESSÃO (mesmo padrão do resto do Sicon)
+// ---------------------------------------------------------------
+$('btn-login').addEventListener('click', async () => {
+    const email = $('login-email').value.trim();
+    const senha = $('login-senha').value;
+    const statusEl = $('status-login');
+    statusEl.textContent = '';
+    if (!email || !senha) { statusEl.textContent = 'Preencha e-mail e senha.'; return; }
+    const btn = $('btn-login');
+    btn.disabled = true; btn.textContent = 'Entrando...';
+    const { error } = await sb.auth.signInWithPassword({ email, password: senha });
+    btn.disabled = false; btn.textContent = 'Entrar';
+    if (error) {
+        const msg = (error.message || '').toLowerCase();
+        if (msg.includes('email not confirmed')) statusEl.textContent = 'Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada.';
+        else if (msg.includes('invalid login credentials') || msg.includes('invalid_credentials')) statusEl.textContent = 'E-mail ou senha incorretos.';
+        else if (msg.includes('rate limit') || msg.includes('too many')) statusEl.textContent = 'Muitas tentativas seguidas. Aguarde um instante e tente de novo.';
+        else if (!navigator.onLine) statusEl.textContent = 'Sem conexão com a internet. Verifique sua rede e tente de novo.';
+        else statusEl.textContent = 'Não foi possível entrar: ' + error.message;
+        return;
+    }
+    await onLogin();
+});
+$('login-senha').addEventListener('keydown', e => { if (e.key === 'Enter') $('btn-login').click(); });
+$('link-esqueci-senha').addEventListener('click', async (e) => {
+    e.preventDefault();
+    const statusEl = $('status-login');
+    const email = $('login-email').value.trim();
+    if (!email) { statusEl.textContent = 'Digite seu e-mail no campo acima primeiro, depois clique em "Esqueci minha senha".'; return; }
+    statusEl.style.color = ''; statusEl.textContent = 'Enviando...';
+    try {
+        const { error } = await sb.auth.resetPasswordForEmail(email);
+        if (error) throw error;
+        statusEl.style.color = 'var(--brand-2)';
+        statusEl.textContent = 'Se esse e-mail estiver cadastrado, você vai receber um link pra redefinir a senha.';
+    } catch (erro) { statusEl.style.color = ''; statusEl.textContent = 'Não foi possível enviar: ' + erro.message; }
+});
+$('btn-sair').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
+
+async function checkSession() {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) await onLogin();
+}
+
+async function onLogin() {
+    $('tela-login').classList.add('hidden');
+    const { data: sessao } = await sb.auth.getUser();
+    meuPerfil.email = sessao?.user?.email || '';
+    meuPerfil.nomeOperador = sessao?.user?.user_metadata?.nome || sessao?.user?.user_metadata?.full_name || meuPerfil.email;
+    const userId = sessao?.user?.id;
+    meuPerfil.userId = userId;
+    if (!userId) return;
+
+    const { data: vinculos, error } = await sb.from('servir_unidade_usuarios')
+        .select('unidade_negocio_id, eh_principal, servir_unidades_negocio(nome)')
+        .eq('user_id', userId);
+    if (error || !vinculos || !vinculos.length) {
+        alert('Não encontramos nenhuma unidade vinculada ao seu usuário. Fale com o administrador.');
+        return;
+    }
+    vinculosGlobais = vinculos.map(v => ({ unidade_id: v.unidade_negocio_id, eh_principal: v.eh_principal, nome: v.servir_unidades_negocio?.nome || '' }));
+
+    if (vinculosGlobais.length === 1) {
+        await definirUnidadeAtiva(vinculosGlobais[0]);
+        await iniciarApp();
+    } else {
+        abrirEscolhaUnidade();
+    }
+}
+
+function ordenarUnidadesPorNome(l){ const nm = (v) => String((v.servir_unidades_negocio && v.servir_unidades_negocio.nome) || v.nome || ''); return [...l].sort((a, b) => nm(a).localeCompare(nm(b), 'pt-BR', { sensitivity: 'base', numeric: true })); }
+function abrirEscolhaUnidade() {
+    const wrap = $('lista-unidades-escolha');
+    wrap.innerHTML = '';
+    ordenarUnidadesPorNome(vinculosGlobais).forEach(v => {
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-cinza';
+        btn.style.width = '100%';
+        btn.textContent = v.nome;
+        btn.addEventListener('click', async () => {
+            await definirUnidadeAtiva(v);
+            $('modal-unidade').classList.remove('aberto');
+            await iniciarApp();
+        });
+        wrap.appendChild(btn);
+    });
+    $('modal-unidade').classList.add('aberto');
+}
+$('btn-trocar-unidade').addEventListener('click', abrirEscolhaUnidade);
+
+async function definirUnidadeAtiva(vinculo) {
+    meuPerfil.unidadeId = vinculo.unidade_id;
+    meuPerfil.unidadeNome = vinculo.nome;
+    meuPerfil.ehPrincipal = !!vinculo.eh_principal;
+    $('unidade-logada').textContent = vinculo.nome;
+    $('unidadePillHeader').textContent = vinculo.nome;
+    $('btn-trocar-unidade').style.display = vinculosGlobais.length > 1 ? '' : 'none';
+}
+
+// ---------------------------------------------------------------
+// PERSONALIZAÇÃO VISUAL POR UNIDADE (copiado de staff-painel-admin.html)
+// ---------------------------------------------------------------
+function clarearCor(hex, percentual) {
+    hex = (hex || '').replace('#', '');
+    if (hex.length !== 6) return hex;
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const misturar = (canal) => Math.round(canal + (255 - canal) * percentual);
+    return '#' + [misturar(r), misturar(g), misturar(b)].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function escurecerCor(hex, percentual) {
+    hex = (hex || '').replace('#', '');
+    if (hex.length !== 6) return hex;
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const escurecer = (canal) => Math.round(canal * (1 - percentual));
+    return '#' + [escurecer(r), escurecer(g), escurecer(b)].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function aplicarPersonalizacao(corPrincipal, imagemFundoUrl) {
+    if (corPrincipal) {
+        const raiz = document.documentElement.style;
+        raiz.setProperty('--brand', corPrincipal);
+        raiz.setProperty('--brand-2', clarearCor(corPrincipal, 0.2));
+        raiz.setProperty('--brand-soft', clarearCor(corPrincipal, 0.92));
+        raiz.setProperty('--brand-escuro', escurecerCor(corPrincipal, 0.35));
+    }
+    if (imagemFundoUrl) {
+        const sidebar = document.querySelector('.sidebar');
+        sidebar.style.backgroundImage = `linear-gradient(180deg, rgba(15,43,34,.82) 0%, rgba(15,43,34,.7) 100%), url('${imagemFundoUrl}')`;
+        sidebar.style.backgroundSize = 'cover';
+        sidebar.style.backgroundPosition = 'center';
+    }
+}
+async function carregarPersonalizacao() {
+    const { data, error } = await sb.from('servir_unidades_negocio').select('cor_principal, imagem_fundo_url, logo_url').eq('id', meuPerfil.unidadeId).single();
+    if (error || !data) return;
+    aplicarPersonalizacao(data.cor_principal, data.imagem_fundo_url);
+}
+
+// ---------------------------------------------------------------
+// LICENÇA (mesmo padrão do resto da plataforma)
+// ---------------------------------------------------------------
+function mostrarAvisoLicenca(texto) {
+    if (!texto) return;
+    if ($('avisoPendenciaLicenca')) return;
+    const banner = document.createElement('div');
+    banner.id = 'avisoPendenciaLicenca';
+    banner.style.cssText = 'position:sticky; top:0; z-index:99999; background:var(--aviso-soft); color:var(--accent-ink); padding:10px 16px; font-size:.85rem; text-align:center; border-bottom:2px solid var(--accent); display:flex; align-items:center; justify-content:center; gap:8px; box-shadow:0 2px 6px rgba(0,0,0,.08);';
+    const span = document.createElement('span');
+    span.textContent = texto;
+    banner.innerHTML = '⚠️ ';
+    banner.appendChild(span);
+    document.body.prepend(banner);
+}
+function bloquearAcessoTotal(mensagem) {
+    if ($('overlayBloqueioLicenca')) return;
+    const botaoTrocar = $('btn-trocar-unidade');
+    const temTrocar = botaoTrocar && botaoTrocar.style.display !== 'none';
+    const overlay = document.createElement('div');
+    overlay.id = 'overlayBloqueioLicenca';
+    overlay.style.cssText = 'position:fixed; inset:0; z-index:999999; background:var(--bg); display:flex; align-items:center; justify-content:center; padding:20px;';
+    overlay.innerHTML = `
+    <div style="background:var(--surface); border-radius:16px; padding:36px; max-width:440px; text-align:center; box-shadow:0 8px 28px rgba(20,30,50,.1);">
+      <div style="font-size:2.5rem; margin-bottom:12px;">🔒</div>
+      <h2 style="color:var(--danger); margin-bottom:12px; font-size:1.2rem;">Acesso bloqueado</h2>
+      <p style="color:var(--ink); font-size:.92rem; line-height:1.5; margin-bottom:20px;">${escapeHtml(mensagem)}</p>
+      <div style="display:flex; gap:10px; flex-direction:column;">
+        ${temTrocar ? '<button id="btnTrocarUnidadeBloqueio" style="padding:10px; border-radius:8px; border:1.5px solid var(--brand); background:none; color:var(--brand); font-weight:600; cursor:pointer;">🔄 Escolher outra unidade</button>' : ''}
+        <button id="btnSairBloqueio" style="padding:10px; border-radius:8px; border:none; background:var(--brand); color:#fff; font-weight:600; cursor:pointer;">Sair</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    if (temTrocar) $('btnTrocarUnidadeBloqueio').addEventListener('click', () => { overlay.remove(); botaoTrocar.click(); });
+    $('btnSairBloqueio').addEventListener('click', async () => { await sb.auth.signOut(); location.reload(); });
+}
+async function verificarPendenciaLicenca(unidadeIdAlvo, moduloChave) {
+    try {
+        const { data, error } = await sb.rpc('fn_verificar_pendencia_licenca', { p_unidade_negocio_id: unidadeIdAlvo, p_modulo_chave: moduloChave });
+        if (error || !data) return false;
+        if (data.bloqueia) { bloquearAcessoTotal(data.mensagem); return true; }
+        mostrarAvisoLicenca(data.mensagem);
+        return false;
+    } catch (erro) {
+        console.warn('Não consegui checar pendência de licença:', erro.message);
+        return false;
+    }
+}
+
+// busca com lista (clicar no campo vazio já lista os primeiros)
+function ligarBusca(input, caixa, getLista, rotuloFn, subFn, aoSelecionar) {
+    function render(termo) {
+        const t = normalizar(termo.trim());
+        // x.busca (opcional) = texto extra só pra casar a busca (ex: telefone sem máscara)
+        const lista = getLista().filter(x => !t || normalizar(rotuloFn(x) + ' ' + (subFn ? subFn(x) : '') + ' ' + (x.busca || '')).includes(t)).slice(0, 20);
+        caixa.innerHTML = lista.length
+            ? lista.map((x, i) => `<div class="resultado-item" data-i="${i}">${escapeHtml(rotuloFn(x))}${subFn ? `<div class="sub">${escapeHtml(subFn(x))}</div>` : ''}</div>`).join('')
+            : '<div class="sugestao-autocomplete-vazia">Nada encontrado.</div>';
+        caixa.classList.add('show');
+        caixa.querySelectorAll('[data-i]').forEach(el => el.addEventListener('click', () => {
+            const x = lista[Number(el.dataset.i)];
+            input.value = rotuloFn(x);
+            caixa.classList.remove('show');
+            aoSelecionar(x);
+        }));
+    }
+    input.addEventListener('input', () => { aoSelecionar(null); render(input.value); });
+    input.addEventListener('focus', () => render(input.value));
+    input.addEventListener('click', () => render(input.value));
+    document.addEventListener('click', (e) => { if (e.target !== input && !caixa.contains(e.target)) caixa.classList.remove('show'); });
+}
+
+// ---------------------------------------------------------------
+// PDF -- jsPDF sob demanda + popup com 3 ações (Visualizar/Baixar/Compartilhar)
+// ---------------------------------------------------------------
+const scriptsCarregados = {};
+function carregarScriptExterno(src) {
+    if (scriptsCarregados[src]) return scriptsCarregados[src];
+    scriptsCarregados[src] = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = src; script.onload = resolve; script.onerror = () => { delete scriptsCarregados[src]; reject(new Error('Não foi possível carregar ' + src)); };
+        document.head.appendChild(script);
+    });
+    return scriptsCarregados[src];
+}
+const carregarJsPdf = () => carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js');
+const carregarQrCode = () => carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js');
+
+let pdfAtual = null;
+function mostrarPopupAcoesPdf(tituloModal, blob, nomeArquivo) {
+    pdfAtual = { blob, nomeArquivo };
+    $('tituloModalAcoesPdf').textContent = tituloModal;
+    $('modalAcoesPdf').classList.add('aberto');
+}
+$('btnFecharModalAcoesPdf').addEventListener('click', () => $('modalAcoesPdf').classList.remove('aberto'));
+$('btnVisualizarPdfGerado').addEventListener('click', () => { if (pdfAtual) window.open(URL.createObjectURL(pdfAtual.blob), '_blank'); });
+$('btnBaixarPdfGerado').addEventListener('click', () => {
+    if (!pdfAtual) return;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(pdfAtual.blob);
+    a.download = pdfAtual.nomeArquivo;
+    a.click();
+});
+$('btnCompartilharPdfGerado').addEventListener('click', async () => {
+    if (!pdfAtual) return;
+    try {
+        const arquivo = new File([pdfAtual.blob], pdfAtual.nomeArquivo, { type: 'application/pdf' });
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [arquivo] })) await navigator.share({ files: [arquivo], title: pdfAtual.nomeArquivo });
+        else alert('Compartilhamento direto não disponível nesse navegador -- use Baixar.');
+    } catch (erro) { /* pessoa cancelou o compartilhamento */ }
+});
+
+// ---------------------------------------------------------------
+// CONSTANTES DO MÓDULO
+// ---------------------------------------------------------------
+const REGIMES = { sem_refeicao: 'Sem refeição', cafe: 'Café da manhã', meia_pensao: 'Meia pensão', pensao_completa: 'Pensão completa', all_inclusive: 'All inclusive' };
+const REGIME_CURTO = { sem_refeicao: 'S/ ref.', cafe: 'CM', meia_pensao: 'MAP', pensao_completa: 'PC', all_inclusive: 'AI' };
+const STATUS_GRUPO = { orcamento: 'Orçamento', confirmada: 'Confirmada', cancelada: 'Cancelada' };
+const FORMAS = { dinheiro: 'Dinheiro', pix: 'Pix', cartao_credito: 'Cartão de crédito', cartao_debito: 'Cartão de débito', transferencia: 'Transferência', boleto: 'Boleto', outro: 'Outro' };
+const ORIGENS = { balcao: 'Balcão', site: 'Site' };
+const STATUS_CAIXA = { aberto: 'Aberto', fechado: 'Fechado', aceito: 'Aceito' };
+const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const SERVICOS_PADRAO = [   // os códigos são os do sistema antigo (a carga viagens-carga-servicos.sql usa os mesmos)
+    { nome: 'SGL', codigo_externo: '1', tipo: 'acomodacao', pessoas: 1, ordem: 1 }, { nome: 'DBL', codigo_externo: '2', tipo: 'acomodacao', pessoas: 2, ordem: 2 },
+    { nome: 'TPL', codigo_externo: '3', tipo: 'acomodacao', pessoas: 3, ordem: 3 }, { nome: 'QPL', codigo_externo: '4', tipo: 'acomodacao', pessoas: 4, ordem: 4 },
+    { nome: 'QTL', codigo_externo: '5', tipo: 'acomodacao', pessoas: 5, ordem: 5 }, { nome: 'SPL', codigo_externo: '6', tipo: 'acomodacao', pessoas: 6, ordem: 6 }
+];
+
+// ---------------------------------------------------------------
+// ESTADO
+// ---------------------------------------------------------------
+let meuPerfil = { unidadeId: null, unidadeNome: '', ehPrincipal: false, userId: null, nomeOperador: '', email: '' };
+let vinculosGlobais = [];
+let sqlPendente = false;
+let operadoras = [], hoteis = [], servicos = [], aeroportos = [], companhias = [], maquinas = [], regras = [];
+let grupos = [];          // lista da aba Reservas (filtro da tela)
+let gruposAno = [];       // últimos 12 meses + futuro (Dashboard)
+let caixasRecentes = [];
+let grupoAtual = null;    // linha de viagens_grupos aberta no modal
+let linhasAtual = [], pagamentosAtual = [], tarifasHotel = [];
+let linhaEditandoId = null;
+let passagens = [], passagensAno = [];   // lista da aba Passagens / últimos 12 meses (Dashboard)
+let passagemAtual = null, trechosAtual = [], pagamentosPassagem = [];
+let pagModo = 'grupo';    // o pop-up de pagamentos serve ao grupo OU à passagem
+let extrasAtual = [];     // extras de todas as linhas do grupo aberto
+let extraLinhaId = null, extraEditandoId = null;
+let cadAtual = 'operadoras';
+
+// ---------------------------------------------------------------
+// NÚMEROS E DATAS (campos de dinheiro são texto: aceitam vírgula ou ponto)
+// ---------------------------------------------------------------
+function parseNum(s) {
+    s = String(s == null ? '' : s).replace(/[R$\s]/g, '');
+    if (!s) return null;
+    const v = s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s;
+    const n = parseFloat(v);
+    return isNaN(n) ? null : n;
+}
+function fmtNum(n) { return (n == null || isNaN(n)) ? '' : (Math.round(n * 100) / 100).toFixed(2).replace('.', ','); }
+function diasEntre(a, b) {
+    if (!a || !b) return 0;
+    const d = Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000);
+    return isNaN(d) ? 0 : Math.max(0, d);
+}
+function somaDias(iso, n) { const d = new Date(Date.parse(iso + 'T00:00:00Z') + n * 86400000); return d.toISOString().slice(0, 10); }
+const periodoTxt = (de, ate) => (de ? formatarDataSemFuso(de) : '—') + ' a ' + (ate ? formatarDataSemFuso(ate) : '—');
+const opNome = (id) => (operadoras.find(o => o.id === id) || {}).nome || '';
+const htNome = (id) => (hoteis.find(h => h.id === id) || {}).nome || '';
+const cmNome = (id) => (companhias.find(x => x.id === id) || {}).nome || '';
+const mqRotulo = (id) => { const m = maquinas.find(x => x.id === id); return m ? `${m.codigo} — ${m.nome}` : ''; };
+const svNome = (id) => (servicos.find(a => a.id === id) || {}).nome || '';
+const pillStatus = (st) => `<span class="pill pill-${st}">${escapeHtml(STATUS_GRUPO[st] || st)}</span>`;
+
+// ---------------------------------------------------------------
+// CARREGAMENTO
+// ---------------------------------------------------------------
+function mostrarAvisoSqlPendente() {
+    const aviso = document.createElement('div');
+    aviso.className = 'cartao-vazio'; aviso.style.marginBottom = '16px';
+    aviso.textContent = '⚠️ As tabelas do módulo ainda não existem no banco. Rode o arquivo viagens.sql no SQL Editor do Supabase e recarregue esta página.';
+    document.querySelector('main.app-main').prepend(aviso);
+}
+async function carregarCadastros() {
+    const u = meuPerfil.unidadeId;
+    const [o, h, a, ae, cm, mq, rg] = await Promise.all([
+        sb.from('viagens_operadoras').select('*').eq('unidade_negocio_id', u).order('nome'),
+        sb.from('viagens_hoteis').select('*').eq('unidade_negocio_id', u).order('nome'),
+        sb.from('viagens_servicos').select('*').eq('unidade_negocio_id', u).order('ordem').order('nome'),
+        sb.from('viagens_aeroportos').select('*').eq('unidade_negocio_id', u).order('nome'),
+        sb.from('viagens_companhias').select('*').eq('unidade_negocio_id', u).order('nome'),
+        sb.from('viagens_maquinas').select('*').eq('unidade_negocio_id', u).order('codigo'),
+        sb.from('viagens_companhias_regras').select('*').eq('unidade_negocio_id', u)
+    ]);
+    const erro = o.error || h.error || a.error || ae.error || cm.error || mq.error || rg.error;
+    if (erro) { if (erroDeTabelaAusente(erro)) sqlPendente = true; else console.error(erro); return; }
+    // busca = texto extra para a busca dos campos (código externo)
+    operadoras = (o.data || []).map(r => ({ ...r, busca: r.codigo_externo || '' })); hoteis = (h.data || []).map(r => ({ ...r, busca: r.codigo_externo || '' })); servicos = (a.data || []).map(r => ({ ...r, busca: r.codigo_externo || '' }));
+    aeroportos = (ae.data || []).map(r => ({ ...r, busca: [r.sigla, r.codigo_externo].filter(Boolean).join(' ') }));
+    companhias = (cm.data || []).map(r => ({ ...r, busca: r.codigo_externo || '' }));
+    maquinas = (mq.data || []).map(r => ({ ...r, busca: r.codigo }));
+    regras = rg.data || [];
+}
+const COLUNAS_GRUPO = 'id,codigo,codigo_externo,nome,operadora_id,hotel_id,data_de,data_ate,status,origem,valor_total,valor_custo,valor_recebido';
+async function carregarGruposAno() {
+    const d = new Date(); d.setFullYear(d.getFullYear() - 1);
+    const desde = d.toISOString().slice(0, 10);
+    try {
+        gruposAno = await buscarTudo(() => sb.from('viagens_grupos').select(COLUNAS_GRUPO).eq('unidade_negocio_id', meuPerfil.unidadeId).gte('data_de', desde).order('data_de', { ascending: false }).order('id'));
+    } catch (e) { console.error(e); gruposAno = []; }
+}
+async function carregarCaixasRecentes() {
+    const { data, error } = await sb.from('viagens_caixas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('data', { ascending: false }).range(0, 59);
+    if (error) { console.error(error); caixasRecentes = []; return; }
+    caixasRecentes = data || [];
+}
+async function iniciarApp() {
+    $('app').style.display = 'block';
+    await carregarPersonalizacao(); // antes da checagem de licença -- a tela de bloqueio também reflete a cor da unidade
+    if (await verificarPendenciaLicenca(meuPerfil.unidadeId, 'viagens')) return;
+    sqlPendente = false;
+    await carregarCadastros();
+    if (sqlPendente) { mostrarAvisoSqlPendente(); return; }
+    await Promise.all([carregarGruposAno(), carregarPassagensAno(), carregarCaixasRecentes()]);
+    const hoje = hojeISO();
+    $('rsDe').value = somaDias(hoje, -60); $('rsAte').value = somaDias(hoje, 180);
+    $('cxData').value = hoje;
+    $('psDe').value = somaDias(hoje, -60); $('psAte').value = hoje;
+    renderizarTudo();
+    await carregarGrupos();
+    await carregarPassagens();
+    await carregarCaixaDia();
+}
+
+// ---------------------------------------------------------------
+// NAVEGAÇÃO
+// ---------------------------------------------------------------
+const TITULOS_ABA = { dashboard: 'Dashboard', reservas: 'Reservas', passagens: 'Passagens aéreas', caixa: 'Caixa', cadastros: 'Cadastros' };
+function irParaAba(aba) {
+    document.querySelectorAll('.tab-app-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.panel-app').forEach(p => p.classList.remove('active'));
+    const btn = document.querySelector(`.tab-app-btn[data-app-tab="${aba}"]`);
+    if (btn) btn.classList.add('active');
+    $('app-panel-' + aba).classList.add('active');
+    $('tituloConteudo').textContent = TITULOS_ABA[aba] || '';
+    if (aba === 'dashboard') renderizarDashboard();
+    if (aba === 'passagens') carregarPassagens();
+    if (aba === 'caixa') carregarCaixaDia();
+    if (aba === 'cadastros') renderizarCadastro();
+}
+document.querySelectorAll('.tab-app-btn').forEach(b => b.addEventListener('click', () => irParaAba(b.dataset.appTab)));
+function renderizarTudo() {
+    renderizarSelectsFiltro();
+    renderizarDashboard();
+    renderizarCadastro();
+}
+
+// ---------------------------------------------------------------
+// DASHBOARD
+// ---------------------------------------------------------------
+function renderizarBarras(idEl, itens, vazioMsg) {
+    const maior = Math.max(...itens.map(i => i.valor), 0);
+    $(idEl).innerHTML = itens.length ? itens.map(i => {
+        const largura = maior > 0 && i.valor > 0 ? Math.max(2, (i.valor / maior) * 100) : 0;
+        return `<div class="barra-linha">
+            <div class="rotulo" title="${escapeHtml(i.rotulo)}">${escapeHtml(i.rotulo)}</div>
+            <div class="barra-trilho" aria-hidden="true"><div class="barra-fill" style="width:${largura}%"></div></div>
+            <div class="valores"><strong>${i.textoValor}</strong>${i.textoSub ? `<small>${i.textoSub}</small>` : ''}</div>
+        </div>`;
+    }).join('') : `<div class="vazio">${vazioMsg}</div>`;
+}
+function renderizarDashboard() {
+    const hoje = hojeISO(), mes = hoje.slice(0, 7);
+    const ativos = gruposAno.filter(g => g.status !== 'cancelada');
+    const doMes = ativos.filter(g => (g.data_de || '').startsWith(mes));
+    const vendido = doMes.reduce((a, g) => a + Number(g.valor_total || 0), 0);
+    const custo = doMes.reduce((a, g) => a + Number(g.valor_custo || 0), 0);
+    $('statGrupos').textContent = doMes.length;
+    $('statVendido').textContent = formatarMoeda(vendido);
+    $('statComissao').textContent = formatarMoeda(vendido - custo);
+    const pasAtivas = passagensAno.filter(x => x.status !== 'cancelada');
+    $('statReceber').textContent = formatarMoeda(arredondar2(ativos.reduce((a, g) => a + Math.max(0, Number(g.valor_total || 0) - Number(g.valor_recebido || 0)), 0)
+        + pasAtivas.reduce((a, x) => a + Math.max(0, Number(x.valor_total || 0) - Number(x.valor_recebido || 0)), 0)));
+    const pasMes = pasAtivas.filter(x => (x.data_emissao || '').startsWith(mes));
+    $('statPassagens').textContent = `${pasMes.length} · ${formatarMoeda(pasMes.reduce((a, x) => a + Number(x.valor_total || 0), 0))}`;
+    $('statLucroPassagens').textContent = formatarMoeda(arredondar2(pasMes.reduce((a, x) => a + Number(x.lucro || 0), 0)));
+    $('statCaixas').textContent = caixasRecentes.filter(c => c.status === 'fechado').length;
+
+    const agrupar = (chave, nomeFn) => {
+        const m = {};
+        ativos.forEach(g => { const k = g[chave] || '_'; const x = m[k] || (m[k] = { nome: nomeFn(g[chave]) || 'Sem informação', valor: 0, qtd: 0, com: 0 }); x.valor += Number(g.valor_total || 0); x.qtd++; x.com += Number(g.valor_total || 0) - Number(g.valor_custo || 0); });
+        return Object.values(m).filter(x => x.valor > 0).sort((a, b) => b.valor - a.valor).slice(0, 8).map(x => ({ rotulo: x.nome, valor: x.valor, textoValor: formatarMoeda(x.valor), textoSub: `${x.qtd} reserva${x.qtd === 1 ? '' : 's'} · comissão ${formatarMoeda(x.com)}` }));
+    };
+    renderizarBarras('graficoOperadoras', agrupar('operadora_id', opNome), 'Nenhuma venda nos últimos 12 meses.');
+    renderizarBarras('graficoHoteis', agrupar('hotel_id', htNome), 'Nenhuma venda nos últimos 12 meses.');
+    const prox = ativos.filter(g => g.data_de && g.data_de >= hoje).sort((a, b) => a.data_de.localeCompare(b.data_de)).slice(0, 10);
+    $('corpoProximas').innerHTML = prox.map(g => {
+        const saldo = arredondar2(Number(g.valor_total || 0) - Number(g.valor_recebido || 0));
+        return `<tr data-abrir-grupo="${g.id}" style="cursor:pointer;"><td>${formatarDataSemFuso(g.data_de)}</td><td><strong>${escapeHtml(g.nome)}</strong></td><td>${escapeHtml(opNome(g.operadora_id))}</td><td>${escapeHtml(htNome(g.hotel_id))}</td><td class="num ${saldo > 0.004 ? 'neg' : ''}">${formatarMoeda(saldo)}</td></tr>`;
+    }).join('') || '<tr><td colspan="5" class="vazio">Nenhuma entrada futura.</td></tr>';
+}
+$('cardCaixas').addEventListener('click', () => irParaAba('caixa'));
+
+// ---------------------------------------------------------------
+// RESERVAS (lista)
+// ---------------------------------------------------------------
+function renderizarSelectsFiltro() {
+    const op = $('rsOperadora'), ht = $('rsHotel'), vo = op.value, vh = ht.value;
+    op.innerHTML = '<option value="">Todas as operadoras</option>' + operadoras.map(o => `<option value="${o.id}">${escapeHtml(o.nome)}</option>`).join('');
+    ht.innerHTML = '<option value="">Todos os hotéis</option>' + hoteis.map(h => `<option value="${h.id}">${escapeHtml(h.nome)}</option>`).join('');
+    op.value = vo; ht.value = vh;
+    const po = $('psOperadora'), vp = po.value;
+    po.innerHTML = '<option value="">Todas as companhias</option>' + companhias.map(o => `<option value="${o.id}">${escapeHtml(o.nome)}</option>`).join('');
+    po.value = vp;
+}
+let seqGrupos = 0;
+async function carregarGrupos() {
+    const seq = ++seqGrupos;
+    const de = $('rsDe').value, ate = $('rsAte').value;
+    let q = sb.from('viagens_grupos').select(COLUNAS_GRUPO).eq('unidade_negocio_id', meuPerfil.unidadeId);
+    if (de) q = q.gte('data_ate', de);
+    if (ate) q = q.lte('data_de', ate);
+    if ($('rsOperadora').value) q = q.eq('operadora_id', $('rsOperadora').value);
+    if ($('rsHotel').value) q = q.eq('hotel_id', $('rsHotel').value);
+    if ($('rsStatus').value) q = q.eq('status', $('rsStatus').value);
+    const { data, error } = await q.order('data_de', { ascending: false }).order('id').range(0, 999);
+    if (seq !== seqGrupos) return;   // resposta atrasada
+    if (error) { $('rsMsg').className = 'status-msg erro'; $('rsMsg').textContent = 'Não consegui carregar as reservas: ' + error.message; return; }
+    grupos = data || [];
+    $('rsMsg').className = 'status-msg'; $('rsMsg').textContent = grupos.length >= 1000 ? 'Mostrando as 1000 primeiras reservas do período — estreite o período ou use os filtros.' : '';
+    renderizarGrupos();
+}
+function renderizarGrupos() {
+    const t = normalizar($('rsBusca').value.trim());
+    const lista = grupos.filter(g => !t || normalizar([g.nome, g.codigo, g.codigo_externo, opNome(g.operadora_id), htNome(g.hotel_id)].join(' ')).includes(t));
+    $('corpoGrupos').innerHTML = lista.map(g => {
+        const saldo = arredondar2(Number(g.valor_total || 0) - Number(g.valor_recebido || 0));
+        return `<tr data-abrir-grupo="${g.id}" style="cursor:pointer;" class="${g.status === 'cancelada' ? 'cancelado' : ''}">
+            <td>#${g.codigo}</td><td><strong>${escapeHtml(g.nome)}</strong>${g.codigo_externo ? `<small class="sub">cód. externo ${escapeHtml(g.codigo_externo)}</small>` : ''}${g.origem === 'site' ? '<small class="sub">venda pelo site</small>' : ''}</td>
+            <td>${escapeHtml(opNome(g.operadora_id))}</td><td>${escapeHtml(htNome(g.hotel_id))}</td><td>${periodoTxt(g.data_de, g.data_ate)}</td>
+            <td class="num">${formatarMoeda(g.valor_total)}</td><td class="num">${formatarMoeda(g.valor_recebido)}</td>
+            <td class="num ${saldo > 0.004 && g.status !== 'cancelada' ? 'neg' : ''}">${formatarMoeda(saldo)}</td><td>${pillStatus(g.status)}</td></tr>`;
+    }).join('') || '<tr><td colspan="9" class="vazio">Nenhuma reserva neste período/filtro.</td></tr>';
+    const v = lista.filter(g => g.status !== 'cancelada');
+    const tot = v.reduce((a, g) => a + Number(g.valor_total || 0), 0), rec = v.reduce((a, g) => a + Number(g.valor_recebido || 0), 0);
+    $('rodapeGrupos').innerHTML = lista.length ? `<tr><td colspan="5"><strong>${v.length} reserva(s) não cancelada(s)</strong></td><td class="num"><strong>${formatarMoeda(tot)}</strong></td><td class="num"><strong>${formatarMoeda(rec)}</strong></td><td class="num"><strong>${formatarMoeda(arredondar2(tot - rec))}</strong></td><td></td></tr>` : '';
+}
+['rsDe', 'rsAte', 'rsOperadora', 'rsHotel', 'rsStatus'].forEach(id => $(id).addEventListener('change', carregarGrupos));
+$('rsBusca').addEventListener('input', renderizarGrupos);
+document.addEventListener('click', (e) => { const tr = e.target.closest('[data-abrir-grupo]'); if (tr) abrirGrupo(tr.dataset.abrirGrupo); });
+$('btnNovoGrupo').addEventListener('click', () => abrirGrupo(null));
+
+// ---------------------------------------------------------------
+// CAMPOS DE BUSCA (operadora / hotel)
+// ---------------------------------------------------------------
+function ligarCampoLista(id, getLista, subFn, opcoes) {
+    opcoes = opcoes || {};
+    const hidden = $(id), input = $(id + '_busca'), caixa = $(id + '_resultados');
+    const elegivel = opcoes.filtro || (x => x.ativo), rotulo = opcoes.rotulo || (x => x.nome);
+    ligarBusca(input, caixa, () => getLista().filter(elegivel), rotulo, subFn, (x) => { hidden.value = x ? x.id : ''; if (opcoes.aoSelecionar) opcoes.aoSelecionar(x); });
+    input.addEventListener('blur', () => setTimeout(() => { if (!hidden.value) input.value = ''; }, 200));
+    return { mostrar() { const x = getLista().find(r => r.id === hidden.value); input.value = x ? rotulo(x) : ''; if (!x) hidden.value = ''; } };
+}
+const campoOperadora = ligarCampoLista('gOperadora', () => operadoras, null);
+const campoHotel = ligarCampoLista('gHotel', () => hoteis, h => h.cidade || '', { aoSelecionar: () => carregarTarifasHotel() });
+// serviço da linha do grupo: só ACOMODAÇÕES liberadas para Reservas (os demais serviços entram como extras da linha)
+const campoServico = ligarCampoLista('lnServico', () => servicos, s => s.codigo_externo ? 'cód. ' + s.codigo_externo : '', { filtro: s => s.ativo && s.usa_reservas && s.tipo === 'acomodacao', aoSelecionar: () => aplicarTarifa() });
+
+// ---------------------------------------------------------------
+// MODAL DO GRUPO (a tela "Vendas" do sistema antigo)
+// ---------------------------------------------------------------
+function preencherSelectsLinha() {
+    const r = $('lnRegime').value;
+    $('lnRegime').innerHTML = Object.entries(REGIMES).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+    $('lnRegime').value = r || 'sem_refeicao';
+    $('pgForma').innerHTML = Object.entries(FORMAS).map(([k, v]) => `<option value="${k}">${v}</option>`).join('');
+}
+function totaisGrupo() {
+    const g = grupoAtual || {};
+    const total = Number(g.valor_total || 0), rec = Number(g.valor_recebido || 0), custo = Number(g.valor_custo || 0);
+    const saldo = arredondar2(total - rec);
+    $('tTotal').textContent = formatarMoeda(total); $('tReceb').textContent = formatarMoeda(rec);
+    $('tSaldo').textContent = formatarMoeda(saldo); $('tSaldo').className = saldo > 0.004 ? 'neg' : '';
+    $('tCusto').textContent = formatarMoeda(custo); $('tComissao').textContent = formatarMoeda(arredondar2(total - custo));
+}
+function modoGrupo() {
+    const salvo = !!grupoAtual;
+    $('grupoTitulo').textContent = salvo ? `Grupo #${grupoAtual.codigo} — ${grupoAtual.nome}` : 'Novo grupo';
+    $('grupoSub').textContent = salvo ? 'Lance os hóspedes e as acomodações; os totais se atualizam sozinhos.' : 'Preencha os dados do grupo e salve; depois lance os hóspedes.';
+    $('blocoLinhas').classList.toggle('hidden', !salvo);
+    $('btnRooming').classList.toggle('hidden', !salvo);
+    $('btnPagamentos').classList.toggle('hidden', !salvo);
+    $('btnExcluirGrupo').classList.toggle('hidden', !(salvo && meuPerfil.ehPrincipal));
+    $('btnSalvarGrupo').textContent = salvo ? 'Salvar dados do grupo' : 'Salvar grupo';
+    totaisGrupo();
+}
+async function carregarTarifasHotel() {
+    tarifasHotel = [];
+    const hid = $('gHotel').value;
+    if (!hid) return;
+    const { data, error } = await sb.from('viagens_tarifas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('hotel_id', hid).eq('ativo', true);
+    if (!error) tarifasHotel = data || [];
+}
+async function carregarDetalheGrupo(id) {
+    const [g, l, p, ex] = await Promise.all([
+        sb.from('viagens_grupos').select('*').eq('id', id).single(),
+        sb.from('viagens_linhas').select('*').eq('grupo_id', id).order('ordem').order('criado_em'),
+        sb.from('viagens_pagamentos').select('*, viagens_caixas(status, data)').eq('grupo_id', id).order('data_pagamento', { ascending: false }).order('criado_em', { ascending: false }),
+        sb.from('viagens_linhas_extras').select('*').eq('grupo_id', id).order('ordem').order('criado_em')
+    ]);
+    if (g.error || !g.data) throw new Error((g.error && g.error.message) || 'Grupo não encontrado.');
+    grupoAtual = g.data; linhasAtual = l.data || []; pagamentosAtual = p.data || []; extrasAtual = ex.data || [];
+}
+function limparFormLinha(manterValores) {
+    linhaEditandoId = null;
+    $('lnHospede').value = ''; $('lnAcompanhante').value = ''; $('lnObs').value = ''; $('lnQtd').value = '1';
+    if (!manterValores) { $('lnVenda').value = ''; $('lnPct').value = ''; $('lnCusto').value = ''; $('lnServico').value = ''; campoServico.mostrar(); $('lnRegime').value = 'sem_refeicao'; }
+    $('lnDe').value = (grupoAtual && grupoAtual.data_de) || ($('lnDe').value || ''); $('lnAte').value = (grupoAtual && grupoAtual.data_ate) || ($('lnAte').value || '');
+    $('btnAdicionarLinha').textContent = 'Adicionar'; $('btnCancelarEdicaoLinha').classList.add('hidden');
+    $('tituloLinha').textContent = 'Lançar hóspede / acomodação'; $('lnHint').textContent = ''; $('linhaMsg').textContent = '';
+    atualizarDiarias();
+}
+async function abrirGrupo(id) {
+    $('grupoMsg').textContent = ''; $('linhaMsg').textContent = '';
+    preencherSelectsLinha();
+    if (!id) {
+        grupoAtual = null; linhasAtual = []; pagamentosAtual = []; extrasAtual = []; tarifasHotel = [];
+        $('gNome').value = ''; $('gCodExterno').value = ''; $('gStatus').value = 'confirmada'; $('gOperadora').value = ''; $('gHotel').value = ''; $('gDe').value = ''; $('gAte').value = ''; $('gObs').value = '';
+        campoOperadora.mostrar(); campoHotel.mostrar();
+        modoGrupo(); renderizarLinhas();
+        $('modal-grupo').classList.add('aberto'); $('gNome').focus();
+        return;
+    }
+    try { await carregarDetalheGrupo(id); } catch (e) { alert('Não consegui abrir o grupo: ' + e.message); return; }
+    preencherFormGrupo();
+    await carregarTarifasHotel();
+    limparFormLinha(false);
+    modoGrupo(); renderizarLinhas();
+    $('modal-grupo').classList.add('aberto');
+}
+function preencherFormGrupo() {
+    const g = grupoAtual;
+    $('gNome').value = g.nome || ''; $('gCodExterno').value = g.codigo_externo || ''; $('gStatus').value = g.status; $('gOperadora').value = g.operadora_id || ''; $('gHotel').value = g.hotel_id || '';
+    $('gDe').value = g.data_de || ''; $('gAte').value = g.data_ate || ''; $('gObs').value = g.observacoes || '';
+    campoOperadora.mostrar(); campoHotel.mostrar();
+}
+async function recarregarGrupoAtual() {
+    if (!grupoAtual) return;
+    await carregarDetalheGrupo(grupoAtual.id);
+    totaisGrupo(); renderizarLinhas();
+}
+$('btnSalvarGrupo').addEventListener('click', async () => {
+    const msg = $('grupoMsg'); msg.className = 'status-msg erro';
+    const nome = $('gNome').value.trim(), de = $('gDe').value, ate = $('gAte').value, status = $('gStatus').value;
+    if (!nome) { msg.textContent = 'Informe o nome do grupo.'; $('gNome').focus(); return; }
+    if (!de || !ate) { msg.textContent = 'Informe a entrada e a saída do grupo.'; return; }
+    if (ate < de) { msg.textContent = 'A saída não pode ser antes da entrada.'; return; }
+    if (grupoAtual && status === 'cancelada' && grupoAtual.status !== 'cancelada' && !confirm('Cancelar esta reserva? Ela deixa de contar nos totais, mas os pagamentos já lançados continuam registrados.')) return;
+    const payload = { nome, codigo_externo: $('gCodExterno').value.trim() || null, operadora_id: $('gOperadora').value || null, hotel_id: $('gHotel').value || null, data_de: de, data_ate: ate, status, observacoes: $('gObs').value.trim() || null };
+    const btn = $('btnSalvarGrupo'); btn.disabled = true;
+    try {
+        if (!grupoAtual) {
+            const { data, error } = await sb.from('viagens_grupos').insert({ ...payload, unidade_negocio_id: meuPerfil.unidadeId, criado_por: meuPerfil.email }).select().single();
+            if (error) throw error;
+            await registrarSentinela('viagens_grupo_criado', `Criou o grupo #${data.codigo} "${nome}" (${periodoTxt(de, ate)})`);
+            await carregarDetalheGrupo(data.id);
+        } else {
+            const antes = grupoAtual;
+            const { error } = await sb.from('viagens_grupos').update({ ...payload, atualizado_em: new Date().toISOString() }).eq('id', grupoAtual.id);
+            if (error) throw error;
+            if (antes.status !== status) await registrarSentinela('viagens_grupo_situacao', `Grupo #${antes.codigo} "${antes.nome}": situação ${STATUS_GRUPO[antes.status]} → ${STATUS_GRUPO[status]}`);
+            await carregarDetalheGrupo(grupoAtual.id);
+        }
+        await carregarTarifasHotel();
+        modoGrupo(); preencherFormGrupo(); renderizarLinhas(); limparFormLinha(true);
+        msg.className = 'status-msg sucesso'; msg.textContent = 'Grupo salvo.';
+        atualizarListasDeFundo();
+    } catch (e) { msg.textContent = e.code === '23505' ? 'Já existe outro grupo com esse código externo.' : e.code === '22001' ? 'O código externo pode ter no máximo 20 caracteres.' : 'Não consegui salvar: ' + (e.message || e); }
+    finally { btn.disabled = false; }
+});
+async function atualizarListasDeFundo() { await Promise.all([carregarGrupos(), carregarGruposAno()]); renderizarDashboard(); }
+$('btnFecharGrupo').addEventListener('click', () => { $('modal-grupo').classList.remove('aberto'); atualizarListasDeFundo(); });
+$('btnExcluirGrupo').addEventListener('click', async () => {
+    if (!grupoAtual) return;
+    const g = grupoAtual;
+    if (!confirm(`Excluir o grupo #${g.codigo} "${g.nome}" com ${linhasAtual.length} linha(s)? Isso não pode ser desfeito. Se já houver pagamentos, cancele a reserva em vez de excluir.`)) return;
+    const { error } = await sb.from('viagens_grupos').delete().eq('id', g.id);
+    if (error) { $('grupoMsg').className = 'status-msg erro'; $('grupoMsg').textContent = /foreign key|viola/i.test(error.message) ? 'Este grupo tem pagamentos lançados e não pode ser excluído. Mude a situação para Cancelada.' : 'Não consegui excluir: ' + error.message; return; }
+    await registrarSentinela('viagens_grupo_excluido', `Excluiu o grupo #${g.codigo} "${g.nome}" (${periodoTxt(g.data_de, g.data_ate)}), total ${formatarMoeda(g.valor_total)}, ${linhasAtual.length} linha(s)`);
+    $('modal-grupo').classList.remove('aberto'); grupoAtual = null; atualizarListasDeFundo();
+});
+
+// ---------------------------------------------------------------
+// LINHAS DO GRUPO
+// ---------------------------------------------------------------
+function atualizarDiarias() { $('lnDiarias').value = String(diasEntre($('lnDe').value, $('lnAte').value)); }
+function recalcCustoPorPct() {
+    const v = parseNum($('lnVenda').value), p = parseNum($('lnPct').value);
+    if (v != null && p != null) $('lnCusto').value = fmtNum(v * (1 - p / 100));
+}
+function recalcPctPorCusto() {
+    const v = parseNum($('lnVenda').value), c = parseNum($('lnCusto').value);
+    if (v != null && v > 0 && c != null) $('lnPct').value = fmtNum((1 - c / v) * 100);
+}
+$('lnPct').addEventListener('input', recalcCustoPorPct);
+$('lnCusto').addEventListener('input', recalcPctPorCusto);
+$('lnVenda').addEventListener('input', () => { if (parseNum($('lnPct').value) != null) recalcCustoPorPct(); else recalcPctPorCusto(); });
+$('lnDe').addEventListener('change', () => { atualizarDiarias(); aplicarTarifa(); });
+$('lnAte').addEventListener('change', atualizarDiarias);
+$('lnRegime').addEventListener('change', aplicarTarifa);
+
+// tarifa por período (hotel + acomodação + regime + vigência; a da operadora vale mais que a geral)
+function buscarTarifa() {
+    if (!tarifasHotel.length) return null;
+    const ac = $('lnServico').value, rg = $('lnRegime').value, d = $('lnDe').value, op = $('gOperadora').value;
+    if (!ac || !d) return null;
+    const c = tarifasHotel.filter(t => t.servico_id === ac && t.regime === rg && t.vigencia_de <= d && t.vigencia_ate >= d && (!t.operadora_id || t.operadora_id === op));
+    c.sort((a, b) => (b.operadora_id ? 1 : 0) - (a.operadora_id ? 1 : 0));
+    return c[0] || null;
+}
+function aplicarTarifa() {
+    $('lnHint').textContent = '';
+    if (linhaEditandoId || (parseNum($('lnVenda').value) || 0) > 0) return;
+    const t = buscarTarifa();
+    if (!t) return;
+    $('lnVenda').value = fmtNum(Number(t.valor_venda)); $('lnCusto').value = fmtNum(Number(t.valor_custo)); $('lnPct').value = '';
+    recalcPctPorCusto();
+    $('lnHint').textContent = `Tarifa do período aplicada (${formatarDataSemFuso(t.vigencia_de)} a ${formatarDataSemFuso(t.vigencia_ate)}) — pode ajustar.`;
+}
+
+function renderizarLinhas() {
+    $('qtdLinhas').textContent = linhasAtual.length ? `${linhasAtual.length} linha(s)` : '';
+    $('corpoLinhas').innerHTML = linhasAtual.map(l => {
+        const ex = extrasDaLinha(l.id), exTot = ex.reduce((a, e) => a + Number(e.total_venda || 0), 0);
+        return `
+        <tr>
+            <td>${escapeHtml(l.hospede || '')}${l.observacoes ? `<small class="sub">${escapeHtml(l.observacoes)}</small>` : ''}</td><td>${escapeHtml(l.acompanhante || '')}</td>
+            <td>${escapeHtml(svNome(l.servico_id))}</td><td title="${escapeHtml(REGIMES[l.regime] || '')}">${escapeHtml(REGIME_CURTO[l.regime] || '')}</td>
+            <td class="num">${l.diarias}</td><td>${formatarDataSemFuso(l.data_de)}</td><td>${formatarDataSemFuso(l.data_ate)}</td><td class="num">${l.qtd}</td>
+            <td class="num">${formatarMoeda(l.valor_venda)}</td><td class="num">${formatarMoeda(l.valor_custo)}${l.percentual != null ? `<small class="sub">${fmtNum(Number(l.percentual))}%</small>` : ''}</td>
+            <td class="num"><strong>${formatarMoeda(Number(l.total_venda || 0) + exTot)}</strong>${exTot ? `<small class="sub">com extras ${formatarMoeda(exTot)}</small>` : ''}</td>
+            <td style="white-space:nowrap;"><button class="btn btn-cinza btn-sm" data-ln-extras="${l.id}" title="Serviços extras desta linha">➕ Extras${ex.length ? ` (${ex.length})` : ''}</button> <button class="btn btn-cinza btn-sm" data-ln-edit="${l.id}" title="Editar">✏️</button> <button class="btn btn-cinza btn-sm" data-ln-dup="${l.id}" title="Duplicar">⧉</button> <button class="btn btn-perigo btn-sm" data-ln-del="${l.id}" title="Excluir">🗑</button></td>
+        </tr>`;
+    }).join('') || '<tr><td colspan="12" class="vazio">Nenhuma linha ainda. Preencha o formulário acima e clique em Adicionar.</td></tr>';
+}
+function preencherFormLinha(l, comoNova) {
+    $('lnHospede').value = l.hospede || ''; $('lnAcompanhante').value = l.acompanhante || ''; $('lnServico').value = l.servico_id || ''; campoServico.mostrar();
+    $('lnRegime').value = l.regime || 'sem_refeicao'; $('lnDe').value = l.data_de; $('lnAte').value = l.data_ate; $('lnQtd').value = String(l.qtd);
+    $('lnVenda').value = fmtNum(Number(l.valor_venda)); $('lnPct').value = l.percentual != null ? fmtNum(Number(l.percentual)) : ''; $('lnCusto').value = fmtNum(Number(l.valor_custo));
+    $('lnObs').value = l.observacoes || ''; atualizarDiarias();
+    linhaEditandoId = comoNova ? null : l.id;
+    $('btnAdicionarLinha').textContent = comoNova ? 'Adicionar' : 'Salvar alteração';
+    $('btnCancelarEdicaoLinha').classList.toggle('hidden', !!comoNova);
+    $('tituloLinha').textContent = comoNova ? 'Nova linha a partir de uma existente' : 'Editando linha';
+    $('lnHospede').focus();
+}
+$('btnCancelarEdicaoLinha').addEventListener('click', () => limparFormLinha(true));
+$('corpoLinhas').addEventListener('click', async (e) => {
+    const ed = e.target.closest('[data-ln-edit]'), dp = e.target.closest('[data-ln-dup]'), dl = e.target.closest('[data-ln-del]');
+    if (ed) { preencherSelectsLinha(); const l = linhasAtual.find(x => x.id === ed.dataset.lnEdit); if (l) { linhaEditandoId = l.id; preencherSelectsLinha(); preencherFormLinha(l, false); } }
+    if (dp) { const l = linhasAtual.find(x => x.id === dp.dataset.lnDup); if (l) preencherFormLinha({ ...l, hospede: '' }, true); }
+    if (dl) {
+        const l = linhasAtual.find(x => x.id === dl.dataset.lnDel); if (!l) return;
+        const nEx = extrasDaLinha(l.id).length;
+        if (!confirm(`Excluir a linha de "${l.hospede || 'sem nome'}" (${formatarMoeda(l.total_venda)})${nEx ? ` e os ${nEx} extra(s) dela` : ''}?`)) return;
+        const { error } = await sb.from('viagens_linhas').delete().eq('id', l.id);
+        if (error) { $('linhaMsg').className = 'status-msg erro'; $('linhaMsg').textContent = 'Não consegui excluir: ' + error.message; return; }
+        await registrarSentinela('viagens_linha_excluida', `Grupo #${grupoAtual.codigo} "${grupoAtual.nome}": excluiu a linha de "${l.hospede || ''}" ${svNome(l.servico_id)} ${periodoTxt(l.data_de, l.data_ate)} qtd ${l.qtd}, venda ${formatarMoeda(l.valor_venda)}, total ${formatarMoeda(l.total_venda)}${nEx ? `, com ${nEx} extra(s)` : ''}`);
+        if (linhaEditandoId === l.id) limparFormLinha(true);
+        await recarregarGrupoAtual(); atualizarListasDeFundo();
+    }
+});
+$('btnAdicionarLinha').addEventListener('click', async () => {
+    const msg = $('linhaMsg'); msg.className = 'status-msg erro';
+    if (!grupoAtual) return;
+    const hospede = $('lnHospede').value.trim(), de = $('lnDe').value, ate = $('lnAte').value;
+    const qtd = parseInt($('lnQtd').value, 10), venda = parseNum($('lnVenda').value) ?? 0;
+    let custo = parseNum($('lnCusto').value), pct = parseNum($('lnPct').value);
+    if (!hospede) { msg.textContent = 'Informe o hóspede.'; $('lnHospede').focus(); return; }
+    if (!de || !ate) { msg.textContent = 'Informe a entrada e a saída.'; return; }
+    if (ate < de) { msg.textContent = 'A saída não pode ser antes da entrada.'; return; }
+    if (isNaN(qtd) || qtd < 0) { msg.textContent = 'A quantidade precisa ser 0 ou mais.'; $('lnQtd').focus(); return; }
+    if (venda > 0 && custo == null && pct == null) { msg.textContent = 'Informe o % de comissão ou o valor de custo.'; $('lnPct').focus(); return; }
+    if (custo == null) custo = venda > 0 ? venda * (1 - (pct || 0) / 100) : 0;
+    if (custo > venda + 0.004) { msg.textContent = 'O custo não pode ser maior que o valor de venda.'; $('lnCusto').focus(); return; }
+    if (pct != null && (pct < 0 || pct > 100)) { msg.textContent = 'O % de comissão precisa estar entre 0 e 100.'; return; }
+    const reg = {
+        hospede, acompanhante: $('lnAcompanhante').value.trim() || null, servico_id: $('lnServico').value || null, regime: $('lnRegime').value || 'sem_refeicao',
+        data_de: de, data_ate: ate, qtd, valor_venda: arredondar2(venda), percentual: pct == null ? null : arredondar2(pct), valor_custo: arredondar2(custo), observacoes: $('lnObs').value.trim() || null
+    };
+    const btn = $('btnAdicionarLinha'); btn.disabled = true;
+    try {
+        if (linhaEditandoId) {
+            const { error } = await sb.from('viagens_linhas').update(reg).eq('id', linhaEditandoId);
+            if (error) throw error;
+        } else {
+            const ordem = linhasAtual.reduce((m, l) => Math.max(m, l.ordem || 0), 0) + 1;
+            const { error } = await sb.from('viagens_linhas').insert({ ...reg, unidade_negocio_id: meuPerfil.unidadeId, grupo_id: grupoAtual.id, ordem });
+            if (error) throw error;
+        }
+        const foiEdicao = !!linhaEditandoId;
+        await recarregarGrupoAtual();
+        limparFormLinha(true);
+        msg.className = 'status-msg sucesso'; msg.textContent = foiEdicao ? 'Linha atualizada.' : 'Linha adicionada.';
+        $('lnHospede').focus();
+        atualizarListasDeFundo();
+    } catch (e) { msg.textContent = 'Não consegui salvar a linha: ' + (e.message || e); }
+    finally { btn.disabled = false; }
+});
+
+// ---------------------------------------------------------------
+// EXTRAS DA LINHA -- serviços adicionais que o hóspede demanda (taxa, café extra, seguro, passeio...),
+// acessados pelo botão "Extras" da linha do grupo. Total do extra = venda × qtd × diárias (1, ou as da linha).
+// ---------------------------------------------------------------
+const extrasDaLinha = (id) => extrasAtual.filter(e => e.linha_id === id);
+const campoExtraServico = ligarCampoLista('exServico', () => servicos, s => s.codigo_externo ? 'cód. ' + s.codigo_externo : '', { filtro: s => s.ativo && s.usa_reservas && s.tipo !== 'acomodacao' });
+const linhaDoExtra = () => linhasAtual.find(x => x.id === extraLinhaId);
+function diariasDoExtra() { const l = linhaDoExtra(); return ($('exPorDiaria').checked && l) ? Math.max(1, l.diarias) : 1; }
+$('exPorDiaria').addEventListener('change', () => { $('exDiarias').value = String(diariasDoExtra()); });
+function limparFormExtra() {
+    extraEditandoId = null;
+    $('exServico').value = ''; campoExtraServico.mostrar(); $('exQtd').value = '1'; $('exPorDiaria').checked = false; $('exDiarias').value = '1';
+    $('exVenda').value = ''; $('exPct').value = ''; $('exCusto').value = ''; $('exObs').value = '';
+    $('btnAdicionarExtra').textContent = 'Adicionar extra'; $('btnCancelarExtra').classList.add('hidden'); $('extTituloForm').textContent = 'Lançar serviço extra';
+}
+function renderizarExtras() {
+    const l = linhaDoExtra(); if (!l) return;
+    const lista = extrasDaLinha(l.id);
+    const tot = lista.reduce((a, e) => a + Number(e.total_venda || 0), 0);
+    $('extQtd').textContent = lista.length ? `${lista.length} extra(s)` : '';
+    $('corpoExtras').innerHTML = lista.map(e => `
+        <tr><td><strong>${escapeHtml(svNome(e.servico_id) || '—')}</strong>${e.observacoes ? `<small class="sub">${escapeHtml(e.observacoes)}</small>` : ''}</td>
+            <td class="num">${e.qtd}</td><td class="num">${e.diarias}</td><td class="num">${formatarMoeda(e.valor_venda)}</td>
+            <td class="num">${formatarMoeda(e.valor_custo)}${e.percentual != null ? `<small class="sub">${fmtNum(Number(e.percentual))}%</small>` : ''}</td>
+            <td class="num"><strong>${formatarMoeda(e.total_venda)}</strong></td>
+            <td style="white-space:nowrap;"><button class="btn btn-cinza btn-sm" data-ex-edit="${e.id}" title="Editar">✏️</button> <button class="btn btn-perigo btn-sm" data-ex-del="${e.id}" title="Excluir">🗑</button></td></tr>`).join('')
+        || '<tr><td colspan="7" class="vazio">Nenhum extra nesta linha.</td></tr>';
+    $('rodapeExtras').innerHTML = lista.length ? `<tr><td colspan="5"><strong>Total dos extras</strong></td><td class="num"><strong>${formatarMoeda(tot)}</strong></td><td></td></tr>` : '';
+}
+function abrirExtras(linhaId) {
+    const l = linhasAtual.find(x => x.id === linhaId); if (!l) return;
+    extraLinhaId = linhaId;
+    $('extTitulo').textContent = `Extras — ${l.hospede || 'hóspede'}`;
+    $('extSub').textContent = `${svNome(l.servico_id) || 'Sem acomodação'} · ${periodoTxt(l.data_de, l.data_ate)} · ${l.diarias} diária(s) · linha ${formatarMoeda(l.total_venda)}`;
+    $('extMsg').textContent = '';
+    limparFormExtra(); renderizarExtras();
+    $('modal-extras').classList.add('aberto');
+    $('exServico_busca').focus();
+}
+$('corpoLinhas').addEventListener('click', (e) => { const b = e.target.closest('[data-ln-extras]'); if (b) abrirExtras(b.dataset.lnExtras); });
+$('btnFecharExtras').addEventListener('click', () => { $('modal-extras').classList.remove('aberto'); extraLinhaId = null; atualizarListasDeFundo(); });
+$('btnNovoServicoExtra').addEventListener('click', () => abrirCadastro('servicos', null, (r) => { $('exServico').value = r.id; campoExtraServico.mostrar(); }));
+$('btnCancelarExtra').addEventListener('click', limparFormExtra);
+
+// % comissão e custo se calculam um ao outro (mesma regra da linha)
+function ligarComissao(idVenda, idPct, idCusto) {
+    const porPct = () => { const v = parseNum($(idVenda).value), p = parseNum($(idPct).value); if (v != null && p != null) $(idCusto).value = fmtNum(v * (1 - p / 100)); };
+    const porCusto = () => { const v = parseNum($(idVenda).value), c = parseNum($(idCusto).value); if (v != null && v > 0 && c != null) $(idPct).value = fmtNum((1 - c / v) * 100); };
+    $(idPct).addEventListener('input', porPct); $(idCusto).addEventListener('input', porCusto);
+    $(idVenda).addEventListener('input', () => { if (parseNum($(idPct).value) != null) porPct(); else porCusto(); });
+}
+ligarComissao('exVenda', 'exPct', 'exCusto');
+
+$('corpoExtras').addEventListener('click', async (e) => {
+    const ed = e.target.closest('[data-ex-edit]'), dl = e.target.closest('[data-ex-del]');
+    if (ed) {
+        const x = extrasAtual.find(v => v.id === ed.dataset.exEdit); if (!x) return;
+        extraEditandoId = x.id;
+        $('exServico').value = x.servico_id || ''; campoExtraServico.mostrar(); $('exQtd').value = String(x.qtd);
+        const l = linhaDoExtra(); $('exPorDiaria').checked = !!(l && x.diarias > 1 && x.diarias === l.diarias); $('exDiarias').value = String(x.diarias);
+        $('exVenda').value = fmtNum(Number(x.valor_venda)); $('exPct').value = x.percentual != null ? fmtNum(Number(x.percentual)) : ''; $('exCusto').value = fmtNum(Number(x.valor_custo)); $('exObs').value = x.observacoes || '';
+        $('btnAdicionarExtra').textContent = 'Salvar alteração'; $('btnCancelarExtra').classList.remove('hidden'); $('extTituloForm').textContent = 'Editando extra';
+    }
+    if (dl) {
+        const x = extrasAtual.find(v => v.id === dl.dataset.exDel); if (!x) return;
+        const l = linhaDoExtra();
+        if (!confirm(`Excluir o extra "${svNome(x.servico_id) || 'sem serviço'}" (${formatarMoeda(x.total_venda)})?`)) return;
+        const { error } = await sb.from('viagens_linhas_extras').delete().eq('id', x.id);
+        if (error) { $('extMsg').className = 'status-msg erro'; $('extMsg').textContent = 'Não consegui excluir: ' + error.message; return; }
+        await registrarSentinela('viagens_extra_excluido', `Grupo #${grupoAtual.codigo} "${grupoAtual.nome}", hóspede "${l ? l.hospede : ''}": excluiu o extra "${svNome(x.servico_id)}" qtd ${x.qtd} × ${x.diarias} diária(s), venda ${formatarMoeda(x.valor_venda)}, total ${formatarMoeda(x.total_venda)}`);
+        if (extraEditandoId === x.id) limparFormExtra();
+        await recarregarGrupoAtual(); renderizarExtras(); atualizarListasDeFundo();
+    }
+});
+$('btnAdicionarExtra').addEventListener('click', async () => {
+    const msg = $('extMsg'); msg.className = 'status-msg erro';
+    const l = linhaDoExtra(); if (!l || !grupoAtual) return;
+    const servicoId = $('exServico').value, qtd = parseInt($('exQtd').value, 10), venda = parseNum($('exVenda').value) ?? 0;
+    let custo = parseNum($('exCusto').value), pct = parseNum($('exPct').value);
+    if (!servicoId) { msg.textContent = 'Escolha o serviço na lista (se ele não existir, use o "+" para cadastrar).'; $('exServico_busca').focus(); return; }
+    if (isNaN(qtd) || qtd < 0) { msg.textContent = 'A quantidade precisa ser 0 ou mais.'; $('exQtd').focus(); return; }
+    if (venda > 0 && custo == null && pct == null) { msg.textContent = 'Informe o % de comissão ou o valor de custo.'; $('exPct').focus(); return; }
+    if (custo == null) custo = venda > 0 ? venda * (1 - (pct || 0) / 100) : 0;
+    if (custo > venda + 0.004) { msg.textContent = 'O custo não pode ser maior que o valor de venda.'; $('exCusto').focus(); return; }
+    if (pct != null && (pct < 0 || pct > 100)) { msg.textContent = 'O % de comissão precisa estar entre 0 e 100.'; return; }
+    const reg = { servico_id: servicoId, qtd, diarias: diariasDoExtra(), valor_venda: arredondar2(venda), percentual: pct == null ? null : arredondar2(pct), valor_custo: arredondar2(custo), observacoes: $('exObs').value.trim() || null };
+    const btn = $('btnAdicionarExtra'); btn.disabled = true;
+    try {
+        if (extraEditandoId) {
+            const { error } = await sb.from('viagens_linhas_extras').update(reg).eq('id', extraEditandoId); if (error) throw error;
+        } else {
+            const ordem = extrasDaLinha(l.id).reduce((m, x) => Math.max(m, x.ordem || 0), 0) + 1;
+            const { error } = await sb.from('viagens_linhas_extras').insert({ ...reg, unidade_negocio_id: meuPerfil.unidadeId, linha_id: l.id, grupo_id: grupoAtual.id, ordem }); if (error) throw error;
+        }
+        const foiEdicao = !!extraEditandoId;
+        await recarregarGrupoAtual(); renderizarExtras(); limparFormExtra();
+        msg.className = 'status-msg sucesso'; msg.textContent = foiEdicao ? 'Extra atualizado.' : 'Extra adicionado.';
+        $('exServico_busca').focus();
+        atualizarListasDeFundo();
+    } catch (e) { msg.textContent = 'Não consegui salvar o extra: ' + (e.message || e); }
+    finally { btn.disabled = false; }
+});
+
+// ---------------------------------------------------------------
+// ROOMING LIST (PDF)
+// ---------------------------------------------------------------
+const carregarAutoTable = () => carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+$('btnRooming').addEventListener('click', async () => {
+    if (!grupoAtual) return;
+    const msg = $('grupoMsg'); msg.className = 'status-msg'; msg.textContent = 'Gerando o PDF...';
+    try {
+        await carregarJsPdf(); await carregarAutoTable();
+        const g = grupoAtual, { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        doc.setFontSize(15); doc.setFont('helvetica', 'bold'); doc.text('Rooming list', 14, 16);
+        doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+        doc.text(meuPerfil.unidadeNome || '', 283, 16, { align: 'right' });
+        doc.text(`Grupo: ${g.nome}  (#${g.codigo})`, 14, 24);
+        doc.text(`Hotel: ${htNome(g.hotel_id) || '—'}     Operadora: ${opNome(g.operadora_id) || '—'}     Período: ${periodoTxt(g.data_de, g.data_ate)}`, 14, 30);
+        const quartos = linhasAtual.filter(l => (servicos.find(a => a.id === l.servico_id) || {}).tipo === 'acomodacao');
+        const corpo = quartos.map((l, i) => [i + 1, l.hospede || '', l.acompanhante || '', svNome(l.servico_id), REGIMES[l.regime] || '', formatarDataSemFuso(l.data_de), formatarDataSemFuso(l.data_ate), l.diarias, l.qtd, l.observacoes || '']);
+        doc.autoTable({ startY: 35, head: [['#', 'Hóspede', 'Acompanhante', 'Acomodação', 'Regime', 'Entrada', 'Saída', 'Diárias', 'Qtd', 'Obs.']], body: corpo, styles: { fontSize: 9 }, headStyles: { fillColor: [27, 67, 50] } });
+        const resumo = {}; quartos.forEach(l => { const n = svNome(l.servico_id); resumo[n] = (resumo[n] || 0) + l.qtd; });
+        const y = (doc.lastAutoTable ? doc.lastAutoTable.finalY : 40) + 8;
+        doc.setFont('helvetica', 'bold'); doc.text('Resumo: ' + (Object.entries(resumo).map(([n, q]) => `${n} x${q}`).join('   ') || 'sem acomodações'), 14, y);
+        if (g.observacoes) { doc.setFont('helvetica', 'normal'); doc.text('Obs.: ' + g.observacoes, 14, y + 6); }
+        doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.text('Gerado em ' + new Date().toLocaleString('pt-BR'), 14, 200);
+        const nomeArq = 'rooming-' + normalizar(g.nome).replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.pdf';
+        msg.textContent = '';
+        mostrarPopupAcoesPdf('Rooming list gerada', doc.output('blob'), nomeArq);
+    } catch (e) { msg.className = 'status-msg erro'; msg.textContent = 'Não consegui gerar o PDF: ' + (e.message || e); }
+});
+
+// ---------------------------------------------------------------
+// PAGAMENTOS (do grupo OU da passagem aérea)
+// ---------------------------------------------------------------
+function pagCtx() {
+    if (pagModo === 'passagem') {
+        const p = passagemAtual, nome = p ? nomePassageiro(p) : '';
+        return { chave: 'passagem_id', obj: p, lista: () => pagamentosPassagem, rotulo: p ? `Passagem #${p.codigo} ${nome}` : '', sent: p ? `Passagem #${p.codigo} "${nome}"` : '', de: 'da passagem', recarregar: recarregarPassagemAtual };
+    }
+    const g = grupoAtual;
+    return { chave: 'grupo_id', obj: g, lista: () => pagamentosAtual, rotulo: g ? `#${g.codigo} ${g.nome}` : '', sent: g ? `Grupo #${g.codigo} "${g.nome}"` : '', de: 'do grupo', recarregar: recarregarGrupoAtual };
+}
+function renderizarPagamentos() {
+    const c = pagCtx(), o = c.obj, saldo = arredondar2(Number(o.valor_total || 0) - Number(o.valor_recebido || 0));
+    $('pagTitulo').textContent = `Pagamentos — ${c.rotulo}`;
+    $('pagSub').textContent = `Total ${formatarMoeda(o.valor_total)} · recebido ${formatarMoeda(o.valor_recebido)} · saldo ${formatarMoeda(saldo)}`;
+    $('corpoPagamentos').innerHTML = c.lista().map(p => {
+        const cx = p.viagens_caixas;
+        const travado = cx && cx.status !== 'aberto';
+        const situ = p.cancelado ? `<span class="pill pill-cancelada">Cancelado</span>${p.motivo_cancelamento ? `<small class="sub">${escapeHtml(p.motivo_cancelamento)}</small>` : ''}`
+            : travado ? `<span class="pill pill-${cx.status}">Caixa ${STATUS_CAIXA[cx.status].toLowerCase()}</span>` : '<span class="pill pill-confirmada">Lançado</span>';
+        return `<tr class="${p.cancelado ? 'cancelado' : ''}"><td>${formatarDataSemFuso(p.data_pagamento)}</td><td>${escapeHtml(FORMAS[p.forma] || p.forma)}</td><td>${escapeHtml(p.referencia || '')}${p.observacoes ? `<small class="sub">${escapeHtml(p.observacoes)}</small>` : ''}</td>
+            <td>${escapeHtml(ORIGENS[p.origem] || p.origem)}</td><td class="num">${formatarMoeda(p.valor)}</td><td>${situ}</td>
+            <td>${(!p.cancelado && !travado) ? `<button class="btn btn-perigo btn-sm" data-pg-cancel="${p.id}">Cancelar</button>` : ''}</td></tr>`;
+    }).join('') || '<tr><td colspan="7" class="vazio">Nenhum pagamento lançado.</td></tr>';
+}
+function abrirPagamentos(modo) {
+    pagModo = modo;
+    const o = pagCtx().obj; if (!o) return;
+    renderizarPagamentos();
+    const saldo = arredondar2(Number(o.valor_total || 0) - Number(o.valor_recebido || 0));
+    $('pgData').value = hojeISO(); $('pgValor').value = saldo > 0 ? fmtNum(saldo) : ''; $('pgForma').value = 'dinheiro'; $('pgRef').value = ''; $('pgObs').value = ''; $('pagMsg').textContent = '';
+    $('modal-pagamentos').classList.add('aberto');
+}
+$('btnPagamentos').addEventListener('click', () => { if (grupoAtual) abrirPagamentos('grupo'); });
+$('btnPagamentosPassagem').addEventListener('click', () => { if (passagemAtual) abrirPagamentos('passagem'); });
+$('btnFecharPagamentos').addEventListener('click', () => { $('modal-pagamentos').classList.remove('aberto'); atualizarListasDeFundo(); atualizarPassagensDeFundo(); });
+$('btnLancarPagamento').addEventListener('click', async () => {
+    const msg = $('pagMsg'); msg.className = 'status-msg erro';
+    const c = pagCtx(), o = c.obj;
+    const valor = parseNum($('pgValor').value), data = $('pgData').value;
+    if (!data) { msg.textContent = 'Informe a data do pagamento.'; return; }
+    if (valor == null || valor <= 0) { msg.textContent = 'Informe um valor maior que zero.'; $('pgValor').focus(); return; }
+    const saldo = arredondar2(Number(o.valor_total || 0) - Number(o.valor_recebido || 0));
+    if (valor > saldo + 0.004 && !confirm(`O valor (${formatarMoeda(valor)}) é maior que o saldo ${c.de} (${formatarMoeda(saldo)}). Lançar mesmo assim?`)) return;
+    const btn = $('btnLancarPagamento'); btn.disabled = true;
+    try {
+        const { error } = await sb.from('viagens_pagamentos').insert({ unidade_negocio_id: meuPerfil.unidadeId, [c.chave]: o.id, data_pagamento: data, valor: arredondar2(valor), forma: $('pgForma').value, origem: 'balcao', referencia: $('pgRef').value.trim() || null, observacoes: $('pgObs').value.trim() || null, criado_por: meuPerfil.email });
+        if (error) throw error;
+        await registrarSentinela('viagens_pagamento_lancado', `${c.sent}: pagamento de ${formatarMoeda(valor)} (${FORMAS[$('pgForma').value]}) em ${formatarDataSemFuso(data)}`);
+        await c.recarregar();
+        renderizarPagamentos();
+        const o2 = pagCtx().obj, novoSaldo = arredondar2(Number(o2.valor_total || 0) - Number(o2.valor_recebido || 0));
+        $('pgValor').value = novoSaldo > 0 ? fmtNum(novoSaldo) : ''; $('pgRef').value = ''; $('pgObs').value = '';
+        msg.className = 'status-msg sucesso'; msg.textContent = 'Pagamento lançado.';
+    } catch (e) { msg.textContent = (e.message || String(e)); }
+    finally { btn.disabled = false; }
+});
+$('corpoPagamentos').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-pg-cancel]'); if (!b) return;
+    const c = pagCtx();
+    const p = c.lista().find(x => x.id === b.dataset.pgCancel); if (!p) return;
+    const motivo = (prompt(`Cancelar o pagamento de ${formatarMoeda(p.valor)} de ${formatarDataSemFuso(p.data_pagamento)}? Informe o motivo:`) || '').trim();
+    if (!motivo) { return; }
+    const { error } = await sb.from('viagens_pagamentos').update({ cancelado: true, cancelado_em: new Date().toISOString(), cancelado_por: meuPerfil.email, motivo_cancelamento: motivo }).eq('id', p.id);
+    if (error) { $('pagMsg').className = 'status-msg erro'; $('pagMsg').textContent = error.message; return; }
+    await registrarSentinela('viagens_pagamento_cancelado', `${c.sent}: cancelou pagamento de ${formatarMoeda(p.valor)} (${formatarDataSemFuso(p.data_pagamento)}) — ${motivo}`);
+    await c.recarregar(); renderizarPagamentos();
+});
+
+// ---------------------------------------------------------------
+// PASSAGENS AÉREAS (consolidadora) -- tela "VENDAS BRA" do sistema antigo
+//   total do cliente = tarifa + taxa + outros + DU
+//   depósito à companhia = tarifa − comissão da empresa + taxa + outros − DU   (o DU fica com a agência)
+//   lucro = comissão da empresa + DU − comissão de venda − comissão da agência indicadora
+// ---------------------------------------------------------------
+const nomePassageiro = (p) => [p.passageiro_nome, p.passageiro_sobrenome].filter(Boolean).join(' ');
+const aeroRotulo = (a) => a.sigla ? `${a.sigla} — ${a.nome}` : a.nome;
+const aeroCurto = (id) => { const a = aeroportos.find(x => x.id === id); return a ? (a.sigla || a.nome) : ''; };
+const nv = (id) => parseNum($(id).value) || 0;
+const OPC_AERO = { rotulo: aeroRotulo };
+const subAero = (a) => a.codigo_externo ? 'cód. ' + a.codigo_externo : '';
+const campoPCompanhia = ligarCampoLista('pCompanhia', () => companhias, null, { aoSelecionar: (x) => aplicarRegraComissao(x) });
+const campoPMaquina = ligarCampoLista('pMaquina', () => maquinas, null, { rotulo: m => `${m.codigo} — ${m.nome}`, aoSelecionar: (x) => aplicarRegraComissao(x) });
+const chaveUltimaMaquina = () => `viagens_ultima_maquina_${meuPerfil.unidadeId}`;
+function ultimaMaquina() { try { const id = localStorage.getItem(chaveUltimaMaquina()) || ''; return maquinas.some(m => m.id === id && m.ativo) ? id : ''; } catch (e) { return ''; } }
+// REGRA (companhia + máquina), vinda do cadastro: % de comissão de venda, % de comissão da empresa e % de DU (sobre a tarifa).
+// Vale ao escolher a companhia e a máquina (a ordem tanto faz).
+function aplicarRegraComissao(sel) {
+    $('pRegraHint').textContent = '';
+    if (!sel) return;   // sel nulo = o usuário está digitando na busca
+    const cId = $('pCompanhia').value, mId = $('pMaquina').value;
+    if (!cId || !mId) return;
+    const r = regras.find(x => x.companhia_id === cId && x.maquina_id === mId && x.ativo);
+    if (!r) { $('pRegraHint').textContent = 'Não há regra ativa para esta companhia e máquina (Cadastros → Regras de comissão): preencha as comissões e o DU na mão.'; return; }
+    if (passagemAtual && !confirm('Aplicar a regra desta companhia e máquina? Isso substitui os % de comissão e do DU atuais.')) return;
+    const t = nv('pTarifa');
+    const preenche = (idPct, idVal, pct) => { $(idPct).value = pct ? fmtNum(pct) : '0,00'; $(idVal).value = fmtNum(t * pct / 100); };
+    preenche('pPctEmpresa', 'pComEmpresa', Number(r.pct_comissao_empresa)); preenche('pPctVenda', 'pComVenda', Number(r.pct_comissao_venda));
+    const du = Number(r.pct_du || 0); $('pPctDU').value = du ? fmtNum(du) : ''; $('pDU').value = du ? fmtNum(t * du / 100) : '';
+    recalcPassagem();
+    $('pRegraHint').textContent = `Regra aplicada: comissão da empresa ${fmtNum(Number(r.pct_comissao_empresa))}%, comissão de venda ${fmtNum(Number(r.pct_comissao_venda))}%, DU ${fmtNum(du)}% da tarifa — pode ajustar.`;
+}
+const campoPOrigem = ligarCampoLista('pOrigem', () => aeroportos, subAero, OPC_AERO);
+const campoPDestino = ligarCampoLista('pDestino', () => aeroportos, subAero, OPC_AERO);
+const campoTrOrigem = ligarCampoLista('trOrigem', () => aeroportos, subAero, OPC_AERO);
+const campoTrDestino = ligarCampoLista('trDestino', () => aeroportos, subAero, OPC_AERO);
+
+const COLUNAS_PASSAGEM = 'id,codigo,codigo_externo,companhia_id,maquina_id,vendedor,data_emissao,numero_bilhete,ficha,origem_id,destino_id,data_voo,passageiro_nome,passageiro_sobrenome,valor_tarifa,comissao_empresa,valor_total,deposito,lucro,valor_recebido,status';
+async function carregarPassagensAno() {
+    const d = new Date(); d.setFullYear(d.getFullYear() - 1);
+    try {
+        passagensAno = await buscarTudo(() => sb.from('viagens_passagens').select(COLUNAS_PASSAGEM).eq('unidade_negocio_id', meuPerfil.unidadeId).gte('data_emissao', d.toISOString().slice(0, 10)).order('data_emissao', { ascending: false }).order('id'));
+    } catch (e) { console.error(e); passagensAno = []; }
+}
+let seqPassagens = 0;
+async function carregarPassagens() {
+    const seq = ++seqPassagens;
+    const de = $('psDe').value, ate = $('psAte').value;
+    let q = sb.from('viagens_passagens').select(COLUNAS_PASSAGEM).eq('unidade_negocio_id', meuPerfil.unidadeId);
+    if (de) q = q.gte('data_emissao', de);
+    if (ate) q = q.lte('data_emissao', ate);
+    if ($('psOperadora').value) q = q.eq('companhia_id', $('psOperadora').value);
+    if ($('psStatus').value) q = q.eq('status', $('psStatus').value);
+    const { data, error } = await q.order('data_emissao', { ascending: false }).order('codigo', { ascending: false }).range(0, 999);
+    if (seq !== seqPassagens) return;
+    if (error) { $('psMsg').className = 'status-msg erro'; $('psMsg').textContent = 'Não consegui carregar as passagens: ' + error.message; return; }
+    passagens = data || [];
+    $('psMsg').className = 'status-msg'; $('psMsg').textContent = passagens.length >= 1000 ? 'Mostrando as 1000 primeiras passagens do período — estreite o período ou use os filtros.' : '';
+    renderizarPassagens();
+}
+function renderizarPassagens() {
+    const t = normalizar($('psBusca').value.trim());
+    const lista = passagens.filter(p => !t || normalizar([nomePassageiro(p), p.numero_bilhete, p.ficha, p.codigo, p.codigo_externo, cmNome(p.companhia_id), p.vendedor].join(' ')).includes(t));
+    $('corpoPassagens').innerHTML = lista.map(p => {
+        const saldo = arredondar2(Number(p.valor_total || 0) - Number(p.valor_recebido || 0));
+        const trecho = [aeroCurto(p.origem_id), aeroCurto(p.destino_id)].filter(Boolean).join(' → ');
+        return `<tr data-abrir-passagem="${p.id}" style="cursor:pointer;" class="${p.status === 'cancelada' ? 'cancelado' : ''}">
+            <td>#${p.codigo}</td><td>${formatarDataSemFuso(p.data_emissao)}</td><td>${escapeHtml(cmNome(p.companhia_id))}</td>
+            <td><strong>${escapeHtml(nomePassageiro(p))}</strong>${p.codigo_externo ? `<small class="sub">cód. externo ${escapeHtml(p.codigo_externo)}</small>` : ''}</td>
+            <td>${escapeHtml(p.numero_bilhete || '')}${p.ficha ? `<small class="sub">ficha ${escapeHtml(p.ficha)}</small>` : ''}</td><td>${escapeHtml(trecho)}${p.data_voo ? `<small class="sub">${formatarDataSemFuso(p.data_voo)}</small>` : ''}</td>
+            <td class="num">${formatarMoeda(p.valor_total)}</td><td class="num">${formatarMoeda(p.valor_recebido)}</td>
+            <td class="num ${saldo > 0.004 && p.status !== 'cancelada' ? 'neg' : ''}">${formatarMoeda(saldo)}</td><td class="num">${formatarMoeda(p.lucro)}</td>
+            <td><span class="pill pill-${p.status === 'cancelada' ? 'cancelada' : 'confirmada'}">${p.status === 'cancelada' ? 'Cancelada' : 'Emitida'}</span></td></tr>`;
+    }).join('') || '<tr><td colspan="11" class="vazio">Nenhuma passagem neste período/filtro.</td></tr>';
+    const v = lista.filter(p => p.status !== 'cancelada');
+    const soma = (f) => v.reduce((a, p) => a + Number(p[f] || 0), 0);
+    $('rodapePassagens').innerHTML = lista.length ? `<tr><td colspan="6"><strong>${v.length} passagem(ns) não cancelada(s)</strong></td><td class="num"><strong>${formatarMoeda(soma('valor_total'))}</strong></td><td class="num"><strong>${formatarMoeda(soma('valor_recebido'))}</strong></td><td class="num"><strong>${formatarMoeda(arredondar2(soma('valor_total') - soma('valor_recebido')))}</strong></td><td class="num"><strong>${formatarMoeda(soma('lucro'))}</strong></td><td></td></tr>` : '';
+}
+['psDe', 'psAte', 'psOperadora', 'psStatus'].forEach(id => $(id).addEventListener('change', carregarPassagens));
+$('psBusca').addEventListener('input', renderizarPassagens);
+document.addEventListener('click', (e) => { const tr = e.target.closest('[data-abrir-passagem]'); if (tr) abrirPassagem(tr.dataset.abrirPassagem); });
+$('btnNovaPassagem').addEventListener('click', () => abrirPassagem(null));
+async function atualizarPassagensDeFundo() { await Promise.all([carregarPassagens(), carregarPassagensAno()]); renderizarDashboard(); }
+
+// ---- cálculo ao vivo (a % e o valor da comissão se calculam um ao outro, sobre a tarifa) ----
+function recalcPassagem() {
+    const t = nv('pTarifa'), tx = nv('pTaxa'), ou = nv('pOutros'), du = nv('pDU');
+    const ce = nv('pComEmpresa'), cv = nv('pComVenda'), ca = nv('pComAgencia');
+    const total = arredondar2(t + tx + ou + du), dep = arredondar2(t - ce + tx + ou - du), lucro = arredondar2(ce + du - cv - ca);
+    const rec = passagemAtual ? Number(passagemAtual.valor_recebido || 0) : 0, saldo = arredondar2(total - rec);
+    $('pTotal').textContent = formatarMoeda(total); $('pReceb').textContent = formatarMoeda(rec);
+    $('pSaldo').textContent = formatarMoeda(saldo); $('pSaldo').className = saldo > 0.004 ? 'neg' : '';
+    $('pDeposito').textContent = formatarMoeda(dep); $('pLucro').textContent = formatarMoeda(lucro); $('pLucro').className = lucro < 0 ? 'neg' : '';
+    const av = [];
+    if (dep < 0) av.push('O depósito à companhia ficou negativo: confira a tarifa e as comissões.');
+    if (ce + cv + ca > t + 0.004 && t > 0) av.push('A soma das comissões é maior que a tarifa.');
+    $('pAviso').textContent = av.join(' ');
+}
+function ligarPctValor(idPct, idVal) {
+    $(idPct).addEventListener('input', () => { const p = parseNum($(idPct).value); if (p != null) $(idVal).value = fmtNum(nv('pTarifa') * p / 100); recalcPassagem(); });
+    $(idVal).addEventListener('input', () => { const v = parseNum($(idVal).value), t = nv('pTarifa'); if (v != null && t > 0) $(idPct).value = fmtNum(v / t * 100); recalcPassagem(); });
+}
+ligarPctValor('pPctEmpresa', 'pComEmpresa'); ligarPctValor('pPctVenda', 'pComVenda'); ligarPctValor('pPctIndicador', 'pComAgencia'); ligarPctValor('pPctDU', 'pDU');
+$('pTarifa').addEventListener('input', () => {
+    [['pPctEmpresa', 'pComEmpresa'], ['pPctVenda', 'pComVenda'], ['pPctIndicador', 'pComAgencia'], ['pPctDU', 'pDU']].forEach(([pc, vl]) => { const p = parseNum($(pc).value); if (p != null) $(vl).value = fmtNum(nv('pTarifa') * p / 100); });
+    recalcPassagem();
+});
+['pTaxa', 'pOutros'].forEach(id => $(id).addEventListener('input', recalcPassagem));
+
+// ---- abrir / preencher ----
+function modoPassagem() {
+    const salvo = !!passagemAtual;
+    $('psTitulo').textContent = salvo ? `Passagem #${passagemAtual.codigo} — ${nomePassageiro(passagemAtual)}` : 'Nova venda de passagem';
+    $('psSub').textContent = salvo ? 'Lance os trechos (conexões) e os pagamentos; os valores se atualizam sozinhos.' : 'Preencha os dados e grave; depois lance os trechos e os pagamentos.';
+    $('btnGravarPassagem').textContent = salvo ? 'Gravar alterações' : 'Gravar';
+    $('btnPagamentosPassagem').classList.toggle('hidden', !salvo);
+    $('btnExcluirPassagem').classList.toggle('hidden', !(salvo && meuPerfil.ehPrincipal));
+    $('cartaoTrechos').classList.toggle('hidden', !salvo);
+    recalcPassagem();
+}
+function preencherFormPassagem() {
+    const p = passagemAtual || {};
+    $('pCompanhia').value = p.companhia_id || ''; campoPCompanhia.mostrar();
+    $('pMaquina').value = passagemAtual ? (p.maquina_id || '') : ultimaMaquina(); campoPMaquina.mostrar(); $('pRegraHint').textContent = '';
+    $('pEmissao').value = p.data_emissao || hojeISO(); $('pBilhete').value = p.numero_bilhete || ''; $('pFicha').value = p.ficha || ''; $('pCodExterno').value = p.codigo_externo || '';
+    $('pStatus').value = p.status || 'emitida'; $('pObs').value = p.observacoes || '';
+    $('pNome').value = p.passageiro_nome || ''; $('pSobrenome').value = p.passageiro_sobrenome || ''; $('pIndicador').value = p.indicador || '';
+    $('pOrigem').value = p.origem_id || ''; campoPOrigem.mostrar(); $('pDestino').value = p.destino_id || ''; campoPDestino.mostrar();
+    $('pDataVoo').value = p.data_voo || ''; $('pNumVoo').value = p.numero_voo || '';
+    const f = (v) => (v == null || (Number(v) === 0 && !passagemAtual)) ? '' : fmtNum(Number(v));
+    $('pTarifa').value = f(p.valor_tarifa); $('pTaxa').value = f(p.valor_taxa); $('pOutros').value = f(p.valor_outros); $('pDU').value = f(p.valor_du);
+    $('pComEmpresa').value = f(p.comissao_empresa); $('pPctEmpresa').value = p.pct_comissao_empresa != null ? fmtNum(Number(p.pct_comissao_empresa)) : '';
+    $('pComVenda').value = f(p.comissao_venda); $('pPctVenda').value = p.pct_comissao_venda != null ? fmtNum(Number(p.pct_comissao_venda)) : '';
+    $('pComAgencia').value = f(p.comissao_agencia); $('pPctIndicador').value = p.pct_indicador != null ? fmtNum(Number(p.pct_indicador)) : '';
+    $('pPctDU').value = p.pct_du != null ? fmtNum(Number(p.pct_du)) : '';
+}
+async function carregarDetalhePassagem(id) {
+    const [p, t, pg] = await Promise.all([
+        sb.from('viagens_passagens').select('*').eq('id', id).single(),
+        sb.from('viagens_passagens_trechos').select('*').eq('passagem_id', id).order('ordem').order('criado_em'),
+        sb.from('viagens_pagamentos').select('*, viagens_caixas(status, data)').eq('passagem_id', id).order('data_pagamento', { ascending: false }).order('criado_em', { ascending: false })
+    ]);
+    if (p.error || !p.data) throw new Error((p.error && p.error.message) || 'Passagem não encontrada.');
+    passagemAtual = p.data; trechosAtual = t.data || []; pagamentosPassagem = pg.data || [];
+}
+async function recarregarPassagemAtual() { if (!passagemAtual) return; await carregarDetalhePassagem(passagemAtual.id); recalcPassagem(); renderizarTrechos(); }
+async function abrirPassagem(id) {
+    $('psFormMsg').textContent = ''; $('trMsg').textContent = '';
+    if (!id) { passagemAtual = null; trechosAtual = []; pagamentosPassagem = []; }
+    else { try { await carregarDetalhePassagem(id); } catch (e) { alert('Não consegui abrir a passagem: ' + e.message); return; } }
+    preencherFormPassagem(); limparFormTrecho(); renderizarTrechos(); modoPassagem();
+    $('modal-passagem').classList.add('aberto');
+    if (!id) $('pNome').focus();
+}
+$('btnFecharPassagem').addEventListener('click', () => { $('modal-passagem').classList.remove('aberto'); atualizarPassagensDeFundo(); });
+$('btnNovaCompanhia').addEventListener('click', () => abrirCadastro('companhias', null, (r) => { $('pCompanhia').value = r.id; campoPCompanhia.mostrar(); aplicarRegraComissao(r); }));
+$('btnNovaMaquina').addEventListener('click', () => abrirCadastro('maquinas', null, (r) => { $('pMaquina').value = r.id; campoPMaquina.mostrar(); aplicarRegraComissao(r); }));
+$('btnNovoAeroOrigem').addEventListener('click', () => abrirCadastro('aeroportos', null, (r) => { $('pOrigem').value = r.id; campoPOrigem.mostrar(); }));
+$('btnNovoAeroDestino').addEventListener('click', () => abrirCadastro('aeroportos', null, (r) => { $('pDestino').value = r.id; campoPDestino.mostrar(); }));
+
+// ---- gravar / excluir ----
+$('btnGravarPassagem').addEventListener('click', async () => {
+    const msg = $('psFormMsg'); msg.className = 'status-msg erro';
+    const nome = $('pNome').value.trim(), emissao = $('pEmissao').value;
+    if (!nome) { msg.textContent = 'Informe o nome do passageiro.'; $('pNome').focus(); return; }
+    if (!emissao) { msg.textContent = 'Informe a data da emissão.'; $('pEmissao').focus(); return; }
+    const pct = (id) => { const v = parseNum($(id).value); return v == null ? null : arredondar2(v); };
+    for (const [id, rot] of [['pPctEmpresa', 'da empresa'], ['pPctVenda', 'de venda'], ['pPctIndicador', 'da agência indicadora'], ['pPctDU', 'do DU']]) {
+        const v = pct(id); if (v != null && (v < 0 || v > 100)) { msg.textContent = `O % de comissão ${rot} precisa estar entre 0 e 100.`; $(id).focus(); return; }
+    }
+    const t = nv('pTarifa'), tx = nv('pTaxa'), ou = nv('pOutros'), du = nv('pDU'), ce = nv('pComEmpresa'), cv = nv('pComVenda'), ca = nv('pComAgencia');
+    if ([t, tx, ou, du, ce, cv, ca].some(x => x < 0)) { msg.textContent = 'Os valores não podem ser negativos.'; return; }
+    if (t - ce + tx + ou - du < -0.004 && !confirm('O depósito à companhia ficou negativo. Gravar mesmo assim?')) return;
+    const reg = {
+        companhia_id: $('pCompanhia').value || null, maquina_id: $('pMaquina').value || null, vendedor: (maquinas.find(m => m.id === $('pMaquina').value) || {}).nome || null, data_emissao: emissao, numero_bilhete: $('pBilhete').value.trim() || null, ficha: $('pFicha').value.trim() || null,
+        codigo_externo: $('pCodExterno').value.trim() || null, status: $('pStatus').value, observacoes: $('pObs').value.trim() || null,
+        passageiro_nome: nome, passageiro_sobrenome: $('pSobrenome').value.trim() || null, indicador: $('pIndicador').value.trim() || null,
+        origem_id: $('pOrigem').value || null, destino_id: $('pDestino').value || null, data_voo: $('pDataVoo').value || null, numero_voo: $('pNumVoo').value.trim() || null,
+        valor_tarifa: arredondar2(t), valor_taxa: arredondar2(tx), valor_outros: arredondar2(ou), valor_du: arredondar2(du),
+        pct_comissao_empresa: pct('pPctEmpresa'), comissao_empresa: arredondar2(ce), pct_comissao_venda: pct('pPctVenda'), comissao_venda: arredondar2(cv), pct_indicador: pct('pPctIndicador'), comissao_agencia: arredondar2(ca), pct_du: pct('pPctDU')
+    };
+    if (passagemAtual && reg.status === 'cancelada' && passagemAtual.status !== 'cancelada' && !confirm('Cancelar esta passagem? Ela deixa de contar nos totais; os pagamentos já lançados continuam registrados.')) return;
+    const btn = $('btnGravarPassagem'); btn.disabled = true;
+    try {
+        if (!passagemAtual) {
+            const { data, error } = await sb.from('viagens_passagens').insert({ ...reg, unidade_negocio_id: meuPerfil.unidadeId, criado_por: meuPerfil.email }).select().single();
+            if (error) throw error;
+            await registrarSentinela('viagens_passagem_criada', `Criou a passagem #${data.codigo} de "${nome}" — total ${formatarMoeda(data.valor_total)}, lucro ${formatarMoeda(data.lucro)}`);
+            await carregarDetalhePassagem(data.id);
+        } else {
+            const antes = passagemAtual;
+            const { error } = await sb.from('viagens_passagens').update({ ...reg, atualizado_em: new Date().toISOString() }).eq('id', antes.id);
+            if (error) throw error;
+            await carregarDetalhePassagem(antes.id);
+            if (antes.status !== reg.status) await registrarSentinela('viagens_passagem_situacao', `Passagem #${antes.codigo} "${nomePassageiro(antes)}": ${antes.status} → ${reg.status}`);
+            if (Number(antes.valor_total) !== Number(passagemAtual.valor_total) || Number(antes.lucro) !== Number(passagemAtual.lucro) || Number(antes.deposito) !== Number(passagemAtual.deposito))
+                await registrarSentinela('viagens_passagem_valores', `Passagem #${antes.codigo} "${nomePassageiro(antes)}": total ${formatarMoeda(antes.valor_total)} → ${formatarMoeda(passagemAtual.valor_total)}; depósito ${formatarMoeda(antes.deposito)} → ${formatarMoeda(passagemAtual.deposito)}; lucro ${formatarMoeda(antes.lucro)} → ${formatarMoeda(passagemAtual.lucro)}`);
+        }
+        try { if ($('pMaquina').value) localStorage.setItem(chaveUltimaMaquina(), $('pMaquina').value); } catch (e) { /* sem armazenamento */ }
+        preencherFormPassagem(); modoPassagem(); renderizarTrechos();
+        msg.className = 'status-msg sucesso'; msg.textContent = 'Passagem gravada.';
+        atualizarPassagensDeFundo();
+    } catch (e) { msg.textContent = e.code === '23505' ? 'Já existe outra passagem com esse código externo.' : e.code === '22001' ? 'O código externo pode ter no máximo 20 caracteres.' : 'Não consegui gravar: ' + (e.message || e); }
+    finally { btn.disabled = false; }
+});
+$('btnExcluirPassagem').addEventListener('click', async () => {
+    if (!passagemAtual) return;
+    const p = passagemAtual;
+    if (!confirm(`Excluir a passagem #${p.codigo} de "${nomePassageiro(p)}"? Isso não pode ser desfeito. Se já houver pagamentos, cancele a passagem em vez de excluir.`)) return;
+    const { error } = await sb.from('viagens_passagens').delete().eq('id', p.id);
+    if (error) { $('psFormMsg').className = 'status-msg erro'; $('psFormMsg').textContent = /foreign key|viola/i.test(error.message) ? 'Esta passagem tem pagamentos lançados e não pode ser excluída. Mude a situação para Cancelada.' : 'Não consegui excluir: ' + error.message; return; }
+    await registrarSentinela('viagens_passagem_excluida', `Excluiu a passagem #${p.codigo} de "${nomePassageiro(p)}" (bilhete ${p.numero_bilhete || '—'}), total ${formatarMoeda(p.valor_total)}, lucro ${formatarMoeda(p.lucro)}`);
+    $('modal-passagem').classList.remove('aberto'); passagemAtual = null; atualizarPassagensDeFundo();
+});
+
+// ---- trechos / conexões ("Lançar trechos") ----
+function limparFormTrecho() { $('trOrigem').value = ''; campoTrOrigem.mostrar(); $('trDestino').value = ''; campoTrDestino.mostrar(); $('trData').value = ''; $('trVoo').value = ''; }
+function renderizarTrechos() {
+    $('qtdTrechos').textContent = trechosAtual.length ? `${trechosAtual.length} trecho(s)` : '';
+    $('corpoTrechos').innerHTML = trechosAtual.map((t, i) => `<tr><td class="num">${i + 1}</td><td>${escapeHtml(aeroCurto(t.origem_id) || '—')}</td><td>${escapeHtml(aeroCurto(t.destino_id) || '—')}</td><td>${t.data_voo ? formatarDataSemFuso(t.data_voo) : ''}</td><td>${escapeHtml(t.numero_voo || '')}</td>
+        <td><button class="btn btn-perigo btn-sm" data-tr-del="${t.id}" title="Excluir trecho">🗑</button></td></tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhum trecho lançado (o voo principal está na seção acima).</td></tr>';
+}
+$('btnAdicionarTrecho').addEventListener('click', async () => {
+    const msg = $('trMsg'); msg.className = 'status-msg erro';
+    if (!passagemAtual) return;
+    if (!$('trOrigem').value || !$('trDestino').value) { msg.textContent = 'Escolha a origem e o destino do trecho.'; return; }
+    const ordem = trechosAtual.reduce((m, t) => Math.max(m, t.ordem || 0), 0) + 1;
+    const { error } = await sb.from('viagens_passagens_trechos').insert({ unidade_negocio_id: meuPerfil.unidadeId, passagem_id: passagemAtual.id, ordem, origem_id: $('trOrigem').value, destino_id: $('trDestino').value, data_voo: $('trData').value || null, numero_voo: $('trVoo').value.trim() || null });
+    if (error) { msg.textContent = 'Não consegui lançar o trecho: ' + error.message; return; }
+    await carregarDetalhePassagem(passagemAtual.id); limparFormTrecho(); renderizarTrechos();
+    msg.className = 'status-msg sucesso'; msg.textContent = 'Trecho lançado.';
+    $('trOrigem_busca').focus();
+});
+$('corpoTrechos').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-tr-del]'); if (!b) return;
+    const t = trechosAtual.find(x => x.id === b.dataset.trDel); if (!t) return;
+    if (!confirm(`Excluir o trecho ${aeroCurto(t.origem_id)} → ${aeroCurto(t.destino_id)}?`)) return;
+    const { error } = await sb.from('viagens_passagens_trechos').delete().eq('id', t.id);
+    if (error) { $('trMsg').className = 'status-msg erro'; $('trMsg').textContent = 'Não consegui excluir: ' + error.message; return; }
+    await registrarSentinela('viagens_trecho_excluido', `Passagem #${passagemAtual.codigo} "${nomePassageiro(passagemAtual)}": excluiu o trecho ${aeroCurto(t.origem_id)} → ${aeroCurto(t.destino_id)} ${t.data_voo ? formatarDataSemFuso(t.data_voo) : ''} ${t.numero_voo || ''}`);
+    await carregarDetalhePassagem(passagemAtual.id); renderizarTrechos();
+});
+
+// ---------------------------------------------------------------
+// CAIXA DO DIA
+// ---------------------------------------------------------------
+let caixaDoDia = null, pagamentosDoDia = [];
+async function carregarCaixaDia() {
+    const data = $('cxData').value; if (!data) return;
+    const [c, p] = await Promise.all([
+        sb.from('viagens_caixas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('data', data).maybeSingle(),
+        sb.from('viagens_pagamentos').select('*, viagens_grupos(nome, codigo), viagens_passagens(codigo, passageiro_nome, passageiro_sobrenome)').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('data_pagamento', data).order('criado_em')
+    ]);
+    caixaDoDia = c.data || null; pagamentosDoDia = p.data || [];
+    const erro = c.error || p.error;
+    $('cxMsg').className = 'status-msg' + (erro ? ' erro' : ''); $('cxMsg').textContent = erro ? 'Não consegui carregar o caixa: ' + erro.message : '';
+    renderizarCaixaDia(); renderizarCaixasRecentes();
+}
+function rotuloPagCaixa(p) {
+    if (p.viagens_grupos) return `#${p.viagens_grupos.codigo} ${p.viagens_grupos.nome}`;
+    if (p.viagens_passagens) return `Passagem #${p.viagens_passagens.codigo} ${nomePassageiro(p.viagens_passagens)}`;
+    return '';
+}
+function renderizarCaixaDia() {
+    const st = caixaDoDia ? caixaDoDia.status : 'aberto';
+    $('cxSituacao').innerHTML = `<span class="pill pill-${st}">Caixa ${STATUS_CAIXA[st].toLowerCase()}</span>`;
+    const validos = pagamentosDoDia.filter(p => !p.cancelado);
+    const total = validos.reduce((a, p) => a + Number(p.valor), 0);
+    const porForma = {}; validos.forEach(p => { porForma[p.forma] = (porForma[p.forma] || 0) + Number(p.valor); });
+    $('cxCards').innerHTML = `<div class="stat-card"><div class="label">Total do dia</div><div class="value">${formatarMoeda(total)}</div></div>` +
+        Object.entries(porForma).map(([f, v]) => `<div class="stat-card"><div class="label">${escapeHtml(FORMAS[f] || f)}</div><div class="value">${formatarMoeda(v)}</div></div>`).join('');
+    $('cxCorpo').innerHTML = pagamentosDoDia.map(p => `<tr class="${p.cancelado ? 'cancelado' : ''}"><td>${escapeHtml(rotuloPagCaixa(p))}</td><td>${escapeHtml(FORMAS[p.forma] || p.forma)}</td><td>${escapeHtml(p.referencia || '')}</td><td>${escapeHtml(ORIGENS[p.origem] || p.origem)}</td><td class="num">${formatarMoeda(p.valor)}</td><td>${p.cancelado ? 'Cancelado' : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="vazio">Nenhum pagamento neste dia.</td></tr>';
+    $('cxBtnFechar').classList.toggle('hidden', st !== 'aberto');
+    $('cxBtnReabrir').classList.toggle('hidden', !(st === 'fechado' && meuPerfil.ehPrincipal));
+    if (st === 'aceito') { $('cxMsg').className = 'status-msg sucesso'; $('cxMsg').textContent = `Aceito pelo programa de integração${caixaDoDia.aceito_em ? ' em ' + formatarDataHora(caixaDoDia.aceito_em) : ''}${caixaDoDia.referencia_externa ? ' — ref. ' + caixaDoDia.referencia_externa : ''}. Não pode mais ser alterado.`; }
+    else if (st === 'fechado') { $('cxMsg').className = 'status-msg'; $('cxMsg').textContent = 'Caixa fechado: aguardando o aceite do programa de integração.'; }
+}
+function renderizarCaixasRecentes() {
+    $('cxRecentes').innerHTML = caixasRecentes.map(c => `<tr data-cx-data="${c.data}" style="cursor:pointer;"><td>${formatarDataSemFuso(c.data)}</td><td><span class="pill pill-${c.status}">${STATUS_CAIXA[c.status]}</span></td><td class="num">${formatarMoeda(c.total)}</td><td>${escapeHtml(c.fechado_por || '')}${c.fechado_em ? `<small class="sub">${formatarDataHora(c.fechado_em)}</small>` : ''}</td><td>${c.aceito_em ? formatarDataHora(c.aceito_em) + (c.referencia_externa ? `<small class="sub">ref. ${escapeHtml(c.referencia_externa)}</small>` : '') : ''}</td></tr>`).join('') || '<tr><td colspan="5" class="vazio">Nenhum caixa fechado ainda.</td></tr>';
+}
+$('cxRecentes').addEventListener('click', (e) => { const tr = e.target.closest('[data-cx-data]'); if (tr) { $('cxData').value = tr.dataset.cxData; carregarCaixaDia(); } });
+$('cxData').addEventListener('change', carregarCaixaDia);
+$('cxBtnFechar').addEventListener('click', async () => {
+    const data = $('cxData').value, validos = pagamentosDoDia.filter(p => !p.cancelado);
+    const total = validos.reduce((a, p) => a + Number(p.valor), 0);
+    if (!confirm(`Fechar o caixa de ${formatarDataSemFuso(data)} com ${validos.length} pagamento(s) totalizando ${formatarMoeda(total)}?\n\nDepois de fechado, os pagamentos deste dia não podem mais ser alterados.`)) return;
+    const { error } = await sb.rpc('viagens_fechar_caixa', { p_unidade: meuPerfil.unidadeId, p_data: data, p_por: meuPerfil.email });
+    if (error) { $('cxMsg').className = 'status-msg erro'; $('cxMsg').textContent = error.message; return; }
+    await registrarSentinela('viagens_caixa_fechado', `Fechou o caixa de ${formatarDataSemFuso(data)}: ${validos.length} pagamento(s), ${formatarMoeda(total)}`);
+    await carregarCaixasRecentes(); await carregarCaixaDia(); renderizarDashboard();
+});
+$('cxBtnReabrir').addEventListener('click', async () => {
+    if (!caixaDoDia) return;
+    if (!confirm(`Reabrir o caixa de ${formatarDataSemFuso(caixaDoDia.data)}? Os pagamentos do dia voltam a poder ser alterados.`)) return;
+    const { error } = await sb.rpc('viagens_reabrir_caixa', { p_caixa: caixaDoDia.id });
+    if (error) { $('cxMsg').className = 'status-msg erro'; $('cxMsg').textContent = error.message; return; }
+    await registrarSentinela('viagens_caixa_reaberto', `Reabriu o caixa de ${formatarDataSemFuso(caixaDoDia.data)} (total ${formatarMoeda(caixaDoDia.total)})`);
+    await carregarCaixasRecentes(); await carregarCaixaDia(); renderizarDashboard();
+});
+
+// ---------------------------------------------------------------
+// CADASTROS (operadoras, hotéis, acomodações/serviços)
+// ---------------------------------------------------------------
+const CADASTROS = {
+    operadoras: { tabela: 'viagens_operadoras', rotulo: 'Operadora', lista: () => operadoras, definir: (v) => { operadoras = v; },
+        campos: [{ id: 'nome', rot: 'Nome *', req: true }, { id: 'codigo_externo', rot: 'Código externo (até 20 caracteres)', max: 20 }, { id: 'contato', rot: 'Contato' }, { id: 'telefone', rot: 'Telefone' }, { id: 'email', rot: 'E-mail' }, { id: 'observacoes', rot: 'Observações', area: true }],
+        colunas: [['Nome', r => `<strong>${escapeHtml(r.nome)}</strong>`], ['Cód. externo', r => escapeHtml(r.codigo_externo || '')], ['Contato', r => escapeHtml([r.contato, r.telefone].filter(Boolean).join(' · '))], ['E-mail', r => escapeHtml(r.email || '')]] },
+    hoteis: { tabela: 'viagens_hoteis', rotulo: 'Hotel', lista: () => hoteis, definir: (v) => { hoteis = v; },
+        campos: [{ id: 'nome', rot: 'Nome *', req: true }, { id: 'codigo_externo', rot: 'Código externo (até 20 caracteres)', max: 20 }, { id: 'cidade', rot: 'Cidade' }, { id: 'endereco', rot: 'Endereço' }, { id: 'telefone', rot: 'Telefone' }, { id: 'email', rot: 'E-mail' }, { id: 'contato', rot: 'Contato' }, { id: 'observacoes', rot: 'Observações', area: true }],
+        colunas: [['Nome', r => `<strong>${escapeHtml(r.nome)}</strong>`], ['Cód. externo', r => escapeHtml(r.codigo_externo || '')], ['Cidade', r => escapeHtml(r.cidade || '')], ['Contato', r => escapeHtml([r.contato, r.telefone].filter(Boolean).join(' · '))]] },
+    servicos: { tabela: 'viagens_servicos', rotulo: 'Serviço', lista: () => servicos, definir: (v) => { servicos = v; },
+        campos: [{ id: 'nome', rot: 'Nome *', req: true }, { id: 'codigo_externo', rot: 'Código externo (código no sistema antigo, até 20 caracteres)', max: 20 },
+            { id: 'tipo', rot: 'Tipo', opcoes: { servico: 'Serviço / taxa / extra', acomodacao: 'Acomodação (ocupa quarto, entra no rooming list)' } },
+            { id: 'pessoas', rot: 'Pessoas por unidade (acomodação)', num: true }, { id: 'ordem', rot: 'Ordem na lista', num: true },
+            { id: 'usa_reservas', rot: 'Usar em Reservas', bool: true, def: true }, { id: 'usa_eventos', rot: 'Usar em Eventos', bool: true }, { id: 'usa_pacotes', rot: 'Usar em Pacotes', bool: true }],
+        colunas: [['Cód.', r => escapeHtml(r.codigo_externo || '')], ['Serviço', r => `<strong>${escapeHtml(r.nome)}</strong>`], ['Tipo', r => r.tipo === 'acomodacao' ? 'Acomodação' : 'Serviço'],
+            ['Usado em', r => [r.usa_reservas ? 'Reservas' : '', r.usa_eventos ? 'Eventos' : '', r.usa_pacotes ? 'Pacotes' : ''].filter(Boolean).join(' · ') || '—']] },
+    aeroportos: { tabela: 'viagens_aeroportos', rotulo: 'Aeroporto', lista: () => aeroportos, definir: (v) => { aeroportos = v; },
+        campos: [{ id: 'nome', rot: 'Nome * (cidade/aeroporto, ex.: ARACAJU)', req: true }, { id: 'sigla', rot: 'Sigla (ex.: AJU)', max: 4 }, { id: 'codigo_externo', rot: 'Código externo (código no sistema antigo, até 20 caracteres)', max: 20 }],
+        colunas: [['Cód. externo', r => escapeHtml(r.codigo_externo || '')], ['Sigla', r => `<strong>${escapeHtml(r.sigla || '')}</strong>`], ['Aeroporto / destino', r => escapeHtml(r.nome)]] },
+    companhias: { tabela: 'viagens_companhias', rotulo: 'Companhia', lista: () => companhias, definir: (v) => { companhias = v; },
+        campos: [{ id: 'nome', rot: 'Nome * (ex.: GOL, TAM, TAM VIAGENS)', req: true }, { id: 'codigo_externo', rot: 'Código externo (código no sistema antigo, até 20 caracteres)', max: 20 }],
+        colunas: [['Cód. externo', r => escapeHtml(r.codigo_externo || '')], ['Companhia', r => `<strong>${escapeHtml(r.nome)}</strong>`], ['Regras', r => String(regras.filter(x => x.companhia_id === r.id).length)]] },
+    maquinas: { tabela: 'viagens_maquinas', rotulo: 'Máquina / vendedor', lista: () => maquinas, definir: (v) => { maquinas = v; }, descr: (r) => `${r.codigo} — ${r.nome}`,
+        campos: [{ id: 'codigo', rot: 'Código da máquina * (ex.: 007)', req: true, max: 20 }, { id: 'nome', rot: 'Nome do vendedor *', req: true }],
+        colunas: [['Código', r => `<strong>${escapeHtml(r.codigo)}</strong>`], ['Vendedor', r => escapeHtml(r.nome)]] },
+    regras: { tabela: 'viagens_companhias_regras', rotulo: 'Regra de comissão', lista: () => regras.slice().sort((a, b) => cmNome(a.companhia_id).localeCompare(cmNome(b.companhia_id), 'pt-BR') || mqRotulo(a.maquina_id).localeCompare(mqRotulo(b.maquina_id))),
+        definir: (v) => { regras = v; }, descr: (r) => `${cmNome(r.companhia_id)} / ${mqRotulo(r.maquina_id)}`, busca: (r) => [cmNome(r.companhia_id), mqRotulo(r.maquina_id)].join(' '),
+        campos: [{ id: 'companhia_id', rot: 'Companhia *', req: true, opcoesFn: () => companhias.filter(x => x.ativo).map(x => ({ id: x.id, texto: x.nome })) },
+            { id: 'maquina_id', rot: 'Máquina / vendedor *', req: true, opcoesFn: () => maquinas.filter(x => x.ativo).map(x => ({ id: x.id, texto: `${x.codigo} — ${x.nome}` })) },
+            { id: 'pct_comissao_venda', rot: 'Comissão de venda (% sobre a tarifa, do vendedor)', dec: true, pct: true }, { id: 'pct_comissao_empresa', rot: 'Comissão da empresa (% sobre a tarifa, paga pela companhia)', dec: true, pct: true },
+            { id: 'pct_du', rot: 'DU (% sobre a tarifa; o valor fica com a agência)', dec: true, pct: true }],
+        colunas: [['Companhia', r => `<strong>${escapeHtml(cmNome(r.companhia_id))}</strong>`], ['Máquina', r => escapeHtml(mqRotulo(r.maquina_id))], ['Com. venda', r => fmtNum(Number(r.pct_comissao_venda)) + '%'], ['Com. empresa', r => fmtNum(Number(r.pct_comissao_empresa)) + '%'], ['DU', r => fmtNum(Number(r.pct_du)) + '%']] }
+};
+let cadEditandoId = null, cadAoSalvar = null;
+function renderizarCadastro() {
+    const c = CADASTROS[cadAtual];
+    document.querySelectorAll('.sub-aba').forEach(b => b.classList.toggle('ativa', b.dataset.cad === cadAtual));
+    $('tabelaCad').querySelector('thead').innerHTML = '<tr>' + c.colunas.map(x => `<th>${x[0]}</th>`).join('') + '<th>Situação</th><th></th></tr>';
+    const t = normalizar($('cadBusca').value.trim());
+    const todos = c.lista(), lista = todos.filter(r => !t || normalizar(c.busca ? c.busca(r) : [r.nome, r.codigo, r.codigo_externo, r.sigla, r.cidade, r.contato].join(' ')).includes(t));
+    $('tabelaCad').querySelector('tbody').innerHTML = lista.map(r => `<tr class="${r.ativo ? '' : 'cancelado'}">${c.colunas.map(x => `<td>${x[1](r)}</td>`).join('')}<td><span class="pill pill-${r.ativo ? 'ativo' : 'inativo'}">${r.ativo ? 'Ativo' : 'Inativo'}</span></td>
+        <td style="white-space:nowrap;"><button class="btn btn-cinza btn-sm" data-cad-edit="${r.id}">Editar</button> <button class="btn btn-cinza btn-sm" data-cad-ativo="${r.id}">${r.ativo ? 'Desativar' : 'Ativar'}</button></td></tr>`).join('')
+        || `<tr><td colspan="${c.colunas.length + 2}" class="vazio">${todos.length ? 'Nada encontrado.' : 'Nada cadastrado ainda.'}</td></tr>`;
+    $('btnCadPadrao').classList.toggle('hidden', !(cadAtual === 'servicos' && !todos.length));
+}
+document.querySelectorAll('.sub-aba').forEach(b => b.addEventListener('click', () => { cadAtual = b.dataset.cad; $('cadBusca').value = ''; renderizarCadastro(); }));
+$('cadBusca').addEventListener('input', renderizarCadastro);
+function abrirCadastro(tipo, id, aoSalvar) {
+    const c = CADASTROS[tipo]; cadAtual = tipo; cadEditandoId = id || null; cadAoSalvar = aoSalvar || null;
+    const r = id ? c.lista().find(x => x.id === id) : null;
+    $('cadTitulo').textContent = (id ? 'Editar ' : 'Novo(a) ') + c.rotulo.toLowerCase();
+    $('cadCampos').innerHTML = c.campos.map(f => {
+        if (f.opcoesFn) return `<div class="campo"><label>${f.rot}</label><select id="cad_${f.id}"><option value="">—</option>${f.opcoesFn().map(o => `<option value="${o.id}" ${r && r[f.id] === o.id ? 'selected' : ''}>${escapeHtml(o.texto)}</option>`).join('')}</select></div>`;
+        if (f.bool) return `<label class="campo-check"><input type="checkbox" id="cad_${f.id}" ${(r ? r[f.id] : f.def) ? 'checked' : ''}> ${f.rot}</label>`;
+        const v = r ? (f.dec ? fmtNum(Number(r[f.id])) : (r[f.id] ?? '')) : (f.id === 'pessoas' ? 1 : f.id === 'ordem' ? (c.lista().length + 1) : '');
+        const ctl = f.opcoes ? `<select id="cad_${f.id}">${Object.entries(f.opcoes).map(([k, t]) => `<option value="${k}" ${v === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`
+            : f.area ? `<textarea id="cad_${f.id}">${escapeHtml(v)}</textarea>` : `<input type="text" id="cad_${f.id}" ${f.num ? 'inputmode="numeric"' : f.dec ? 'inputmode="decimal"' : ''} ${f.max ? `maxlength="${f.max}"` : ''} value="${escapeHtml(v)}">`;
+        return `<div class="campo"><label>${f.rot}</label>${ctl}</div>`;
+    }).join('');
+    $('cadMsg').textContent = '';
+    $('modal-cad').classList.add('aberto');
+    const primeiro = $('cadCampos').querySelector('input,select,textarea'); if (primeiro) primeiro.focus();
+}
+$('btnNovoCad').addEventListener('click', () => abrirCadastro(cadAtual, null, null));
+$('btnFecharCad').addEventListener('click', () => $('modal-cad').classList.remove('aberto'));
+$('btnNovaOperadora').addEventListener('click', () => abrirCadastro('operadoras', null, (r) => { $('gOperadora').value = r.id; campoOperadora.mostrar(); }));
+$('btnNovoHotel').addEventListener('click', () => abrirCadastro('hoteis', null, async (r) => { $('gHotel').value = r.id; campoHotel.mostrar(); await carregarTarifasHotel(); }));
+$('tabelaCad').addEventListener('click', async (e) => {
+    const ed = e.target.closest('[data-cad-edit]'), at = e.target.closest('[data-cad-ativo]');
+    if (ed) abrirCadastro(cadAtual, ed.dataset.cadEdit, null);
+    if (at) {
+        const c = CADASTROS[cadAtual], r = c.lista().find(x => x.id === at.dataset.cadAtivo); if (!r) return;
+        const { error } = await sb.from(c.tabela).update({ ativo: !r.ativo }).eq('id', r.id);
+        if (error) { alert('Não consegui alterar: ' + error.message); return; }
+        await registrarSentinela('viagens_cadastro_situacao', `${c.rotulo} "${c.descr ? c.descr(r) : r.nome}": ${r.ativo ? 'desativado' : 'ativado'}`);
+        await carregarCadastros(); renderizarCadastro(); renderizarSelectsFiltro();
+    }
+});
+$('btnSalvarCad').addEventListener('click', async () => {
+    const c = CADASTROS[cadAtual], msg = $('cadMsg'); msg.className = 'status-msg erro';
+    const reg = {};
+    for (const f of c.campos) {
+        if (f.bool) { reg[f.id] = $('cad_' + f.id).checked; continue; }
+        let v = $('cad_' + f.id).value.trim();
+        if (f.req && !v) { msg.textContent = f.opcoesFn ? 'Escolha a companhia e a máquina.' : 'Preencha todos os campos obrigatórios (*).'; return; }
+        if (f.dec) { const n = parseNum(v) ?? 0; if (n < 0 || (f.pct && n > 100)) { msg.textContent = f.pct ? 'O percentual precisa estar entre 0 e 100.' : 'O valor não pode ser negativo.'; return; } reg[f.id] = n; continue; }
+        reg[f.id] = f.num ? (parseInt(v, 10) || 0) : (v || null);
+    }
+    const btn = $('btnSalvarCad'); btn.disabled = true;
+    try {
+        let salvo;
+        if (cadEditandoId) {
+            const { data, error } = await sb.from(c.tabela).update(reg).eq('id', cadEditandoId).select().single(); if (error) throw error; salvo = data;
+            await registrarSentinela('viagens_cadastro_editado', `${c.rotulo} "${c.descr ? c.descr(salvo) : salvo.nome}" editado`);
+        } else {
+            const { data, error } = await sb.from(c.tabela).insert({ ...reg, unidade_negocio_id: meuPerfil.unidadeId }).select().single(); if (error) throw error; salvo = data;
+            await registrarSentinela('viagens_cadastro_criado', `${c.rotulo} "${c.descr ? c.descr(salvo) : salvo.nome}" cadastrado`);
+        }
+        await carregarCadastros(); renderizarCadastro(); renderizarSelectsFiltro(); preencherSelectsLinha();
+        $('modal-cad').classList.remove('aberto');
+        if (cadAoSalvar) await cadAoSalvar(salvo);
+    } catch (e) { msg.textContent = e.code === '23505' ? (/codext/i.test(e.message || '') ? 'Já existe um cadastro com esse código externo.' : (cadAtual === 'regras' ? 'Já existe uma regra para essa companhia e máquina.' : cadAtual === 'maquinas' ? 'Já existe uma máquina com esse código.' : 'Já existe um cadastro com esse nome.')) : e.code === '22001' ? 'O código externo pode ter no máximo 20 caracteres.' : 'Não consegui salvar: ' + (e.message || e); }
+    finally { btn.disabled = false; }
+});
+$('btnCadPadrao').addEventListener('click', async () => {
+    const faltam = SERVICOS_PADRAO.filter(p => !servicos.some(x => normalizar(x.nome) === normalizar(p.nome) || (x.codigo_externo && x.codigo_externo === p.codigo_externo)));
+    if (!faltam.length) { alert('As acomodações padrão já estão cadastradas.'); return; }
+    const { error } = await sb.from('viagens_servicos').insert(faltam.map(a => ({ ...a, unidade_negocio_id: meuPerfil.unidadeId })));
+    if (error) { alert('Não consegui criar: ' + error.message); return; }
+    await registrarSentinela('viagens_cadastro_criado', 'Criou as acomodações padrão (' + faltam.map(a => a.nome).join(', ') + ')');
+    await carregarCadastros(); renderizarCadastro();
+});
+
+// ---------------------------------------------------------------
+// AJUDA
+// ---------------------------------------------------------------
+const AJUDA_VIAGENS = {
+    titulo: 'Agência de Viagens',
+    ultimaRevisao: '06/11/2026',
+    secoes: [
+        { id: 'geral', titulo: 'Visão geral', corpo: `
+            <p>Módulo para agências que <strong>reservam hospedagem em hotéis</strong> para grupos de passageiros ou passageiros individuais, vendidos por operadoras.
+            Cada reserva é um <strong>grupo</strong> (um passageiro individual é um grupo de uma pessoa) com suas linhas de hóspedes, os pagamentos recebidos e o fechamento do caixa do dia.</p>
+            <ul>
+                <li><strong>Dashboard</strong>: vendido e comissão do mês, o que falta receber, vendas por operadora e por hotel, próximas entradas.</li>
+                <li><strong>Reservas</strong>: a lista de grupos e a tela de cada grupo (hóspedes, valores, rooming list, pagamentos).</li>
+                <li><strong>Passagens</strong>: venda de passagem aérea (a agência compra para o cliente e ganha comissão da companhia): tarifa, taxa, DU, comissões, depósito, lucro, trechos e pagamentos.</li>
+                <li><strong>Caixa</strong>: pagamentos do dia (hospedagem e passagens) e fechamento.</li>
+                <li><strong>Cadastros</strong>: operadoras, hotéis e tipos de acomodação/serviço.</li>
+            </ul>
+            <p>Em evolução: tarifas por período por hotel (a estrutura já está no banco; a tela de preenchimento vem numa próxima atualização), venda pelo site.</p>
+        ` },
+        { id: 'dashboard', titulo: 'Dashboard', corpo: `
+            <ul>
+                <li>Os números do mês consideram os grupos com <strong>entrada no mês</strong> e não contam reservas canceladas.</li>
+                <li><strong>Comissão da agência</strong> = total vendido − custo.</li>
+                <li><strong>A receber em aberto</strong> = o que falta receber de todas as reservas não canceladas dos últimos 12 meses em diante.</li>
+                <li><strong>Caixas aguardando aceite</strong>: caixas já fechados que o programa de integração ainda não aceitou. Toque para ir ao Caixa.</li>
+            </ul>
+        ` },
+        { id: 'reservas', titulo: 'Reservas e grupos', corpo: `
+            <ul>
+                <li>A lista mostra os grupos cujo período <strong>cruza</strong> as datas escolhidas em "Entre ... e ...". O padrão é 60 dias para trás e 180 para frente.</li>
+                <li><strong>Novo grupo</strong>: nome, operadora, hotel, entrada e saída. Salve o grupo e então lance os hóspedes.</li>
+                <li><strong>Linha</strong> = hóspede + <strong>acomodação</strong> (SGL, DBL, TPL...) + regime + período + quantidade + valores. O <strong>total</strong> da linha é
+                <strong>valor de venda × quantidade × diárias</strong> (as diárias são a diferença entre saída e entrada).</li>
+                <li><strong>% comissão e custo</strong> se calculam um ao outro: informe o % e o custo sai de <em>venda × (1 − %)</em>; informe o custo e o % é calculado. O custo não pode ser maior que a venda.</li>
+                <li><strong>Regime</strong>: sem refeição, café da manhã, meia pensão, pensão completa ou all inclusive.</li>
+                <li><strong>➕ Extras</strong> (botão da linha): serviços adicionais que o hóspede pede — taxa, café extra, seguro, passeio, transfer... Escolha o serviço (busca por nome ou código do sistema antigo), a quantidade e os valores; "Cobrar por diária" multiplica pelas diárias da linha. O total do extra é <strong>venda × qtd × diárias</strong> e entra no total do grupo, com a mesma regra de % comissão e custo da linha. Excluir uma linha exclui os extras dela.</li>
+                <li>⧉ duplica uma linha (útil para vários hóspedes com o mesmo valor); depois de adicionar, acomodação, regime, datas e valores ficam preenchidos para a próxima linha.</li>
+                <li><strong>Rooming list</strong> gera o PDF da lista de hospedagem para enviar ao hotel (só linhas de acomodação).</li>
+                <li><strong>Código externo</strong>: o código do grupo no outro sistema (opcional, até 20 caracteres, não pode repetir na unidade). Serve para importar dados e conversar com o outro sistema; a lista também busca por ele.</li>
+                <li><strong>Situação</strong>: Orçamento, Confirmada ou Cancelada. Reserva cancelada não conta nos totais. <strong>Excluir grupo</strong> só o usuário principal faz, e só se não houver pagamentos — com pagamentos, cancele.</li>
+                <li>Quando o hotel tem tarifa cadastrada para o período, a linha já vem com o valor (pode ajustar).</li>
+            </ul>
+        ` },
+        { id: 'passagens', titulo: 'Passagens aéreas', corpo: `
+            <p>Tela de venda de passagem da consolidadora: o cliente pede, a agência <strong>compra a passagem</strong> e ganha <strong>comissão direta da companhia</strong>.</p>
+            <ul>
+                <li><strong>Companhia</strong> vem de <strong>Cadastros → Companhias</strong> (GOL, TAM, TAM VIAGENS...). <strong>Máquina / vendedor</strong> (ex.: 007) é quem vendeu e recebe a comissão de venda; fica lembrada para a próxima venda.</li>
+                <li><strong>Regras de comissão</strong> (Cadastros → Regras de comissão): uma regra por <strong>companhia + máquina</strong> com a comissão de venda (%), a comissão da empresa (%) e o <strong>DU (%)</strong>, todos sobre a <strong>tarifa</strong>. Ao escolher a companhia e a máquina na venda, o app <strong>preenche esses % e os valores</strong> (você pode ajustar na venda). Regra inativa não é aplicada. O valor do DU fica com a agência.</li>
+                <li><strong>Origem e destino</strong> vêm de <strong>Cadastros → Aeroportos</strong> (sigla e código do sistema antigo). <strong>Trechos e conexões</strong> são lançados depois de gravar a venda.</li>
+                <li><strong>Total do cliente</strong> = tarifa + taxa + outros + DU.</li>
+                <li><strong>Comissões</strong>: o % e o valor se calculam um ao outro, sempre sobre a <strong>tarifa</strong> (comissão da empresa = a que a companhia paga; comissão de venda = a do vendedor; comissão da agência indicadora, se houver).</li>
+                <li><strong>Depósito à companhia</strong> = tarifa − comissão da empresa + taxa + outros − DU. <strong>Lucro da empresa</strong> = comissão da empresa + DU − comissão de venda − comissão da agência indicadora. <strong>O DU fica com a agência.</strong></li>
+                <li><strong>Pagamentos</strong> do cliente são lançados na própria venda e entram no <strong>caixa do dia</strong> junto com os da hospedagem. Passagem com pagamento não é excluída: mude a situação para Cancelada.</li>
+            </ul>
+        ` },
+        { id: 'caixa', titulo: 'Caixa e pagamentos', corpo: `
+            <ul>
+                <li>Os <strong>pagamentos</strong> são lançados dentro do grupo (botão Pagamentos): data, valor, forma e referência. O recebido e o saldo do grupo se atualizam sozinhos.</li>
+                <li>Pagamento errado não se apaga: <strong>cancele</strong> informando o motivo (fica registrado).</li>
+                <li><strong>Fechar caixa do dia</strong> junta os pagamentos da data e os <strong>trava</strong>: não dá para lançar nem cancelar pagamentos desse dia. Só o usuário principal reabre um caixa fechado.</li>
+                <li>O <strong>aceite</strong> é feito pelo programa de integração com o financeiro da empresa (não por aqui). Caixa aceito não pode mais ser reaberto; a referência do lançamento no financeiro aparece na lista.</li>
+                <li>As vendas pelo site (quando existirem) também caem no caixa do dia do pagamento.</li>
+            </ul>
+        ` },
+        { id: 'cadastros', titulo: 'Cadastros', corpo: `
+            <ul>
+                <li><strong>Código externo</strong> (operadoras, hotéis e grupos): o código do registro no outro sistema. É opcional, tem no máximo 20 caracteres e não pode se repetir dentro da unidade (não diferencia maiúsculas nem espaços). É por ele que as importações e a integração ligam os registros sem duplicar.</li>
+                <li><strong>Operadoras</strong> e <strong>hotéis</strong> podem ser cadastrados também dentro da tela do grupo, pelo botão "+".</li>
+                <li><strong>Serviços</strong>: o catálogo de serviços do sistema antigo (código, nome e onde cada um é usado: <strong>Reservas, Eventos, Pacotes</strong>). Tipo <strong>Acomodação</strong> (SGL, DBL, TPL, QPL, QTL, SPL...) ocupa quarto, aparece no campo "Acomodação" da linha e entra no rooming list; tipo <strong>Serviço</strong> (taxas, café extra, seguro...) é lançado como extra da linha. Só aparecem nas reservas os serviços marcados "Usar em Reservas". O código do sistema antigo fica em "Código externo". Se a lista estiver vazia, "Criar acomodações padrão" cadastra SGL, DBL, TPL, QPL, QTL e SPL.</li>
+                <li>Itens em uso não são apagados, só <strong>desativados</strong>: deixam de aparecer nas buscas, mas continuam nas reservas antigas.</li>
+            </ul>
+        ` },
+    ]
+};
+function renderizarAjudaModulo(secaoId) {
+    const secao = AJUDA_VIAGENS.secoes.find(s => s.id === secaoId) || AJUDA_VIAGENS.secoes[0];
+    document.querySelectorAll('.modal-ajuda-nav-item').forEach(el => el.classList.toggle('ativo', el.dataset.secao === secao.id));
+    $('ajudaModuloConteudo').innerHTML = `<h4>${escapeHtml(secao.titulo)}</h4>${secao.corpo}<div class="ajuda-atualizado">Última revisão deste conteúdo: ${AJUDA_VIAGENS.ultimaRevisao}</div>`;
+}
+function abrirModalAjuda(secaoInicial) {
+    $('modalAjudaTitulo').textContent = '❓ Ajuda — ' + AJUDA_VIAGENS.titulo;
+    $('ajudaModuloNav').innerHTML = AJUDA_VIAGENS.secoes.map(s => `<button type="button" class="modal-ajuda-nav-item" data-secao="${s.id}">${escapeHtml(s.titulo)}</button>`).join('');
+    document.querySelectorAll('.modal-ajuda-nav-item').forEach(btn => btn.addEventListener('click', () => renderizarAjudaModulo(btn.dataset.secao)));
+    renderizarAjudaModulo(secaoInicial || 'geral');
+    $('modal-ajuda').classList.add('aberto');
+}
+$('btnAjudaModulo').addEventListener('click', () => {
+    const abaAtivaBtn = document.querySelector('.tab-app-btn.active');
+    const abaAtiva = abaAtivaBtn ? abaAtivaBtn.dataset.appTab : 'geral';
+    abrirModalAjuda(AJUDA_VIAGENS.secoes.some(s => s.id === abaAtiva) ? abaAtiva : 'geral');
+});
+$('btnFecharModalAjuda').addEventListener('click', () => $('modal-ajuda').classList.remove('aberto'));
+
+// ---------------------------------------------------------------
+// INÍCIO
+// ---------------------------------------------------------------
+checkSession();
+
+</script>
+
+<!-- Botão "Fechar" FIXO no topo direito de cada pop-up (os pop-ups não fecham com clique fora; assim o operador sempre vê onde fechar, mesmo com o conteúdo rolado).
+     Reaproveita o botão "Fechar" que o próprio pop-up já tem (roda a limpeza dele); pop-up sem "Fechar" (ex.: escolha obrigatória de unidade) fica como está. -->
+<style>
+    .modal-fechar-topo { position: sticky; top: 8px; z-index: 40; height: 0; overflow: visible; text-align: right; pointer-events: none; }
+    .modal-fechar-x { pointer-events: auto; position: relative; margin: 0 0 0 auto; display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; font: 600 .8rem 'Inter', system-ui, sans-serif;
+        color: var(--ink, #1f2a24); background: var(--surface, #fff); border: 1.5px solid var(--border, #cfd6d2); border-radius: 999px; box-shadow: 0 2px 8px rgba(0,0,0,.18); cursor: pointer; }
+    .modal-fechar-x:hover { background: var(--danger-soft, #fbeae8); border-color: var(--danger, #c0392b); color: var(--danger, #c0392b); }
+    .modal-fechar-topo + * { padding-right: 104px; }
+</style>
+<script>
+(function () {
+    const texto = (b) => (b.textContent || '').replace(/[\u2715\u00d7]/g, '').trim().toLowerCase();
+    function botaoFecharOriginal(caixa) {
+        const bts = Array.from(caixa.querySelectorAll('button')).filter(b => !b.closest('.modal-fechar-topo'));
+        return bts.find(b => /^fechar\b/.test(texto(b))) || bts.find(b => texto(b) === 'cancelar') || null;
+    }
+    document.querySelectorAll('.modal-overlay').forEach(ov => {
+        const caixa = ov.querySelector('.modal-caixa');
+        if (!caixa || caixa.querySelector('.modal-fechar-topo')) return;
+        if (caixa.querySelector('.modal-ajuda-head')) return;      // a Ajuda já tem o Fechar no cabeçalho fixo
+        if (!botaoFecharOriginal(caixa)) return;                    // sem "Fechar" próprio: não inventa saída
+        const topo = document.createElement('div');
+        topo.className = 'modal-fechar-topo';
+        topo.innerHTML = '<button type="button" class="modal-fechar-x" aria-label="Fechar esta janela" title="Fechar">\u2715 Fechar</button>';
+        topo.firstChild.addEventListener('click', () => { const b = botaoFecharOriginal(caixa); if (b) b.click(); else ov.classList.remove('aberto'); });
+        caixa.insertBefore(topo, caixa.firstChild);
+    });
+})();
+</script>
+</body>
+</html>

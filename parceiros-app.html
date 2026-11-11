@@ -578,7 +578,7 @@
         <div class="aviso-pendentes hidden" id="avisoFechamentoSql" style="cursor:default;">⚠️ O fechamento ainda não existe no banco. Rode, nesta ordem, os arquivos parceiros-vendas-erp.sql e parceiros-fechamento-erp.sql no SQL Editor do Supabase e recarregue esta página.</div>
         <div class="cartao">
             <h2>Fechar um período e creditar no saldo</h2>
-            <p class="desc">Soma a comissão das vendas do sistema da loja (ERP) <strong>ainda não fechadas</strong> do período, <strong>um crédito por parceiro</strong>, e lança no saldo/extrato dele. Cada pedido fechado guarda o % e o valor creditados, então o mesmo pedido nunca é contado duas vezes. Se depois houver um acordo (num pedido ou no % do parceiro), use <strong>Refazer</strong>: só a diferença entra no extrato.</p>
+            <p class="desc" id="fechDesc">Soma a comissão das vendas do sistema da loja (ERP) <strong>ainda não fechadas</strong> do período, <strong>um crédito por parceiro</strong>, e lança no saldo/extrato dele. Cada pedido fechado guarda o % e o valor creditados, então o mesmo pedido nunca é contado duas vezes. Se depois houver um acordo (num pedido ou no % do parceiro), use <strong>Refazer</strong>: só a diferença entra no extrato.</p>
             <div class="grade">
                 <div class="campo"><label for="fechDe">De</label><input type="date" id="fechDe"></div>
                 <div class="campo"><label for="fechAte">Até</label><input type="date" id="fechAte"></div>
@@ -592,8 +592,9 @@
             <div class="dica hidden" id="fechSoPrincipal">Só o usuário <strong>principal</strong> da unidade fecha, refaz ou desfaz. Você pode simular.</div>
             <div class="status-msg" id="fechStatus"></div>
             <div id="fechSimulacao" class="hidden">
+                <p class="dica" style="margin:8px 0 6px;">Toque numa linha para ver os <strong>pedidos</strong> (e, no formato por recebimento, a <strong>parcela ou o pagamento no ato</strong>) que entram no crédito do parceiro.</p>
                 <div class="tabela-scroll"><table class="tabela">
-                    <thead><tr><th>Cód. externo</th><th>Parceiro</th><th class="num">Pedidos</th><th class="num">Valor vendido</th><th class="num">Comissão</th></tr></thead>
+                    <thead><tr><th>Cód. externo</th><th>Parceiro</th><th class="num" id="fechThQtd">Pedidos</th><th class="num" id="fechThValor">Valor vendido</th><th class="num" id="fechThBase" style="display:none;">Comissionável</th><th class="num">Comissão</th></tr></thead>
                     <tbody id="fechSimCorpo"></tbody>
                 </table></div>
             </div>
@@ -602,7 +603,7 @@
             <h2>Fechamentos feitos</h2>
             <p class="desc">Toque num fechamento para ver o que foi creditado a cada parceiro.</p>
             <div class="tabela-scroll"><table class="tabela">
-                <thead><tr><th>Período</th><th>Situação</th><th class="num">Parceiros</th><th class="num">Pedidos</th><th class="num">Comissão creditada</th><th>Feito em</th><th></th></tr></thead>
+                <thead><tr><th>Período</th><th>Situação</th><th class="num">Parceiros</th><th class="num">Pedidos / recebimentos</th><th class="num">Comissão creditada</th><th>Feito em</th><th></th></tr></thead>
                 <tbody id="fechCorpo"></tbody>
             </table></div>
         </div>
@@ -638,6 +639,15 @@
             <div class="tabela-scroll"><table class="tabela">
                 <thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th class="num">Valor</th><th class="num">Saldo após</th></tr></thead>
                 <tbody id="corpoExtrato"></tbody>
+            </table></div>
+        </div>
+        <div class="cartao" id="painelRecibos">
+            <h2>Recibos de pagamento de comissão</h2>
+            <p class="desc">Cada pagamento (botão <strong>Pagar</strong>) emite um <strong>recibo numerado</strong>: valor, saldo antes e depois, a <strong>composição</strong> do que foi baixado (créditos mais antigos primeiro) e o detalhamento dos pedidos e parcelas de cada fechamento. Toque em <strong>PDF</strong> para ver, baixar ou compartilhar.</p>
+            <div class="aviso-pendentes hidden" id="avisoReciboSql" style="cursor:default;">⚠️ Os recibos ainda não existem no banco. Rode o arquivo parceiros-recibos.sql no SQL Editor do Supabase e recarregue esta página.</div>
+            <div class="tabela-scroll"><table class="tabela">
+                <thead><tr><th>Nº</th><th>Data</th><th>Parceiro</th><th class="num">Valor pago</th><th class="num">Saldo antes</th><th class="num">Saldo depois</th><th>Situação</th><th></th></tr></thead>
+                <tbody id="corpoRecibos"></tbody>
             </table></div>
         </div>
     </div>
@@ -697,6 +707,12 @@
                 <div class="campo"><label>Percentual padrão das vendas do ERP (%)</label><input type="number" step="0.1" min="0" max="100" id="cfgPercentualErp" placeholder="em branco = o mesmo do lado"></div>
             </div>
             <div class="dica" id="cfgPercentualErpDica">O percentual do ERP vale só para parceiro sem percentual próprio e para pedidos do ERP <strong>ainda não fechados</strong> (muda a comissão calculada na hora). Fechamentos já feitos só mudam com <em>Refazer cálculo</em>. Em branco = usa o percentual padrão da venda lançada.</div>
+            <div class="campo" style="margin-top:10px;"><label for="cfgComissaoModo">Como a comissão das vendas do ERP é fechada</label>
+                <select id="cfgComissaoModo">
+                    <option value="pedido">Pelo pedido inteiro (não espera o pagamento)</option>
+                    <option value="recebimento">Por recebimento (só sobre o que foi recebido de cada pedido)</option>
+                </select></div>
+            <div class="dica" id="cfgComissaoModoDica">Por recebimento: a comissão vem do pagamento no ato e das parcelas já pagas (importados pelo coletor), na proporção do que não é oferta; a taxa de cartão não abate. Parcela a receber ainda não gera comissão. Um pedido nunca entra nos dois formatos.</div>
             <button class="btn btn-principal btn-inline" id="btnSalvarCfgRecompensa">Salvar</button>
             <div class="status-msg" id="statusCfgRecompensa"></div>
         </div>
@@ -817,18 +833,18 @@
 
 <!-- ================= MODAL DETALHE DO PARCEIRO ================= -->
 <div class="modal-overlay" id="modal-erp">
-    <div class="modal-caixa" style="max-width:1020px;">
+    <div class="modal-caixa" style="max-width:1180px;">
         <h3 id="erpDetTitulo"></h3>
         <p class="sub" id="erpDetSub"></p>
         <div class="tabela-scroll"><table class="tabela">
-            <thead><tr><th>Venda</th><th>Baixa</th><th>Loja</th><th>Pedido</th><th>Cliente</th><th class="num">Valor</th><th class="num">%</th><th class="num">Comissão</th><th></th></tr></thead>
+            <thead><tr><th>Venda</th><th>Baixa</th><th>Loja</th><th>Pedido</th><th>Cliente</th><th class="num">Valor líquido</th><th class="num" title="Itens marcados como oferta (promoção) no ERP: não geram comissão">Em oferta</th><th class="num" title="Soma das notas de devolução registradas para o pedido: reduz a base da comissão">Devolvido</th><th class="num" title="Valor líquido menos a parte em oferta e a parte devolvida: é a base da comissão">Comissionável</th><th class="num col-receb" title="Já recebido do pedido (pagamento no ato e parcelas pagas)">Recebido</th><th class="num col-receb" title="Parcelas ainda não pagas: não geram comissão">A receber</th><th class="num">%</th><th class="num">Comissão</th><th></th></tr></thead>
             <tbody id="erpDetCorpo"></tbody>
         </table></div>
         <div class="acoes-linha" style="margin-top:14px;"><button class="btn btn-cinza" id="erpDetFechar">Fechar</button></div>
     </div>
 </div>
 <div class="modal-overlay" id="modal-fech">
-    <div class="modal-caixa" style="max-width:860px;">
+    <div class="modal-caixa" style="max-width:1180px;">
         <h3 id="fechModTitulo"></h3>
         <p class="sub" id="fechModSub"></p>
         <div id="fechModCorpo"></div>
@@ -853,6 +869,23 @@
             <button class="btn btn-principal" id="erpAcordoSalvar">Salvar</button>
             <button class="btn btn-cinza" id="erpAcordoRemover">Voltar ao % do parceiro</button>
             <button class="btn btn-cinza" id="erpAcordoCancelar">Cancelar</button>
+        </div>
+    </div>
+</div>
+<div class="modal-overlay" id="modal-devolucao">
+    <div class="modal-caixa" style="max-width:640px;">
+        <h3>Devolução do pedido</h3>
+        <p class="sub" id="devSub"></p>
+        <div id="devLista" style="margin-bottom:12px;"></div>
+        <div class="campo"><label for="devNf">Nº da nota fiscal de devolução</label><input type="text" id="devNf" maxlength="40"></div>
+        <div class="campo"><label for="devData">Data da devolução</label><input type="date" id="devData"></div>
+        <div class="campo"><label for="devValor">Valor devolvido (R$)</label><input type="text" inputmode="decimal" id="devValor" placeholder="ex.: 150,00"></div>
+        <div class="campo"><label for="devObs">Observação (opcional — se quiser, informe os produtos devolvidos)</label><textarea id="devObs" rows="2" maxlength="400"></textarea></div>
+        <div class="dica">A devolução <strong>reduz a base da comissão</strong> do pedido. Pedido ainda não fechado já fica com a base menor; pedido <strong>já fechado</strong> precisa de "Refazer cálculo" no fechamento, que lança só a diferença no extrato (se a comissão já foi paga, o parceiro fica com saldo negativo que abate os próximos créditos). Informe só o valor da nota; a mesma nota não entra duas vezes no mesmo pedido.</div>
+        <div class="status-msg" id="devStatus"></div>
+        <div class="acoes-linha" style="margin-top:14px;">
+            <button class="btn btn-principal" id="devSalvar">Registrar devolução</button>
+            <button class="btn btn-cinza" id="devFechar">Fechar</button>
         </div>
     </div>
 </div>
@@ -1231,9 +1264,11 @@ function aplicarPersonalizacao(corPrincipal, imagemFundoUrl) {
         sidebar.style.backgroundPosition = 'center';
     }
 }
+let unidadeLogoUrl = '';
 async function carregarPersonalizacao() {
     const { data, error } = await sb.from('servir_unidades_negocio').select('cor_principal, imagem_fundo_url, logo_url').eq('id', meuPerfil.unidadeId).single();
     if (error || !data) return;
+    unidadeLogoUrl = data.logo_url || '';
     aplicarPersonalizacao(data.cor_principal, data.imagem_fundo_url);
 }
 
@@ -1296,7 +1331,7 @@ async function iniciarApp() {
     sqlPendente = false;
     await carregarConfig();
     if (sqlPendente) { mostrarAvisoSqlPendente(); return; }
-    await Promise.all([carregarRamos(), carregarParceiros(), carregarSaldos(), carregarIndServicos(), carregarIndVendas(), carregarPropagandas(), carregarErpDb()]);
+    await Promise.all([carregarRamos(), carregarParceiros(), carregarSaldos(), carregarIndServicos(), carregarIndVendas(), carregarPropagandas(), carregarErpDb(), carregarRecibos()]);
     erpLerPrefs(); erpPrefsLidas = true;   // as regras do ERP vêm da configuração da unidade
     $('vndData').value = hojeISO();
     $('vndLoja').value = ultimaLoja();
@@ -1333,6 +1368,17 @@ async function carregarParceiros() {
     try {
         parceiros = await buscarTudo(() => sb.from('parceiros_parceiros').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('nome').order('id'));
     } catch (erro) { console.error(erro); parceiros = []; }
+}
+// recibos de pagamento de comissão (parceiros-recibos.sql): um por pagamento, com a composição do que foi baixado do saldo
+let recibos = [], reciboSqlPendente = false;
+async function carregarRecibos() {
+    try {
+        recibos = await buscarTudo(() => sb.from('parceiros_recibos').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('numero', { ascending: false }).order('id'));
+        reciboSqlPendente = false;
+    } catch (e) {
+        recibos = []; reciboSqlPendente = erroDeTabelaAusente(e);
+        if (!reciboSqlPendente) console.error(e);
+    }
 }
 async function carregarSaldos() {
     const { data, error } = await sb.rpc('parceiros_saldos');
@@ -2264,6 +2310,7 @@ function renderizarRecompensas() {
     $('corpoSaldos').querySelectorAll('[data-lanc]').forEach(b => b.addEventListener('click', () => abrirLancamento(b.dataset.lanc, b.dataset.parc)));
     $('corpoSaldos').querySelectorAll('[data-extrato]').forEach(b => b.addEventListener('click', () => abrirExtrato(b.dataset.extrato)));
     $('corpoSaldos').querySelectorAll('[data-abrir-parc]').forEach(a => a.addEventListener('click', (e) => { e.preventDefault(); abrirDetalhe(a.dataset.abrirParc); }));
+    renderizarRecibos();
 }
 
 let extratoParceiroId = null;
@@ -2280,7 +2327,7 @@ async function abrirExtrato(parceiroId) {
     $('corpoExtrato').innerHTML = linhas.map(l => `<tr>
         <td>${formatarDataHora(l.criado_em)}</td>
         <td><span class="pill pill-${l.tipo}">${TIPO_LANCAMENTO[l.tipo]}</span></td>
-        <td>${escapeHtml(l.descricao || '')}${l.titulo_id ? `<small class="sub">Título #${l.titulo_id} no Financeiro</small>` : ''}${l.criado_por ? `<small class="sub">${escapeHtml(l.criado_por)}</small>` : ''}</td>
+        <td>${escapeHtml(l.descricao || '')}${l.titulo_id ? `<small class="sub">Título #${l.titulo_id} no Financeiro</small>` : ''}${l.tipo === 'pagamento' ? reciboLinkExtrato(l) : ''}${l.criado_por ? `<small class="sub">${escapeHtml(l.criado_por)}</small>` : ''}</td>
         <td class="num ${Number(l.valor) < 0 ? 'valor-neg' : 'valor-pos'}">${formatarMoeda(l.valor)}</td>
         <td class="num">${formatarMoeda(l.saldoApos)}</td>
     </tr>`).join('') || '<tr><td colspan="5" class="vazio">Sem lançamentos.</td></tr>';
@@ -2367,7 +2414,7 @@ async function gerarPagamentoFinanceiro(p, valor, contaId, vencimento, descricao
         tituloId = titulo.id;
         const { error: eVinc } = await sb.from('parceiros_lancamentos').update({ titulo_id: tituloId }).eq('id', lancId);
         if (eVinc) throw eVinc;
-        return tituloId;
+        return { tituloId, lancId };
     } catch (erro) {
         if (tituloId) await sb.from('financeiro_titulos').delete().eq('id', tituloId);
         if (operacaoId) await sb.from('unidade_operacao').delete().eq('id', operacaoId);
@@ -2392,16 +2439,21 @@ $('btnConfirmarLanc').addEventListener('click', async () => {
     if (tipo !== 'ajuste' && valor > saldoDe(parceiroId) + 0.004) return erro(`O valor passa do saldo (${formatarMoeda(saldoDe(parceiroId))}).`);
     const btn = $('btnConfirmarLanc');
     btn.disabled = true; statusEl.className = 'status-msg'; statusEl.textContent = 'Processando...';
+    let reciboParaAbrir = null;
     try {
         if (tipo === 'pagamento') {
             const contaId = $('lancConta').value;
             const venc = $('lancVencimento').value;
             if (!contaId) { btn.disabled = false; return erro('Escolha a conta de pagamento.'); }
             if (!venc) { btn.disabled = false; return erro('Informe o vencimento.'); }
-            const tituloId = await gerarPagamentoFinanceiro(p, valor, contaId, venc, descricaoDigitada || 'Pagamento de comissão');
+            const pagamento = await gerarPagamentoFinanceiro(p, valor, contaId, venc, descricaoDigitada || 'Pagamento de comissão');
+            const tituloId = pagamento.tituloId;
             await registrarSentinela('parceiro_pagamento', `Gerou pagamento de ${formatarMoeda(valor)} ao parceiro #${p.codigo} "${p.nome}" (título #${tituloId} a pagar no Financeiro)`);
             statusEl.className = 'status-msg sucesso';
-            statusEl.textContent = `Título #${tituloId} criado em aberto no Financeiro.`;
+            let avisoRecibo = '';
+            try { const rc = await emitirReciboDoLancamento(pagamento.lancId, venc); reciboParaAbrir = rc.id; avisoRecibo = ` Recibo nº ${rc.numero} emitido.`; }
+            catch (er) { avisoRecibo = ` ⚠️ O pagamento foi feito, mas o recibo NÃO foi emitido (${(er && er.message) || er}${reciboSqlPendente ? ' — rode o parceiros-recibos.sql' : ''}). Emita pelo Extrato do parceiro.`; }
+            statusEl.textContent = `Título #${tituloId} criado em aberto no Financeiro.${avisoRecibo}`;
         } else {
             const { error } = await sb.rpc('parceiros_lancar', {
                 p_parceiro_id: p.id, p_tipo: tipo, p_valor: valor,
@@ -2413,12 +2465,227 @@ $('btnConfirmarLanc').addEventListener('click', async () => {
         await carregarSaldos();
         renderizarRecompensas(); renderizarDashboard(); renderizarParceiros();
         if (extratoParceiroId === parceiroId) abrirExtrato(parceiroId);
-        setTimeout(() => $('modal-lancamento').classList.remove('aberto'), tipo === 'pagamento' ? 1400 : 0);
+        setTimeout(() => { $('modal-lancamento').classList.remove('aberto'); if (reciboParaAbrir) gerarReciboPdf(reciboParaAbrir); }, tipo === 'pagamento' ? 1400 : 0);
     } catch (e) {
         erro('Erro: ' + (e.message || e));
         btn.disabled = false;
     }
 });
+
+// ---------------------------------------------------------------
+// RECIBO DE PAGAMENTO DE COMISSÃO (numerado, com baixa no saldo, composição e detalhamento) -- PDF com Visualizar/Baixar/Compartilhar
+// ---------------------------------------------------------------
+const reciboDoLancamento = (lancId) => recibos.find(r => r.lancamento_id === lancId) || null;
+const reciboNumeroTxt = (r) => String(r.numero).padStart(6, '0');
+function reciboLinkExtrato(l) {
+    const r = reciboDoLancamento(l.id);
+    if (r) return `<small class="sub"><a href="#" data-recibo-ver="${escapeHtml(r.id)}">Recibo nº ${reciboNumeroTxt(r)}${r.status === 'cancelado' ? ' (cancelado)' : ''} — PDF</a></small>`;
+    if (reciboSqlPendente) return '';
+    return `<small class="sub"><a href="#" data-recibo-emitir="${escapeHtml(l.id)}">Emitir recibo deste pagamento</a></small>`;
+}
+async function emitirReciboDoLancamento(lancId, vencimento) {
+    const { data, error } = await sb.rpc('parceiros_emitir_recibo', { p_lancamento: lancId, p_por: meuPerfil.email, p_vencimento: vencimento || null });
+    if (error) { if (erroDeTabelaAusente(error)) reciboSqlPendente = true; throw error; }
+    await carregarRecibos();
+    const rc = recibos.find(x => x.id === data);
+    if (!rc) throw new Error('Recibo emitido, mas não consegui lê-lo de volta.');
+    const p = parceiroPorId(rc.parceiro_id);
+    registrarSentinela('parceiro_recibo_emitido', `Emitiu o recibo nº ${reciboNumeroTxt(rc)} de ${formatarMoeda(rc.valor)} ao parceiro #${p ? p.codigo + ' "' + p.nome + '"' : '?'} (saldo ${formatarMoeda(rc.saldo_anterior)} → ${formatarMoeda(rc.saldo_apos)})`);
+    return rc;
+}
+function renderizarRecibos() {
+    $('avisoReciboSql').classList.toggle('hidden', !reciboSqlPendente);
+    $('corpoRecibos').innerHTML = recibos.slice(0, 150).map(r => {
+        const p = parceiroPorId(r.parceiro_id);
+        return `<tr><td><strong>${reciboNumeroTxt(r)}</strong></td><td>${formatarDataSemFuso(r.data_emissao)}</td><td>${p ? `#${p.codigo} ${escapeHtml(p.nome)}` : 'Parceiro removido'}</td>
+            <td class="num"><strong>${formatarMoeda(r.valor)}</strong></td><td class="num">${formatarMoeda(r.saldo_anterior)}</td><td class="num">${formatarMoeda(r.saldo_apos)}</td>
+            <td>${r.status === 'cancelado' ? `<span class="pill pill-cancelado" title="${escapeHtml(r.motivo_cancelamento || '')}">Cancelado</span>` : '<span class="pill pill-confirmada">Emitido</span>'}</td>
+            <td style="white-space:nowrap;"><button class="btn btn-principal btn-sm" style="width:auto;padding:6px 10px;" data-recibo-ver="${escapeHtml(r.id)}">PDF</button>
+            ${meuPerfil.ehPrincipal && r.status !== 'cancelado' ? `<button class="btn btn-cinza btn-sm" data-recibo-cancelar="${escapeHtml(r.id)}" title="Marca o recibo como cancelado; não desfaz o pagamento">Cancelar</button>` : ''}</td></tr>`;
+    }).join('') || `<tr><td colspan="8" class="vazio">${reciboSqlPendente ? 'Rode o parceiros-recibos.sql para começar.' : 'Nenhum recibo emitido ainda: ele é emitido sozinho a cada "Pagar".'}</td></tr>`;
+}
+async function cancelarRecibo(id) {
+    const r = recibos.find(x => x.id === id); if (!r) return;
+    const motivo = prompt(`Cancelar o recibo nº ${reciboNumeroTxt(r)} de ${formatarMoeda(r.valor)}?\nIsto só marca o recibo como cancelado: o pagamento no saldo e o título no Financeiro continuam (acerte-os à parte, se for o caso).\n\nMotivo (obrigatório):`);
+    if (motivo === null) return;
+    if (!motivo.trim()) { alert('Informe o motivo.'); return; }
+    const { error } = await sb.rpc('parceiros_cancelar_recibo', { p_recibo: id, p_motivo: motivo.trim(), p_por: meuPerfil.email });
+    if (error) { alert('Erro: ' + error.message); return; }
+    registrarSentinela('parceiro_recibo_cancelado', `Cancelou o recibo nº ${reciboNumeroTxt(r)} de ${formatarMoeda(r.valor)} — ${motivo.trim()}`);
+    await carregarRecibos(); renderizarRecibos();
+    if (extratoParceiroId) abrirExtrato(extratoParceiroId);
+}
+document.addEventListener('click', async (e) => {
+    const ver = e.target.closest('[data-recibo-ver]'); if (ver) { e.preventDefault(); gerarReciboPdf(ver.dataset.reciboVer); return; }
+    const can = e.target.closest('[data-recibo-cancelar]'); if (can) { cancelarRecibo(can.dataset.reciboCancelar); return; }
+    const emi = e.target.closest('[data-recibo-emitir]');
+    if (emi) {
+        e.preventDefault();
+        try { const rc = await emitirReciboDoLancamento(emi.dataset.reciboEmitir, null); renderizarRecibos(); if (extratoParceiroId) abrirExtrato(extratoParceiroId); gerarReciboPdf(rc.id); }
+        catch (er) { alert('Não consegui emitir o recibo: ' + ((er && er.message) || er)); }
+    }
+});
+
+// valor por extenso (padrão de recibo brasileiro; mesma função do gerador de recibo do Admin Plataforma)
+function numeroPorExtenso(valor) {
+    const UN = ['zero', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove'];
+    const DEZ19 = ['dez', 'onze', 'doze', 'treze', 'quatorze', 'quinze', 'dezesseis', 'dezessete', 'dezoito', 'dezenove'];
+    const DEZ = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa'];
+    const CEM = ['', 'cento', 'duzentos', 'trezentos', 'quatrocentos', 'quinhentos', 'seiscentos', 'setecentos', 'oitocentos', 'novecentos'];
+    const ate999 = (n) => {
+        if (n === 0) return ''; if (n === 100) return 'cem';
+        const c = Math.floor(n / 100), resto = n % 100, partes = [];
+        if (c) partes.push(CEM[c]);
+        if (resto) { if (resto < 10) partes.push(UN[resto]); else if (resto < 20) partes.push(DEZ19[resto - 10]); else { const d = Math.floor(resto / 10), u = resto % 10; partes.push(DEZ[d] + (u ? ' e ' + UN[u] : '')); } }
+        return partes.join(' e ');
+    };
+    const inteiroExtenso = (n) => {
+        if (n === 0) return 'zero';
+        const milhoes = Math.floor(n / 1000000), milhares = Math.floor((n % 1000000) / 1000), resto = n % 1000, partes = [];
+        if (milhoes) partes.push(milhoes === 1 ? 'um milhão' : ate999(milhoes) + ' milhões');
+        if (milhares) partes.push(milhares === 1 ? 'mil' : ate999(milhares) + ' mil');
+        if (resto) partes.push(ate999(resto));
+        return partes.join(' e ');
+    };
+    const v = Math.round(valor * 100) / 100, inteiro = Math.floor(v), centavos = Math.round((v - inteiro) * 100);
+    let t = `${inteiroExtenso(inteiro)} ${inteiro === 1 ? 'real' : 'reais'}`;
+    if (centavos > 0) t += ` e ${inteiroExtenso(centavos)} ${centavos === 1 ? 'centavo' : 'centavos'}`;
+    return t.charAt(0).toUpperCase() + t.slice(1);
+}
+// itens (pedidos ou recebimentos) que formaram um crédito de fechamento do ERP, a partir dos dados já carregados
+function fechItensDaLinha(linhaId) {
+    const mapa = new Map(erpDb.map(o => [(o.lojaCod || '') + '\u0001' + o.ref, o]));
+    const rec = [];
+    Object.entries(recebDb).forEach(([k, g]) => g.itens.filter(i => i.fechamento_recebimento_id === linhaId).forEach(i => {
+        const o = mapa.get(k) || {};
+        rec.push({ tipo: i.tipo, pedido: i.referencia, cliente: o.cli, dataVenda: o.dv, dataRef: i.data_recebimento, parcela: i.parcela, vcto: i.data_vencimento, receb: fechRecebDoPedido(g), valorPedido: o.v || 0,
+            recebido: Number(i.valor_recebido) || 0, oferta: o.oferta || 0, base: Number(i.base_valor) || 0, pct: i.comissao_pct == null ? null : Number(i.comissao_pct), comissao: Number(i.comissao_valor) || 0 });
+    }));
+    if (rec.length) return { modo: 'recebimento', itens: rec.sort((a, b) => String(a.dataRef).localeCompare(String(b.dataRef)) || String(a.pedido).localeCompare(String(b.pedido), 'pt-BR', { numeric: true })) };
+    const ped = erpDb.filter(o => o.fech === linhaId).map(o => ({ tipo: 'pedido', pedido: o.ref, cliente: o.cli, dataVenda: o.dv, dataRef: (config && config.erp_ref === 'baixa') ? o.db : o.dv, valorPedido: o.v, recebido: 0, oferta: o.oferta || 0,
+        base: erpBasePedido(o), pct: o.cpct, comissao: o.cvalor || 0, receb: o.rec ? fechRecebDoPedido(o.rec) : [] }));
+    return { modo: 'pedido', itens: ped.sort((a, b) => String(a.dataRef).localeCompare(String(b.dataRef)) || String(a.pedido).localeCompare(String(b.pedido), 'pt-BR', { numeric: true })) };
+}
+// logo da unidade como PNG proporcional (a Servir Central grava JPEG; o jsPDF precisa de dataURL); falha = PDF sem logo
+async function prepararLogoParaPdf() {
+    if (!unidadeLogoUrl) return null;
+    try {
+        const resp = await fetch(unidadeLogoUrl, { cache: 'no-store' }); if (!resp.ok) return null;
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const img = await new Promise((ok, no) => { const im = new Image(); im.onload = () => ok(im); im.onerror = no; im.src = url; });
+        const esc = Math.min(1, 400 / Math.max(img.naturalWidth, img.naturalHeight));
+        const cv = document.createElement('canvas'); cv.width = Math.round(img.naturalWidth * esc); cv.height = Math.round(img.naturalHeight * esc);
+        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height); URL.revokeObjectURL(url);
+        return { dataUrl: cv.toDataURL('image/png'), prop: cv.width / cv.height };
+    } catch (e) { return null; }
+}
+async function gerarReciboPdf(reciboId) {
+    const r = recibos.find(x => x.id === reciboId); if (!r) { alert('Recibo não encontrado: atualize a página.'); return; }
+    const p = parceiroPorId(r.parceiro_id) || {};
+    try {
+        await carregarJsPdf(); await carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js');
+        const logo = await prepararLogoParaPdf();
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+        const M = 15, W = 180, corTxt = [30, 30, 30], corMuda = [110, 110, 110];
+        const [br, bg, bb] = hexParaRgb(getComputedStyle(document.documentElement).getPropertyValue('--brand').trim());
+        const m = (v) => formatarMoeda(v).replace(/\u00a0/g, ' ');
+        const dt = (d) => (d ? formatarDataSemFuso(String(d).slice(0, 10)) : '-');
+        const dtHora = (d) => (d ? new Date(d).toLocaleDateString('pt-BR') : '-');
+        let y = 14;
+        // cabeçalho
+        let x0 = M;
+        if (logo) { const h = 16, w = Math.min(36, h * logo.prop); try { doc.addImage(logo.dataUrl, 'PNG', M, y - 2, w, w / logo.prop); x0 = M + w + 4; } catch (e) { /* segue sem logo */ } }
+        doc.setTextColor(br, bg, bb); doc.setFont('helvetica', 'bold'); doc.setFontSize(14); doc.text(meuPerfil.unidadeNome || '', x0, y + 4);
+        doc.setFontSize(10); doc.setTextColor(...corMuda); doc.setFont('helvetica', 'normal'); doc.text('Recibo de pagamento de comissão', x0, y + 10);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(br, bg, bb); doc.text('Nº ' + reciboNumeroTxt(r), M + W, y + 4, { align: 'right' });
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(...corMuda); doc.text('Emitido em ' + dt(r.data_emissao), M + W, y + 10, { align: 'right' });
+        y += 20; doc.setDrawColor(br, bg, bb); doc.setLineWidth(0.6); doc.line(M, y, M + W, y); y += 8;
+        if (r.status === 'cancelado') {
+            doc.setTextColor(192, 57, 43); doc.setFont('helvetica', 'bold'); doc.setFontSize(13); doc.text('RECIBO CANCELADO', M + W, y, { align: 'right' });
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.text(doc.splitTextToSize('Motivo: ' + (r.motivo_cancelamento || '-'), 90), M + W, y + 5, { align: 'right' }); y += 12;
+        }
+        // texto do recibo
+        doc.setTextColor(...corTxt); doc.setFontSize(11);
+        const texto = `Recebi de ${meuPerfil.unidadeNome || 'a loja'} a quantia de ${m(r.valor)} (${numeroPorExtenso(Number(r.valor))}), referente ao pagamento de comissão por indicação de vendas, conforme a composição abaixo.`;
+        const lin = doc.splitTextToSize(texto, W); doc.text(lin, M, y); y += lin.length * 5.2 + 4;
+        // parceiro e pagamento
+        doc.setFontSize(9.5); doc.setTextColor(...corMuda); doc.text('RECEBEDOR (PARCEIRO)', M, y); doc.text('PAGAMENTO', M + 95, y); y += 4.5;
+        doc.setTextColor(...corTxt); doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.text(`#${p.codigo || ''} ${p.nome || ''}`.trim(), M, y);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+        doc.text('CPF/CNPJ: ' + (p.documento || '-'), M, y + 5);
+        doc.text(r.titulo_id ? `Título nº ${r.titulo_id} a pagar no Financeiro` : 'Pagamento lançado no saldo do parceiro', M + 95, y);
+        doc.text('Vencimento: ' + dt(r.vencimento), M + 95, y + 5); y += 13;
+        // saldo
+        const cx = [M, M + 62, M + 124];
+        const caixas = [['Saldo de comissão antes', m(r.saldo_anterior)], ['Pago neste recibo', m(r.valor)], ['Saldo de comissão depois', m(r.saldo_apos)]];
+        caixas.forEach((c, i) => {
+            doc.setFillColor(i === 1 ? 234 : 246, i === 1 ? 242 : 247, i === 1 ? 238 : 249); doc.setDrawColor(210, 214, 218); doc.roundedRect(cx[i], y, 56, 17, 1.5, 1.5, 'FD');
+            doc.setFontSize(8.5); doc.setTextColor(...corMuda); doc.setFont('helvetica', 'normal'); doc.text(c[0], cx[i] + 3, y + 5.5);
+            doc.setFontSize(12.5); doc.setTextColor(...corTxt); doc.setFont('helvetica', 'bold'); doc.text(c[1], cx[i] + 3, y + 13);
+        });
+        y += 23;
+        // composição
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(...corTxt); doc.text('Composição do pagamento (baixa pelo crédito mais antigo primeiro)', M, y); y += 2;
+        const comp = Array.isArray(r.composicao) ? r.composicao : [];
+        doc.autoTable({
+            startY: y + 1, margin: { left: M, right: M }, theme: 'grid',
+            head: [['Data do crédito', 'Origem', 'Valor do crédito', 'Já pago antes', 'Pago neste recibo', 'Resta']],
+            body: comp.map(c => [dtHora(c.data), c.origem || '', m(c.valor), m(c.ja_pago), m(c.pago), m(c.resta)]).concat([['', 'Total pago neste recibo', '', '', m(comp.reduce((a, c) => a + Number(c.pago || 0), 0)), '']]),
+            styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 1.8, textColor: corTxt, lineColor: [210, 214, 218] },
+            headStyles: { fillColor: [br, bg, bb], textColor: 255, fontStyle: 'bold' },
+            columnStyles: { 0: { cellWidth: 22 }, 2: { halign: 'right', cellWidth: 27 }, 3: { halign: 'right', cellWidth: 25 }, 4: { halign: 'right', fontStyle: 'bold', cellWidth: 28 }, 5: { halign: 'right', cellWidth: 26 } },
+            didParseCell: (d) => { if (d.row.index === comp.length && d.section === 'body') { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [234, 242, 238]; } },
+        });
+        y = doc.lastAutoTable.finalY + 12;
+        // assinaturas
+        if (y > 245) { doc.addPage(); y = 30; }
+        doc.setDrawColor(120, 120, 120); doc.setLineWidth(0.3);
+        doc.line(M, y + 14, M + 80, y + 14); doc.line(M + 100, y + 14, M + W, y + 14);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...corMuda);
+        doc.text(`${p.nome || 'Parceiro'} (recebedor)`, M + 40, y + 18.5, { align: 'center' }); doc.text('Responsável pelo pagamento', M + 140, y + 18.5, { align: 'center' });
+        doc.text('Data: ____/____/________', M, y + 26);
+        doc.setFontSize(7.5); doc.text(`Emitido por ${r.criado_por || '-'} em ${dtHora(r.criado_em)}. O pagamento baixa primeiro os créditos mais antigos do saldo do parceiro.`, M, y + 33);
+        // anexo: detalhamento dos fechamentos cobertos (pedidos e parcelas)
+        const comLinha = comp.filter(c => c.linha_id);
+        if (comLinha.length) {
+            doc.addPage(); let ya = 16;
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(br, bg, bb); doc.text(`Anexo do recibo nº ${reciboNumeroTxt(r)} - detalhamento dos fechamentos`, M, ya); ya += 7;
+            comLinha.forEach(c => {
+                const { modo, itens } = fechItensDaLinha(c.linha_id);
+                if (ya > 250) { doc.addPage(); ya = 16; }
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...corTxt); doc.text(c.origem || 'Fechamento', M, ya);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...corMuda);
+                const parcial = Number(c.pago) + 0.004 < Number(c.valor);
+                doc.text(`Crédito de ${m(c.valor)}${parcial ? `; este recibo baixou ${m(c.pago)} (ver "Resta" na composição)` : '; baixado por inteiro'}`, M, ya + 4.2);
+                if (!itens.length) { doc.text('Detalhamento indisponível (os pedidos desse fechamento não estão mais carregados).', M, ya + 9); ya += 15; return; }
+                const rec = modo === 'recebimento';
+                const nParc = (i) => (i.receb || []).filter(x => x.tipo !== 'imediato').length;
+                const oQue = (i) => i.tipo === 'imediato' ? 'No ato' : 'Parcela ' + (i.parcela || '') + (nParc(i) > 1 ? ' de ' + nParc(i) : '');
+                doc.autoTable({
+                    startY: ya + 6, margin: { left: M, right: M }, theme: 'striped',
+                    head: [rec ? ['Pedido', 'Cliente', 'Recebido em', 'O que é', 'Vencimento', 'Recebido', 'Comissionável', '%', 'Comissão'] : ['Pedido', 'Cliente', 'Data', 'Valor líquido', 'Em oferta', 'Comissionável', '%', 'Comissão']],
+                    body: itens.map(i => rec
+                        ? [i.pedido, i.cliente || '', dt(i.dataRef), oQue(i), i.tipo === 'imediato' ? '-' : dt(i.vcto), m(i.recebido), m(i.base), String(i.pct == null ? '' : i.pct).replace('.', ',') + '%', m(i.comissao)]
+                        : [i.pedido, i.cliente || '', dt(i.dataRef), m(i.valorPedido), i.oferta > 0 ? m(i.oferta) : '-', m(i.base), String(i.pct == null ? '' : i.pct).replace('.', ',') + '%', m(i.comissao)])
+                        .concat([rec ? ['Total', '', '', '', '', m(itens.reduce((a, i) => a + i.recebido, 0)), m(itens.reduce((a, i) => a + i.base, 0)), '', m(itens.reduce((a, i) => a + i.comissao, 0))]
+                                     : ['Total', '', '', m(itens.reduce((a, i) => a + i.valorPedido, 0)), '', m(itens.reduce((a, i) => a + i.base, 0)), '', m(itens.reduce((a, i) => a + i.comissao, 0))]]),
+                    styles: { font: 'helvetica', fontSize: 7.5, cellPadding: 1.4, textColor: corTxt },
+                    headStyles: { fillColor: [br, bg, bb], textColor: 255 },
+                    columnStyles: rec ? { 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right', fontStyle: 'bold' } } : { 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right', fontStyle: 'bold' } },
+                    didParseCell: (d) => { if (d.row.index === itens.length && d.section === 'body') { d.cell.styles.fontStyle = 'bold'; d.cell.styles.fillColor = [234, 242, 238]; } },
+                });
+                ya = doc.lastAutoTable.finalY + 9;
+            });
+        }
+        const nomeArq = `recibo-${reciboNumeroTxt(r)}-${(p.nome || 'parceiro').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').toLowerCase()}.pdf`;
+        mostrarPopupAcoesPdf(`Recibo nº ${reciboNumeroTxt(r)} gerado`, doc.output('blob'), nomeArq);
+    } catch (erro) {
+        console.error(erro);
+        alert('Não foi possível gerar o recibo: ' + ((erro && erro.message) || erro));
+    }
+}
 // ---------------------------------------------------------------
 // DASHBOARD
 // ---------------------------------------------------------------
@@ -2509,9 +2776,12 @@ $('btnSalvarCfgRecompensa').addEventListener('click', async () => {
     const campos = { tipo_recompensa_padrao: $('cfgTipoPadrao').value, percentual_padrao: pct };
     // a coluna só existe depois de rodar o parceiros-vendas-erp.sql atualizado
     if ('erp_percentual_padrao' in config) campos.erp_percentual_padrao = pctErp;
+    const modoNovo = $('cfgComissaoModo').value === 'recebimento' ? 'recebimento' : 'pedido';
+    if ('erp_comissao_modo' in config) campos.erp_comissao_modo = modoNovo;
+    else if (modoNovo === 'recebimento') { $('statusCfgRecompensa').className = 'status-msg erro'; $('statusCfgRecompensa').textContent = 'Rode o parceiros-vendas-erp.sql no Supabase (versão nova) para poder escolher o fechamento por recebimento.'; return; }
     else if (pctErp !== null) { $('statusCfgRecompensa').className = 'status-msg erro'; $('statusCfgRecompensa').textContent = 'Rode o parceiros-vendas-erp.sql no Supabase (versão nova) para poder guardar o percentual do ERP.'; return; }
     if (await salvarConfig(campos, 'statusCfgRecompensa')) {
-        await registrarSentinela('parceiros_config', `Recompensa padrão: ${TIPO_RECOMPENSA[$('cfgTipoPadrao').value]} ${pct}% (venda lançada)` + ('erp_percentual_padrao' in config ? `; vendas do ERP ${pctErp === null ? 'seguem o mesmo %' : pctErp + '%'}` : ''));
+        await registrarSentinela('parceiros_config', `Recompensa padrão: ${TIPO_RECOMPENSA[$('cfgTipoPadrao').value]} ${pct}% (venda lançada)` + ('erp_percentual_padrao' in config ? `; vendas do ERP ${pctErp === null ? 'seguem o mesmo %' : pctErp + '%'}` : '') + ('erp_comissao_modo' in config ? `; comissão do ERP fechada ${modoNovo === 'recebimento' ? 'POR RECEBIMENTO' : 'pelo pedido inteiro'}` : ''));
         renderizarPreviewVenda(); renderizarDashboard();
         if (erpPedidos.length) erpRenderizar();
     }
@@ -2654,6 +2924,9 @@ function renderizarParametros() {
     const temColErp = 'erp_percentual_padrao' in config;
     $('cfgPercentualErp').value = temColErp && config.erp_percentual_padrao != null ? config.erp_percentual_padrao : '';
     $('cfgPercentualErp').disabled = !temColErp;
+    const temColModo = 'erp_comissao_modo' in config;
+    $('cfgComissaoModo').value = temColModo && config.erp_comissao_modo === 'recebimento' ? 'recebimento' : 'pedido';
+    $('cfgComissaoModo').disabled = !temColModo;
     $('cfgPercentualErp').placeholder = temColErp ? 'em branco = o mesmo da venda lançada' : 'rode o parceiros-vendas-erp.sql';
     $('cfgAutocadastro').checked = !!config.autocadastro_ativo;
     $('cfgRamoLivre').checked = !!config.autocadastro_ramo_livre;
@@ -2985,10 +3258,64 @@ function erpPctPedido(o) {
     if (o.acordo != null) return o.acordo;
     return o.p ? percentualErp(o.p) : 0;
 }
+// modo da unidade: 'pedido' = comissão sobre o pedido inteiro (fechamento total); 'recebimento' = só sobre o que foi RECEBIDO de cada pedido
+const erpModoRecebimento = () => !!config && config.erp_comissao_modo === 'recebimento';
 function erpComissaoPedido(o) {
     if (!o.p) return 0;
     if (o.fech) return o.cvalor != null ? o.cvalor : 0;
-    return arredondar2(o.v * erpPctPedido(o) / 100);
+    if (erpModoRecebimento()) {
+        // já creditado (recebimentos fechados) + parte comissionável do que foi recebido e ainda não fechado; parcela a receber não gera comissão
+        const g = o.rec;
+        if (!g) return 0;
+        return arredondar2(g.fechada + arredondar2((g.abertoBase || 0) * erpPctPedido(o) / 100));
+    }
+    return arredondar2(erpBasePedido(o) * erpPctPedido(o) / 100);
+}
+// base da comissão = valor líquido do pedido menos a parte em itens de OFERTA (promoção), na proporção do que NÃO foi devolvido (nota de devolução)
+function erpBasePedido(o) { return o.v > 0 ? Math.max(arredondar2(Math.max(o.v - (o.oferta || 0), 0) * Math.max(o.v - (o.dev || 0), 0) / o.v), 0) : 0; }
+// base de cada RECEBIMENTO (formato por recebimento), igual ao banco (parceiros_base_receb_rc): percorre os recebimentos na ordem (data, id);
+// só conta até o valor líquido do pedido depois das devoluções (teto), na proporção do comissionável; a taxa de cartão não abate.
+// Soma em g.abertoBase só o que ainda não foi fechado.
+function erpCalcularBasesReceb(o) {
+    const g = o.rec; if (!g) return;
+    const teto = Math.max(o.v - (o.dev || 0), 0), prop = o.v > 0 ? Math.max(o.v - (o.oferta || 0), 0) / o.v : 0;
+    const itens = g.itens.filter(i => i.situacao === 'recebido').sort((a, b) => String(a.data_recebimento || '').localeCompare(String(b.data_recebimento || '')) || String(a.id || '').localeCompare(String(b.id || '')));
+    let cum = 0, aberto = 0;
+    itens.forEach(i => {
+        const r = Number(i.valor_recebido) || 0, antes = cum; cum += r;
+        i.baseCalc = arredondar2(prop * (Math.min(cum, teto) - Math.min(antes, teto)));
+        if (!i.fechamento_recebimento_id) aberto += i.baseCalc;
+    });
+    g.abertoBase = arredondar2(aberto);
+}
+// o pedido já está todo creditado? (fechado pelo total, ou todos os recebimentos já fechados e nada a receber)
+function erpCreditadoTotal(o) {
+    if (o.fech) return true;
+    const g = o.rec;
+    return erpModoRecebimento() && !!g && g.fechada > 0 && g.abertoRec <= 0 && g.aReceber <= 0;
+}
+// recebimentos (pagamento no ato e parcelas) gravados pelo coletor, agrupados por pedido (loja + nº)
+let recebDb = {};
+let recebSqlPendente = false;
+async function carregarRecebErp() {
+    recebDb = {}; recebSqlPendente = false;
+    try {
+        const linhas = await buscarTudo(() => sb.from('parceiros_recebimentos_erp')
+            .select('id,loja_codigo,referencia,tipo,parcela,data_vencimento,data_recebimento,valor,valor_recebido,situacao,fechamento_recebimento_id,base_valor,comissao_pct,comissao_valor')
+            .eq('unidade_negocio_id', meuPerfil.unidadeId).order('id'));
+        linhas.forEach(l => {
+            const k = (l.loja_codigo || '') + '\u0001' + l.referencia;
+            const g = recebDb[k] || (recebDb[k] = { itens: [], fechada: 0, abertoRec: 0, recebido: 0, aReceber: 0 });
+            const rec = l.situacao === 'recebido', fechado = !!l.fechamento_recebimento_id;
+            g.itens.push(l);
+            if (rec) { g.recebido += Number(l.valor_recebido) || 0; if (!fechado) g.abertoRec += Number(l.valor_recebido) || 0; } else g.aReceber += Number(l.valor) || 0;
+            if (fechado) g.fechada += Number(l.comissao_valor) || 0;
+        });
+        Object.values(recebDb).forEach(g => { g.fechada = arredondar2(g.fechada); g.abertoRec = arredondar2(g.abertoRec); g.recebido = arredondar2(g.recebido); g.aReceber = arredondar2(g.aReceber); });
+    } catch (e) {
+        recebSqlPendente = erroDeTabelaAusente(e);
+        if (!recebSqlPendente) console.error(e);
+    }
 }
 async function carregarErpDb() {
     try {
@@ -2996,21 +3323,24 @@ async function carregarErpDb() {
         const consulta = (colunas) => buscarTudo(() => sb.from('parceiros_vendas_erp').select(colunas)
             .eq('unidade_negocio_id', meuPerfil.unidadeId).order('data_venda', { ascending: false }).order('id'));
         let linhas;
-        try { linhas = await consulta(base + ',id,pct_acordo,fechamento_parceiro_id,comissao_pct,comissao_valor'); erpFechamentoSql = true; }
+        try { linhas = await consulta(base + ',id,pct_acordo,fechamento_parceiro_id,comissao_pct,comissao_valor,valor_oferta,valor_devolvido'); erpFechamentoSql = true; }
         catch (e1) {
             // colunas de acordo/fechamento ainda não existem (parceiros-vendas-erp.sql antigo): lê sem elas
-            if (!/pct_acordo|fechamento_parceiro_id|comissao_pct|comissao_valor/.test(String((e1 && e1.message) || ''))) throw e1;
+            if (!/pct_acordo|fechamento_parceiro_id|comissao_pct|comissao_valor|valor_oferta|valor_devolvido/.test(String((e1 && e1.message) || ''))) throw e1;
             linhas = await consulta(base); erpFechamentoSql = false;
         }
         erpDbSqlPendente = false;
         erpDbSyncEm = null;
+        await carregarRecebErp();
         erpDb = linhas.map(l => {
             if (l.sincronizado_em && (!erpDbSyncEm || l.sincronizado_em > erpDbSyncEm)) erpDbSyncEm = l.sincronizado_em;
             return { id: l.id || null, cod: l.codigo_externo, chave: l.chave_codigo, ind: l.indicador || '', loja: l.loja || l.loja_codigo || '(sem loja)', lojaCod: l.loja_codigo || '',
                 ref: l.referencia, dv: l.data_venda, db: l.data_baixa || '', cli: l.cliente || '', ven: l.vendedor || '', itens: l.qtd_itens || 0, v: Number(l.valor_pedido) || 0, propria: !!l.compra_propria,
                 acordo: l.pct_acordo == null ? null : Number(l.pct_acordo), fech: l.fechamento_parceiro_id || null,
-                cpct: l.comissao_pct == null ? null : Number(l.comissao_pct), cvalor: l.comissao_valor == null ? null : Number(l.comissao_valor) };
+                cpct: l.comissao_pct == null ? null : Number(l.comissao_pct), cvalor: l.comissao_valor == null ? null : Number(l.comissao_valor),
+                oferta: l.valor_oferta == null ? null : Number(l.valor_oferta), dev: Number(l.valor_devolvido) || 0, rec: recebDb[(l.loja_codigo || '') + '\u0001' + l.referencia] || null };
         });
+        erpDb.forEach(erpCalcularBasesReceb);
     } catch (erro) {
         erpDb = []; erpDbSyncEm = null;
         erpDbSqlPendente = erroDeTabelaAusente(erro);
@@ -3285,7 +3615,8 @@ async function erpSincronizar(opcoes) {
 function erpAgrupar(lista) {
     const grupos = {}, meses = {};
     lista.forEach(o => {
-        const g = grupos[o.chave] || (grupos[o.chave] = { chave: o.chave, cod: o.cod, ind: o.ind, p: o.p, pedidos: [], valor: 0, com: 0, fechados: 0, acordos: 0, ultima: '' });
+        const g = grupos[o.chave] || (grupos[o.chave] = { chave: o.chave, cod: o.cod, ind: o.ind, p: o.p, pedidos: [], valor: 0, base: 0, oferta: 0, com: 0, fechados: 0, acordos: 0, ultima: '' });
+        g.base += erpBasePedido(o); g.oferta += o.oferta || 0;
         g.pedidos.push(o); g.valor += o.v; if (o.dref > g.ultima) g.ultima = o.dref;
         const com = erpComissaoPedido(o);
         g.com += com; if (o.fech) g.fechados++; if (o.acordo != null && !o.fech) g.acordos++;
@@ -3296,7 +3627,7 @@ function erpAgrupar(lista) {
     Object.values(grupos).forEach(g => {
         g.com = arredondar2(g.com);
         g.pctBase = g.p ? percentualErp(g.p) : 0;
-        g.pct = g.p && g.valor > 0 && (g.acordos || g.fechados) ? arredondar2(g.com / g.valor * 100) : g.pctBase;
+        g.pct = g.p && g.base > 0 && (g.acordos || g.fechados) ? arredondar2(g.com / g.base * 100) : g.pctBase;
         g.variavel = !!(g.acordos || g.fechados);
     });
     return { grupos: Object.values(grupos), meses };
@@ -3328,7 +3659,9 @@ function erpRenderizar() {
     $('erpCards').innerHTML = `
         <div class="stat-card"><div class="label">Pedidos no período</div><div class="value">${r.lista.length.toLocaleString('pt-BR')}</div></div>
         <div class="stat-card"><div class="label">Valor vendido</div><div class="value">${formatarMoeda(valorTot)}</div></div>
-        <div class="stat-card"><div class="label">Comissão calculada</div><div class="value">${formatarMoeda(comissaoTot)}</div></div>
+        <div class="stat-card"><div class="label">${erpModoRecebimento() ? 'Comissão sobre o recebido' : 'Comissão calculada'}</div><div class="value">${formatarMoeda(comissaoTot)}</div></div>
+        ${erpModoRecebimento() ? `<div class="stat-card"><div class="label">Já recebido dos pedidos</div><div class="value">${formatarMoeda(arredondar2(r.lista.filter(o => o.p && o.rec).reduce((a, o) => a + o.rec.recebido, 0)))}</div></div>
+        <div class="stat-card"><div class="label">A receber (sem comissão ainda)</div><div class="value alerta">${formatarMoeda(arredondar2(r.lista.filter(o => o.p && o.rec).reduce((a, o) => a + o.rec.aReceber, 0)))}</div></div>` : ''}
         ${comissaoFechada ? `<div class="stat-card"><div class="label">Já creditada no saldo</div><div class="value">${formatarMoeda(comissaoFechada)}</div></div>` : ''}
         <div class="stat-card"><div class="label">Parceiros com venda</div><div class="value">${comP.length}</div></div>
         <div class="stat-card ${semP.length ? 'clicavel' : ''}" id="erpCardSem"><div class="label">Sem parceiro cadastrado</div><div class="value ${semP.length ? 'alerta' : ''}">${nPedSemP} pedido(s)</div></div>`;
@@ -3336,13 +3669,18 @@ function erpRenderizar() {
     if (erpPrefs.soBaixados && r.descartaNaoBaixado) notas.push(`${r.descartaNaoBaixado} pedido(s) sem baixa (${formatarMoeda(r.descartaValorNB)}) ficaram de fora.`);
     if (erpPrefs.ignorarProprio && r.descartaPropria) notas.push(`${r.descartaPropria} compra(s) do próprio indicador (${formatarMoeda(r.descartaValorPr)}) foram ignoradas.`);
     if (!erpPrefs.ignorarProprio) { const n = r.lista.filter(o => o.propria).length; if (n) notas.push(`${n} pedido(s) parecem compra do próprio indicador (marcados na lista); marque "Ignorar compras do próprio indicador" se não devem gerar comissão.`); }
+    if (erpModoRecebimento()) {
+        if (recebSqlPendente) notas.push('A tabela de recebimentos ainda não existe: rode o parceiros-recebimentos-erp.sql no Supabase.');
+        else if (!Object.keys(recebDb).length) notas.push('Nenhum recebimento importado ainda: rode o coletor (consulta de recebimentos). Enquanto isso a comissão por recebimento fica em zero.');
+        else notas.push('Comissão por RECEBIMENTO: só o que já foi recebido de cada pedido (pagamento no ato e parcelas pagas) gera comissão, sem a parte em oferta; a taxa de cartão não abate.');
+    }
     $('erpNotas').textContent = notas.join(' ');
 
     $('erpCorpoParceiros').innerHTML = comP.sort((a, b) => b.valor - a.valor).map(g => `
         <tr data-erp-parc="${escapeHtml(g.chave)}" style="cursor:pointer;">
             <td>${escapeHtml(g.cod)}</td>
             <td><strong>${escapeHtml(g.p.nome)}</strong>${ramoNome(g.p.ramo_id) ? `<small class="sub">${escapeHtml(ramoNome(g.p.ramo_id))}</small>` : ''}</td>
-            <td class="num">${g.pedidos.length}</td><td class="num">${formatarMoeda(g.valor)}</td>
+            <td class="num">${g.pedidos.length}</td><td class="num">${formatarMoeda(g.valor)}${g.oferta > 0 ? `<small class="sub">${formatarMoeda(g.oferta)} em oferta, fora da comissão</small>` : ''}</td>
             <td class="num">${g.variavel ? '≈ ' : ''}${String(g.pct).replace('.', ',')}%</td>
             <td class="num"><strong>${formatarMoeda(g.com)}</strong>${g.fechados ? `<small class="sub">${g.fechados === g.pedidos.length ? 'tudo' : g.fechados + ' ped.'} creditado no saldo</small>` : ''}${g.acordos ? `<small class="sub">${g.acordos} com % de acordo</small>` : ''}</td><td>${formatarDataSemFuso(g.ultima)}</td>
         </tr>`).join('') || '<tr><td colspan="7" class="vazio">Nenhum pedido de parceiro cadastrado neste período/filtro.</td></tr>';
@@ -3366,24 +3704,103 @@ function erpDetalhe(chave) {
     $('erpDetTitulo').textContent = g.p ? `${g.p.nome}` : `Indicador ${g.cod} (sem parceiro cadastrado)`;
     $('erpDetSub').textContent = `Código externo ${g.cod} · ${g.pedidos.length} pedido(s) · ${formatarMoeda(g.valor)}` + (g.p ? ` · ${g.variavel ? '≈ ' : ''}${String(g.pct).replace('.', ',')}% = ${formatarMoeda(g.com)}` : '') + (g.p ? '' : ` · ${g.ind || ''}`);
     erpDetChave = chave;
+    const totOferta = g.pedidos.reduce((a, o) => a + (o.oferta || 0), 0), temOferta = g.pedidos.some(o => o.oferta != null);
+    if (temOferta) $('erpDetSub').textContent += ` · em itens de oferta ${formatarMoeda(totOferta)} (fora da comissão)`;
     // quem pode ajustar o % do pedido: pedido que veio do banco (tem id), ainda não fechado, e só com as colunas novas no banco
     const podeAcordo = (o) => !!g.p && !!o.id && !o.fech && erpFechamentoSql;
+    // devolução: só o usuário principal, pedido que veio do banco, e só com a coluna/tabela de devoluções no banco
+    const podeDevolucao = (o) => !!o.id && meuPerfil.ehPrincipal && !devolucaoSqlPendente;
     $('erpDetCorpo').innerHTML = linhas.map(o => {
         const pct = g.p ? erpPctPedido(o) : null;
-        const sel = o.fech ? '<span class="pill pill-confirmada" title="Já creditado no saldo do parceiro">creditado</span>'
+        const sel = erpCreditadoTotal(o) ? '<span class="pill pill-confirmada" title="Já creditado no saldo do parceiro">creditado</span>'
             : (o.acordo != null ? '<span class="pill pill-pendente" title="% combinado só para este pedido">acordo</span>' : '');
         return `
         <tr><td>${formatarDataSemFuso(o.dv)}</td><td>${o.db ? formatarDataSemFuso(o.db) : '<span class="pill pill-pendente">sem baixa</span>'}</td>
         <td>${escapeHtml(o.loja)}</td><td>${escapeHtml(o.ref)}</td>
         <td>${escapeHtml(o.cli || '—')}${o.propria ? ' <span class="pill pill-recusado">compra própria?</span>' : ''}</td>
         <td class="num">${formatarMoeda(o.v)}</td>
+        <td class="num">${o.oferta == null ? '—' : (o.oferta > 0 ? `<span style="color:var(--accent-ink);">${formatarMoeda(o.oferta)}</span>` : '—')}</td>
+        <td class="num">${o.dev > 0 ? `<span style="color:var(--danger);">${formatarMoeda(o.dev)}</span>` : '—'}</td>
+        <td class="num">${formatarMoeda(erpBasePedido(o))}</td>
+        <td class="num col-receb">${o.rec ? formatarMoeda(o.rec.recebido) : '—'}</td><td class="num col-receb">${o.rec && o.rec.aReceber > 0 ? formatarMoeda(o.rec.aReceber) : '—'}</td>
         <td class="num">${pct == null ? '—' : String(pct).replace('.', ',') + '%'} ${sel}</td>
         <td class="num">${g.p ? formatarMoeda(erpComissaoPedido(o)) : '—'}</td>
-        <td>${podeAcordo(o) ? `<button type="button" class="btn btn-cinza btn-sm" data-erp-acordo="${escapeHtml(o.id)}" title="Combinar um % diferente só para este pedido">% acordo</button>` : ''}</td></tr>`;
+        <td style="white-space:nowrap;">${podeAcordo(o) ? `<button type="button" class="btn btn-cinza btn-sm" data-erp-acordo="${escapeHtml(o.id)}" title="Combinar um % diferente só para este pedido">% acordo</button> ` : ''}${podeDevolucao(o) ? `<button type="button" class="btn btn-cinza btn-sm" data-erp-devolucao="${escapeHtml(o.id)}" title="Registrar a nota fiscal de devolução deste pedido (só o valor)">Devolução</button>` : ''}</td></tr>`;
     }).join('');
+    document.querySelectorAll('#modal-erp .col-receb').forEach(el => { el.style.display = erpModoRecebimento() ? '' : 'none'; });
     $('modal-erp').classList.add('aberto');
 }
 let erpDetChave = null;
+// ---- devolução (nota fiscal de devolução; só valor) ----
+let devolucaoSqlPendente = false, erpDevId = null;
+function devValorNum(txt) { txt = String(txt || '').trim().replace(/[R$\s]/g, ''); if (txt.includes(',')) txt = txt.replace(/\./g, '').replace(',', '.'); const n = Number(txt); return isFinite(n) ? n : NaN; }
+function devMsg(tipo, txt) { const el = $('devStatus'); el.className = 'status-msg ' + (tipo || ''); el.textContent = txt || ''; }
+async function erpDevCarregarLista(o) {
+    const box = $('devLista'); box.innerHTML = '<small class="sub">Carregando…</small>';
+    const { data, error } = await sb.from('parceiros_devolucoes_erp').select('id,nf_devolucao,data_devolucao,valor,observacao,status,motivo_cancelamento')
+        .eq('unidade_negocio_id', meuPerfil.unidadeId).eq('loja_codigo', o.lojaCod || '').eq('referencia', o.ref).order('criado_em');
+    if (error) { if (erroDeTabelaAusente(error)) { devolucaoSqlPendente = true; box.innerHTML = '<div class="dica">Rode o parceiros-devolucoes.sql no Supabase para registrar devoluções.</div>'; } else box.textContent = 'Erro: ' + error.message; return; }
+    if (!data.length) { box.innerHTML = '<small class="sub">Nenhuma devolução registrada neste pedido.</small>'; return; }
+    box.innerHTML = '<div class="tabela-scroll"><table class="tabela"><thead><tr><th>Nota</th><th>Data</th><th class="num">Valor</th><th>Observação</th><th></th></tr></thead><tbody>' + data.map(d => `
+        <tr${d.status === 'cancelada' ? ' style="opacity:.55;text-decoration:line-through;"' : ''}><td>${escapeHtml(d.nf_devolucao)}</td><td>${formatarDataSemFuso(d.data_devolucao)}</td><td class="num">${formatarMoeda(Number(d.valor))}</td>
+        <td>${escapeHtml(d.observacao || '')}${d.status === 'cancelada' ? ` <small class="sub">cancelada: ${escapeHtml(d.motivo_cancelamento || '')}</small>` : ''}</td>
+        <td>${d.status === 'ativa' ? `<button type="button" class="btn btn-cinza btn-sm" data-dev-cancelar="${escapeHtml(d.id)}" data-dev-nf="${escapeHtml(d.nf_devolucao)}" data-dev-valor="${escapeHtml(d.valor)}">Cancelar</button>` : ''}</td></tr>`).join('') + '</tbody></table></div>';
+}
+function erpAbrirDevolucao(id) {
+    const o = erpDb.find(x => String(x.id) === String(id));
+    if (!o) return;
+    erpDevId = o.id;
+    $('devSub').textContent = `Pedido ${o.ref} · ${o.loja} · ${o.cli || 'sem cliente'} · valor líquido ${formatarMoeda(o.v)}` + (o.dev > 0 ? ` · já devolvido ${formatarMoeda(o.dev)}` : '');
+    $('devNf').value = ''; $('devValor').value = ''; $('devObs').value = ''; $('devData').value = hojeISO(); devMsg('', '');
+    $('modal-devolucao').classList.add('aberto');
+    erpDevCarregarLista(o);
+    setTimeout(() => $('devNf').focus(), 50);
+}
+async function erpDevAtualizarTela(o) {
+    await carregarErpDb(); erpUsarBanco(); renderizarDashboard(); erpRenderizar();
+    if (erpDetChave) erpDetalhe(erpDetChave);
+    const n = erpDb.find(x => String(x.id) === String(o.id)); if (n) await erpDevCarregarLista(n);
+    return n;
+}
+function erpDevAviso(o) {
+    // pedido que já tem comissão creditada no saldo: a mudança só entra pelo "Refazer cálculo" do fechamento
+    const fechado = o.fech || (o.rec && o.rec.fechada > 0);
+    return fechado ? ' Este pedido já tem comissão creditada no saldo: use "Refazer cálculo" no fechamento para lançar a diferença.' : '';
+}
+async function erpDevRegistrar() {
+    const o = erpDb.find(x => String(x.id) === String(erpDevId)); if (!o) return;
+    const nf = $('devNf').value.trim(), data = $('devData').value, valor = devValorNum($('devValor').value), obs = $('devObs').value.trim();
+    if (!nf) { devMsg('erro', 'Informe o número da nota fiscal de devolução.'); $('devNf').focus(); return; }
+    if (!data) { devMsg('erro', 'Informe a data da devolução.'); return; }
+    if (!(valor > 0)) { devMsg('erro', 'Informe o valor devolvido (maior que zero).'); $('devValor').focus(); return; }
+    if (valor + (o.dev || 0) > o.v + 0.004) { devMsg('erro', `A devolução passa do valor do pedido (${formatarMoeda(o.v)}, já devolvido ${formatarMoeda(o.dev || 0)}).`); return; }
+    $('devSalvar').disabled = true; devMsg('', 'Registrando…');
+    try {
+        const { error } = await sb.rpc('parceiros_registrar_devolucao', { p_unidade: meuPerfil.unidadeId, p_loja: o.lojaCod || '', p_referencia: o.ref, p_nf: nf, p_data: data, p_valor: arredondar2(valor), p_obs: obs || null, p_por: meuPerfil.email });
+        if (error) { if (erroDeTabelaAusente(error)) devolucaoSqlPendente = true; throw new Error(error.message); }
+        registrarSentinela('parceiros_erp_devolucao', `Devolução no pedido ERP ${o.ref} (loja ${o.loja}, ${formatarMoeda(o.v)}): nota ${nf}, ${formatarMoeda(valor)} em ${data}${obs ? ' — ' + obs : ''}`);
+        const aviso = erpDevAviso(o);
+        $('devNf').value = ''; $('devValor').value = ''; $('devObs').value = '';
+        const n = await erpDevAtualizarTela(o);
+        devMsg('sucesso', `Devolução registrada${n ? ` (total devolvido ${formatarMoeda(n.dev)}, comissionável ${formatarMoeda(erpBasePedido(n))})` : ''}.` + aviso);
+    } catch (e) { devMsg('erro', (e && e.message) || String(e)); }
+    finally { $('devSalvar').disabled = false; }
+}
+async function erpDevCancelar(idDev, nf, valor) {
+    const o = erpDb.find(x => String(x.id) === String(erpDevId)); if (!o) return;
+    const motivo = prompt(`Cancelar a devolução da nota ${nf} (${formatarMoeda(Number(valor))})? A base da comissão volta a considerar esse valor.\n\nMotivo do cancelamento:`);
+    if (motivo === null) return;
+    if (!motivo.trim()) { devMsg('erro', 'Informe o motivo do cancelamento.'); return; }
+    devMsg('', 'Cancelando…');
+    try {
+        const { error } = await sb.rpc('parceiros_cancelar_devolucao', { p_id: idDev, p_motivo: motivo.trim(), p_por: meuPerfil.email });
+        if (error) throw new Error(error.message);
+        registrarSentinela('parceiros_erp_devolucao_cancelada', `Cancelou a devolução da nota ${nf} (${formatarMoeda(Number(valor))}) no pedido ERP ${o.ref} (loja ${o.loja}) — ${motivo.trim()}`);
+        const aviso = erpDevAviso(o);
+        await erpDevAtualizarTela(o);
+        devMsg('sucesso', 'Devolução cancelada.' + aviso);
+    } catch (e) { devMsg('erro', (e && e.message) || String(e)); }
+}
 // ---- % de acordo por pedido (só pedido ainda não fechado) ----
 let erpAcordoId = null;
 function erpAbrirAcordo(id) {
@@ -3465,12 +3882,18 @@ $('erpBtnExportar').addEventListener('click', erpExportar);
 $('erpBtnGravar').addEventListener('click', erpGravarClique);
 $('erpDetFechar').addEventListener('click', () => $('modal-erp').classList.remove('aberto'));
 $('erpAcordoSalvar').addEventListener('click', () => erpSalvarAcordo(false));
+$('devSalvar').addEventListener('click', erpDevRegistrar);
+$('devFechar').addEventListener('click', () => $('modal-devolucao').classList.remove('aberto'));
 $('erpAcordoRemover').addEventListener('click', () => erpSalvarAcordo(true));
 $('erpAcordoCancelar').addEventListener('click', () => $('modal-acordo').classList.remove('aberto'));
 $('erpAcordoPct').addEventListener('keydown', (e) => { if (e.key === 'Enter') erpSalvarAcordo(false); });
 document.addEventListener('click', (e) => {
     const ac = e.target.closest('[data-erp-acordo]');
     if (ac) { erpAbrirAcordo(ac.dataset.erpAcordo); return; }
+    const dv = e.target.closest('[data-erp-devolucao]');
+    if (dv) { erpAbrirDevolucao(dv.dataset.erpDevolucao); return; }
+    const dc = e.target.closest('[data-dev-cancelar]');
+    if (dc) { erpDevCancelar(dc.dataset.devCancelar, dc.dataset.devNf, dc.dataset.devValor); return; }
     const tr = e.target.closest('[data-erp-parc]');
     if (tr) { erpDetalhe(tr.dataset.erpParc); return; }
     if (e.target.closest('#erpCardSem')) { const el = $('erpBlocoSem'); if (el && !el.classList.contains('hidden')) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
@@ -3496,12 +3919,25 @@ function fechAtualizarBotoes() {
     $('fechBtnSimular').disabled = fechOcupado;
     $('fechSoPrincipal').classList.toggle('hidden', ehP);
 }
+// há parcela a receber importada do ERP? (se sim, o fechamento pelo pedido inteiro creditaria comissão sobre dinheiro que ainda não entrou)
+const fechTemParcelaAReceber = () => Object.values(recebDb).some(g => g.aReceber > 0);
 function fechAbrirAba() {
     if (!erpPrefsLidas) { erpLerPrefs(); erpPrefsLidas = true; }
     if (!$('fechDe').value || !$('fechAte').value) { const p = fechPeriodoAnterior(); $('fechDe').value = p.de; $('fechAte').value = p.ate; }
+    const recM = erpModoRecebimento();
+    $('fechDesc').innerHTML = recM
+        ? 'Soma a comissão <strong>sobre o que foi recebido</strong> dos pedidos do sistema da loja (ERP) no período — pagamento no ato e parcelas pagas —, <strong>um crédito por parceiro</strong>, e lança no saldo/extrato dele. Cada recebimento fechado guarda o % e o valor creditados e <strong>não entra de novo</strong>; parcela a receber espera ser paga. Se depois houver um acordo (num pedido ou no % do parceiro), use <strong>Refazer</strong>: só a diferença entra no extrato.'
+        : 'Soma a comissão das vendas do sistema da loja (ERP) <strong>ainda não fechadas</strong> do período, <strong>um crédito por parceiro</strong>, e lança no saldo/extrato dele. Cada pedido fechado guarda o % e o valor creditados, então o mesmo pedido nunca é contado duas vezes. Se depois houver um acordo (num pedido ou no % do parceiro), use <strong>Refazer</strong>: só a diferença entra no extrato.';
+    $('fechThQtd').textContent = recM ? 'Recebimentos' : 'Pedidos'; $('fechThValor').textContent = recM ? 'Valor recebido' : 'Valor vendido';
+    $('fechThBase').style.display = recM ? '' : 'none';
+    if (recM) {
+        $('fechRegras').innerHTML = 'Formato: <strong>por recebimento</strong> (muda em Parâmetros). Entra o que foi <strong>recebido no período</strong> (data do recebimento), de parceiros <strong>ativos ou inativos</strong> com <strong>código externo</strong>, sem a parte em oferta e sem abater a taxa de cartão. Pedido já fechado pelo total fica de fora.'
+            + (recebSqlPendente ? ' <strong>⚠️ A tabela de recebimentos ainda não existe: rode o parceiros-recebimentos-erp.sql.</strong>' : '');
+    } else
     $('fechRegras').innerHTML = erpPrefsNoBanco()
         ? `Regras usadas: data de referência <strong>${erpPrefs.ref === 'baixa' ? 'da baixa' : 'da venda'}</strong> · ${erpPrefs.soBaixados ? 'só pedidos baixados' : 'inclui pedidos sem baixa'} · ${erpPrefs.ignorarProprio ? 'ignora compra do próprio indicador' : 'conta compra do próprio indicador'} (mudam na aba <em>Vendas do ERP</em>). Entram só pedidos de parceiros <strong>ativos ou inativos</strong> com <strong>código externo</strong> cadastrado.`
         : '⚠️ As regras de cálculo ainda não estão na configuração da unidade: rode o parceiros-vendas-erp.sql no Supabase antes de fechar.';
+    if (!recM && fechTemParcelaAReceber()) $('fechRegras').innerHTML += '<div style="margin-top:8px;padding:8px 10px;border:1px solid var(--danger);border-radius:8px;color:var(--danger);"><strong>⚠️ Formato atual: pedido inteiro.</strong> Ele credita o pedido todo, <strong>inclusive parcelas ainda não pagas</strong>. Se o combinado é comissionar só o que foi <strong>recebido</strong> (parcelas pagas e pagamento no ato), mude para <em>Por recebimento</em> em <strong>Parâmetros</strong> antes de fechar.</div>';
     fechAtualizarBotoes();
     fechCarregar();
 }
@@ -3533,7 +3969,7 @@ function fechRenderizarLista() {
         const aberto = f.status === 'fechado';
         return `<tr style="cursor:pointer;" data-fech-ver="${escapeHtml(f.id)}">
             <td>${formatarDataSemFuso(f.periodo_de)} a ${formatarDataSemFuso(f.periodo_ate)}${f.observacao ? `<small class="sub">${escapeHtml(f.observacao)}</small>` : ''}</td>
-            <td>${aberto ? '<span class="pill pill-confirmada">Fechado</span>' : '<span class="pill pill-cancelado">Desfeito</span>'}${refeitos ? `<small class="sub">refeito ${refeitos}×</small>` : ''}</td>
+            <td>${aberto ? '<span class="pill pill-confirmada">Fechado</span>' : '<span class="pill pill-cancelado">Desfeito</span>'}<small class="sub">${f.modo === 'recebimento' ? 'por recebimento' : 'pedido inteiro'}</small>${refeitos ? `<small class="sub">refeito ${refeitos}×</small>` : ''}</td>
             <td class="num">${ls.length}</td><td class="num">${ped}</td>
             <td class="num">${aberto ? `<strong>${formatarMoeda(tot)}</strong>` : '—'}</td>
             <td>${escapeHtml(feito)}${f.criado_por ? `<small class="sub">${escapeHtml(f.criado_por)}</small>` : ''}</td>
@@ -3548,31 +3984,34 @@ async function fechExecutar(aplicar) {
     if (aplicar) {
         if (!meuPerfil.ehPrincipal) { fechMsg('erro', 'Só o usuário principal da unidade fecha as vendas.'); return; }
         if (!fechSim || fechSim.de !== de || fechSim.ate !== ate) { fechMsg('erro', 'Simule este período antes de fechar.'); return; }
-        if (!confirm(`Creditar ${formatarMoeda(fechSim.total)} no saldo de ${fechSim.n} parceiro(s), referente às vendas do ERP de ${formatarDataSemFuso(de)} a ${formatarDataSemFuso(ate)}?\n\nOs pedidos ficam marcados como fechados. Depois dá para refazer o cálculo ou desfazer.`)) return;
+        const avisoPedido = (!erpModoRecebimento() && fechTemParcelaAReceber()) ? '⚠️ ATENÇÃO: o formato atual é PEDIDO INTEIRO e existem parcelas ainda não pagas. Elas serão creditadas mesmo sem terem sido recebidas. Para comissionar só o que foi recebido, cancele e mude para "Por recebimento" em Parâmetros.\n\n' : '';
+        if (!confirm(`${avisoPedido}Creditar ${formatarMoeda(fechSim.total)} no saldo de ${fechSim.n} parceiro(s), referente às vendas do ERP de ${formatarDataSemFuso(de)} a ${formatarDataSemFuso(ate)}?\n\nOs pedidos ficam marcados como fechados. Depois dá para refazer o cálculo ou desfazer.`)) return;
     }
     fechOcupado = true; fechAtualizarBotoes();
     fechMsg('', aplicar ? 'Fechando...' : 'Simulando...');
     try {
-        const { data, error } = await sb.rpc('parceiros_fechar_erp', { p_unidade: meuPerfil.unidadeId, p_de: de, p_ate: ate, p_aplicar: aplicar, p_por: fechPor(), p_obs: $('fechObs').value.trim() || null });
+        const recM = erpModoRecebimento();
+        const { data, error } = await sb.rpc(recM ? 'parceiros_fechar_recebimentos' : 'parceiros_fechar_erp', { p_unidade: meuPerfil.unidadeId, p_de: de, p_ate: ate, p_aplicar: aplicar, p_por: fechPor(), p_obs: $('fechObs').value.trim() || null });
         if (error) {
             if (erroDeTabelaAusente(error)) { fechSqlPendente = true; $('avisoFechamentoSql').classList.remove('hidden'); }
             throw new Error(error.message);
         }
         const linhas = data || [];
         const total = arredondar2(linhas.reduce((a, l) => a + Number(l.comissao || 0), 0));
-        const pedidos = linhas.reduce((a, l) => a + (l.pedidos || 0), 0);
-        $('fechSimCorpo').innerHTML = linhas.map(l => `<tr><td>${escapeHtml(l.codigo_externo || '')}</td><td><strong>${escapeHtml(l.parceiro_nome || '')}</strong></td>
-            <td class="num">${l.pedidos}</td><td class="num">${formatarMoeda(l.valor_vendido)}</td><td class="num"><strong>${formatarMoeda(l.comissao)}</strong></td></tr>`).join('')
-            + (linhas.length ? `<tr><td colspan="2"><strong>Total</strong></td><td class="num"><strong>${pedidos}</strong></td><td></td><td class="num"><strong>${formatarMoeda(total)}</strong></td></tr>` : '');
+        const qtdDe = (l) => (l.recebimentos != null ? l.recebimentos : l.pedidos) || 0, valorDe = (l) => (l.valor_recebido != null ? l.valor_recebido : l.valor_vendido);
+        const pedidos = linhas.reduce((a, l) => a + qtdDe(l), 0);
+        $('fechSimCorpo').innerHTML = linhas.map(l => `<tr data-fech-sim="${escapeHtml(l.parceiro_id)}" style="cursor:pointer;" title="Toque para ver o que entra"><td>${escapeHtml(l.codigo_externo || '')}</td><td><strong>${escapeHtml(l.parceiro_nome || '')}</strong></td>
+            <td class="num">${qtdDe(l)}</td><td class="num">${formatarMoeda(valorDe(l))}</td>${recM ? `<td class="num">${formatarMoeda(l.base_comissionavel)}</td>` : ''}<td class="num"><strong>${formatarMoeda(l.comissao)}</strong></td></tr>`).join('')
+            + (linhas.length ? `<tr><td colspan="2"><strong>Total</strong></td><td class="num"><strong>${pedidos}</strong></td><td></td>${recM ? '<td></td>' : ''}<td class="num"><strong>${formatarMoeda(total)}</strong></td></tr>` : '');
         $('fechSimulacao').classList.toggle('hidden', !linhas.length);
         if (!aplicar) {
-            fechSim = { de, ate, n: linhas.length, total };
+            fechSim = { de, ate, n: linhas.length, total, modo: recM ? 'recebimento' : 'pedido' };
             fechMsg(linhas.length ? 'sucesso' : 'erro', linhas.length
-                ? `Simulação: ${pedidos} pedido(s) em aberto, ${formatarMoeda(total)} de comissão para ${linhas.length} parceiro(s). Nada foi gravado.`
-                : 'Nenhum pedido em aberto neste período (já fechado, sem baixa, ou sem parceiro com código externo).');
+                ? `Simulação: ${pedidos} ${recM ? 'recebimento(s)' : 'pedido(s) em aberto'}, ${formatarMoeda(total)} de comissão para ${linhas.length} parceiro(s). Nada foi gravado.`
+                : (recM ? 'Nenhum recebimento a fechar neste período (já fechado, sem parceiro com código externo, ou nada recebido).' : 'Nenhum pedido em aberto neste período (já fechado, sem baixa, ou sem parceiro com código externo).'));
         } else {
             fechSim = null;
-            registrarSentinela('parceiros_erp_fechamento', `Fechou as vendas do ERP de ${de} a ${ate}: ${formatarMoeda(total)} creditados a ${linhas.length} parceiro(s) (${pedidos} pedidos)`);
+            registrarSentinela('parceiros_erp_fechamento', `Fechou as vendas do ERP ${recM ? 'POR RECEBIMENTO ' : ''}de ${de} a ${ate}: ${formatarMoeda(total)} creditados a ${linhas.length} parceiro(s) (${pedidos} ${recM ? 'recebimentos' : 'pedidos'})`);
             fechMsg('sucesso', `Fechado: ${formatarMoeda(total)} creditados no saldo de ${linhas.length} parceiro(s).`);
             $('fechSimulacao').classList.add('hidden');
             await fechAtualizarDepois();
@@ -3602,13 +4041,13 @@ function fechAbrirModal(titulo, sub, corpoHtml, { botao, motivo, motivoRotulo, a
 function fechVer(id) {
     const f = fechLista.find(x => x.id === id); if (!f) return;
     const ls = fechDoFechamento(id);
-    const corpo = `<div class="tabela-scroll"><table class="tabela"><thead><tr><th>Parceiro</th><th class="num">Pedidos</th><th class="num">Valor vendido</th><th class="num">Comissão</th><th>Refeito</th></tr></thead><tbody>`
+    const corpo = `<div class="tabela-scroll"><table class="tabela"><thead><tr><th>Parceiro</th><th class="num">${f.modo === 'recebimento' ? 'Recebimentos' : 'Pedidos'}</th><th class="num">${f.modo === 'recebimento' ? 'Valor recebido' : 'Valor vendido'}</th><th class="num">Comissão</th><th>Refeito</th></tr></thead><tbody>`
         + (ls.map(l => { const p = parceiroPorId(l.parceiro_id);
-            return `<tr><td><strong>${escapeHtml(p ? p.nome : 'Parceiro removido')}</strong></td><td class="num">${l.pedidos}</td><td class="num">${formatarMoeda(l.valor_vendido)}</td>
+            return `<tr data-fech-linha="${escapeHtml(l.id)}" style="cursor:pointer;" title="Toque para ver o que foi creditado"><td><strong>${escapeHtml(p ? p.nome : 'Parceiro removido')}</strong></td><td class="num">${l.pedidos}</td><td class="num">${formatarMoeda(l.valor_vendido)}</td>
             <td class="num"><strong>${formatarMoeda(l.comissao)}</strong></td><td>${l.refeitos ? `${l.refeitos}× · ${l.refeito_em ? new Date(l.refeito_em).toLocaleString('pt-BR') : ''}${l.ultimo_motivo ? `<small class="sub">${escapeHtml(l.ultimo_motivo)}</small>` : ''}` : '—'}</td></tr>`; }).join('') || '<tr><td colspan="5" class="vazio">Sem linhas.</td></tr>')
         + `</tbody></table></div>`
         + (f.status === 'desfeito' ? `<p class="dica" style="margin-top:10px;">Desfeito em ${f.desfeito_em ? new Date(f.desfeito_em).toLocaleString('pt-BR') : ''}${f.desfeito_por ? ' por ' + escapeHtml(f.desfeito_por) : ''}${f.motivo_desfazer ? ' — ' + escapeHtml(f.motivo_desfazer) : ''}. O extrato guarda o crédito e o estorno.</p>` : '')
-        + `<p class="dica" style="margin-top:10px;">No extrato de cada parceiro (aba Recompensas) aparecem o crédito e, se houver, os ajustes.</p>`;
+        + `<p class="dica" style="margin-top:10px;">Toque num parceiro para ver os pedidos e as parcelas creditados. No extrato de cada parceiro (aba Recompensas) aparecem o crédito e, se houver, os ajustes.</p>`;
     fechAbrirModal(`Fechamento de ${formatarDataSemFuso(f.periodo_de)} a ${formatarDataSemFuso(f.periodo_ate)}`, f.status === 'fechado' ? 'Fechado' : 'Desfeito', corpo);
 }
 async function fechRefazer(id) {
@@ -3648,6 +4087,72 @@ function fechDesfazer(id) {
             fechMsg('sucesso', `Fechamento desfeito: ${formatarMoeda(tot)} estornados e ${ped} pedido(s) reabertos.`);
         } });
 }
+// ---- detalhe: o que entra (simulação) ou o que foi creditado (fechamento feito) por parceiro ----
+function fechTabelaDetalhe(itens, modo) {
+    const rec = modo === 'recebimento';
+    const tot = (f) => arredondar2(itens.reduce((a, i) => a + (Number(i[f]) || 0), 0));
+    const dt = (d) => (d ? formatarDataSemFuso(d) : '—');
+    // "Parcela 2 de 3" (conta as parcelas do pedido) e a situação de cada recebimento
+    const nParc = (i) => (i.receb || []).filter(x => x.tipo !== 'imediato').length;
+    const oQue = (i) => i.tipo === 'imediato' ? 'Pagamento no ato' : 'Parcela ' + escapeHtml(i.parcela || '') + (nParc(i) > 1 ? ' de ' + nParc(i) : '');
+    const sit = (x) => x.situacao === 'recebido' ? `pago em ${dt(x.data)}` : '<span style="color:var(--accent-ink);">a receber</span>';
+    const recebimentosDoPedido = (i) => (i.receb && i.receb.length)
+        ? i.receb.map(x => `<div style="white-space:nowrap;">${x.tipo === 'imediato' ? 'No ato' : 'Parcela ' + escapeHtml(x.parcela || '') + (nParc(i) > 1 ? '/' + nParc(i) : '') + (x.vcto ? ' · vence ' + dt(x.vcto) : '')} · ${formatarMoeda(x.situacao === 'recebido' ? x.recebido : x.valor)} · ${sit(x)}</div>`).join('')
+        : '<span class="dica">sem recebimento importado</span>';
+    const linhas = itens.map(i => `<tr><td><strong>${escapeHtml(i.pedido)}</strong>${i.loja ? `<small class="sub">${escapeHtml(i.loja)}</small>` : ''}</td><td>${escapeHtml(i.cliente || '—')}</td>
+        <td>${dt(i.dataVenda)}</td>
+        ${rec ? `<td>${oQue(i)}</td><td>${i.tipo === 'imediato' ? '—' : dt(i.vcto)}</td><td>${dt(i.dataRef)}</td>` : `<td>${dt(i.dataRef)}</td>`}
+        <td class="num">${formatarMoeda(i.valorPedido)}</td>${rec ? `<td class="num"><strong>${formatarMoeda(i.recebido)}</strong></td>` : ''}
+        <td class="num">${i.oferta > 0 ? formatarMoeda(i.oferta) : '—'}${i.devolvido > 0 ? `<small class="sub" style="color:var(--danger);">${formatarMoeda(i.devolvido)} devolvido</small>` : ''}</td><td class="num">${formatarMoeda(i.base)}</td>
+        <td class="num">${String(i.pct == null ? '' : i.pct).replace('.', ',')}%</td><td class="num"><strong>${formatarMoeda(i.comissao)}</strong></td>
+        ${rec ? '' : `<td style="font-size:.82rem;">${recebimentosDoPedido(i)}</td>`}</tr>`).join('');
+    const cab = rec
+        ? '<th>Pedido</th><th>Cliente</th><th>Venda</th><th>O que é</th><th>Vencimento</th><th>Recebido em</th><th class="num">Valor do pedido</th><th class="num">Recebido</th><th class="num" title="Oferta do pedido todo: fica fora da comissão, na proporção">Em oferta</th><th class="num">Comissionável</th><th class="num">%</th><th class="num">Comissão</th>'
+        : '<th>Pedido</th><th>Cliente</th><th>Venda</th><th>Data de referência</th><th class="num">Valor líquido</th><th class="num">Em oferta</th><th class="num">Comissionável</th><th class="num">%</th><th class="num">Comissão</th><th>Como foi / será recebido</th>';
+    const colsAntes = rec ? 6 : 4;
+    const rodape = `<tr><td colspan="${colsAntes}"><strong>Total</strong></td>${rec ? `<td></td><td class="num"><strong>${formatarMoeda(tot('recebido'))}</strong></td>` : '<td class="num"><strong>' + formatarMoeda(tot('valorPedido')) + '</strong></td>'}<td></td><td class="num"><strong>${formatarMoeda(tot('base'))}</strong></td><td></td><td class="num"><strong>${formatarMoeda(tot('comissao'))}</strong></td>${rec ? '' : '<td></td>'}</tr>`;
+    return `<div class="tabela-scroll"><table class="tabela"><thead><tr>${cab}</tr></thead><tbody>${linhas || `<tr><td colspan="${rec ? 12 : 10}" class="vazio">Nada a mostrar.</td></tr>`}${itens.length ? rodape : ''}</tbody></table></div>`;
+}
+const fechLinhaDoRpc = (x) => ({ tipo: x.tipo, pedido: x.referencia, loja: x.loja, cliente: x.cliente, dataVenda: x.data_venda, dataRef: x.data_ref, parcela: x.parcela,
+    valorPedido: Number(x.valor_pedido) || 0, recebido: Number(x.valor_recebido) || 0, oferta: Number(x.oferta) || 0, devolvido: Number(x.devolvido) || 0, base: Number(x.base) || 0, pct: Number(x.pct), comissao: Number(x.comissao) || 0,
+    vcto: x.data_vencimento, receb: (x.recebimentos || []).map(r => ({ tipo: r.tipo, parcela: r.parcela, vcto: r.vcto, data: r.data, valor: Number(r.valor) || 0, recebido: Number(r.recebido) || 0, situacao: r.situacao })) });
+async function fechDetalheSim(parceiroId) {
+    if (!fechSim) return;
+    const p = parceiroPorId(parceiroId), modo = fechSim.modo || 'pedido';
+    const { data, error } = await sb.rpc('parceiros_fechar_detalhe', { p_unidade: meuPerfil.unidadeId, p_de: fechSim.de, p_ate: fechSim.ate, p_modo: modo, p_parceiro: parceiroId });
+    if (error) { fechMsg('erro', error.message + (erroDeTabelaAusente(error) ? ' — rode o parceiros-fechamento-erp.sql de novo (função de detalhe).' : '')); return; }
+    const itens = (data || []).map(fechLinhaDoRpc);
+    fechAbrirModal(`${p ? p.nome : 'Parceiro'} — o que entra no fechamento`, `${formatarDataSemFuso(fechSim.de)} a ${formatarDataSemFuso(fechSim.ate)} · ${modo === 'recebimento' ? 'por recebimento' : 'pedido inteiro'} · simulação (nada foi gravado)`,
+        fechTabelaDetalhe(itens, modo) + (modo === 'recebimento' ? '<p class="dica" style="margin-top:10px;">Só entra o que foi <strong>recebido</strong> no período, na proporção do que não é oferta; a taxa de cartão não abate. Parcela ainda a receber espera ser paga.</p>' : ''));
+}
+const fechRecebDoPedido = (g) => (g && g.itens ? g.itens.map(i => ({ tipo: i.tipo, parcela: i.parcela, vcto: i.data_vencimento, data: i.data_recebimento, valor: Number(i.valor) || 0, recebido: Number(i.valor_recebido) || 0, situacao: i.situacao }))
+    .sort((a, b) => String(a.vcto || '').localeCompare(String(b.vcto || '')) || String(a.parcela || '').localeCompare(String(b.parcela || ''))) : []);
+function fechDetalheFechado(linhaId) {
+    const l = fechLinhas.find(x => x.id === linhaId); if (!l) return;
+    const f = fechLista.find(x => x.id === l.fechamento_id); if (!f) return;
+    const p = parceiroPorId(l.parceiro_id), modo = f.modo === 'recebimento' ? 'recebimento' : 'pedido';
+    const mapa = new Map(erpDb.map(o => [(o.lojaCod || '') + '\u0001' + o.ref, o]));
+    let itens = [];
+    if (modo === 'recebimento') {
+        Object.entries(recebDb).forEach(([k, g]) => g.itens.filter(i => i.fechamento_recebimento_id === linhaId).forEach(i => {
+            const o = mapa.get(k) || {};
+            itens.push({ tipo: i.tipo, pedido: i.referencia, loja: o.loja, cliente: o.cli, dataVenda: o.dv, dataRef: i.data_recebimento, parcela: i.parcela, valorPedido: o.v || 0, vcto: i.data_vencimento, receb: fechRecebDoPedido(g),
+                recebido: Number(i.valor_recebido) || 0, oferta: o.oferta || 0, base: Number(i.base_valor) || 0, pct: i.comissao_pct == null ? null : Number(i.comissao_pct), comissao: Number(i.comissao_valor) || 0 });
+        }));
+    } else {
+        itens = erpDb.filter(o => o.fech === linhaId).map(o => ({ tipo: 'pedido', pedido: o.ref, loja: o.loja, cliente: o.cli, dataVenda: o.dv, dataRef: (config && config.erp_ref === 'baixa') ? o.db : o.dv,
+            valorPedido: o.v, recebido: 0, oferta: o.oferta || 0, base: erpBasePedido(o), pct: o.cpct, comissao: o.cvalor || 0, receb: o.rec ? fechRecebDoPedido(o.rec) : [] }));
+    }
+    itens.sort((a, b) => String(a.dataRef).localeCompare(String(b.dataRef)) || String(a.pedido).localeCompare(String(b.pedido), 'pt-BR', { numeric: true }));
+    fechAbrirModal(`${p ? p.nome : 'Parceiro'} — creditado neste fechamento`, `${formatarDataSemFuso(f.periodo_de)} a ${formatarDataSemFuso(f.periodo_ate)} · ${modo === 'recebimento' ? 'por recebimento' : 'pedido inteiro'} · creditado ${formatarMoeda(l.comissao)}`,
+        `<p style="margin:0 0 10px;"><button type="button" class="btn btn-cinza btn-sm" data-fech-voltar="${escapeHtml(f.id)}">← Voltar ao fechamento</button></p>` + fechTabelaDetalhe(itens, modo)
+        + (l.refeitos ? '<p class="dica" style="margin-top:10px;">Este fechamento foi refeito: os valores acima já mostram o cálculo mais recente.</p>' : ''));
+}
+$('fechSimCorpo').addEventListener('click', (e) => { const t = e.target.closest('[data-fech-sim]'); if (t) fechDetalheSim(t.dataset.fechSim); });
+$('fechModCorpo').addEventListener('click', (e) => {
+    const v = e.target.closest('[data-fech-voltar]'); if (v) { fechVer(v.dataset.fechVoltar); return; }
+    const t = e.target.closest('[data-fech-linha]'); if (t) fechDetalheFechado(t.dataset.fechLinha);
+});
 $('fechBtnSimular').addEventListener('click', () => fechExecutar(false));
 $('fechBtnFechar').addEventListener('click', () => fechExecutar(true));
 ['fechDe', 'fechAte'].forEach(id => $(id).addEventListener('change', () => { fechAtualizarBotoes(); }));
@@ -3666,7 +4171,7 @@ $('fechCorpo').addEventListener('click', (e) => {
 
 const AJUDA_PARCEIROS = {
     titulo: 'Parceiros Comerciais',
-    ultimaRevisao: '09/11/2026',
+    ultimaRevisao: '10/11/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>Módulo pra lojas (de material de construção, por exemplo) que recebem profissionais
@@ -3782,11 +4287,20 @@ const AJUDA_PARCEIROS = {
                 <li>A data de referência e as regras <strong>"só pedidos baixados"</strong> e <strong>"ignorar compra do próprio indicador"</strong> ficam salvas na unidade e valem
                 também para a página do parceiro e o Dashboard — mudar aqui muda para todos. Enquanto o pedido está <strong>em aberto</strong>, a comissão é <strong>calculada</strong>
                 (valor × % de acordo do pedido, ou o % atual do parceiro) e <strong>ainda não está no saldo</strong>: ela só vai para o saldo/extrato no <strong>Fechamento ERP</strong>. Se a loja também lançou na mão a mesma venda, ela conta duas vezes.</li>
-                <li><strong>Valor do pedido = valor líquido dos produtos</strong> (base da comissão): soma dos itens <strong>com o desconto de cada linha (produto)</strong> descontado, menos o desconto do pedido, se houver.
+                <li><strong>Produtos em oferta (promoção) não geram comissão</strong>: o ERP marca a linha como oferta, e o app mostra por pedido o <em>Em oferta</em> e o <em>Comissionável</em> (valor líquido menos a oferta). A comissão é % × <strong>comissionável</strong>.
+                Pedido só com oferta tem comissão zero.</li>
+                <li><strong>Valor do pedido = valor líquido dos produtos</strong>: soma dos itens <strong>com o desconto de cada linha (produto)</strong> descontado, menos o desconto do pedido, se houver.
                 <strong>Frete, taxa de entrega e despesas acessórias não entram.</strong> Isso é definido na consulta do coletor; pedidos já gravados passam a usar o novo valor na próxima coleta
                 (pedido já fechado só muda o crédito com <em>Refazer cálculo</em>).</li>
+                <li><strong>Comissão por RECEBIMENTO</strong> (escolha em <em>Parâmetros</em>): em vez do pedido inteiro, só o que foi <strong>recebido</strong> gera comissão. O coletor importa, de cada pedido, o <strong>pagamento no ato</strong> (venda à vista, na data da baixa) e cada <strong>parcela</strong> do financeiro do ERP (só conta quando está baixada; valor recebido = valor − descontos, e a <strong>taxa de cartão não abate</strong>). Cada recebimento entra na proporção do que <strong>não é oferta</strong> do pedido. No detalhe do parceiro aparecem as colunas <em>Recebido</em> e <em>A receber</em>.</li>
                 <li><strong>% de acordo</strong>: no detalhe do parceiro (toque na linha), o botão <em>% acordo</em> de um pedido em aberto combina um percentual só para aquele pedido.
                 Pedido <strong>creditado</strong> (já fechado) mostra o % e o valor que foram creditados e não aceita mudança direta: use <em>Refazer</em> no Fechamento ERP.</li>
+                <li><strong>Devolução (nota fiscal de devolução)</strong>: quando o cliente devolve produtos com nota de devolução (o pedido não é cancelado), o <strong>usuário principal</strong> registra no detalhe do parceiro,
+                no botão <em>Devolução</em> da linha do pedido: <strong>nº da nota, data, valor devolvido</strong> e, se quiser, uma observação com os produtos. Só o valor entra no cálculo. A devolução <strong>reduz a base da comissão</strong>
+                (coluna <em>Devolvido</em>): no formato por pedido a base é o comissionável na proporção do que não foi devolvido; no formato por recebimento só o que fica até o valor do pedido depois da devolução gera comissão.
+                Pedido <strong>ainda não fechado</strong> já fica com a base menor. Pedido <strong>já fechado</strong> precisa de <em>Refazer cálculo</em> no Fechamento ERP, que lança só a <strong>diferença</strong> (ajuste negativo) no extrato;
+                se a comissão já foi paga, o parceiro fica com <strong>saldo negativo</strong>, que abate os próximos créditos. A mesma nota não entra duas vezes no mesmo pedido e a soma não passa do valor do pedido.
+                Nota lançada errada? <em>Cancelar</em> na lista de devoluções do pedido (pede o motivo) e depois <em>Refazer cálculo</em>, se o pedido já estava fechado.</li>
             </ul>
         ` },
         { id: 'fechamento', titulo: 'Fechamento ERP', corpo: `
@@ -3798,6 +4312,7 @@ const AJUDA_PARCEIROS = {
                 <li>Entram os pedidos <strong>em aberto</strong> do período, de parceiros <strong>ativos ou inativos</strong> com <strong>código externo</strong>, seguindo as regras da aba <em>Vendas do ERP</em> (data de referência, só baixados, compra própria).</li>
                 <li><strong>Refazer cálculo</strong>: use quando houver um acordo (num pedido, com <em>% acordo</em>, ou no % geral do parceiro, no cadastro dele). Mostra a diferença por parceiro e, ao confirmar, lança no extrato <strong>só a diferença</strong> (tipo ajuste, positivo ou negativo) com o motivo. Recalcula somente os pedidos <strong>daquele fechamento</strong>; pedidos novos vão para o próximo.</li>
                 <li><strong>Desfazer</strong>: estorna o que foi creditado e <strong>reabre os pedidos</strong>. O crédito e o estorno continuam visíveis no extrato. Se parte já foi paga ao parceiro, o saldo dele pode ficar negativo.</li>
+                <li><strong>Dois formatos</strong> (escolha em <em>Parâmetros → Como a comissão do ERP é fechada</em>): <strong>pedido inteiro</strong> (fecha o pedido sem esperar o pagamento) e <strong>por recebimento</strong> (fecha só o que foi recebido no período; parcela a receber espera ser paga e entra no fechamento do mês em que for baixada). Um pedido nunca entra nos dois: pedido fechado pelo total não tem os recebimentos fechados de novo, e pedido com recebimento fechado não entra no fechamento total. <strong>Refazer</strong> e <strong>Desfazer</strong> funcionam nos dois (desfazer solta os recebimentos para fecharem de novo).</li>
                 <li>Depois do crédito, o valor segue o fluxo normal de <em>Recompensas</em> (pagar gera o título no Financeiro). Na página do parceiro, a comissão do ERP já creditada aparece no saldo e no extrato; a ainda não fechada aparece como "a creditar".</li>
             </ul>
         ` },
@@ -3814,6 +4329,7 @@ const AJUDA_PARCEIROS = {
                 <li>Pagar/resgatar acima do saldo é bloqueado (a checagem acontece no banco, então duas
                 pessoas não conseguem gastar o mesmo saldo ao mesmo tempo).</li>
                 <li><strong>Extrato</strong> mostra todo o histórico, com o saldo após cada lançamento.</li>
+                <li><strong>Recibo de pagamento de comissão</strong>: cada <em>Pagar</em> emite sozinho um recibo <strong>numerado</strong> (PDF com Visualizar, Baixar e Compartilhar). Ele traz o valor por extenso, o <strong>saldo antes e depois</strong> e a <strong>composição</strong> do pagamento: quais créditos (fechamentos de comissão, vendas indicadas) foram baixados — sempre o crédito <strong>mais antigo primeiro</strong> — com o valor original, o que já tinha sido pago, o pago agora e o que resta. No anexo, o detalhamento dos pedidos e das parcelas de cada fechamento. O número do recibo aparece também no extrato do parceiro. Recibos emitidos ficam listados abaixo do saldo; um pagamento sem recibo tem o link <em>Emitir recibo</em> no extrato. <strong>Cancelar recibo</strong> (só o principal) só marca o recibo como cancelado: o pagamento no saldo e o título no Financeiro continuam.</li>
             </ul>
         ` },
         { id: 'vitrine', titulo: 'Vitrine (TV)', corpo: `
@@ -3904,6 +4420,36 @@ $('btnFecharModalAjuda').addEventListener('click', () => $('modal-ajuda').classL
 // INÍCIO
 // ---------------------------------------------------------------
 checkSession();
+</script>
+
+<!-- Botão "Fechar" FIXO no topo direito de cada pop-up (os pop-ups não fecham com clique fora; assim o operador sempre vê onde fechar, mesmo com o conteúdo rolado).
+     Reaproveita o botão "Fechar" que o próprio pop-up já tem (roda a limpeza dele); pop-up sem "Fechar" (ex.: escolha obrigatória de unidade) fica como está. -->
+<style>
+    .modal-fechar-topo { position: sticky; top: 8px; z-index: 40; height: 0; overflow: visible; text-align: right; pointer-events: none; }
+    .modal-fechar-x { pointer-events: auto; position: relative; margin: 0 0 0 auto; display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; font: 600 .8rem 'Inter', system-ui, sans-serif;
+        color: var(--ink, #1f2a24); background: var(--surface, #fff); border: 1.5px solid var(--border, #cfd6d2); border-radius: 999px; box-shadow: 0 2px 8px rgba(0,0,0,.18); cursor: pointer; }
+    .modal-fechar-x:hover { background: var(--danger-soft, #fbeae8); border-color: var(--danger, #c0392b); color: var(--danger, #c0392b); }
+    .modal-fechar-topo + * { padding-right: 104px; }
+</style>
+<script>
+(function () {
+    const texto = (b) => (b.textContent || '').replace(/[\u2715\u00d7]/g, '').trim().toLowerCase();
+    function botaoFecharOriginal(caixa) {
+        const bts = Array.from(caixa.querySelectorAll('button')).filter(b => !b.closest('.modal-fechar-topo'));
+        return bts.find(b => /^fechar\b/.test(texto(b))) || bts.find(b => texto(b) === 'cancelar') || null;
+    }
+    document.querySelectorAll('.modal-overlay').forEach(ov => {
+        const caixa = ov.querySelector('.modal-caixa');
+        if (!caixa || caixa.querySelector('.modal-fechar-topo')) return;
+        if (caixa.querySelector('.modal-ajuda-head')) return;      // a Ajuda já tem o Fechar no cabeçalho fixo
+        if (!botaoFecharOriginal(caixa)) return;                    // sem "Fechar" próprio: não inventa saída
+        const topo = document.createElement('div');
+        topo.className = 'modal-fechar-topo';
+        topo.innerHTML = '<button type="button" class="modal-fechar-x" aria-label="Fechar esta janela" title="Fechar">\u2715 Fechar</button>';
+        topo.firstChild.addEventListener('click', () => { const b = botaoFecharOriginal(caixa); if (b) b.click(); else ov.classList.remove('aberto'); });
+        caixa.insertBefore(topo, caixa.firstChild);
+    });
+})();
 </script>
 </body>
 </html>
