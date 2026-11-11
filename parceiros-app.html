@@ -1420,6 +1420,13 @@ const ramoTexto = (p) => ramoNome(p.ramo_id) || (p.ramo_informado ? p.ramo_infor
 const saldoDe = (id) => saldos[id] || 0;
 const percentualEfetivo = (p) => (p && p.percentual_recompensa != null) ? Number(p.percentual_recompensa) : Number(config?.percentual_padrao || 0);
 // vendas do ERP: % próprio do parceiro; senão o padrão do ERP da loja; senão o padrão geral
+// texto do % do parceiro: sem % próprio e com código externo, as vendas do ERP seguem o % do ERP (parâmetro), as lançadas na mão o padrão da loja
+function rotuloPercentual(p) {
+    const ef = percentualEfetivo(p);
+    if (!p || p.percentual_recompensa != null || !p.codigo_externo) return ef + '%';
+    const erp = percentualErp(p);
+    return erp === ef ? ef + '%' : `${erp}% no ERP · ${ef}% lançadas`;
+}
 const percentualErp = (p) => (p && p.percentual_recompensa != null) ? Number(p.percentual_recompensa)
     : (config && config.erp_percentual_padrao != null ? Number(config.erp_percentual_padrao) : Number(config?.percentual_padrao || 0));
 function avaliacaoDe(parceiroId) {
@@ -1861,7 +1868,7 @@ function abrirDetalhe(id) {
                 <div class="parc-meta" style="white-space:normal;">${escapeHtml([p.empresa, ramoTexto(p)].filter(Boolean).join(' · ') || '—')}</div>
                 <div class="parc-rodape">
                     <span class="pill pill-${p.status}">${STATUS_PARCEIRO[p.status]}</span>
-                    <span class="pill pill-${p.tipo_recompensa}">${TIPO_RECOMPENSA[p.tipo_recompensa]} ${percentualEfetivo(p)}%</span>
+                    <span class="pill pill-${p.tipo_recompensa}">${TIPO_RECOMPENSA[p.tipo_recompensa]} ${rotuloPercentual(p)}</span>
                     ${aval ? `${estrelas(aval.media)}<small style="color:var(--muted)">${aval.media.toFixed(1)} (${aval.qtd})</small>` : ''}
                     <small style="color:var(--muted)">Código #${p.codigo ?? '—'} · ${p.origem === 'autocadastro' ? 'autocadastro' : 'balcão'}</small>
                 </div>
@@ -1901,7 +1908,7 @@ function abrirDetalhe(id) {
         ${p.status === 'ativo' ? `
         <div class="campo" style="margin-bottom:6px;"><label>Link pessoal do parceiro (consultar saldo e indicações)</label>
             <div class="link-box"><input type="text" readonly value="${escapeHtml(linkConsultaParceiro(p))}"><button class="btn btn-cinza btn-sm" data-acao="copiar">Copiar</button></div>
-            <div class="acoes-linha" style="margin-top:8px;"><button class="btn btn-sucesso btn-sm" data-acao="zap-link">Enviar link por WhatsApp</button><button class="btn btn-cinza btn-sm" data-acao="novo-token">Gerar novo link</button></div>
+            <div class="acoes-linha" style="margin-top:8px;"><button class="btn btn-principal btn-sm" data-acao="abrir-link" title="Abre a página do parceiro em uma nova aba, do jeito que ele vê">Abrir link do parceiro</button><button class="btn btn-sucesso btn-sm" data-acao="zap-link">Enviar link por WhatsApp</button><button class="btn btn-cinza btn-sm" data-acao="novo-token">Gerar novo link</button></div>
         </div>` : ''}
         <div class="acoes-linha"><button class="btn btn-cinza" data-acao="editar">✏️ Editar</button>${acoes}</div>
         <div class="status-msg" id="statusDetalhe"></div>`;
@@ -1975,6 +1982,7 @@ $('detalheCorpo').addEventListener('click', async (e) => {
         try { await navigator.clipboard.writeText(linkConsultaParceiro(p)); btn.textContent = 'Copiado ✓'; } catch (err) { prompt('Copie o link:', linkConsultaParceiro(p)); }
         return;
     }
+    if (acao === 'abrir-link') { window.open(linkConsultaParceiro(p), '_blank', 'noopener'); return; }
     if (acao === 'zap-link') {
         const url = linkWhatsApp(p.whatsapp || p.telefone, `Olá, ${primeiroNome(p.nome)}! Aqui é da ${meuPerfil.unidadeNome}. Acompanhe suas indicações e recompensas por este link: ${linkConsultaParceiro(p)}`);
         if (url) window.open(url, '_blank'); else alert('Esse parceiro não tem WhatsApp/telefone com DDD cadastrado.');
@@ -2297,7 +2305,7 @@ function renderizarRecompensas() {
         const s = saldoDe(p.id);
         return `<tr>
             <td><a href="#" data-abrir-parc="${p.id}">#${p.codigo} ${escapeHtml(p.nome)}</a>${p.status !== 'ativo' ? ` <span class="pill pill-${p.status}">${STATUS_PARCEIRO[p.status]}</span>` : ''}</td>
-            <td><span class="pill pill-${p.tipo_recompensa}">${TIPO_RECOMPENSA[p.tipo_recompensa]}</span> <small class="sub" style="display:inline;">${percentualEfetivo(p)}%</small></td>
+            <td><span class="pill pill-${p.tipo_recompensa}">${TIPO_RECOMPENSA[p.tipo_recompensa]}</span> <small class="sub" style="display:inline;">${rotuloPercentual(p)}</small></td>
             <td class="num ${s < 0 ? 'valor-neg' : (s > 0 ? 'valor-pos' : '')}">${formatarMoeda(s)}</td>
             <td style="white-space:nowrap;">
                 ${s > 0 && p.tipo_recompensa === 'comissao' ? `<button class="btn btn-principal btn-sm" style="width:auto;padding:7px 10px;" data-lanc="pagamento" data-parc="${p.id}">Pagar</button>` : ''}
@@ -4429,7 +4437,6 @@ checkSession();
     .modal-fechar-x { pointer-events: auto; position: relative; margin: 0 0 0 auto; display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; font: 600 .8rem 'Inter', system-ui, sans-serif;
         color: var(--ink, #1f2a24); background: var(--surface, #fff); border: 1.5px solid var(--border, #cfd6d2); border-radius: 999px; box-shadow: 0 2px 8px rgba(0,0,0,.18); cursor: pointer; }
     .modal-fechar-x:hover { background: var(--danger-soft, #fbeae8); border-color: var(--danger, #c0392b); color: var(--danger, #c0392b); }
-    .modal-fechar-topo + * { padding-right: 104px; }
 </style>
 <script>
 (function () {

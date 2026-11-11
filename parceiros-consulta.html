@@ -74,6 +74,14 @@
   .tip.on{ opacity:1; }
   .tip strong{ display:block; font-size:.9rem; }
   .tip span{ display:block; color:rgba(255,255,255,.78); }
+  .grafico-wrap .col{ cursor:pointer; }
+  .grafico-wrap .col:focus:not(:focus-visible){ outline:none; }
+  .grafico-wrap.tem-sel .col:not(.sel) .barra{ opacity:.3; }
+  .grafico-wrap .col.sel .barra{ fill:var(--brand-2); }
+  .filtro-mes{ margin-top:10px; padding:10px 12px; border-radius:10px; background:var(--brand-soft, #eef3f0); font-size:.86rem; line-height:1.45; }
+  .filtro-mes .btn-tabela{ padding:6px 14px 0 0; }
+  .tag-mes{ font-size:.72rem; font-weight:600; background:var(--brand-soft, #eef3f0); color:var(--brand-2); border-radius:999px; padding:2px 9px; margin-left:6px; vertical-align:middle; }
+  .dica-clique{ font-size:.74rem; color:var(--muted); margin-top:4px; }
   .btn-tabela{ background:none; border:none; color:var(--brand-2); font-weight:600; font-size:.8rem; cursor:pointer; font-family:inherit; padding:10px 0 0; }
   .tabela-mes{ width:100%; border-collapse:collapse; font-size:.82rem; margin-top:8px; font-variant-numeric:tabular-nums; }
   .tabela-mes th{ text-align:right; font-size:.68rem; color:var(--muted); font-weight:600; padding:4px 0; border-bottom:1px solid var(--border); }
@@ -206,19 +214,33 @@
     const soma = (f) => serie.reduce((a, m) => a + m[f], 0);
     const resumo = `<div class="sub-card" style="margin-top:10px;">Lançadas na loja: <strong>${soma('ql')}</strong> venda(s), ${moeda(soma('tl'))}${soma('qe') ? ` · Sistema da loja (ERP): <strong>${soma('qe')}</strong> pedido(s), ${moeda(soma('te'))}` : ''}</div>`;
     return `<div class="card"><h2>Vendas por mês</h2>
-      <div class="sub-card">Valor vendido nos últimos 12 meses (só vendas confirmadas)</div>
+      <div class="sub-card">Valor vendido nos últimos 12 meses (só vendas confirmadas; nos pedidos do sistema da loja, só a parte comissionável: sem produtos em oferta e sem devoluções)</div>
       <div class="kpis">
         <div class="kpi"><div class="r">Neste mês</div><div class="n">${moedaCurta(serie[serie.length - 1].total)}</div></div>
         <div class="kpi"><div class="r">Vendas indicadas</div><div class="n">${qtd}</div></div>
         <div class="kpi"><div class="r">Total em 12 meses</div><div class="n">${moedaCurta(total)}</div></div>
       </div>
       <div class="grafico-wrap" id="graficoVendas"></div>
+      <div class="dica-clique">Toque em um mês para ver só as vendas dele nas listas abaixo; toque fora das barras para ver todos os meses.</div>
+      <div class="filtro-mes" id="filtroMes" hidden></div>
       ${resumo}
       <button type="button" class="btn-tabela" id="btnTabelaMes">Ver em tabela</button>
       <div id="tabelaMes" hidden><table class="tabela-mes"><thead><tr><th>Mês</th><th>Origem</th><th>Vendas</th><th>Valor vendido</th><th>Recompensa / comissão</th></tr></thead><tbody>${linhas}</tbody></table></div></div>`;
   }
 
   let serieGrafico = [];
+  let mesSel = null;                       // 'AAAA-MM' do mês clicado no gráfico (filtra as listas de vendas); null = todos
+  let atualizarListasVendas = () => {};    // definido em render(): refaz as listas e o aviso conforme mesSel
+  function marcarMesNoGrafico(){
+    const wrap = document.getElementById('graficoVendas'); if(!wrap) return;
+    wrap.classList.toggle('tem-sel', !!mesSel);
+    wrap.querySelectorAll('.col').forEach(g => { const m = serieGrafico[Number(g.dataset.i)]; g.classList.toggle('sel', !!m && m.chave === mesSel); });
+  }
+  function alternarMes(i){
+    const m = serieGrafico[i]; if(!m) return;
+    mesSel = mesSel === m.chave ? null : m.chave;
+    marcarMesNoGrafico(); atualizarListasVendas();
+  }
   function passoBonito(max){
     const alvo = max / 4, e = Math.pow(10, Math.floor(Math.log10(alvo))), f = alvo / e;
     return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * e;
@@ -258,6 +280,7 @@
     svg += '</svg><div class="tip" id="tipVendas"></div>';
     wrap.innerHTML = svg;
     wrap.__geo = { W, ml, mt, slot, barW, yDe };
+    marcarMesNoGrafico();
   }
   function mostrarTip(g){
     const wrap = document.getElementById('graficoVendas'), tip = wrap.querySelector('.tip'), geo = wrap.__geo;
@@ -292,6 +315,13 @@
     wrap.addEventListener('pointerover', e => { const g = e.target.closest('.col'); if(g) mostrarTip(g); });
     wrap.addEventListener('pointerleave', e => { if(e.pointerType === 'mouse') esconderTip(); });
     wrap.addEventListener('focusin', e => { const g = e.target.closest('.col'); if(g) mostrarTip(g); });
+    // clicar numa coluna do mês filtra; clicar em qualquer outra área do gráfico (fundo, linhas, eixos) volta a mostrar todos os meses
+    wrap.addEventListener('click', e => {
+      const g = e.target.closest('.col');
+      if(g) alternarMes(Number(g.dataset.i));
+      else if(mesSel){ mesSel = null; marcarMesNoGrafico(); atualizarListasVendas(); }
+    });
+    wrap.addEventListener('keydown', e => { const g = e.target.closest('.col'); if(g && (e.key === 'Enter' || e.key === ' ')){ e.preventDefault(); alternarMes(Number(g.dataset.i)); } });
     wrap.addEventListener('focusout', esconderTip);
     document.getElementById('btnTabelaMes').addEventListener('click', () => {
       const t = document.getElementById('tabelaMes'); t.hidden = !t.hidden;
@@ -336,11 +366,14 @@
 
     const itemVenda = (v) => `
       <div class="item"><div><div class="t">${escapeHtml(v.cliente_nome || 'Cliente')} <span class="pill pill-${escapeHtml(v.status)}">${v.status === 'cancelada' ? 'Cancelada' : 'Confirmada'}</span></div>
-      <div class="s">${data(v.data_venda)} · venda de ${moeda(v.valor_venda)}${v.loja ? ' · ' + escapeHtml(v.loja) : ''}${v.erp ? (v.pedido ? ' · <strong>pedido nº ' + escapeHtml(v.pedido) + '</strong>' : ' · pedido do sistema da loja') : ''}${v.erp && v.fechado ? ' · <span class="pill pill-confirmada">creditada no saldo</span>' : ''}${v.erp && v.acordo && !v.fechado ? ' · % combinado' : ''}${v.erp && Number(v.oferta) > 0 ? ' · ' + moeda(v.oferta) + ' em produtos de oferta, sem comissão' : ''}${v.erp && Number(v.devolvido) > 0 ? ' · ' + moeda(v.devolvido) + ' devolvido (nota de devolução), sem comissão' : ''}${v.erp && d.comissao_modo === 'recebimento' ? ' · recebido ' + moeda(v.recebido) + (Number(v.a_receber) > 0 ? ' · a receber ' + moeda(v.a_receber) + ' (ainda sem comissão)' : '') : ''}</div></div>
+      <div class="s">${data(v.data_venda)} · venda ${v.erp && v.comissionavel != null ? 'comissionável de ' + moeda(v.comissionavel) : 'de ' + moeda(v.valor_venda)}${v.loja ? ' · ' + escapeHtml(v.loja) : ''}${v.erp ? (v.pedido ? ' · <strong>pedido nº ' + escapeHtml(v.pedido) + '</strong>' : ' · pedido do sistema da loja') : ''}${v.erp && v.fechado ? ' · <span class="pill pill-confirmada">creditada no saldo</span>' : ''}${v.erp && v.acordo && !v.fechado ? ' · % combinado' : ''}${v.erp && Number(v.oferta) > 0 ? ' · ' + moeda(v.oferta) + ' em produtos de oferta, sem comissão' : ''}${v.erp && Number(v.devolvido) > 0 ? ' · ' + moeda(v.devolvido) + ' devolvido (nota de devolução), sem comissão' : ''}${v.erp && d.comissao_modo === 'recebimento' ? ' · recebido ' + moeda(v.recebido) + (Number(v.a_receber) > 0 ? ' · a receber ' + moeda(v.a_receber) + ' (ainda sem comissão)' : '') : ''}</div></div>
       <div class="v">${moeda(v.valor_recompensa)}</div></div>`;
-    const vendasLancadas = (d.vendas || []).filter(v => !v.erp).map(itemVenda).join('') || '<div class="vazio">Nenhuma venda lançada na loja ainda.</div>';
+    const doMes = (v) => !mesSel || String(v.data_venda || '').slice(0, 7) === mesSel;
+    const lancadasFiltradas = () => (d.vendas || []).filter(v => !v.erp && doMes(v));
     const vendasErpLista = (d.vendas || []).filter(v => v.erp);
-    const vendasErp = vendasErpLista.map(itemVenda).join('') || '<div class="vazio">Nenhum pedido do sistema da loja ainda.</div>';
+    const erpFiltradas = () => vendasErpLista.filter(doMes);
+    const htmlLancadas = () => lancadasFiltradas().map(itemVenda).join('') || `<div class="vazio">${mesSel ? 'Nenhuma venda lançada na loja neste mês.' : 'Nenhuma venda lançada na loja ainda.'}</div>`;
+    const htmlErp = () => erpFiltradas().map(itemVenda).join('') || `<div class="vazio">${mesSel ? 'Nenhum pedido do sistema da loja neste mês.' : 'Nenhum pedido do sistema da loja ainda.'}</div>`;
     const temErp = vendasErpLista.length > 0 || !!d.erp_atualizado_em;
     const erpMes = serie[serie.length - 1].re, erp12 = serie.reduce((a, m) => a + m.re, 0), pedErp12 = serie.reduce((a, m) => a + m.qe, 0);
     // fechamento: parte da comissão do ERP já foi creditada no saldo/extrato; o resto ainda é "a creditar"
@@ -371,15 +404,38 @@
       ${cardDados(p)}
       ${cardVendasMes(serie)}
       <div class="card"><h2>Serviços que a loja indicou pra você</h2>${servicos}</div>
-      ${temErp ? `<div class="card"><h2>Vendas do sistema da loja (ERP)</h2>${vendasErp}
+      ${temErp ? `<div class="card" id="cardErp"><h2>Vendas do sistema da loja (ERP)<span class="tag-mes" id="tagErp" hidden></span></h2><div id="listaErp">${htmlErp()}</div>
         ${d.erp_atualizado_em ? `<div class="saldo-nota" style="margin-top:10px;">Pedidos atualizados em ${data(d.erp_atualizado_em)}. ${d.comissao_modo === 'recebimento' ? 'A comissão é sobre o que a loja já recebeu de cada pedido (pagamento no ato e parcelas pagas): parcela a receber ainda não gera comissão. ' : ''}A comissão não conta os produtos em oferta (promoção) nem o valor devolvido (nota de devolução) do pedido. Enquanto o pedido não é fechado, ela é calculada pelo seu percentual atual (ou o % combinado no pedido); depois do fechamento vira crédito no seu saldo.</div>` : ''}</div>` : ''}
-      <div class="card"><h2>Vendas lançadas na loja</h2>${vendasLancadas}</div>
+      <div class="card" id="cardLancadas"><h2>Vendas lançadas na loja<span class="tag-mes" id="tagLancadas" hidden></span></h2><div id="listaLancadas">${htmlLancadas()}</div></div>
       <div class="card"><h2>${ehFech ? 'Extrato' : 'Extrato (vendas lançadas na loja)'}</h2>${lancs}
         ${temErp ? (ehFech ? '<div class="saldo-nota" style="margin-top:10px;">O extrato mostra os créditos das vendas lançadas na loja, os créditos dos fechamentos das vendas do sistema da loja (e eventuais ajustes) e os pagamentos. As ainda não fechadas ficam no quadro "Vendas do sistema da loja (ERP)".</div>'
           : '<div class="saldo-nota" style="margin-top:10px;">O extrato mostra só o que foi lançado na loja (créditos e pagamentos). As comissões das vendas do sistema da loja ficam no quadro "Vendas do sistema da loja (ERP)" até a loja fazer o fechamento e creditar no seu saldo.</div>') : ''}</div>
       <button class="btn-atualizar" id="btnAtualizar">↻ Atualizar</button>`;
     document.getElementById('btnAtualizar').addEventListener('click', carregar);
     iniciarGrafico(serie);
+    // o clique em uma barra filtra as duas listas de vendas pelo mês (mesma data usada pelo gráfico)
+    atualizarListasVendas = () => {
+      if(mesSel && !serie.some(m => m.chave === mesSel)) mesSel = null;
+      const m = serie.find(x => x.chave === mesSel);
+      const le = document.getElementById('listaErp'); if(le) le.innerHTML = htmlErp();
+      document.getElementById('listaLancadas').innerHTML = htmlLancadas();
+      const tag = m ? `${MESES_CURTOS[m.mes]}/${m.ano}` : '';
+      ['tagErp', 'tagLancadas'].forEach(id => { const el = document.getElementById(id); if(el){ el.hidden = !m; el.textContent = tag; } });
+      const info = document.getElementById('filtroMes');
+      if(!m){ info.hidden = true; info.textContent = ''; return; }
+      const nE = erpFiltradas().length, nL = lancadasFiltradas().length;
+      info.replaceChildren();
+      const txt = document.createElement('div');
+      txt.append(`Mostrando só as vendas de `);
+      const forte = document.createElement('strong'); forte.textContent = `${MESES_LONGOS[m.mes]} de ${m.ano}`; txt.append(forte);
+      txt.append(`: ${nE} ${nE === 1 ? 'pedido' : 'pedidos'} do sistema da loja e ${nL} ${nL === 1 ? 'venda lançada' : 'vendas lançadas'} na loja. O extrato e os totais não mudam.`);
+      const b1 = document.createElement('button'); b1.type = 'button'; b1.className = 'btn-tabela'; b1.textContent = 'Ver as vendas ↓';
+      b1.addEventListener('click', () => { const alvo = document.getElementById(le ? 'cardErp' : 'cardLancadas'); if(alvo) alvo.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+      const b2 = document.createElement('button'); b2.type = 'button'; b2.className = 'btn-tabela'; b2.textContent = 'Mostrar todos os meses';
+      b2.addEventListener('click', () => { mesSel = null; marcarMesNoGrafico(); atualizarListasVendas(); });
+      info.append(txt, b1, b2); info.hidden = false;
+    };
+    atualizarListasVendas();
   }
 
   async function carregar(){
