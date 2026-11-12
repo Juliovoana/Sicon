@@ -546,6 +546,7 @@
         <button class="btn btn-verde" id="btnNovoProduto" style="margin-top:8px;">+ Novo produto</button>
         <button class="btn btn-azul" id="btnBaixaDireta" style="margin-top:8px;">⬇️ Baixa direta (sem projeto)</button>
         <button class="btn btn-cinza" id="btnImportarNFe" style="margin-top:8px;">📄 Importar NF-e (XML)</button>
+        <button class="btn btn-cinza" id="btnAtalhoRateioAlmox" style="margin-top:8px;" title="Cruzada plano de contas × setor do consumo do almoxarifado, com os percentuais e o rateio do valor real pago">📊 Rateio do almoxarifado</button>
     </div>
 
     <div class="caixa" id="painelNovoProduto" style="display:none;">
@@ -1256,6 +1257,11 @@
             <button class="btn-icone" id="relSetorCompartilhar" title="Compartilhar">📤</button>
             <button class="btn-icone" id="relSetorSalvar" title="Salvar">💾</button>
         </div>
+    </div>
+
+    <div class="caixa">
+        <h4 style="margin-top:0;">📊 Rateio do consumo do almoxarifado <span class="subtitulo" style="font-weight:normal;">(planilha cruzada plano de contas × setor, só saídas sem nota, com os percentuais e o rateio do valor real pago)</span></h4>
+        <button class="btn btn-cinza" id="btnAbrirRateioAlmox" type="button">📊 Abrir o rateio do almoxarifado</button>
     </div>
 
     <div class="caixa">
@@ -2356,6 +2362,66 @@
     </div>
 </div>
 
+<!-- ===================== MODAL / POPUP: Rateio do consumo do almoxarifado ===================== -->
+<style>
+    .rat-scroll { overflow: auto; max-height: 50vh; border: 1px solid #d9dee5; border-radius: 8px; }
+    .rat-tabela { font-size: .78rem; border-collapse: separate; border-spacing: 0; min-width: max-content; }
+    .rat-tabela th, .rat-tabela td { white-space: nowrap; padding: 5px 8px; }
+    .rat-tabela td.num { text-align: right; }
+    .rat-tabela .rat-fixa { position: sticky; left: 0; background: #fff; z-index: 1; min-width: 220px; max-width: 280px; white-space: normal; }
+    .rat-tabela thead th { position: sticky; top: 0; background: #e8eef7; z-index: 2; }
+    .rat-tabela thead th.rat-fixa { z-index: 3; }
+    .rat-pct { display: block; font-size: .85em; color: #6b7280; }
+    .rat-total td { background: #f3f6fb; }
+    .rat-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; margin: 10px 0; }
+    .rat-cards div { background: #f3f6fb; border: 1px solid #dbe4f0; border-radius: 8px; padding: 8px 10px; }
+    .rat-cards span { display: block; font-size: .74rem; color: #555; }
+    .rat-cards strong { font-size: .95rem; }
+    .rat-clic { cursor: pointer; }
+    .rat-clic:hover { background: #e6f0ff; outline: 1px solid #9bbcf0; }
+</style>
+<div class="modal-overlay" id="modalRateioAlmox">
+    <div class="modal-caixa larga" style="max-width:1280px;">
+        <h3>📊 Rateio do consumo do almoxarifado</h3>
+        <p class="subtitulo">Junta as <strong>saídas do período</strong> (quantidade × valor unitário) por <strong>plano de contas × setor</strong> e mostra quanto cada célula pesa no total.
+            Entram as retiradas (<strong>tipo diferente de entrada</strong>, inclusive as de <strong>nota de saída</strong>) <strong>com evento</strong>. Não entram a <strong>saída imediata de nota de entrada</strong> (baixa direta, que já tem destino próprio) nem os <strong>ajustes de estoque e transferências</strong> (inclusive as do Uniformes/EPI). Digite o <strong>valor real pago</strong> do almoxarifado para ratear pelos percentuais.</p>
+        <div class="grade col3">
+            <div class="campo"><label>Data início</label><input type="date" id="ratAlmoxDataInicio"></div>
+            <div class="campo"><label>Data fim</label><input type="date" id="ratAlmoxDataFim"></div>
+            <div class="campo"><label>Almoxarifado</label><select id="ratAlmoxAlmox"><option value="">Todos os almoxarifados</option></select></div>
+        </div>
+        <div style="margin:8px 0; display:flex; gap:18px; flex-wrap:wrap; font-size:.9rem;">
+            <label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" id="ratAlmoxExcluirNota" checked> Não contar saída imediata de nota de entrada (baixa direta)</label>
+            <label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" id="ratAlmoxExcluirAjuste" checked> Não contar ajustes de estoque e transferências</label>
+            <label style="display:flex; gap:6px; align-items:center;"><input type="checkbox" id="ratAlmoxSoComEvento" checked> Só saídas com evento preenchido</label>
+        </div>
+        <button class="btn" id="ratAlmoxGerar" type="button">Gerar</button>
+        <div class="status-msg" id="ratAlmoxStatus"></div>
+        <div id="ratAlmoxResumo"></div>
+        <div class="campo" style="max-width:380px; margin-top:10px;"><label>Valor real pago do almoxarifado a ratear (R$)</label>
+            <input type="text" inputmode="decimal" id="ratAlmoxValorReal" placeholder="ex.: 89.565,92"></div>
+        <div id="ratAlmoxTabela"></div>
+        <div id="ratAlmoxRateio"></div>
+        <div class="linha-ferramentas-relatorio" id="ratAlmoxAcoes" style="display:none; margin-top:12px;">
+            <select id="ratAlmoxFormato"><option value="xlsx">Excel (base, percentuais, resultado e saídas)</option><option value="pdf">PDF</option></select>
+            <button class="btn-icone" id="ratAlmoxVer" title="Visualizar">👁️</button>
+            <button class="btn-icone" id="ratAlmoxCompartilhar" title="Compartilhar">📤</button>
+            <button class="btn-icone" id="ratAlmoxSalvar" title="Baixar">💾</button>
+        </div>
+        <div style="margin-top:14px; text-align:right;"><button class="btn btn-cinza" id="ratAlmoxFechar" type="button">Fechar</button></div>
+    </div>
+</div>
+
+<!-- lançamentos de uma célula do rateio (para conferir e corrigir setor/plano/evento) -->
+<div class="modal-overlay" id="modalRateioAlmoxDetalhe" style="z-index:1100;">
+    <div class="modal-caixa larga" style="max-width:1200px;">
+        <h3 id="ratDetTitulo">Lançamentos</h3>
+        <p class="subtitulo" id="ratDetSub"></p>
+        <div id="ratDetCorpo"></div>
+        <div style="margin-top:14px; text-align:right;"><button class="btn btn-cinza" id="ratDetFechar" type="button">Fechar</button></div>
+    </div>
+</div>
+
 <!-- ===================== MODAL / POPUP: Atender item ===================== -->
 <div class="modal-overlay" id="modalVincularProduto">
     <div class="modal-caixa" style="max-width:520px;">
@@ -2879,6 +2945,51 @@ async function idsNotasDefinitivas() {
         .not('nota_definitiva_id', 'is', null);
     if (error) throw error;
     return new Set((data || []).map(r => r.nota_definitiva_id));
+}
+
+// Ajuste de saldo (fabrica_ajustar_estoque) com o erro TRATADO. O supabase-js devolve {error} em vez de lançar, e antes este erro era ignorado:
+// se o banco estourasse o tempo limite no meio da edição, o saldo ficava diferente do movimento sem ninguém saber.
+// Tempo limite ("statement timeout") = o comando foi cancelado e nada mudou: tenta mais uma vez e, se falhar de novo, lança.
+// Outro tipo de erro mantém o comportamento antigo (só avisa no console) para não passar a bloquear edições que sempre funcionaram.
+// Reprocessa estoque/preço médio SÓ do produto editado. A versão da UNIDADE INTEIRA (sem p_produto_id) recalcula todos os produtos numa transação só,
+// levava segundos, segurava travas em estoque_produtos (os ajustes de saldo chegaram a levar 5,8 s) e estourava o limite de 8 s do banco
+// («canceling statement due to statement timeout»). produtoId: número = só esse produto; null = item avulso (sem saldo de produto: nada a reprocessar);
+// undefined = não sei qual é o produto -> mantém a unidade inteira (comportamento antigo). Devolve {data, error} como o sb.rpc.
+async function reprocessarMovimentosDoProduto(produtoId) {
+    if (produtoId === null) return { data: [], error: null };
+    const args = { p_unidade_negocio_id: meuPerfil.unidadeId };
+    if (produtoId !== undefined) args.p_produto_id = produtoId;
+    return await sb.rpc('fn_estoque_reprocessar_movimentos', args);
+}
+const ehTempoLimite = (e) => /statement timeout|tempo limite|canceling statement/i.test(String((e && e.message) || e || ''));
+async function ajustarSaldoEstoque(produtoId, delta, almoxarifadoId) {
+    if (!produtoId || !delta) return false;
+    for (let tentativa = 1; ; tentativa++) {
+        const { error } = await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: produtoId, p_delta: delta, p_almoxarifado_id: almoxarifadoId });
+        if (!error) return true;
+        if (!ehTempoLimite(error)) { console.warn('fabrica_ajustar_estoque:', error); return false; }
+        if (tentativa >= 2) throw error;
+        await new Promise(r => setTimeout(r, 1500));
+    }
+}
+// aplica uma lista de ajustes; se algo falhar, desfaz os que já tinham sido aplicados (saldo volta ao que era) e relança com mensagem clara
+async function aplicarAjustesDeSaldo(ajustes, depois) {
+    const feitos = [];
+    try {
+        for (const [pid, delta, almox] of ajustes) { if (await ajustarSaldoEstoque(pid, delta, almox)) feitos.push([pid, delta, almox]); }
+        if (depois) await depois();
+    } catch (e) {
+        let desfeito = true;
+        for (const [pid, delta, almox] of feitos.reverse()) {
+            try { await ajustarSaldoEstoque(pid, -delta, almox); } catch (e2) { desfeito = false; console.error('Não consegui desfazer o ajuste de saldo', e2); }
+        }
+        if (ehTempoLimite(e)) {
+            throw new Error(desfeito
+                ? 'O banco demorou demais para gravar (tempo limite). O lançamento NÃO foi alterado e o saldo do estoque foi mantido. Tente de novo em alguns segundos.'
+                : 'O banco demorou demais para gravar (tempo limite) e o saldo do estoque pode ter ficado diferente do lançamento. Use 🔄 Reprocessar Estoque (guia Relatórios) para conferir este produto.');
+        }
+        throw e;
+    }
 }
 
 async function chamarPost(acao, d) {
@@ -3433,12 +3544,12 @@ async function chamarPost(acao, d) {
         return;
     }
     if (acao === 'excluirMovimentacaoIndividual') {
-        const { data: alvo } = await sb.from('estoque_movimentacoes').select('tipo,estoque_nota_id,movimentacao_origem_id').eq('id', d.movId).maybeSingle();
+        const { data: alvo } = await sb.from('estoque_movimentacoes').select('tipo,estoque_nota_id,movimentacao_origem_id,produto_id').eq('id', d.movId).maybeSingle();
         if (alvo && alvo.tipo === 'entrada') await bloquearSeNotaComRateio(alvo.estoque_nota_id, 'exclusão de itens');
         const { error: e1 } = await sb.from('estoque_movimentacoes').delete().eq('id', d.movId);
         if (e1) throw e1;
         if (alvo && (alvo.tipo === 'saida' || alvo.estoque_nota_id)) await sincronizarRateioPorMovimento(alvo);
-        const { data: reprocessados, error: e2 } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId });
+        const { data: reprocessados, error: e2 } = await reprocessarMovimentosDoProduto(alvo ? (alvo.produto_id == null ? null : alvo.produto_id) : undefined);
         if (e2) throw e2;
         const pulados = (reprocessados || []).filter(r => r.pulado_motivo);
         return { pulados: pulados.map(p => p.nome) };
@@ -3454,11 +3565,13 @@ async function chamarPost(acao, d) {
         // reverte o efeito antigo NO ALMOXARIFADO ONDE ELE REALMENTE
         // ESTAVA (nunca deixa cair no gatilho de auto-criação por
         // falta de informar isso)
-        await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: -sinal * Number(antiga.qtd), p_almoxarifado_id: antiga.almoxarifado_id });
         // aplica o novo efeito no almoxarifado que a edição escolheu
         // (ou no mesmo de antes, se não estiver trocando)
         const almoxarifadoFinal = d.almoxarifadoId !== undefined ? d.almoxarifadoId : antiga.almoxarifado_id;
-        await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: sinal * Number(d.novaQtd), p_almoxarifado_id: almoxarifadoFinal });
+        // mesmo almoxarifado: um único ajuste com a diferença (antes eram dois, o de reverter e o de aplicar); trocou de almoxarifado: dois
+        const ajustesSaldo = (String(almoxarifadoFinal ?? '') === String(antiga.almoxarifado_id ?? ''))
+            ? [[antiga.produto_id, sinal * (Number(d.novaQtd) - Number(antiga.qtd)), antiga.almoxarifado_id]]
+            : [[antiga.produto_id, -sinal * Number(antiga.qtd), antiga.almoxarifado_id], [antiga.produto_id, sinal * Number(d.novaQtd), almoxarifadoFinal]];
         const upd = { qtd: d.novaQtd };
         if (d.novoValorUnit != null) {
             upd.valor_unit = d.novoValorUnit;
@@ -3477,8 +3590,11 @@ async function chamarPost(acao, d) {
         if (d.veiculoId !== undefined) upd.equipamento_veiculo_id = d.veiculoId;
         if (d.almoxarifadoId !== undefined) upd.almoxarifado_id = d.almoxarifadoId;
         if (d.planoContasId !== undefined) upd.plano_contas_id = d.planoContasId;
-        const { error } = await sb.from('estoque_movimentacoes').update(upd).eq('id', d.movId);
-        if (error) throw error;
+        await aplicarAjustesDeSaldo(ajustesSaldo, async () => {
+            let r = await sb.from('estoque_movimentacoes').update(upd).eq('id', d.movId);
+            if (r.error && ehTempoLimite(r.error)) { await new Promise(t => setTimeout(t, 1500)); r = await sb.from('estoque_movimentacoes').update(upd).eq('id', d.movId); }
+            if (r.error) throw r.error;
+        });
         // mudou setor/evento/plano/veículo/qtd/valor: refaz o rateio da nota (compra, se for item de entrada; baixa, se for saída)
         if (antiga.tipo === 'saida' || antiga.estoque_nota_id) await sincronizarRateioPorMovimento(antiga);
         return;
@@ -3488,9 +3604,11 @@ async function chamarPost(acao, d) {
         if (eSel) throw eSel;
         if (antiga.tipo === 'entrada') await bloquearSeNotaComRateio(antiga.estoque_nota_id, 'exclusão de itens');
         const sinal = antiga.tipo === 'entrada' ? 1 : -1;
-        await sb.rpc('fabrica_ajustar_estoque', { p_produto_id: antiga.produto_id, p_delta: -sinal * Number(antiga.qtd), p_almoxarifado_id: antiga.almoxarifado_id });
-        const { error } = await sb.from('estoque_movimentacoes').delete().eq('id', d.movId);
-        if (error) throw error;
+        await aplicarAjustesDeSaldo([[antiga.produto_id, -sinal * Number(antiga.qtd), antiga.almoxarifado_id]], async () => {
+            let r = await sb.from('estoque_movimentacoes').delete().eq('id', d.movId);
+            if (r.error && ehTempoLimite(r.error)) { await new Promise(t => setTimeout(t, 1500)); r = await sb.from('estoque_movimentacoes').delete().eq('id', d.movId); }
+            if (r.error) throw r.error;
+        });
         if (antiga.tipo === 'saida' || antiga.estoque_nota_id) await sincronizarRateioPorMovimento(antiga);
         return;
     }
@@ -3685,7 +3803,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
    ============================================================ */
 const AJUDA_ESTOQUE = {
     titulo: 'Estoque — Controle de Estoque & Projetos',
-    ultimaRevisao: '27/10/2026',
+    ultimaRevisao: '12/11/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>O Estoque controla o material físico da unidade (contêiner/esquadria): o que entra
@@ -4015,6 +4133,18 @@ const AJUDA_ESTOQUE = {
                 só tem entrada (compra) com esse evento/tag, ele não aparece aqui de propósito, mesmo
                 com o evento/tag preenchido na entrada.</li>
                 <li><strong>Por Projeto</strong>: resumo ou detalhado.</li>
+                <li><strong>Rateio do consumo do almoxarifado</strong> (botão 📊 nesta aba): para o fechamento do mês.
+                Escolha o período (e, se quiser, um almoxarifado) e clique em <em>Gerar</em>: o app soma as <strong>saídas</strong>
+                (quantidade × valor unitário) numa <strong>tabela cruzada plano de contas × setor</strong>, com o valor e o
+                <strong>percentual</strong> de cada célula. Entram as retiradas <strong>com evento preenchido</strong>, inclusive as lançadas em <strong>nota de saída</strong>.
+                <strong>Não entram</strong> a saída imediata de <strong>nota de entrada</strong> (baixa direta, que já tem destino e rateio
+                próprios) nem os ajustes de estoque e as transferências (inclusive as geradas pelo Uniformes/EPI; cada filtro pode ser desmarcado para contar). <strong>Clique em uma célula</strong> (ou num total) para ver os lançamentos dela — item, quantidade, setor, evento, plano de contas —
+                e use <em>✏️ Editar</em> para corrigir; o relatório é refeito ao salvar. Digite o
+                <strong>valor real pago do almoxarifado</strong> e o app mostra quanto cabe a cada setor/plano de contas
+                (valor real × percentual). Saídas sem setor ou sem plano de contas aparecem em "Sem …" e entram no percentual:
+                corrija na aba Movimentações para o rateio ficar completo. O <strong>Excel</strong> sai no desenho da planilha cruzada
+                (abas <em>base</em>, <em>percentuais</em> e <em>resultado</em>, com fórmulas — trocar o valor real em B1 recalcula) e uma aba
+                <em>saidas</em> com cada lançamento considerado; também há PDF.</li>
                 <li><strong>Por Responsável</strong>: lista as saídas em nome de uma pessoa, num
                 período opcional — útil pra fechar conta com terceirizado que retira material do
                 almoxarifado (o valor retirado entra no encontro de contas do serviço prestado).</li>
@@ -4438,7 +4568,7 @@ async function carregarAjustesEstoqueProduto(produtoId) {
         const almox = (catalogosBaixa.almoxarifados || []).find(a => a.id === m.almoxarifado_id);
         return `
             <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid #f3c9c4; font-size:0.82rem;">
-                <span>${formatarData(m.data)} · ${m.tipo === 'entrada' ? '+' : '-'}${m.qtd} · ${almox ? escapeHtml(almox.nome) : '(sem almoxarifado)'} · ${escapeHtml(m.responsavel || '-')}</span>
+                <span>${formatarDataBR(m.data)} · ${m.tipo === 'entrada' ? '+' : '-'}${m.qtd} · ${almox ? escapeHtml(almox.nome) : '(sem almoxarifado)'} · ${escapeHtml(m.responsavel || '-')}</span>
                 <button type="button" class="btn btn-cinza btn-pequeno" data-excluir-ajuste="${m.id}" style="background:var(--danger-soft, #FBEAE8); color:var(--danger, #C0392B);">🗑️ Excluir</button>
             </div>
         `;
@@ -4809,7 +4939,7 @@ async function abrirInfoProduto(produtoId) {
                 : '-';
             html += `
                 <tr>
-                    <td>${m.data}</td>
+                    <td>${formatarDataBR(m.data)}</td>
                     <td>${pillTipoMovimentacao(m)}</td>
                     <td class="num">${Number(m.qtd).toLocaleString('pt-BR')}</td>
                     <td class="num">${formatarMoeda(m.valorUnit)}</td>
@@ -5180,7 +5310,7 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
         const somaVOutroItens = nfe.itens.reduce((acc, it) => acc + (it.vOutroItem || 0), 0);
 
         document.getElementById('nfeInfo').innerHTML = `
-            <strong>NF nº ${escapeHtml(nfe.nNF) || '-'}</strong> · Emitida em ${escapeHtml(formatarData(nfe.dhEmi))}<br>
+            <strong>NF nº ${escapeHtml(nfe.nNF) || '-'}</strong> · Emitida em ${escapeHtml(formatarDataBR(nfe.dhEmi))}<br>
             Emitente: ${escapeHtml(nfe.emitNome) || '-'} ${nfe.emitCnpj ? '(CNPJ: ' + escapeHtml(nfe.emitCnpj) + ')' : ''}<br>
             Destinatário: ${escapeHtml(nfe.destNome) || '-'}<br>
             ${nfe.chaveAcesso ? 'Chave de acesso: ' + escapeHtml(nfe.chaveAcesso) + '<br>' : ''}
@@ -5477,7 +5607,7 @@ async function abrirModalNotasParciaisGenerico(ctx) {
                 <input type="checkbox" data-nota-parcial-id="${n.id}" ${(ctx.marcadas || []).includes(n.id) ? 'checked' : ''} style="margin-top:3px;">
                 <span>
                     <strong>${n.numeroNf ? 'Nota nº ' + escapeHtml(n.numeroNf) : 'Sem número'}</strong> — ${escapeHtml(n.nomeFornecedor || 'Fornecedor não informado')}<br>
-                    <span class="subtitulo">Data: ${n.dataEntrada ? formatarData(n.dataEntrada) : '-'} · Qtd desse produto nessa nota: ${n.qtdDesseProduto}</span>
+                    <span class="subtitulo">Data: ${n.dataEntrada ? formatarDataBR(n.dataEntrada) : '-'} · Qtd desse produto nessa nota: ${n.qtdDesseProduto}</span>
                 </span>
             </label>
         `).join('');
@@ -5544,7 +5674,7 @@ function renderizarListaAgregarPedido() {
             <input type="checkbox" data-pedido-id="${n.id}" ${marcadasAgora.has(n.id) ? 'checked' : ''} style="margin-top:3px;">
             <span style="flex:1;">
                 <strong>${n.numeroNf ? 'Nota nº ' + escapeHtml(n.numeroNf) : 'Sem número (#' + n.id + ')'}</strong> — ${escapeHtml(n.nomeFornecedor || 'Fornecedor não informado')}<br>
-                <span class="subtitulo">Data: ${n.dataEntrada ? formatarData(n.dataEntrada) : '-'} · ${n.qtdItens} item(ns) · ${formatarMoeda(n.valorTotal)}</span>
+                <span class="subtitulo">Data: ${n.dataEntrada ? formatarDataBR(n.dataEntrada) : '-'} · ${n.qtdItens} item(ns) · ${formatarMoeda(n.valorTotal)}</span>
             </span>
         </label>
     `).join('');
@@ -6315,7 +6445,7 @@ function renderizarListaProjetos() {
                     <span class="pill" style="background:#eef2ff;color:#1565c0;">${escapeHtml(rotuloTipoProjeto(proj.tipo))}</span>
                     <span class="pill">${LABEL_STATUS_PROJETO[status] || status}</span>
                 </div>
-                <div class="meta-projeto">${(proj.itens || []).length} itens · ${entregue}/${requisitado} entregue (${pct}%) · criado em ${proj.data}</div>
+                <div class="meta-projeto">${(proj.itens || []).length} itens · ${entregue}/${requisitado} entregue (${pct}%) · criado em ${formatarDataBR(proj.data)}</div>
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
                 <div style="width:120px;"><div class="barra-progresso"><div class="barra-progresso-fill ${entregue > requisitado ? 'excedido' : ''}" style="width:${pct}%;"></div></div></div>
@@ -8720,7 +8850,7 @@ function buscarMovimentacoesNaoAgregadas() {
         <label style="display:flex; align-items:flex-start; gap:8px; padding:6px 0; border-bottom:1px solid #eee; cursor:pointer;">
             <input type="checkbox" class="check-mov-nao-agregada" data-mov-id="${m.id}" style="margin-top:3px;">
             <span style="font-size:0.9em;">
-                <strong>${Number(m.qtd).toLocaleString('pt-BR')}</strong> em ${m.data} — ${escapeHtml(m.responsavel) || '-'}
+                <strong>${Number(m.qtd).toLocaleString('pt-BR')}</strong> em ${formatarDataBR(m.data)} — ${escapeHtml(m.responsavel) || '-'}
                 ${m.evento ? ` · evento ${escapeHtml(m.evento)}` : ''}
                 ${m.observacao ? `<br><span style="color:#666;">${escapeHtml(m.observacao)}</span>` : ''}
             </span>
@@ -8792,7 +8922,7 @@ function renderizarListaAtendimentosItem(itemId) {
         div.className = 'linha-atendimento';
         div.innerHTML = `
             <div class="info-atendimento">
-                <strong>${Number(m.qtd).toLocaleString('pt-BR')}</strong> em ${m.data} — ${escapeHtml(m.responsavel) || '-'}
+                <strong>${Number(m.qtd).toLocaleString('pt-BR')}</strong> em ${formatarDataBR(m.data)} — ${escapeHtml(m.responsavel) || '-'}
                 ${m.observacao ? `<br><span style="color:#666;">${escapeHtml(m.observacao)}</span>` : ''}
             </div>
             <div class="acoes-atendimento">
@@ -8858,6 +8988,8 @@ document.getElementById('btnSalvarEditarAtendimento').addEventListener('click', 
     statusEl.className = '';
     statusEl.textContent = 'Atualizando...';
     try {
+        const movEditado = movimentacoes.find(m => m.id === movAtualEdicaoId);
+        const produtoReproc = movEditado ? (movEditado.produto_id == null ? null : movEditado.produto_id) : undefined;
         await chamarPost('editarMovimentacao', {
             movId: movAtualEdicaoId,
             novaQtd,
@@ -8868,8 +9000,8 @@ document.getElementById('btnSalvarEditarAtendimento').addEventListener('click', 
         });
         // igual o modal principal de editar item já faz -- reprocessa
         // depois, pra estoque/preço médio (por almoxarifado e no total)
-        // ficarem batendo com o histórico real
-        const { error: erroReprocessar } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId });
+        // ficarem batendo com o histórico real (só do produto editado: ver reprocessarMovimentosDoProduto)
+        const { error: erroReprocessar } = await reprocessarMovimentosDoProduto(produtoReproc);
         if (erroReprocessar) throw erroReprocessar;
         await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
         atualizarTagContagem();
@@ -9432,7 +9564,7 @@ function cabecalhoRelatorio(doc, proj, subtitulo) {
     doc.text('Requisição de Saída' + (subtitulo ? ' — ' + subtitulo : ''), 14, 18);
     doc.setFontSize(10);
     doc.text(`Projeto: ${proj.descricao} (${rotuloTipoProjeto(proj.tipo)})`, 14, 26);
-    doc.text(`Data de criação do projeto: ${proj.data}`, 14, 32);
+    doc.text(`Data de criação do projeto: ${formatarDataBR(proj.data)}`, 14, 32);
     doc.text(`Relatório emitido em: ${hojeISO()}`, 14, 38);
     return 44;
 }
@@ -9559,7 +9691,7 @@ function construirPdfProjetoDetalhado(proj) {
                 const subtotalRetirada = Number(a.qtd) * Number(a.valorUnit);
                 totalAtendidoGeral += subtotalRetirada;
                 return [
-                    a.data, Number(a.qtd).toLocaleString('pt-BR'), formatarMoeda(a.valorUnit),
+                    formatarDataBR(a.data), Number(a.qtd).toLocaleString('pt-BR'), formatarMoeda(a.valorUnit),
                     formatarMoeda(subtotalRetirada), a.responsavel || '-', a.observacao || '-'
                 ];
             });
@@ -9770,7 +9902,7 @@ function construirPdfListaMovimentacoes(titulo, subtitulo, linhas, colunaExtra) 
     doc.text(`Relatório emitido em: ${hojeISO()}`, 14, 32);
 
     const corpo = linhas.map(l => [
-        l.m.data,
+        formatarDataBR(l.m.data),
         l.prod ? l.prod.nome : (l.m.descricaoAvulsa ? l.m.descricaoAvulsa + ' (avulso)' : '#' + l.m.produtoId),
         colunaExtra.getter(l.m) || '-',
         l.proj ? l.proj.descricao : '-',
@@ -9982,7 +10114,7 @@ async function executarRelatorioResponsavel(acao) {
     const linhas = construirLinhasMovimentacoes(await movimentacoesPorResponsavel(responsavel, dataInicio, dataFim));
     if (!linhas.length) { alert('Nenhuma retirada (saída) encontrada pra esse responsável no período. Esse relatório não lista entrada/compra, só o que foi retirado do estoque.'); return; }
     const formato = document.getElementById('relResponsavelFormato').value;
-    const periodoTexto = (dataInicio || dataFim) ? ` — período: ${dataInicio ? formatarData(dataInicio) : 'início'} a ${dataFim ? formatarData(dataFim) : 'hoje'}` : '';
+    const periodoTexto = (dataInicio || dataFim) ? ` — período: ${dataInicio ? formatarDataBR(dataInicio) : 'início'} a ${dataFim ? formatarDataBR(dataFim) : 'hoje'}` : '';
     const titulo = 'Relatório por Responsável — Detalhado';
     const subtitulo = `Responsável: ${responsavel}${periodoTexto}`;
     const nomeBase = `relatorio-responsavel-${slugArquivo(responsavel)}`;
@@ -10087,7 +10219,7 @@ function construirPdfPorSetor(subtitulo, grupos) {
     grupos.forEach(g => {
         corpo.push([{ content: g.nome, colSpan: 8, styles: { fillColor: [227, 236, 248], fontStyle: 'bold', textColor: [21, 60, 120] } }]);
         g.linhas.forEach(l => corpo.push([
-            l.m.data, nomeLinhaRel(l), nomeSubsetorRel(l.m.subsetorId) || '-', l.m.evento || '-',
+            formatarDataBR(l.m.data), nomeLinhaRel(l), nomeSubsetorRel(l.m.subsetorId) || '-', l.m.evento || '-',
             Number(l.m.qtd).toLocaleString('pt-BR'), formatarMoeda(l.m.valorUnit), formatarMoeda(l.subtotal), l.m.responsavel || '-'
         ]));
         corpo.push([
@@ -10157,7 +10289,7 @@ async function executarRelatorioSetor(acao) {
     const partes = [
         setorSelecionadoRelSetor ? `Setor: ${setorSelecionadoRelSetor.nome}` : 'Todos os setores',
         subsetorSelecionadoRelSetor ? `Subsetor: ${subsetorSelecionadoRelSetor.nome}` : null,
-        (dataInicio || dataFim) ? `período: ${dataInicio ? formatarData(dataInicio) : 'início'} a ${dataFim ? formatarData(dataFim) : 'hoje'}` : null,
+        (dataInicio || dataFim) ? `período: ${dataInicio ? formatarDataBR(dataInicio) : 'início'} a ${dataFim ? formatarDataBR(dataFim) : 'hoje'}` : null,
         filtroNome ? `item: "${filtroNome}"` : null
     ].filter(Boolean);
     const subtitulo = partes.join(' — ');
@@ -10196,6 +10328,341 @@ document.getElementById('relProjetoVer').addEventListener('click', () => executa
 document.getElementById('relProjetoCompartilhar').addEventListener('click', () => executarRelatorioProjeto('compartilhar'));
 document.getElementById('relProjetoSalvar').addEventListener('click', () => executarRelatorioProjeto('salvar'));
 
+
+/* ============================================================
+   RATEIO DO CONSUMO DO ALMOXARIFADO (planilha cruzada Plano de contas x Setor)
+   Pedido do usuário (12/11/2026): a planilha "conf_cruzada_almoxarifado" (abas base / percentuais / resultado), agora gerada pelo app.
+   Base = tipo <> 'entrada' (qtd x valor unitário) agrupado por plano de contas (linhas) e setor (colunas), com EVENTO preenchido (como o usuário
+   extraía), SEM a "saída imediata com nota" = baixa direta de uma NOTA DE ENTRADA: saída cuja estoque_nota_id aponta para uma nota de tipo 'entrada'
+   ou que tem movimentacao_origem_id (ligada a uma entrada). ATENÇÃO: a maioria das requisições tem estoque_nota_id de uma NOTA DE SAÍDA
+   (estoque_notas.tipo = 'saida'): essas SÃO consumo e ENTRAM (na 1ª versão eu excluía todo estoque_nota_id e o relatório saía vazio).
+   Também fora: "Ajustes de estoque" (correção de inventário). O percentual de cada célula = valor / total.
+   O valor REAL pago pelo almoxarifado, digitado na tela, é repartido por esses percentuais (cada célula = valor real x percentual).
+   ============================================================ */
+let ratAlmox = null;                       // último resultado gerado
+const RAT_ALMOX_SEM = '__sem__';
+
+function ratAlmoxNum(txt) {
+    let t = String(txt || '').trim().replace(/[R$\s]/g, '');
+    if (!t) return 0;
+    if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+    const n = Number(t);
+    return isFinite(n) ? n : NaN;
+}
+const ratAlmoxPct = (frac) => (frac * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + '%';
+function ratAlmoxPlano(id) {
+    if (id == null) return { nome: 'Sem plano de contas', codigo: '' };
+    const c = (catalogosBaixa.planoContas || []).find(x => String(x.id) === String(id));
+    return c ? { nome: c.descricao || ('#' + id), codigo: c.codigo || '' } : { nome: '#' + id, codigo: '' };
+}
+function ratAlmoxStatus(tipo, txt) {
+    const el = document.getElementById('ratAlmoxStatus');
+    el.className = 'status-msg' + (tipo ? ' ' + tipo : '');
+    el.textContent = txt || '';
+}
+
+async function ratAlmoxAbrir() {
+    if (!catalogosBaixa || !catalogosBaixa.setores || !catalogosBaixa.setores.length) {
+        try { catalogosBaixa = await chamarGet('listarCatalogosBaixa'); } catch (e) { /* segue com os ids */ }
+    }
+    const sel = document.getElementById('ratAlmoxAlmox'), atual = sel.value;
+    sel.innerHTML = '<option value="">Todos os almoxarifados</option>' + ((catalogosBaixa && catalogosBaixa.almoxarifados) || []).map(a => `<option value="${a.id}">${escapeHtml(a.nome)}</option>`).join('');
+    sel.value = atual;
+    // sem período escolhido: sugere o mês anterior inteiro (fechamento mensal)
+    const di = document.getElementById('ratAlmoxDataInicio'), df = document.getElementById('ratAlmoxDataFim');
+    if (!di.value && !df.value) {
+        const hoje = new Date();
+        di.value = formatarDataISOLocal(new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1));
+        df.value = formatarDataISOLocal(new Date(hoje.getFullYear(), hoje.getMonth(), 0));
+    }
+    ratAlmoxStatus('', '');
+    document.getElementById('modalRateioAlmox').classList.add('aberto');
+}
+
+// todas as saídas do período direto no servidor (páginas de 1000, sem o teto do array global `movimentacoes`)
+async function ratAlmoxBuscarSaidas(dataInicio, dataFim, almoxId) {
+    const colunas = 'id,data,qtd,valor_unit,setor_id,plano_contas_id,almoxarifado_id,estoque_nota_id,movimentacao_origem_id,observacao,produto_id,descricao_avulsa,evento';
+    const TAMANHO = 1000; let todos = [];
+    for (let pagina = 0; ; pagina++) {
+        let q = sb.from('estoque_movimentacoes').select(colunas).eq('unidade_negocio_id', meuPerfil.unidadeId).neq('tipo', 'entrada')
+            .gte('data', dataInicio).lte('data', dataFim).order('id', { ascending: true }).range(pagina * TAMANHO, pagina * TAMANHO + TAMANHO - 1);
+        if (almoxId) q = q.eq('almoxarifado_id', almoxId);
+        const { data, error } = await q;
+        if (error) throw error;
+        todos = todos.concat(data || []);
+        if (!data || data.length < TAMANHO) break;
+    }
+    return todos;
+}
+
+// tipo ('entrada' | 'saida') das notas ligadas às saídas: nota de ENTRADA = baixa direta imediata; nota de SAÍDA = requisição, que é consumo
+async function ratAlmoxTiposDasNotas(brutas) {
+    const ids = [...new Set(brutas.map(m => m.estoque_nota_id).filter(v => v != null))], tipos = new Map();
+    for (let i = 0; i < ids.length; i += 150) {
+        const { data, error } = await sb.from('estoque_notas').select('id,tipo').in('id', ids.slice(i, i + 150));
+        if (error) throw error;
+        (data || []).forEach(n => tipos.set(Number(n.id), n.tipo));
+    }
+    return tipos;
+}
+
+async function ratAlmoxGerar() {
+    const dataInicio = document.getElementById('ratAlmoxDataInicio').value, dataFim = document.getElementById('ratAlmoxDataFim').value;
+    if (!dataInicio || !dataFim) { ratAlmoxStatus('erro', 'Informe a data início e a data fim do período.'); return; }
+    if (dataInicio > dataFim) { ratAlmoxStatus('erro', 'A data de início é depois da data fim.'); return; }
+    const almoxSel = document.getElementById('ratAlmoxAlmox'), almoxId = almoxSel.value ? Number(almoxSel.value) : null;
+    const excluirNota = document.getElementById('ratAlmoxExcluirNota').checked, excluirAjuste = document.getElementById('ratAlmoxExcluirAjuste').checked;
+    const soComEvento = document.getElementById('ratAlmoxSoComEvento').checked;
+    const btn = document.getElementById('ratAlmoxGerar'); btn.disabled = true;
+    ratAlmoxStatus('', 'Buscando as saídas do período...');
+    try {
+        if (!catalogosBaixa || !catalogosBaixa.setores || !catalogosBaixa.setores.length) { try { catalogosBaixa = await chamarGet('listarCatalogosBaixa'); } catch (e) { /* segue */ } }
+        const brutas = await ratAlmoxBuscarSaidas(dataInicio, dataFim, almoxId);
+        const tiposNota = await ratAlmoxTiposDasNotas(brutas);
+        const incluidas = [], exNota = { n: 0, valor: 0 }, exAjuste = { n: 0, valor: 0 }, exEvento = { n: 0, valor: 0 };
+        brutas.forEach(m => {
+            const valor = (Number(m.qtd) || 0) * (Number(m.valor_unit) || 0);
+            // saída imediata com nota = baixa direta de uma NOTA DE ENTRADA, ou saída ligada a uma entrada (movimentacao_origem_id); nota de SAÍDA é requisição (consumo)
+            const comNota = (m.estoque_nota_id != null && tiposNota.get(Number(m.estoque_nota_id)) === 'entrada') || m.movimentacao_origem_id != null;
+            // ajuste de estoque (correção de inventário) e transferência entre almoxarifados/locais (ex.: a do Uniformes/EPI: «Transferência A → B — motivo») não são consumo
+            const obsMov = String(m.observacao || '').trim();
+            const ajuste = obsMov === 'Ajuste de estoque' || /^transfer[eê]ncia/i.test(obsMov);
+            const semEvento = !String(m.evento || '').trim();
+            if (excluirNota && comNota) { exNota.n++; exNota.valor += valor; return; }
+            if (excluirAjuste && ajuste) { exAjuste.n++; exAjuste.valor += valor; return; }
+            if (soComEvento && semEvento) { exEvento.n++; exEvento.valor += valor; return; }
+            incluidas.push({ m, valor });
+        });
+        const colMap = new Map(), linMap = new Map();
+        incluidas.forEach(({ m, valor }) => {
+            const ck = m.setor_id == null ? RAT_ALMOX_SEM : String(m.setor_id), lk = m.plano_contas_id == null ? RAT_ALMOX_SEM : String(m.plano_contas_id);
+            if (!colMap.has(ck)) colMap.set(ck, { chave: ck, nome: nomeSetorRel(m.setor_id), total: 0 });
+            if (!linMap.has(lk)) { const p = ratAlmoxPlano(m.plano_contas_id); linMap.set(lk, { chave: lk, nome: p.nome, codigo: p.codigo, valores: {}, total: 0 }); }
+            colMap.get(ck).total += valor;
+            const l = linMap.get(lk); l.valores[ck] = (l.valores[ck] || 0) + valor; l.total += valor;
+        });
+        const cmp = (a, b) => (a.chave === RAT_ALMOX_SEM) - (b.chave === RAT_ALMOX_SEM) || a.nome.localeCompare(b.nome, 'pt-BR');
+        const colunas = [...colMap.values()].sort(cmp), linhas = [...linMap.values()].sort(cmp);
+        const total = incluidas.reduce((s, x) => s + x.valor, 0);
+        const almoxNome = almoxId ? (almoxSel.options[almoxSel.selectedIndex] || {}).text || '' : 'Todos os almoxarifados';
+        ratAlmox = { colunas, linhas, total, itens: incluidas, exNota, exAjuste, exEvento, dataInicio, dataFim, almoxNome, excluirNota, excluirAjuste, soComEvento, brutas: brutas.length };
+        ratAlmoxStatus('', '');
+        ratAlmoxRenderizar();
+    } catch (e) {
+        console.error(e);
+        ratAlmoxStatus('erro', '⚠️ ' + ((e && e.message) || String(e)));
+    } finally { btn.disabled = false; }
+}
+
+// tabela cruzada na tela: modo 'consumo' = valor + % de cada célula; modo 'rateio' = valor real x percentual
+function ratAlmoxTabelaHtml(modo, valorReal) {
+    const r = ratAlmox, tot = r.total, fator = modo === 'rateio' ? valorReal / tot : 1;
+    const cel = (v) => !v ? '' : (modo === 'consumo' ? `${formatarMoeda(v)}<span class="rat-pct">${ratAlmoxPct(v / tot)}</span>` : formatarMoeda(v * fator));
+    const cab = `<tr><th class="rat-fixa">Plano de contas</th>${r.colunas.map(c => `<th>${escapeHtml(c.nome)}</th>`).join('')}<th>TOTAL</th></tr>`;
+    // célula clicável: abre a lista dos lançamentos dela (l/c = chave do plano/setor; '*' = todos)
+    const clic = (lk, ck) => ` class="num rat-clic" data-rat-l="${lk}" data-rat-c="${ck}" title="Clique para ver os lançamentos desta célula"`;
+    const corpo = r.linhas.map(l => `<tr><td class="rat-fixa">${escapeHtml(l.nome)}${l.codigo ? `<span class="rat-pct">${escapeHtml(l.codigo)}</span>` : ''}</td>` +
+        r.colunas.map(c => l.valores[c.chave] ? `<td${clic(l.chave, c.chave)}>${cel(l.valores[c.chave])}</td>` : '<td class="num"></td>').join('') + `<td${clic(l.chave, '*')}><strong>${cel(l.total)}</strong></td></tr>`).join('');
+    const rodape = `<tr class="rat-total"><td class="rat-fixa"><strong>TOTAL</strong></td>${r.colunas.map(c => `<td${clic('*', c.chave)}><strong>${cel(c.total)}</strong></td>`).join('')}<td${clic('*', '*')}><strong>${cel(r.total)}</strong></td></tr>`;
+    return `<div class="rat-scroll"><table class="tabela rat-tabela"><thead>${cab}</thead><tbody>${corpo}${rodape}</tbody></table></div>`;
+}
+
+function ratAlmoxRenderizar() {
+    const resumo = document.getElementById('ratAlmoxResumo'), tabela = document.getElementById('ratAlmoxTabela'), rateio = document.getElementById('ratAlmoxRateio'), acoes = document.getElementById('ratAlmoxAcoes');
+    if (!ratAlmox) { resumo.innerHTML = tabela.innerHTML = rateio.innerHTML = ''; acoes.style.display = 'none'; return; }
+    const r = ratAlmox;
+    if (!r.itens.length || !(r.total > 0)) {
+        resumo.innerHTML = `<p class="subtitulo">Nenhuma saída encontrada nesse período com os filtros escolhidos (${r.brutas} saída(s) no período; ${r.exNota.n} baixa(s) imediata(s) de nota de entrada, ${r.exAjuste.n} ajuste(s)/transferência(s) e ${r.exEvento.n} sem evento ficaram de fora).</p>`;
+        tabela.innerHTML = rateio.innerHTML = ''; acoes.style.display = 'none'; return;
+    }
+    const semSetor = r.colunas.find(c => c.chave === RAT_ALMOX_SEM), semPlano = r.linhas.find(l => l.chave === RAT_ALMOX_SEM);
+    resumo.innerHTML = `
+        <div class="rat-cards">
+            <div><span>Consumo do período</span><strong>${formatarMoeda(r.total)}</strong></div>
+            <div><span>Saídas consideradas</span><strong>${r.itens.length.toLocaleString('pt-BR')}</strong></div>
+            <div><span>Fora — saída imediata com nota de entrada</span><strong>${r.exNota.n.toLocaleString('pt-BR')} (${formatarMoeda(r.exNota.valor)})</strong></div>
+            <div><span>Fora — ajustes e transferências</span><strong>${r.exAjuste.n.toLocaleString('pt-BR')} (${formatarMoeda(r.exAjuste.valor)})</strong></div>
+            <div><span>Fora — sem evento</span><strong>${r.exEvento.n.toLocaleString('pt-BR')} (${formatarMoeda(r.exEvento.valor)})</strong></div>
+        </div>
+        ${(semSetor || semPlano) ? `<p class="status-msg erro" style="display:block;">⚠️ ${semSetor ? `${formatarMoeda(semSetor.total)} em saídas <strong>sem setor</strong> informado` : ''}${semSetor && semPlano ? ' e ' : ''}${semPlano ? `${formatarMoeda(semPlano.total)} em saídas <strong>sem plano de contas</strong>` : ''} — aparecem na coluna/linha "Sem …" e entram no percentual. Corrija na aba Movimentações para o rateio ficar completo.</p>` : ''}`;
+    tabela.innerHTML = `<h4 style="margin:14px 0 6px;">Consumo por plano de contas × setor (valor e % do total)</h4>` + ratAlmoxTabelaHtml('consumo');
+    acoes.style.display = '';
+    ratAlmoxRenderizarRateio();
+}
+
+function ratAlmoxRenderizarRateio() {
+    const rateio = document.getElementById('ratAlmoxRateio');
+    if (!ratAlmox || !(ratAlmox.total > 0)) { rateio.innerHTML = ''; return; }
+    const v = ratAlmoxNum(document.getElementById('ratAlmoxValorReal').value);
+    if (!isFinite(v)) { rateio.innerHTML = '<p class="status-msg erro" style="display:block;">Valor real inválido.</p>'; return; }
+    if (!(v > 0)) { rateio.innerHTML = '<p class="subtitulo" style="margin-top:12px;">Digite o <strong>valor real pago do almoxarifado</strong> acima para ver a divisão entre setores e planos de contas.</p>'; return; }
+    rateio.innerHTML = `<h4 style="margin:14px 0 6px;">Valor real ${formatarMoeda(v)} rateado pelos percentuais</h4>` + ratAlmoxTabelaHtml('rateio', v);
+}
+
+// ---- exportações ----
+function ratAlmoxSubtitulo() {
+    const r = ratAlmox;
+    return `Período: ${formatarDataBR(r.dataInicio)} a ${formatarDataBR(r.dataFim)} — ${r.almoxNome}` +
+        ` — ${r.excluirNota ? 'sem' : 'com'} saídas imediatas com nota de entrada; ${r.excluirAjuste ? 'sem' : 'com'} ajustes e transferências; ${r.soComEvento ? 'só com' : 'com e sem'} evento`;
+}
+function ratAlmoxPreviewDados() {
+    const r = ratAlmox, dados = r.linhas.map(l => {
+        const o = { 'Plano de contas': l.nome };
+        r.colunas.forEach(c => { o[c.nome] = l.valores[c.chave] ? Number(l.valores[c.chave].toFixed(2)) : ''; });
+        o['TOTAL'] = Number(l.total.toFixed(2)); return o;
+    });
+    const t = { 'Plano de contas': 'TOTAL' }; r.colunas.forEach(c => { t[c.nome] = Number(c.total.toFixed(2)); }); t['TOTAL'] = Number(r.total.toFixed(2)); dados.push(t);
+    dados._colunas = ['Plano de contas', ...r.colunas.map(c => c.nome), 'TOTAL'];
+    return dados;
+}
+// pasta de trabalho no mesmo desenho da planilha cruzada: base (valores), percentuais (fórmula) e resultado (valor real x percentual, em fórmula),
+// mais a aba saidas com cada lançamento considerado (rastreabilidade)
+function ratAlmoxWorkbook(valorReal) {
+    const r = ratAlmox, nC = r.colunas.length, nL = r.linhas.length, L = (i) => XLSX.utils.encode_col(i);
+    const colTot = L(nC + 1), linTot = nL + 2;
+    const cab = ['Plano de contas', ...r.colunas.map(c => c.nome), 'TOTAL'];
+    const intervalo = (nLinhas, nCols) => XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: nLinhas, c: nCols } });
+    const setF = (ws, addr, f, v, z) => { ws[addr] = { t: 'n', f, v, z }; };
+    const FM = '#,##0.00', FP = '0.00%';
+    const wb = XLSX.utils.book_new();
+
+    // base
+    const wsB = XLSX.utils.aoa_to_sheet([cab, ...r.linhas.map(l => [l.nome, ...r.colunas.map(c => l.valores[c.chave] || null), null]), ['TOTAL']]);
+    r.linhas.forEach((l, i) => {
+        const lin = i + 2;
+        r.colunas.forEach((c, j) => { if (wsB[`${L(j + 1)}${lin}`]) wsB[`${L(j + 1)}${lin}`].z = FM; });
+        setF(wsB, `${colTot}${lin}`, `SUM(B${lin}:${L(nC)}${lin})`, l.total, FM);
+    });
+    r.colunas.forEach((c, j) => setF(wsB, `${L(j + 1)}${linTot}`, `SUM(${L(j + 1)}2:${L(j + 1)}${linTot - 1})`, c.total, FM));
+    setF(wsB, `${colTot}${linTot}`, `SUM(B${linTot}:${L(nC)}${linTot})`, r.total, FM);
+    wsB['!ref'] = intervalo(linTot - 1, nC + 1); wsB['!cols'] = [{ wch: 44 }, ...r.colunas.map(() => ({ wch: 16 })), { wch: 16 }];
+    XLSX.utils.book_append_sheet(wb, wsB, 'base');
+
+    // percentuais
+    const totRef = `base!$${colTot}$${linTot}`;
+    const wsP = XLSX.utils.aoa_to_sheet([cab, ...r.linhas.map(l => [l.nome]), ['TOTAL']]);
+    r.linhas.forEach((l, i) => {
+        const lin = i + 2;
+        r.colunas.forEach((c, j) => { if (l.valores[c.chave]) setF(wsP, `${L(j + 1)}${lin}`, `IF(${totRef}=0,0,base!${L(j + 1)}${lin}/${totRef})`, l.valores[c.chave] / r.total, FP); });
+        setF(wsP, `${colTot}${lin}`, `SUM(B${lin}:${L(nC)}${lin})`, l.total / r.total, FP);
+    });
+    r.colunas.forEach((c, j) => setF(wsP, `${L(j + 1)}${linTot}`, `SUM(${L(j + 1)}2:${L(j + 1)}${linTot - 1})`, c.total / r.total, FP));
+    setF(wsP, `${colTot}${linTot}`, `SUM(B${linTot}:${L(nC)}${linTot})`, 1, FP);
+    wsP['!ref'] = intervalo(linTot - 1, nC + 1); wsP['!cols'] = wsB['!cols'];
+    XLSX.utils.book_append_sheet(wb, wsP, 'percentuais');
+
+    // resultado (cabeçalho na linha 3; B1 = valor real digitado, troque e tudo recalcula)
+    const wsR = XLSX.utils.aoa_to_sheet([['Valor real do almoxarifado a ratear (R$):', valorReal || 0], ['Digite o valor real em B1: as células abaixo (valor real x percentual) recalculam.'], cab, ...r.linhas.map(l => [l.nome]), ['TOTAL']]);
+    wsR.B1.z = FM;
+    const linR = (i) => i + 4, linTotR = nL + 4;
+    r.linhas.forEach((l, i) => {
+        const lin = linR(i);
+        r.colunas.forEach((c, j) => { if (l.valores[c.chave]) setF(wsR, `${L(j + 1)}${lin}`, `$B$1*percentuais!${L(j + 1)}${i + 2}`, (valorReal || 0) * l.valores[c.chave] / r.total, FM); });
+        setF(wsR, `${colTot}${lin}`, `SUM(B${lin}:${L(nC)}${lin})`, (valorReal || 0) * l.total / r.total, FM);
+    });
+    r.colunas.forEach((c, j) => setF(wsR, `${L(j + 1)}${linTotR}`, `SUM(${L(j + 1)}4:${L(j + 1)}${linTotR - 1})`, (valorReal || 0) * c.total / r.total, FM));
+    setF(wsR, `${colTot}${linTotR}`, `SUM(B${linTotR}:${L(nC)}${linTotR})`, valorReal || 0, FM);
+    wsR['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: linTotR - 1, c: nC + 1 } }); wsR['!cols'] = wsB['!cols'];
+    XLSX.utils.book_append_sheet(wb, wsR, 'resultado');
+
+    // saidas (detalhe)
+    const det = [['Data', 'Produto', 'Qtd', 'Valor Unit.', 'Subtotal', 'Setor', 'Plano de contas', 'Evento', 'Almoxarifado', 'Observação']];
+    const almoxNome = (id) => { const a = ((catalogosBaixa && catalogosBaixa.almoxarifados) || []).find(x => String(x.id) === String(id)); return a ? a.nome : (id != null ? '#' + id : ''); };
+    r.itens.slice().sort((a, b) => String(a.m.data).localeCompare(String(b.m.data)) || a.m.id - b.m.id).forEach(({ m, valor }) => {
+        const prod = produtos.find(p => p.id === m.produto_id);
+        det.push([String(m.data || '').slice(0, 10), prod ? prod.nome : (m.descricao_avulsa ? m.descricao_avulsa + ' (avulso)' : '#' + m.produto_id), Number(m.qtd) || 0, Number(m.valor_unit) || 0, valor,
+            nomeSetorRel(m.setor_id), ratAlmoxPlano(m.plano_contas_id).nome, m.evento || '', almoxNome(m.almoxarifado_id), m.observacao || '']);
+    });
+    const wsD = XLSX.utils.aoa_to_sheet(det); wsD['!cols'] = [{ wch: 12 }, { wch: 40 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 22 }, { wch: 36 }, { wch: 14 }, { wch: 22 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, wsD, 'saidas');
+    return wb;
+}
+function ratAlmoxPdf(valorReal) {
+    const r = ratAlmox, { jsPDF } = window.jspdf, doc = new jsPDF({ orientation: 'landscape' });
+    doc.setFontSize(15); doc.text('Rateio do consumo do almoxarifado', 14, 14);
+    doc.setFontSize(9); doc.text(ratAlmoxSubtitulo(), 14, 20); doc.text(`Emitido em: ${formatarDataBR(hojeISO())} — total consumido ${formatarMoeda(r.total)}`, 14, 25);
+    const head = [['Plano de contas', ...r.colunas.map(c => c.nome), 'TOTAL']];
+    const estilos = { fontSize: 6.5, cellPadding: 1.2 };
+    const col = (n) => { const o = {}; for (let i = 1; i <= n; i++) o[i] = { halign: 'right' }; return o; };
+    const bloco = (modo) => {
+        const fator = modo === 'rateio' ? valorReal / r.total : 1;
+        const cel = (v) => !v ? '' : (modo === 'consumo' ? `${formatarMoeda(v)}\n${ratAlmoxPct(v / r.total)}` : formatarMoeda(v * fator));
+        return [...r.linhas.map(l => [l.nome, ...r.colunas.map(c => cel(l.valores[c.chave])), cel(l.total)]),
+            [{ content: 'TOTAL', styles: { fontStyle: 'bold' } }, ...r.colunas.map(c => ({ content: cel(c.total), styles: { fontStyle: 'bold' } })), { content: cel(r.total), styles: { fontStyle: 'bold' } }]];
+    };
+    doc.autoTable({ startY: 30, head, body: bloco('consumo'), styles: estilos, headStyles: { fillColor: [21, 101, 192] }, columnStyles: { 0: { cellWidth: 38 }, ...col(r.colunas.length + 1) }, margin: { left: 8, right: 8 } });
+    if (valorReal > 0) {
+        let y = doc.lastAutoTable.finalY + 8;
+        if (y > 170) { doc.addPage(); y = 14; }
+        doc.setFontSize(11); doc.text(`Valor real do almoxarifado a ratear: ${formatarMoeda(valorReal)}`, 8, y);
+        doc.autoTable({ startY: y + 3, head, body: bloco('rateio'), styles: estilos, headStyles: { fillColor: [46, 125, 50] }, columnStyles: { 0: { cellWidth: 38 }, ...col(r.colunas.length + 1) }, margin: { left: 8, right: 8 } });
+    }
+    return doc;
+}
+function ratAlmoxExportar(acao) {
+    if (!ratAlmox || !(ratAlmox.total > 0)) { alert('Gere o relatório primeiro.'); return; }
+    const v = ratAlmoxNum(document.getElementById('ratAlmoxValorReal').value), valorReal = isFinite(v) && v > 0 ? v : 0;
+    const formato = document.getElementById('ratAlmoxFormato').value;
+    const nomeBase = `rateio-almoxarifado-${ratAlmox.dataInicio}-a-${ratAlmox.dataFim}`;
+    if (formato === 'pdf') { executarAcaoPdf(acao, ratAlmoxPdf(valorReal), `${nomeBase}.pdf`); return; }
+    if (acao === 'ver') { visualizarTabelaHtml('Rateio do consumo do almoxarifado — ' + ratAlmoxSubtitulo(), ratAlmoxPreviewDados()); return; }
+    const wb = ratAlmoxWorkbook(valorReal);
+    if (acao === 'salvar') { baixarExcel(wb, `${nomeBase}.xlsx`); return; }
+    const blob = blobExcel(wb); compartilharOuBaixarArquivo(blob, `${nomeBase}.xlsx`, blob.type, `${nomeBase}.xlsx`);
+}
+
+// ---- detalhe de uma célula: lista os lançamentos (item, qtd, setor, evento...) e deixa abrir a edição para corrigir
+let ratAlmoxDetSel = null;                 // { l, c } da célula aberta (para reabrir depois de uma correção)
+function ratAlmoxChave(id) { return id == null ? RAT_ALMOX_SEM : String(id); }
+function ratAlmoxDetalhe(lk, ck) {
+    if (!ratAlmox) return;
+    ratAlmoxDetSel = { l: lk, c: ck };
+    const itens = ratAlmox.itens.filter(({ m }) => (lk === '*' || ratAlmoxChave(m.plano_contas_id) === lk) && (ck === '*' || ratAlmoxChave(m.setor_id) === ck))
+        .sort((a, b) => b.valor - a.valor || b.m.id - a.m.id);
+    const lin = lk === '*' ? null : ratAlmox.linhas.find(x => x.chave === lk), col = ck === '*' ? null : ratAlmox.colunas.find(x => x.chave === ck);
+    if (!itens.length) { document.getElementById('modalRateioAlmoxDetalhe').classList.remove('aberto'); return; }
+    const total = itens.reduce((s, x) => s + x.valor, 0);
+    document.getElementById('ratDetTitulo').textContent = `${lin ? lin.nome : 'Todos os planos de contas'} × ${col ? col.nome : 'todos os setores'}`;
+    document.getElementById('ratDetSub').innerHTML = `${itens.length.toLocaleString('pt-BR')} lançamento(s) — <strong>${formatarMoeda(total)}</strong> (${ratAlmoxPct(total / ratAlmox.total)} do total). Ordenado do maior para o menor valor. Use <strong>✏️ Editar</strong> para corrigir setor, plano de contas, evento ou quantidade; o rateio é refeito ao salvar.`;
+    const almoxNome = (id) => { const a = ((catalogosBaixa && catalogosBaixa.almoxarifados) || []).find(x => String(x.id) === String(id)); return a ? a.nome : ''; };
+    const falta = (txt) => `<span style="color:#c0392b;">${txt}</span>`;
+    document.getElementById('ratDetCorpo').innerHTML = `<div class="rat-scroll" style="max-height:62vh;"><table class="tabela rat-tabela"><thead><tr>
+        <th>Data</th><th>Item</th><th>Qtd</th><th>Valor unit.</th><th>Subtotal</th><th>Setor</th><th>Evento</th><th>Plano de contas</th><th>Almoxarifado</th><th>Observação</th><th></th></tr></thead><tbody>` +
+        itens.map(({ m, valor }) => {
+            const prod = produtos.find(p => p.id === m.produto_id), nomeItem = prod ? prod.nome : (m.descricao_avulsa ? m.descricao_avulsa + ' (avulso)' : '#' + m.produto_id);
+            return `<tr><td>${formatarDataBR(m.data)}</td><td style="white-space:normal; min-width:220px;">${escapeHtml(nomeItem)}</td>
+                <td class="num">${Number(m.qtd).toLocaleString('pt-BR')}</td><td class="num">${formatarMoeda(m.valor_unit)}</td><td class="num"><strong>${formatarMoeda(valor)}</strong></td>
+                <td>${m.setor_id != null ? escapeHtml(nomeSetorRel(m.setor_id)) : falta('sem setor')}</td><td>${m.evento ? escapeHtml(m.evento) : falta('sem evento')}</td>
+                <td style="white-space:normal; min-width:160px;">${m.plano_contas_id != null ? escapeHtml(ratAlmoxPlano(m.plano_contas_id).nome) : falta('sem plano')}</td>
+                <td>${escapeHtml(almoxNome(m.almoxarifado_id))}</td><td style="white-space:normal; min-width:140px;">${escapeHtml(m.observacao || '')}</td>
+                <td><button type="button" class="btn btn-cinza btn-pequeno" data-rat-edit="${m.id}">✏️ Editar</button></td></tr>`;
+        }).join('') + `</tbody></table></div>`;
+    document.getElementById('modalRateioAlmoxDetalhe').classList.add('aberto');
+}
+// depois de corrigir um lançamento: refaz o relatório com os mesmos filtros e reabre a célula (se ainda existir)
+async function ratAlmoxAposEdicao() {
+    const sel = ratAlmoxDetSel;
+    await ratAlmoxGerar();
+    if (sel && ratAlmox) ratAlmoxDetalhe(sel.l, sel.c); else document.getElementById('modalRateioAlmoxDetalhe').classList.remove('aberto');
+}
+document.getElementById('modalRateioAlmox').addEventListener('click', (e) => {
+    const td = e.target.closest('[data-rat-l]');
+    if (td) ratAlmoxDetalhe(td.dataset.ratL, td.dataset.ratC);
+});
+document.getElementById('ratDetFechar').addEventListener('click', () => { document.getElementById('modalRateioAlmoxDetalhe').classList.remove('aberto'); ratAlmoxDetSel = null; });
+document.getElementById('ratDetCorpo').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-rat-edit]');
+    if (b) abrirModalEditarMovimentacaoGeral(Number(b.dataset.ratEdit));
+});
+
+document.getElementById('btnAbrirRateioAlmox').addEventListener('click', ratAlmoxAbrir);
+document.getElementById('btnAtalhoRateioAlmox').addEventListener('click', ratAlmoxAbrir);   // atalho na página principal (aba Estoque)
+document.getElementById('ratAlmoxFechar').addEventListener('click', () => document.getElementById('modalRateioAlmox').classList.remove('aberto'));
+document.getElementById('ratAlmoxGerar').addEventListener('click', ratAlmoxGerar);
+document.getElementById('ratAlmoxValorReal').addEventListener('input', ratAlmoxRenderizarRateio);
+document.getElementById('ratAlmoxVer').addEventListener('click', () => ratAlmoxExportar('ver'));
+document.getElementById('ratAlmoxCompartilhar').addEventListener('click', () => ratAlmoxExportar('compartilhar'));
+document.getElementById('ratAlmoxSalvar').addEventListener('click', () => ratAlmoxExportar('salvar'));
 
 /* ============================================================
    ABA MOVIMENTAÇÕES (painel geral com filtros)
@@ -10321,7 +10788,7 @@ async function abrirModalEditarMovimentacaoGeral(movId) {
         const prod = produtos.find(p => p.id === mov.produto_id);
         movGeralOriginal = { ...mov, nomeProduto: prod ? prod.nome : '#' + mov.produto_id };
         document.getElementById('editMovGeralInfo').textContent =
-            `${mov.tipo === 'entrada' ? 'Entrada' : 'Saída'} · ${prod ? prod.nome : '#' + mov.produto_id} · ${formatarData(mov.data)}`;
+            `${mov.tipo === 'entrada' ? 'Entrada' : 'Saída'} · ${prod ? prod.nome : '#' + mov.produto_id} · ${formatarDataBR(mov.data)}`;
         document.getElementById('editMovGeralQtd').value = mov.qtd;
         document.getElementById('editMovGeralValor').value = mov.valor_unit;
         document.getElementById('editMovGeralTag').value = mov.tag || '';
@@ -10416,8 +10883,8 @@ document.getElementById('btnSalvarEditarMovGeral').addEventListener('click', asy
         // corrigir o preço médio incrementalmente (a média ponderada depende
         // da ordem cronológica de tudo) — por isso, depois de qualquer edição,
         // reprocessa automaticamente pra garantir que estoque e preço médio
-        // do produto continuam batendo com o histórico real
-        const { error: erroReprocessar } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId });
+        // do produto continuam batendo com o histórico real (só do produto editado: ver reprocessarMovimentosDoProduto)
+        const { error: erroReprocessar } = await reprocessarMovimentosDoProduto(movGeralOriginal ? (movGeralOriginal.produto_id == null ? null : movGeralOriginal.produto_id) : undefined);
         if (erroReprocessar) throw erroReprocessar;
 
         if (movGeralOriginal) {
@@ -10436,7 +10903,9 @@ document.getElementById('btnSalvarEditarMovGeral').addEventListener('click', asy
         await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
         atualizarTagContagem();
         renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
-        if (document.getElementById('modalNotaEntrada').classList.contains('aberto') && notaEmEdicaoId) {
+        if (document.getElementById('modalRateioAlmox').classList.contains('aberto')) {
+            await ratAlmoxAposEdicao();   // veio do detalhe do rateio do almoxarifado: refaz o relatório e reabre a célula
+        } else if (document.getElementById('modalNotaEntrada').classList.contains('aberto') && notaEmEdicaoId) {
             await carregarItensETitulosDaNota(notaEmEdicaoId);
         } else if (document.getElementById('modalRequisicaoCompleta').classList.contains('aberto') && notaRequisicaoEmEdicaoId) {
             await carregarItensJaLancadosReq(notaRequisicaoEmEdicaoId);
@@ -10552,7 +11021,7 @@ async function buscarPainelMovimentacoes() {
 
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td>${m.data}</td>
+                <td>${formatarDataBR(m.data)}</td>
                 <td>${pillTipoMovimentacao(m)}</td>
                 <td>${prod ? escapeHtml(prod.nome) : (m.descricaoAvulsa ? escapeHtml(m.descricaoAvulsa) + ' <span class="pill" style="background:#FBEAE8; color:#C0392B; font-size:0.65rem;">avulso</span>' : ('#' + m.produtoId))}</td>
                 <td class="num">${Number(m.qtd).toLocaleString('pt-BR')}</td>
@@ -10621,7 +11090,7 @@ async function abrirModalDestinarAvulso(entradaId) {
         entradaEmDestinacaoAvulso = mov;
 
         document.getElementById('destAvulsoInfo').textContent =
-            `${mov.descricao_avulsa || ''} · qtd ${Number(mov.qtd).toLocaleString('pt-BR')} · entrada em ${formatarData(mov.data)}`;
+            `${mov.descricao_avulsa || ''} · qtd ${Number(mov.qtd).toLocaleString('pt-BR')} · entrada em ${formatarDataBR(mov.data)}`;
 
         if (!catalogosBaixa.setores.length || !catalogosBaixa.almoxarifados || !catalogosBaixa.almoxarifados.length) catalogosBaixa = await chamarGet('listarCatalogosBaixa');
 
@@ -11143,7 +11612,7 @@ async function carregarListaNotasEntrada() {
                 if (valorNota > 0 && somaTitN > 0 && Math.abs(somaTitN - valorNota) >= 0.005) marcaValor += `<br><span class="tag-status" style="background:#fdecea; color:#b00020;" title="Títulos somam ${formatarMoeda(somaTitN)} · valor da nota ${formatarMoeda(valorNota)}">⚠ títulos ${somaTitN > valorNota ? '+' : '−'}${formatarMoeda(Math.abs(somaTitN - valorNota))}</span>`;
             }
             tr.innerHTML = `
-                <td>${formatarData(n.data_entrada)}</td>
+                <td>${formatarDataBR(n.data_entrada)}</td>
                 <td><span class="pill ${n.tipo === 'saida' ? 'pill-saida' : 'pill-entrada'}">${n.tipo === 'saida' ? 'Saída' : 'Entrada'}</span></td>
                 <td>${escapeHtml(n.numero_nf) || '-'}${marcaAgregacao}</td>
                 <td>${escapeHtml(n.nome_fornecedor) || '-'}</td>
@@ -11589,7 +12058,7 @@ function renderizarPedidosAgregados() {
         div.style.cssText = 'background:#fff; border:1px solid #d5e4ff; border-radius:6px; padding:8px 10px; margin-bottom:8px;';
         div.innerHTML = `
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-                <span><strong>${n.numero_nf ? 'Nota nº ' + escapeHtml(n.numero_nf) : 'Nota #' + n.id}</strong> — ${escapeHtml(n.nome_fornecedor || '')} · ${n.data_entrada ? formatarData(n.data_entrada) : '-'} · ${n.itens.length} item(ns) · ${formatarMoeda(totalNota)}
+                <span><strong>${n.numero_nf ? 'Nota nº ' + escapeHtml(n.numero_nf) : 'Nota #' + n.id}</strong> — ${escapeHtml(n.nome_fornecedor || '')} · ${n.data_entrada ? formatarDataBR(n.data_entrada) : '-'} · ${n.itens.length} item(ns) · ${formatarMoeda(totalNota)}
                     <span class="tag-status" style="margin-left:6px;">agregada a esta nota</span></span>
                 <span>
                     <button class="btn btn-cinza btn-pequeno" type="button" data-abrir-pedido="${n.id}">✏️ Abrir</button>
@@ -11878,7 +12347,7 @@ document.getElementById('btnSalvarCabecalhoNota').addEventListener('click', asyn
                 if (duplicadas && duplicadas.length) {
                     const d = duplicadas[0];
                     const prosseguir = confirm(
-                        `⚠️ Já existe uma nota gravada dessa unidade com o mesmo CNPJ e número de NF (${numeroNf}) — fornecedor "${d.nome_fornecedor}", entrada em ${formatarData(d.data_entrada)} (#${d.id}).\n\nDeseja salvar mesmo assim?`
+                        `⚠️ Já existe uma nota gravada dessa unidade com o mesmo CNPJ e número de NF (${numeroNf}) — fornecedor "${d.nome_fornecedor}", entrada em ${formatarDataBR(d.data_entrada)} (#${d.id}).\n\nDeseja salvar mesmo assim?`
                     );
                     if (!prosseguir) { statusEl.className = ''; statusEl.textContent = ''; return; }
                 }
@@ -14318,6 +14787,43 @@ async function iniciarAppFabrica() {
 
 if (sb) checkSession();
 
+</script>
+
+<!-- Botão "Fechar" FIXO no topo direito de cada pop-up: em listas grandes não precisa rolar até o fim para fechar. Fica por cima do conteúdo (não ocupa espaço).
+     Reaproveita o botão de saída que o próprio pop-up já tem (Fechar/Sair/Cancelar...), então a limpeza específica de cada um continua rodando;
+     pop-up sem botão de saída próprio fica como está. Vale também para pop-ups criados depois do carregamento. -->
+<style>
+    .modal-fechar-topo { position: sticky; top: 0; z-index: 40; height: 0; overflow: visible; text-align: right; pointer-events: none; }
+    .modal-fechar-x { pointer-events: auto; position: relative; top: 2px; margin: 0 0 0 auto; display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; font: 700 .8rem Arial, sans-serif;
+        color: #333; background: #fff; border: 1.5px solid #b9c2cc; border-radius: 999px; box-shadow: 0 2px 8px rgba(0,0,0,.22); cursor: pointer; }
+    .modal-fechar-x:hover { background: #fdecea; border-color: #c0392b; color: #c0392b; }
+</style>
+<script>
+(function () {
+    const texto = (b) => (b.textContent || '').replace(/[\u2715\u00d7\u2716]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+    const ehSaida = (t) => /^(fechar|sair|cancelar|voltar|concluir)\b/.test(t);
+    function botaoSaidaOriginal(caixa) {
+        const bts = Array.from(caixa.querySelectorAll('button')).filter(b => !b.closest('.modal-fechar-topo') && !b.disabled);
+        // prefere "Fechar"/"Sair"; depois "Cancelar"/"Voltar"/"Concluir"
+        return bts.find(b => /^(fechar|sair)\b/.test(texto(b))) || bts.find(b => ehSaida(texto(b))) || null;
+    }
+    function adicionar(ov) {
+        const caixa = ov.querySelector(':scope > .modal-caixa');
+        if (!caixa || caixa.querySelector(':scope > .modal-fechar-topo')) return;
+        if (ov.id === 'modalAjudaOverlay' || caixa.querySelector('.modal-ajuda-head')) return;   // a Ajuda já tem o Fechar no cabeçalho fixo
+        if (!botaoSaidaOriginal(caixa)) return;                          // sem botão de saída próprio: não inventa saída
+        const topo = document.createElement('div');
+        topo.className = 'modal-fechar-topo';
+        topo.innerHTML = '<button type="button" class="modal-fechar-x" aria-label="Fechar esta janela" title="Fechar">\u2715 Fechar</button>';
+        topo.firstChild.addEventListener('click', () => { const b = botaoSaidaOriginal(caixa); if (b) b.click(); else ov.classList.remove('aberto'); });
+        caixa.insertBefore(topo, caixa.firstChild);
+    }
+    const varrer = () => document.querySelectorAll('.modal-overlay').forEach(adicionar);
+    varrer();
+    // pop-ups criados depois (ou que só ganham o botão de saída depois): confere de novo quando algo é adicionado à página
+    let t = null;
+    new MutationObserver(() => { clearTimeout(t); t = setTimeout(varrer, 150); }).observe(document.body, { childList: true, subtree: true });
+})();
 </script>
 </body>
 </html>
