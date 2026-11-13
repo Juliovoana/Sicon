@@ -2961,6 +2961,15 @@ async function reprocessarMovimentosDoProduto(produtoId) {
     if (produtoId !== undefined) args.p_produto_id = produtoId;
     return await sb.rpc('fn_estoque_reprocessar_movimentos', args);
 }
+// vários produtos (nota excluída, baixa direta desfeita): um recálculo por produto; passando de 60 produtos cai na unidade inteira (que, com os índices, é rápida)
+async function reprocessarMovimentosDeProdutos(ids) {
+    const lista = [...new Set((ids || []).filter(v => v != null))];
+    if (!lista.length) return { data: [], error: null };
+    if (lista.length > 60) return await reprocessarMovimentosDoProduto(undefined);
+    let todos = [];
+    for (const id of lista) { const r = await reprocessarMovimentosDoProduto(id); if (r.error) return r; todos = todos.concat(r.data || []); }
+    return { data: todos, error: null };
+}
 const ehTempoLimite = (e) => /statement timeout|tempo limite|canceling statement/i.test(String((e && e.message) || e || ''));
 async function ajustarSaldoEstoque(produtoId, delta, almoxarifadoId) {
     if (!produtoId || !delta) return false;
@@ -3030,7 +3039,7 @@ async function chamarPost(acao, d) {
         // igual acontece ao editar uma movimentação: mudar estoque_inicial (ou
         // qualquer outro dado que afete o saldo) exige reprocessar, senão o
         // campo "estoque" fica desatualizado até a próxima entrada/saída
-        const { error: erroReprocessar } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId });
+        const { error: erroReprocessar } = await reprocessarMovimentosDoProduto(data && data.id != null ? data.id : undefined);   // só o produto salvo (antes: a unidade inteira a CADA produto salvo/importado)
         if (erroReprocessar) throw erroReprocessar;
         return data;
     }
@@ -3483,13 +3492,15 @@ async function chamarPost(acao, d) {
         // ordem importa: primeiro os filhos (títulos e movimentações), depois a nota
         const { error: e1 } = await sb.from('estoque_titulos_notas').delete().eq('estoque_nota_id', d.estoqueNotaId);
         if (e1) throw e1;
+        const { data: itensDaNota } = await sb.from('estoque_movimentacoes').select('produto_id').eq('estoque_nota_id', d.estoqueNotaId);
+        const produtosDaNotaExcluida = (itensDaNota || []).map(x => x.produto_id);
         const { error: e2 } = await sb.from('estoque_movimentacoes').delete().eq('estoque_nota_id', d.estoqueNotaId);
         if (e2) throw e2;
         const { error: e3 } = await sb.from('estoque_notas').delete().eq('id', d.estoqueNotaId);
         if (e3) throw e3;
         // recalcula estoque, preço médio e última compra a partir do histórico já sem essa nota
         await sincronizarRateioNota(d.estoqueNotaId);   // nota excluída: remove o rateio da compra
-        const { data: reprocessados, error: e4 } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId });
+        const { data: reprocessados, error: e4 } = await reprocessarMovimentosDeProdutos(produtosDaNotaExcluida);
         if (e4) throw e4;
         const pulados = (reprocessados || []).filter(r => r.pulado_motivo);
         return { pulados: pulados.map(p => p.nome) };
@@ -6827,7 +6838,7 @@ async function desfazerBaixaDiretaNota(notaId) {
             if ((apagadas || []).length !== ids.length) throw new Error(`Só ${(apagadas || []).length} de ${ids.length} saída(s) puderam ser apagadas (permissão?). Confira a nota e tente de novo.`);
         }
         await sincronizarRateioNotaAgora(notaId);
-        const { data: reprocessados, error: eRep } = await sb.rpc('fn_estoque_reprocessar_movimentos', { p_unidade_negocio_id: meuPerfil.unidadeId });
+        const { data: reprocessados, error: eRep } = await reprocessarMovimentosDeProdutos(saidas.map(m => m.produto_id));
         if (eRep) throw eRep;
         const pulados = (reprocessados || []).filter(r => r.pulado_motivo);
         await registrarSentinela('desfazer_baixa_direta_nota',
