@@ -1807,10 +1807,10 @@
             <div class="campo"><label>Data de entrada</label><input type="date" id="notaDataEntrada"></div>
         </div>
         <div class="grade col2" style="margin-top:10px;">
-            <div class="campo">
+            <div class="campo" style="position:relative;">
                 <label>Fornecedor</label>
-                <input type="text" id="notaFornecedorNome" list="notaListaFornecedores" placeholder="Nome do fornecedor">
-                <datalist id="notaListaFornecedores"></datalist>
+                <input type="text" id="notaFornecedorNome" placeholder="Digite parte do nome do fornecedor..." autocomplete="off">
+                <div id="notaFornecedorResultados" class="dropdown-busca-evento"></div>
             </div>
             <div class="campo"><label>CNPJ do fornecedor</label><input type="text" id="notaFornecedorCnpj"></div>
         </div>
@@ -3451,6 +3451,7 @@ async function chamarPost(acao, d) {
         const { data: notaCriada, error } = await query.select().single();
         if (error) throw error;
         if (n.id && registro.tipo !== 'saida') await sincronizarRateioNota(n.id);   // setor/evento/plano da nota são o padrão do rateio da compra
+        if (registro.tipo !== 'saida' && registro.nome_fornecedor) await registrarFornecedor(registro.nome_fornecedor, registro.cnpj_fornecedor, notaCriada && notaCriada.id);   // lembra o fornecedor (e o CNPJ) para as próximas notas
         return notaCriada;
     }
     if (acao === 'salvarTitulosNota') {
@@ -3774,7 +3775,7 @@ async function carregarEventos() {
 async function carregarTudo() {
     document.getElementById('tagContagem').textContent = 'carregando dados do Supabase...';
     try {
-        await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarProjetos(), carregarEventos(), carregarTiposProjeto(), carregarParametrosLembrar(), carregarAlmoxUniformesEpiId()]);
+        await Promise.all([carregarFornecedores(), carregarProdutos(), carregarMovimentacoes(), carregarProjetos(), carregarEventos(), carregarTiposProjeto(), carregarParametrosLembrar(), carregarAlmoxUniformesEpiId()]);
     } catch (err) {
         console.error(err);
         document.getElementById('tagContagem').textContent = '⚠️ Não foi possível carregar os dados. Confira a URL/chave do Supabase.';
@@ -3814,7 +3815,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
    ============================================================ */
 const AJUDA_ESTOQUE = {
     titulo: 'Estoque — Controle de Estoque & Projetos',
-    ultimaRevisao: '12/11/2026',
+    ultimaRevisao: '13/11/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>O Estoque controla o material físico da unidade (contêiner/esquadria): o que entra
@@ -3959,6 +3960,10 @@ const AJUDA_ESTOQUE = {
             <ul>
                 <li><strong>+ Nova entrada direta</strong>: lança manualmente uma compra (fornecedor,
                 itens, valores) — gera os títulos de pagamento correspondentes no Financeiro.</li>
+                <li><strong>Fornecedor lembrado e aviso de pedido repetido</strong> (nota manual): todo fornecedor usado numa nota fica gravado no
+                cadastro de pessoas (a mesma tabela do Financeiro, Obras e Armarinho: nome livre + CNPJ opcional); ao digitar o nome o CNPJ é preenchido sozinho (e, ao colar um CNPJ conhecido, o nome).
+                Ao salvar o cabeçalho, se já existir nota do <strong>mesmo fornecedor</strong> (mesmo CNPJ ou mesmo nome) com o <strong>mesmo número/pedido</strong> —
+                ignorando espaços, pontuação e maiúsculas ("PEDIDO 655044" = "pedido 655044=") —, o app lista as notas encontradas e pergunta se quer salvar mesmo assim.</li>
                 <li><strong>+ Nova requisição</strong>: saída avulsa de estoque <strong>sem</strong>
                 vínculo com projeto (ex.: manutenção de veículo/equipamento) — permite registrar
                 KM/horímetro pra próxima troca. <strong>Ao clicar em Salvar Requisição, o formulário volta em branco</strong> pra
@@ -11216,7 +11221,137 @@ document.getElementById('btnConfirmarDestinarAvulso').addEventListener('click', 
    vieram de importação de XML), itens e títulos de pagamento.
    ========================================================================= */
 let notaEmEdicaoId = null;
-let fornecedoresConhecidosCnpj = {};
+// Fornecedores (nome + CNPJ) lembrados pela nota manual. Vêm da tabela PESSOA (compartilhada com o Financeiro), carregada ao abrir o app,
+// MAIS o que as notas listadas já mostram -- o mapa só cresce, nunca encolhe com o filtro da tela de Notas (era o que «apagava» o CNPJ lembrado).
+const normNome = (s) => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+const soDigitosCnpj = (s) => String(s || '').replace(/\D/g, '');
+const normNumeroNf = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');     // «PEDIDO 655044=» = «pedido 655044»
+let fornecedoresMapa = new Map();                 // nome normalizado -> { nome, cnpj, pessoaId, docPessoa }
+let fornecedoresPessoaOk = false;
+function fornecedoresAdicionar(nome, cnpj, pessoaId) {
+    const n = String(nome || '').trim().replace(/\s+/g, ' ');
+    if (!n) return;
+    const k = normNome(n), c = String(cnpj || '').trim(), atual = fornecedoresMapa.get(k);
+    if (!atual) { fornecedoresMapa.set(k, { nome: n, cnpj: c, pessoaId: pessoaId || null, docPessoa: !!(pessoaId && c) }); return; }
+    if (pessoaId && !atual.pessoaId) { atual.pessoaId = pessoaId; atual.nome = n; atual.docPessoa = !!c; if (c) atual.cnpj = c; }   // o cadastro (pessoa) manda
+    else if (c && !atual.cnpj) atual.cnpj = c;                                                                                      // nunca apaga/troca um CNPJ já conhecido
+}
+const LIMITE_FORNECEDORES_BUSCA = 10;
+function fornecedoresMostrarSugestoes() {
+    const inp = document.getElementById('notaFornecedorNome'), box = document.getElementById('notaFornecedorResultados');
+    if (!inp || !box) return;
+    const termo = inp.value.trim();
+    const todos = [...fornecedoresMapa.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    const casados = termo ? todos.filter(f => casaBusca(f.nome + ' ' + (f.cnpj || ''), termo)) : todos;
+    const lista = casados.slice(0, LIMITE_FORNECEDORES_BUSCA);
+    box.innerHTML = lista.length ? '' : '<div class="item-resultado">Nenhum fornecedor encontrado — o nome digitado será cadastrado ao salvar a nota.</div>';
+    lista.forEach(f => {
+        const div = document.createElement('div');
+        div.className = 'item-resultado'; div.style.cursor = 'pointer';
+        div.innerHTML = `<div class="info-resultado">${escapeHtml(f.nome)}${f.cnpj ? ` <small style="color:#6b7280;">· ${escapeHtml(f.cnpj)}</small>` : ''}</div>`;
+        div.addEventListener('mousedown', (e) => {           // mousedown + preventDefault: escolhe antes do blur fechar a lista
+            e.preventDefault();
+            inp.value = f.nome;
+            if (f.cnpj) document.getElementById('notaFornecedorCnpj').value = f.cnpj;
+            box.classList.remove('aberto');
+        });
+        box.appendChild(div);
+    });
+    if (casados.length > lista.length) {
+        const mais = document.createElement('div');
+        mais.className = 'item-resultado'; mais.style.cssText = 'color:#6b7280; font-size:.85em; cursor:default;';
+        mais.textContent = `Mostrando ${lista.length} de ${casados.length} — digite mais letras para filtrar.`;
+        box.appendChild(mais);
+    }
+    box.classList.add('aberto');
+}
+function fornecedoresRenderizarLista() {
+    // a lista não é mais um datalist com todos os nomes; se a busca estiver aberta, só atualiza o que ela mostra
+    const box = document.getElementById('notaFornecedorResultados');
+    if (box && box.classList.contains('aberto')) fornecedoresMostrarSugestoes();
+}
+// Fornecedores = tabela PESSOA (a mesma do Financeiro, Obras e Armarinho) + os nomes/CNPJ que já aparecem nas notas. O mapa só cresce
+// (filtrar a tela de Notas não faz mais a lembrança do CNPJ sumir). O lançamento continua livre: nome novo vira pessoa ao salvar a nota.
+async function carregarFornecedores() {
+    try {
+        for (let pagina = 0; ; pagina++) {
+            const { data, error } = await sb.from('pessoa').select('id,nome,documento,ativo').eq('unidade_negocio_id', meuPerfil.unidadeId).order('nome').range(pagina * 1000, pagina * 1000 + 999);
+            if (error) throw error;
+            (data || []).filter(p => p.ativo !== false).forEach(p => fornecedoresAdicionar(p.nome, p.documento, p.id));
+            if (!data || data.length < 1000) break;
+        }
+        fornecedoresPessoaOk = true;
+    } catch (e) { fornecedoresPessoaOk = false; console.warn('Cadastro de pessoas indisponível para fornecedores:', e && e.message); }
+    try {
+        for (let pagina = 0; ; pagina++) {
+            const { data, error } = await sb.from('estoque_notas').select('nome_fornecedor,cnpj_fornecedor').eq('unidade_negocio_id', meuPerfil.unidadeId).not('nome_fornecedor', 'is', null).neq('tipo', 'saida').order('id', { ascending: false }).range(pagina * 1000, pagina * 1000 + 999);
+            if (error) throw error;
+            (data || []).forEach(n => fornecedoresAdicionar(n.nome_fornecedor, n.cnpj_fornecedor));
+            if (!data || data.length < 1000) break;
+        }
+    } catch (e) { console.warn('Fornecedores das notas indisponíveis:', e && e.message); }
+    fornecedoresRenderizarLista();
+}
+const escaparIlike = (t) => String(t).replace(/[\\%_]/g, m => '\\' + m);
+// acha ou cria a PESSOA do fornecedor e devolve o id (null se não deu). Reaproveita pelo CNPJ ou pelo nome; só cria se não existir; completa o
+// documento da pessoa quando ela não tinha CNPJ. Nunca trava o salvamento da nota (quem chama ignora a falha).
+async function garantirPessoaFornecedor(nome, cnpj) {
+    const n = String(nome || '').trim().replace(/\s+/g, ' ');
+    if (!n || !fornecedoresPessoaOk) return null;
+    const doc = String(cnpj || '').trim(), dig = soDigitosCnpj(doc), unidade = meuPerfil.unidadeId;
+    let f = fornecedoresMapa.get(normNome(n));
+    if ((!f || !f.pessoaId) && dig) f = [...fornecedoresMapa.values()].find(x => x.pessoaId && soDigitosCnpj(x.cnpj) === dig) || f;     // mesmo CNPJ cadastrado com outro nome
+    if (!f || !f.pessoaId) {
+        // confere no banco (outra aba/usuário pode ter cadastrado agora) antes de criar
+        let achada = null;
+        const { data: porNome } = await sb.from('pessoa').select('id,nome,documento').eq('unidade_negocio_id', unidade).ilike('nome', escaparIlike(n)).limit(10);
+        achada = (porNome || []).find(p => normNome(p.nome) === normNome(n)) || null;
+        if (!achada && doc) { const { data: porDoc } = await sb.from('pessoa').select('id,nome,documento').eq('unidade_negocio_id', unidade).eq('documento', doc).limit(1); achada = (porDoc && porDoc[0]) || null; }
+        if (achada) { fornecedoresAdicionar(achada.nome, achada.documento, achada.id); f = fornecedoresMapa.get(normNome(achada.nome)); }
+    }
+    if (f && f.pessoaId) {
+        if (doc && !f.docPessoa) {                       // a pessoa não tinha documento: agrega o CNPJ digitado
+            const { error } = await sb.from('pessoa').update({ documento: doc }).eq('id', f.pessoaId).is('documento', null);
+            if (!error) { f.docPessoa = true; f.cnpj = doc; }
+        }
+        return f.pessoaId;
+    }
+    // não existe: cria (pessoa não tem id automático -> fn_proximo_id_manual; código = maior da unidade + 1, como no Armarinho)
+    const { data: proximoId, error: eId } = await sb.rpc('fn_proximo_id_manual', { p_tabela: 'pessoa' });
+    if (eId) throw eId;
+    const { data: ult } = await sb.from('pessoa').select('codigo').eq('unidade_negocio_id', unidade).not('codigo', 'is', null).order('codigo', { ascending: false }).limit(1);
+    const codigo = (ult && ult.length && Number(ult[0].codigo) > 0) ? Number(ult[0].codigo) + 1 : 1;
+    const { data: nova, error: eIns } = await sb.from('pessoa').insert({ id: proximoId, unidade_negocio_id: unidade, nome: n, tipo_pessoa: dig.length === 11 ? 'FISICA' : 'JURIDICA', documento: doc || null, codigo, ativo: true }).select('id').single();
+    if (eIns) throw eIns;
+    fornecedoresAdicionar(n, doc, nova.id); fornecedoresMapa.get(normNome(n)).docPessoa = !!doc;
+    return nova.id;
+}
+// chamado ao salvar uma nota de entrada: lembra o fornecedor (lista/CNPJ), garante a pessoa e liga a nota a ela (fornecedor_pessoa_id)
+async function registrarFornecedor(nome, cnpj, notaId) {
+    const n = String(nome || '').trim().replace(/\s+/g, ' ');
+    if (!n) return;
+    fornecedoresAdicionar(n, cnpj); fornecedoresRenderizarLista();
+    try {
+        const pessoaId = await garantirPessoaFornecedor(n, cnpj);
+        fornecedoresRenderizarLista();
+        if (pessoaId && notaId) await sb.from('estoque_notas').update({ fornecedor_pessoa_id: pessoaId }).eq('id', notaId);     // sem a coluna (SQL não rodado) só ignora
+    } catch (e) { console.warn('Fornecedor não gravado em pessoa (a nota foi salva normalmente):', e && e.message); }
+}
+// procura nota de ENTRADA do MESMO fornecedor (CNPJ igual ou nome igual) com o mesmo número/pedido (ignora espaços, pontuação e maiúsculas)
+async function buscarNotasMesmoPedido(numeroNf, cnpj, nome, ignorarId) {
+    const nucleo = normNumeroNf(numeroNf);
+    if (!nucleo) return [];
+    const digitos = (String(numeroNf).match(/\d+/g) || []).sort((a, b) => b.length - a.length)[0];
+    const chave = (digitos && digitos.length >= 3 ? digitos : String(numeroNf).trim()).replace(/[%,()]/g, '');
+    let q = sb.from('estoque_notas').select('id, numero_nf, data_entrada, nome_fornecedor, cnpj_fornecedor, valor_total, tipo')
+        .eq('unidade_negocio_id', meuPerfil.unidadeId).neq('tipo', 'saida').ilike('numero_nf', `%${chave}%`).limit(200);
+    if (ignorarId) q = q.neq('id', ignorarId);
+    const { data, error } = await q;
+    if (error) throw error;
+    const cnpjDig = soDigitosCnpj(cnpj), nomeN = normNome(nome);
+    return (data || []).filter(n => normNumeroNf(n.numero_nf) === nucleo &&
+        ((cnpjDig && soDigitosCnpj(n.cnpj_fornecedor) === cnpjDig) || (nomeN && normNome(n.nome_fornecedor) === nomeN)));
+}
 let notaTipoEmEdicao = 'entrada';
 let itensNotaAtual = [];
 let titulosNotaAtual = [];
@@ -11650,12 +11785,9 @@ async function carregarListaNotasEntrada() {
         // datalist de fornecedores já usados, pra sugestão rápida --
         // também guarda o CNPJ de cada um, pra preencher sozinho quando
         // o nome escolhido bater exatamente com um fornecedor conhecido
-        const nomes = [...new Set((notasBrutas || []).map(n => n.nome_fornecedor).filter(Boolean))];
-        document.getElementById('notaListaFornecedores').innerHTML = nomes.map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
-        fornecedoresConhecidosCnpj = {};
-        (notasBrutas || []).forEach(n => {
-            if (n.nome_fornecedor && n.cnpj_fornecedor) fornecedoresConhecidosCnpj[n.nome_fornecedor] = n.cnpj_fornecedor;
-        });
+        // só ACRESCENTA ao mapa de fornecedores (que vem do cadastro): filtrar a tela de Notas não faz mais a lista/CNPJ lembrados encolherem
+        (notasBrutas || []).filter(n => n.tipo !== 'saida').forEach(n => fornecedoresAdicionar(n.nome_fornecedor, n.cnpj_fornecedor));
+        fornecedoresRenderizarLista();
     } catch (err) {
         console.error(err);
         corpo.innerHTML = '';
@@ -12311,10 +12443,21 @@ function renderizarTitulosNota() {
 // preenche o CNPJ sozinho quando o nome digitado/escolhido bate
 // exatamente com um fornecedor já usado antes em alguma nota
 document.getElementById('notaFornecedorNome').addEventListener('input', (e) => {
-    const cnpjConhecido = fornecedoresConhecidosCnpj[e.target.value];
-    if (cnpjConhecido) {
-        document.getElementById('notaFornecedorCnpj').value = cnpjConhecido;
-    }
+    const f = fornecedoresMapa.get(normNome(e.target.value));
+    if (f && f.cnpj) document.getElementById('notaFornecedorCnpj').value = f.cnpj;
+    fornecedoresMostrarSugestoes();
+});
+// só abre sozinho com o campo vazio (campo já preenchido não reabre ao focar); fecha ao sair, com atraso para o clique na lista funcionar
+document.getElementById('notaFornecedorNome').addEventListener('focus', () => { if (!document.getElementById('notaFornecedorNome').value.trim()) fornecedoresMostrarSugestoes(); });
+document.getElementById('notaFornecedorNome').addEventListener('click', () => { if (!document.getElementById('notaFornecedorNome').value.trim()) fornecedoresMostrarSugestoes(); });
+document.getElementById('notaFornecedorNome').addEventListener('blur', () => setTimeout(() => document.getElementById('notaFornecedorResultados').classList.remove('aberto'), 200));
+document.getElementById('notaFornecedorNome').addEventListener('keydown', (e) => { if (e.key === 'Escape') document.getElementById('notaFornecedorResultados').classList.remove('aberto'); });
+// o contrário: digitou/colou um CNPJ já conhecido e o nome está vazio -> preenche o nome
+document.getElementById('notaFornecedorCnpj').addEventListener('input', (e) => {
+    const dig = soDigitosCnpj(e.target.value), nomeEl = document.getElementById('notaFornecedorNome');
+    if (dig.length < 11 || nomeEl.value.trim()) return;
+    const f = [...fornecedoresMapa.values()].find(x => soDigitosCnpj(x.cnpj) === dig);
+    if (f) nomeEl.value = f.nome;
 });
 
 document.getElementById('btnSalvarCabecalhoNota').addEventListener('click', async () => {
@@ -12345,20 +12488,16 @@ document.getElementById('btnSalvarCabecalhoNota').addEventListener('click', asyn
         // checa quando os dois campos estão preenchidos (casar vazio com
         // vazio não significa nada); ignora a própria nota se já estiver
         // editando uma existente.
-        if (cnpjFornecedor && numeroNf) {
+        // (12/11/2026) agora vale também SEM CNPJ: acha pelo mesmo FORNECEDOR (CNPJ ou nome) + mesmo número/pedido, ignorando espaços, pontuação e maiúsculas
+        // («PEDIDO 655044» = «pedido 655044=»), em qualquer nota de entrada (manual ou XML)
+        if (numeroNf) {
             try {
-                let queryDuplicada = sb.from('estoque_notas')
-                    .select('id, numero_nf, data_entrada, nome_fornecedor')
-                    .eq('unidade_negocio_id', meuPerfil.unidadeId)
-                    .eq('cnpj_fornecedor', cnpjFornecedor)
-                    .eq('numero_nf', numeroNf);
-                if (notaEmEdicaoId) queryDuplicada = queryDuplicada.neq('id', notaEmEdicaoId);
-                const { data: duplicadas, error: eDup } = await queryDuplicada;
-                if (eDup) throw eDup;
-                if (duplicadas && duplicadas.length) {
-                    const d = duplicadas[0];
+                const duplicadas = await buscarNotasMesmoPedido(numeroNf, cnpjFornecedor, nome, notaEmEdicaoId);
+                if (duplicadas.length) {
+                    const linhas = duplicadas.slice(0, 5).map(d => `• #${d.id} — NF/pedido ${d.numero_nf} — ${d.nome_fornecedor || '(sem fornecedor)'} — entrada ${formatarDataBR(d.data_entrada)} — ${formatarMoeda(d.valor_total || 0)}`);
+                    if (duplicadas.length > 5) linhas.push(`… e mais ${duplicadas.length - 5}`);
                     const prosseguir = confirm(
-                        `⚠️ Já existe uma nota gravada dessa unidade com o mesmo CNPJ e número de NF (${numeroNf}) — fornecedor "${d.nome_fornecedor}", entrada em ${formatarDataBR(d.data_entrada)} (#${d.id}).\n\nDeseja salvar mesmo assim?`
+                        `⚠️ Esse pedido já foi lançado para o MESMO fornecedor (${duplicadas.length} nota${duplicadas.length > 1 ? 's' : ''}):\n\n${linhas.join('\n')}\n\nO número ${numeroNf} está sendo lançado de novo. Deseja salvar mesmo assim?`
                     );
                     if (!prosseguir) { statusEl.className = ''; statusEl.textContent = ''; return; }
                 }
