@@ -64,6 +64,12 @@
     .btn-vermelho { background: #b00020; color: #fff; }
     .btn-vermelho:hover { background: #7a0016; }
     .btn-pequeno { padding: 5px 10px; font-size: 0.8em; }
+    /* botões minimalistas sob o selo Entrada/Saída na guia Movimentações (a coluna Ações ficava escondida à direita da tabela larga) */
+    .mov-acoes { margin-top:4px; display:flex; gap:4px; }
+    .btn-mov-mini { padding:1px 7px; font-size:0.72rem; line-height:1.5; border:1px solid #c9ccd1; background:#fff; color:#444; border-radius:4px; cursor:pointer; }
+    .btn-mov-mini:hover { background:#eef2f7; border-color:#90a4ae; }
+    .btn-mov-mini.perigo { color:#b00020; }
+    .btn-mov-mini.perigo:hover { background:#fdecea; border-color:#e0a0a0; }
 
     /* ===== Ajuda do módulo ===== */
     .btn-ajuda-modulo { background:#eef2ff; color:#1565c0; }
@@ -784,7 +790,7 @@
     <div style="max-height:65vh; overflow:auto;">
         <table class="tabela" id="tabelaPainelMov">
             <thead>
-                <tr><th>Data</th><th>Tipo</th><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th>Almoxarifado</th><th class="col-so-avulso" style="display:none;">Status</th><th class="col-so-avulso" style="display:none;">Setor</th><th class="col-so-avulso" style="display:none;">Veículo</th><th>Tag</th><th>Evento</th><th>Projeto</th><th>Fornecedor / NF</th><th>Responsável</th><th>Obs.</th><th>Ações</th></tr>
+                <tr><th>Data</th><th>Tipo</th><th>Produto</th><th class="num">Qtd</th><th class="num">Vlr Unit.</th><th>Almoxarifado</th><th class="col-so-avulso" style="display:none;">Status</th><th class="col-so-avulso" style="display:none;">Setor</th><th class="col-so-avulso" style="display:none;">Veículo</th><th>Tag</th><th>Evento</th><th>Projeto</th><th>Fornecedor / NF</th><th>Responsável</th><th>Obs.</th></tr>
             </thead>
             <tbody id="corpoTabelaPainelMov"></tbody>
         </table>
@@ -2145,6 +2151,29 @@
     </div>
 </div>
 
+<!-- ===================== MODAL / POPUP: Revisar baixa direta (depois de qualquer baixa direta) ===================== -->
+<div class="modal-overlay" id="modalRevisarBaixa" style="z-index:1200;">
+    <div class="modal-caixa larga" style="max-width:1300px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <h4 style="margin:0;">🔎 Revisar baixa direta</h4>
+            <button class="btn btn-cinza btn-pequeno" id="btnFecharRevisarBaixa">✕ Fechar</button>
+        </div>
+        <p class="subtitulo" style="margin-bottom:12px;">Estes são os lançamentos de saída que acabaram de ser criados. Corrija linha a linha o Setor, Subsetor, Veículo, Plano de Contas, Evento, quem solicitou e a Tag — ou preencha a linha azul e clique em "Aplicar" pra copiar só o que você preencheu para todas as linhas. Quantidade, valor e almoxarifado não mudam aqui (o estoque não é alterado). Só é gravado o que você mudou, ao clicar em "Salvar revisão".</p>
+        <div style="overflow-x:auto;">
+            <table class="tabela" style="font-size:0.85em;">
+                <thead>
+                    <tr><th>Produto</th><th class="num">Qtd × Valor</th><th>Setor</th><th>Subsetor</th><th>Veículo</th><th>Plano de Contas</th><th>Evento</th><th>Quem solicitou</th><th>Tag</th><th></th></tr>
+                </thead>
+                <tbody id="corpoRevisarBaixa"></tbody>
+            </table>
+        </div>
+        <div style="margin-top:16px; display:flex; justify-content:space-between; align-items:center; gap:12px;">
+            <span class="status-msg" id="statusRevisarBaixa"></span>
+            <span><button class="btn btn-cinza" id="btnCancelarRevisarBaixa">Deixar como está</button> <button class="btn btn-verde" id="btnSalvarRevisarBaixa">Salvar revisão</button></span>
+        </div>
+    </div>
+</div>
+
 <!-- ===================== MODAL / POPUP: Baixar Itens da Nota ===================== -->
 <div class="modal-overlay" id="modalBaixaItensNota" style="z-index:1100;">
     <div class="modal-caixa larga" style="max-width:1200px;">
@@ -3099,7 +3128,7 @@ async function chamarPost(acao, d) {
     }
     if (acao === 'registrarMovimentacaoBaixaNota') {
         const m = d.movimentacao;
-        const { error: e1 } = await sb.from('estoque_movimentacoes').insert({
+        const { data: baixaInserida, error: e1 } = await sb.from('estoque_movimentacoes').insert({
             data: m.data, produto_id: m.produtoId || null, descricao_avulsa: m.descricaoAvulsa || null, tipo: 'saida', qtd: m.qtd, valor_unit: m.valorUnit,
             responsavel: m.responsavel || '', observacao: m.observacao || '', evento: m.evento || '', tag: m.tag || '',
             fornecedor_nome: 'Almoxarifado',
@@ -3110,7 +3139,7 @@ async function chamarPost(acao, d) {
             almoxarifado: m.almoxarifado || 1,
             almoxarifado_id: m.almoxarifadoId || null,
             unidade_negocio_id: meuPerfil.unidadeId
-        });
+        }).select('id').single();
         if (e1) throw e1;
         // item avulso (sem produto de catálogo) nunca ajusta estoque de
         // produto nenhum -- não existe produto de verdade pra afetar
@@ -3124,7 +3153,7 @@ async function chamarPost(acao, d) {
             if (e2) throw e2;
         }
         await sincronizarRateioPorMovimento({ movimentacao_origem_id: m.movimentacaoOrigemId || null });
-        return;
+        return baixaInserida;   // { id } da saída criada (a revisão da baixa direta usa)
     }
     if (acao === 'salvarTipoProjeto') {
         const nome = String(d.nome || '').trim();
@@ -3815,7 +3844,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
    ============================================================ */
 const AJUDA_ESTOQUE = {
     titulo: 'Estoque — Controle de Estoque & Projetos',
-    ultimaRevisao: '13/11/2026',
+    ultimaRevisao: '16/11/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>O Estoque controla o material físico da unidade (contêiner/esquadria): o que entra
@@ -3931,7 +3960,7 @@ const AJUDA_ESTOQUE = {
             <p><strong>Abrir a nota do lançamento:</strong> o selo <strong>Entrada ↗</strong> / <strong>Saída ↗</strong>
             (sublinhado) abre a nota que originou o movimento — a nota de entrada, ou a requisição de saída — pra você
             alterar. O mesmo vale no popup <strong>ℹ️</strong> do produto (histórico), que reabre sozinho ao fechar a nota.
-            Lançamento sem nota (baixa direta, por exemplo) tem o selo comum, sem o ↗: use <strong>✏️ Editar</strong>.</p>
+            Lançamento sem nota (baixa direta, por exemplo) tem o selo comum, sem o ↗. O botãozinho <strong>✏️ Editar</strong> fica <strong>logo abaixo do selo</strong> (na coluna Tipo, sempre visível, sem precisar rolar a tabela para a direita) e edita <strong>só aquele item</strong>; já o selo ↗ abre a <strong>nota inteira</strong>.</p>
             <p><strong>🏷️ Itens avulsos</strong> — procedimento pra item avulso (sem produto
             cadastrado, entrado por XML ou nota manual):</p>
             <ul>
@@ -4050,6 +4079,16 @@ const AJUDA_ESTOQUE = {
                 da saída somem e ela repete a da entrada). A entrada e a nota continuam com a classificação original;
                 só os movimentos de <strong>saída</strong> usam a da saída. Isso só vale pra Baixa Direta: em "Entrada em
                 Estoque" não há saída, então os campos da saída são ignorados.</li>
+                <li><strong>Revisar a baixa direta</strong>: depois de <strong>qualquer baixa direta</strong> (importação de XML,
+                baixa direta da nota manual, "Baixar itens dessa nota" e "Baixa direta (sem projeto)") o sistema pergunta
+                <strong>"Deseja revisar?"</strong>. Respondendo que sim, abre a janela <strong>🔎 Revisar baixa direta</strong> com as
+                saídas que acabaram de ser criadas, para corrigir linha a linha <strong>Setor, Subsetor, Veículo, Plano de Contas,
+                Evento, quem solicitou (responsável) e Tag</strong>. A linha azul <strong>"Aplicar a todos"</strong> copia para todas as
+                linhas só o que foi preenchido nela. Quantidade, valor e almoxarifado <strong>não mudam</strong> nessa janela (o
+                estoque não é alterado); só é gravado o que foi alterado, e o rateio da baixa da nota é refeito. Responder "não"
+                não perde nada: dá para revisar depois pela própria <strong>nota de entrada</strong> (Notas → ✏️ Abrir → bloco
+                📊 Rateio da nota → botão <strong>🔎 Revisar baixa direta</strong>, que abre as saídas ligadas àquela nota) ou, uma a
+                uma, em Movimentações (✏️ Editar).</li>
                 <li><strong>Subsetor é da saída</strong>: não existe subsetor na entrada. Ele aparece só na hora da
                 <strong>Baixa Direta</strong> (importação de XML e nota manual) e lista os subsetores do <strong>setor da
                 saída</strong> (o setor da saída, ou o da entrada se "usar a mesma classificação" estiver marcado). Trocar o
@@ -4160,7 +4199,7 @@ const AJUDA_ESTOQUE = {
                 (valor real × percentual). Saídas sem setor ou sem plano de contas aparecem em "Sem …" e entram no percentual:
                 corrija na aba Movimentações para o rateio ficar completo. O <strong>Excel</strong> sai no desenho da planilha cruzada
                 (abas <em>base</em>, <em>percentuais</em> e <em>resultado</em>, com fórmulas — trocar o valor real em B1 recalcula) e uma aba
-                <em>saidas</em> com cada lançamento considerado; também há PDF.</li>
+                <em>saidas</em> com cada lançamento considerado; também há PDF.</li>
                 <li><strong>Por Responsável</strong>: lista as saídas em nome de uma pessoa, num
                 período opcional — útil pra fechar conta com terceirizado que retira material do
                 almoxarifado (o valor retirado entra no encontro de contas do serviço prestado).</li>
@@ -5116,7 +5155,8 @@ document.getElementById('btnConfirmarBaixaDireta').addEventListener('click', asy
     statusEl.className = '';
     statusEl.textContent = 'Registrando...';
     try {
-        await chamarPost('registrarMovimentacao', {
+        iniciarColetaBaixas();
+        coletarBaixa(await chamarPost('registrarMovimentacao', {
             movimentacao: {
                 data: document.getElementById('baixaData').value || hojeISO(),
                 produtoId: prod.id,
@@ -5133,7 +5173,7 @@ document.getElementById('btnConfirmarBaixaDireta').addEventListener('click', asy
                 projetoId: null,
                 itemProjetoId: null
             }
-        });
+        }));
         await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
         atualizarTagContagem();
         statusEl.className = 'status-msg sucesso';
@@ -5143,7 +5183,9 @@ document.getElementById('btnConfirmarBaixaDireta').addEventListener('click', asy
             document.getElementById('modalBaixaDireta').classList.remove('aberto');
             statusEl.textContent = '';
         }, 1200);
+        finalizarColetaBaixas();
     } catch (err) {
+        coletaBaixas = null;
         console.error(err);
         statusEl.className = 'status-msg erro';
         statusEl.textContent = '⚠️ ' + err.message;
@@ -5950,6 +5992,7 @@ async function processarImportacaoNFe(tipo) {
         }
 
         iniciarLoteRateio();   // as saídas da baixa direta geram o rateio uma vez só, no fim
+        iniciarColetaBaixas(); // guarda os ids das saídas criadas, para oferecer a revisão no fim
         // 2) itens: cria produto se precisar, e a movimentação já ligada à nota
         //    (com nota(s) de pedido agregada(s) inteira(s), os itens da NF-e são IGNORADOS: o estoque já entrou pelas notas de pedido)
         const totalItensAProcessar = agregarInteiras ? 0 : nfeItensParseados.length;
@@ -5991,7 +6034,7 @@ async function processarImportacaoNFe(tipo) {
                     }
                 });
                 if (tipo === 'saida') {
-                    await chamarPost('registrarMovimentacao', {
+                    coletarBaixa(await chamarPost('registrarMovimentacao', {
                         movimentacao: {
                             data, descricaoAvulsa: descricaoItemAvulso, qtd: item.qtd, valorUnit: item.valorUnit,
                             tipo: 'saida',
@@ -6003,7 +6046,7 @@ async function processarImportacaoNFe(tipo) {
                             estoqueNotaId,
                             ...destinacao
                         }
-                    });
+                    }));
                 }
                 continue;
             }
@@ -6080,7 +6123,7 @@ async function processarImportacaoNFe(tipo) {
                     }
                 });
                 if (tipo === 'saida') {
-                    await chamarPost('registrarMovimentacao', {
+                    coletarBaixa(await chamarPost('registrarMovimentacao', {
                         movimentacao: {
                             data, produtoId, qtd: qtdALancar, valorUnit: item.valorUnit,
                             tipo: 'saida',
@@ -6092,7 +6135,7 @@ async function processarImportacaoNFe(tipo) {
                             estoqueNotaId,
                             ...destinacao
                         }
-                    });
+                    }));
                 }
             }
         }
@@ -6148,7 +6191,9 @@ async function processarImportacaoNFe(tipo) {
         setTimeout(() => {
             document.getElementById('modalImportarNFe').classList.remove('aberto');
         }, 2000);
+        finalizarColetaBaixas();   // baixa direta: pergunta se quer revisar setor/solicitante/plano/evento/tag
     } catch (err) {
+        coletaBaixas = null;
         console.error(err);
         statusEl.className = 'status-msg erro';
         statusEl.textContent = '⚠️ ' + err.message;
@@ -6792,9 +6837,19 @@ async function atualizarInfoRateioNota(notaId) {
                 (incompleta ? '<div style="margin-top:6px; padding:6px 10px; background:#FDECEA; color:#7A1C14; border-radius:6px; font-size:.85rem;">⚠️ Falta Setor, Plano de contas ou Evento em alguma linha — o Financeiro e a DRE precisam dos três. Informe nos itens da nota (✏️ Editar) ou na classificação da nota e salve: o rateio se refaz sozinho.</div>' : '');
         };
         document.getElementById('listaRateioNota').innerHTML = (await montar(opCompra, '🛒 Compra (entrada em estoque)')) + (await montar(opBaixa, '📤 Baixa direta (destinação)')) +
-            ((opBaixa || qtdSaidas) ? `<div style="margin-top:10px;">${qtdSaidas && !opBaixa ? '<p class="subtitulo" style="margin:0 0 6px 0;">Esta nota tem ' + qtdSaidas + ' saída(s) ligada(s) (baixa direta), sem rateio de baixa gerado.</p>' : ''}<button type="button" class="btn btn-vermelho btn-pequeno" id="btnDesfazerBaixaDireta">↩️ Desfazer baixa direta${qtdSaidas ? ' (' + qtdSaidas + ' saída' + (qtdSaidas > 1 ? 's' : '') + ')' : ''}</button> <span class="subtitulo">apaga as saídas ligadas a esta nota e libera a nota para editar/remover</span></div>` : '');
+            ((opBaixa || qtdSaidas) ? `<div style="margin-top:10px;">${qtdSaidas && !opBaixa ? '<p class="subtitulo" style="margin:0 0 6px 0;">Esta nota tem ' + qtdSaidas + ' saída(s) ligada(s) (baixa direta), sem rateio de baixa gerado.</p>' : ''}${qtdSaidas ? '<button type="button" class="btn btn-azul btn-pequeno" id="btnRevisarBaixaNota" title="Corrigir Setor, Plano de Contas, Evento, quem solicitou e Tag das saídas desta nota">🔎 Revisar baixa direta</button> ' : ''}<button type="button" class="btn btn-vermelho btn-pequeno" id="btnDesfazerBaixaDireta">↩️ Desfazer baixa direta${qtdSaidas ? ' (' + qtdSaidas + ' saída' + (qtdSaidas > 1 ? 's' : '') + ')' : ''}</button> <span class="subtitulo">apaga as saídas ligadas a esta nota e libera a nota para editar/remover</span></div>` : '');
         const btnDesfazer = document.getElementById('btnDesfazerBaixaDireta');
         if (btnDesfazer) btnDesfazer.addEventListener('click', () => desfazerBaixaDiretaNota(notaId));
+        const btnRevisar = document.getElementById('btnRevisarBaixaNota');
+        if (btnRevisar) btnRevisar.addEventListener('click', async () => {
+            btnRevisar.disabled = true;
+            try {
+                const saidas = await saidasDaNotaDeEntrada(notaId);
+                if (!saidas.length) { alert('Não há saídas ligadas a esta nota.'); return; }
+                await abrirModalRevisarBaixa(saidas.map(m => m.id));
+            } catch (err) { alert('Erro ao abrir a revisão: ' + (err.message || err)); }
+            finally { btnRevisar.disabled = false; }
+        });
         document.getElementById('tituloRateioNota').textContent = '📊 Rateio da nota';
         bloco.style.display = '';
     } catch (e) { console.warn('Rateio da nota:', e); }
@@ -11038,7 +11093,11 @@ async function buscarPainelMovimentacoes() {
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td>${formatarDataBR(m.data)}</td>
-                <td>${pillTipoMovimentacao(m)}</td>
+                <td style="white-space:nowrap;">${pillTipoMovimentacao(m)}
+                    <div class="mov-acoes">${filtroItensAvulsosAtivo && ehEntrada && !finalizado ? `
+                        <button class="btn-mov-mini" data-destinar-avulso="${m.id}" title="Registra a saída desse item avulso para um destino">📍 Destinar</button>
+                        <button class="btn-mov-mini perigo" data-excluir-pendencia="${m.id}" title="Remove esse item avulso pendente (ainda não foi destinado)">🗑</button>
+                    ` : `<button class="btn-mov-mini" data-editar-mov="${m.id}" title="Editar só este item (para editar a nota inteira, clique no selo acima)">✏️ Editar</button>`}</div></td>
                 <td>${prod ? escapeHtml(prod.nome) : (m.descricaoAvulsa ? escapeHtml(m.descricaoAvulsa) + ' <span class="pill" style="background:#FBEAE8; color:#C0392B; font-size:0.65rem;">avulso</span>' : ('#' + m.produtoId))}</td>
                 <td class="num">${Number(m.qtd).toLocaleString('pt-BR')}</td>
                 <td class="num">${formatarMoeda(m.valorUnit)}</td>
@@ -11050,12 +11109,6 @@ async function buscarPainelMovimentacoes() {
                 <td>${fornecedorInfo}</td>
                 <td>${escapeHtml(m.responsavel) || '-'}</td>
                 <td>${escapeHtml(m.observacao) || '-'}</td>
-                <td class="center">
-                    ${filtroItensAvulsosAtivo && ehEntrada && !finalizado ? `
-                        <button class="btn btn-azul btn-pequeno" data-destinar-avulso="${m.id}">📍 Dar destinação</button>
-                        <button class="btn btn-vermelho btn-pequeno" data-excluir-pendencia="${m.id}" title="Remove esse item avulso pendente (ainda não foi destinado)">🗑 Excluir</button>
-                    ` : `<button class="btn btn-cinza btn-pequeno" data-editar-mov="${m.id}">✏️ Editar</button>`}
-                </td>
             `;
             corpo.appendChild(tr);
         });
@@ -12829,12 +12882,13 @@ document.getElementById('btnRegistrarBaixaDiretaNota').addEventListener('click',
 
         let qtdRegistrada = 0;
         iniciarLoteRateio();
+        iniciarColetaBaixas();
         try {
         for (const item of itensEntrada) {
             const jaBaixado = jaBaixadoPorOrigem[item.id] || 0;
             const disponivel = Number(item.qtd) - jaBaixado;
             if (disponivel <= 0) continue;
-            await chamarPost('registrarMovimentacaoBaixaNota', {
+            coletarBaixa(await chamarPost('registrarMovimentacaoBaixaNota', {
                 movimentacao: {
                     data, produtoId: item.produto_id, descricaoAvulsa: item.descricao_avulsa || null,
                     qtd: disponivel, valorUnit: Number(item.valor_unit),
@@ -12846,12 +12900,13 @@ document.getElementById('btnRegistrarBaixaDiretaNota').addEventListener('click',
                     movimentacaoOrigemId: item.id,
                     observacao: `Baixa direta da nota #${notaEmEdicaoId}`
                 }
-            });
+            }));
             qtdRegistrada++;
         }
         } finally { await encerrarLoteRateio(); }
 
         if (qtdRegistrada === 0) {
+            coletaBaixas = null;
             statusEl.className = 'status-msg erro';
             statusEl.textContent = 'Todos os itens dessa nota já foram baixados anteriormente.';
         } else {
@@ -12860,8 +12915,10 @@ document.getElementById('btnRegistrarBaixaDiretaNota').addEventListener('click',
             await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
             atualizarTagContagem();
             renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+            finalizarColetaBaixas();   // pergunta se quer revisar setor/solicitante/plano/evento/tag
         }
     } catch (err) {
+        coletaBaixas = null;
         statusEl.className = 'status-msg erro';
         statusEl.textContent = '⚠️ ' + err.message;
     } finally {
@@ -13526,7 +13583,11 @@ let cbBaixaAtivo = null;      // { input, linha, tipo, itens, idx }
 function fecharDdBaixaLinha() { ddBaixaLinha.classList.remove('aberto'); ddBaixaLinha.innerHTML = ''; cbBaixaAtivo = null; }
 function linhaDoInputCbBaixa(input) {
     const tr = input.closest('tr');
-    return tr ? itensBaixaAtual.find(l => l.linhaId === Number(tr.dataset.linha)) : null;
+    if (!tr) return null;
+    // a mesma busca por linha serve à grade "Baixar itens da nota" e à janela "Revisar baixa direta"
+    const emRevisao = !!tr.closest('#corpoRevisarBaixa');
+    if (emRevisao && Number(tr.dataset.linha) === 0) return linhaTodosRevisao;   // linha "Aplicar a todos"
+    return (emRevisao ? itensRevisaoAtual : itensBaixaAtual).find(l => l.linhaId === Number(tr.dataset.linha));
 }
 function desenharDdBaixaLinha(termo) {
     const A = cbBaixaAtivo; if (!A) return;
@@ -13572,8 +13633,7 @@ function restaurarCbBaixa(input) {
         input.value = rot; input.title = rot; input.dataset.sujo = '';
     }
 }
-(function ligarBuscasLinhaBaixa() {
-    const corpo = document.getElementById('corpoBaixaItensNota');
+function ligarBuscasLinhaBaixa(corpo) {
     const abrir = (input, termo) => {
         const linha = linhaDoInputCbBaixa(input); if (!linha) return;
         cbBaixaAtivo = { input, linha, tipo: input.dataset.cb, itens: [], idx: -1 };
@@ -13611,13 +13671,143 @@ function restaurarCbBaixa(input) {
         const input = e.target.closest('input.baixa-cb'); if (!input) return;
         setTimeout(() => { if (!cbBaixaAtivo || cbBaixaAtivo.input !== input) restaurarCbBaixa(input); else { fecharDdBaixaLinha(); restaurarCbBaixa(input); } }, 180);
     });
-    ddBaixaLinha.addEventListener('mousedown', (e) => {
-        e.preventDefault();                                   // antes do blur do campo
-        const d = e.target.closest('.item-resultado[data-i]'); if (!d || !cbBaixaAtivo) return;
-        escolherCbBaixa(cbBaixaAtivo.itens[Number(d.dataset.i)]);
+}
+ligarBuscasLinhaBaixa(document.getElementById('corpoBaixaItensNota'));
+ligarBuscasLinhaBaixa(document.getElementById('corpoRevisarBaixa'));
+ddBaixaLinha.addEventListener('mousedown', (e) => {
+    e.preventDefault();                                   // antes do blur do campo
+    const d = e.target.closest('.item-resultado[data-i]'); if (!d || !cbBaixaAtivo) return;
+    escolherCbBaixa(cbBaixaAtivo.itens[Number(d.dataset.i)]);
+});
+window.addEventListener('scroll', (e) => { if (cbBaixaAtivo && !ddBaixaLinha.contains(e.target)) fecharDdBaixaLinha(); }, true);
+
+/* =========================================================================
+   REVISAR BAIXA DIRETA — depois de qualquer baixa direta (saída imediata de compra/nota), pergunta se quer revisar e abre
+   uma janela com os lançamentos de saída que acabaram de ser criados (parecida com "Baixar itens da nota"), para corrigir
+   Setor, Subsetor, Veículo, Plano de Contas, Evento, quem solicitou (responsável) e Tag linha a linha, ou "Aplicar a todos".
+   Não mexe em quantidade, valor nem almoxarifado (não altera estoque); o rateio da baixa da nota é refeito ao salvar.
+   ========================================================================= */
+let itensRevisaoAtual = [];
+let proximoIdLinhaRevisao = 1;
+let coletaBaixas = null;                       // ids das saídas criadas pela baixa em andamento (null = não está coletando)
+function iniciarColetaBaixas() { coletaBaixas = []; }
+function coletarBaixa(resultado) { if (coletaBaixas && resultado && resultado.id != null) coletaBaixas.push(resultado.id); }
+// termina a coleta e, se houve baixa, pergunta se quer revisar (adiado um instante para a tela mostrar o "✅ registrada" antes do confirm)
+function finalizarColetaBaixas() {
+    const ids = coletaBaixas || []; coletaBaixas = null;
+    if (!ids.length) return;
+    setTimeout(() => {
+        if (confirm(`Baixa direta registrada em ${ids.length} lançamento(s).\n\nDeseja revisar agora o Setor, quem solicitou, Plano de Contas, Evento e Tag desses lançamentos?`)) abrirModalRevisarBaixa(ids);
+    }, 350);
+}
+const LINHA_TODOS_REVISAO = 0;
+const linhaTodosRevisao = { linhaId: LINHA_TODOS_REVISAO, setorId: '', subsetorId: '', veiculoId: '', planoContasId: '', evento: '', responsavel: '', tag: '' };
+async function abrirModalRevisarBaixa(ids) {
+    const statusEl = document.getElementById('statusRevisarBaixa'); statusEl.className = ''; statusEl.textContent = '';
+    try {
+        if (!catalogosBaixa.setores || !catalogosBaixa.setores.length || !catalogosBaixa.planoContas) catalogosBaixa = await chamarGet('listarCatalogosBaixa');
+        const { data, error } = await sb.from('estoque_movimentacoes')
+            .select('id,data,produto_id,descricao_avulsa,qtd,valor_unit,setor_id,subsetor_id,equipamento_veiculo_id,plano_contas_id,evento,responsavel,tag')
+            .in('id', ids).order('id');
+        if (error) throw error;
+        if (!data || !data.length) { alert('Não encontrei os lançamentos dessa baixa.'); return; }
+        const s = v => (v == null ? '' : String(v));
+        itensRevisaoAtual = data.map(m => {
+            const prod = produtos.find(p => p.id === m.produto_id);
+            const l = {
+                linhaId: proximoIdLinhaRevisao++, movId: m.id,
+                produtoNome: prod ? prod.nome : (m.descricao_avulsa ? m.descricao_avulsa + ' (avulso)' : '#' + m.produto_id),
+                qtd: Number(m.qtd), valorUnit: Number(m.valor_unit),
+                setorId: s(m.setor_id), subsetorId: s(m.subsetor_id), veiculoId: s(m.equipamento_veiculo_id), planoContasId: s(m.plano_contas_id),
+                evento: s(m.evento), responsavel: s(m.responsavel), tag: s(m.tag)
+            };
+            l.original = { setorId: l.setorId, subsetorId: l.subsetorId, veiculoId: l.veiculoId, planoContasId: l.planoContasId, evento: l.evento, responsavel: l.responsavel, tag: l.tag };
+            return l;
+        });
+        Object.assign(linhaTodosRevisao, { setorId: '', subsetorId: '', veiculoId: '', planoContasId: '', evento: '', responsavel: '', tag: '' });
+        renderGridRevisaoBaixa();
+        document.getElementById('modalRevisarBaixa').classList.add('aberto');
+    } catch (err) {
+        alert('Erro ao abrir a revisão da baixa: ' + (err.message || err));
+    }
+}
+function renderGridRevisaoBaixa() {
+    const corpo = document.getElementById('corpoRevisarBaixa');
+    fecharDdBaixaLinha();
+    const celulas = (l) => `
+            <td>${htmlCbBaixa('setor', l)}</td>
+            <td>${htmlCbBaixa('subsetor', l)}</td>
+            <td>${htmlCbBaixa('veiculo', l)}</td>
+            <td>${htmlCbBaixa('planocontas', l)}</td>
+            <td>${htmlCbBaixa('evento', l)}</td>
+            <td><input type="text" class="rev-resp" style="width:130px; text-transform:uppercase;" value="${escapeHtml(l.responsavel)}" placeholder="-"></td>
+            <td><input type="text" class="rev-tag" style="width:100px;" value="${escapeHtml(l.tag)}" placeholder="-"></td>`;
+    corpo.innerHTML = `
+        <tr data-linha="${LINHA_TODOS_REVISAO}" style="background:#eef6ff;">
+            <td colspan="2"><strong>Aplicar a todos</strong><br><span style="font-size:.85em; color:#555;">só o que você preencher aqui é copiado</span></td>
+            ${celulas(linhaTodosRevisao)}
+            <td class="center"><button type="button" class="btn btn-azul btn-pequeno" id="btnAplicarTodosRevisao">⬇️ Aplicar</button></td>
+        </tr>` + itensRevisaoAtual.map(l => `
+        <tr data-linha="${l.linhaId}">
+            <td>${escapeHtml(l.produtoNome)}</td>
+            <td class="num">${l.qtd} × ${formatarMoeda(l.valorUnit)}</td>
+            ${celulas(l)}
+            <td></td>
+        </tr>`).join('');
+    const alvoDaLinha = (tr) => Number(tr.dataset.linha) === LINHA_TODOS_REVISAO ? linhaTodosRevisao : itensRevisaoAtual.find(x => x.linhaId === Number(tr.dataset.linha));
+    corpo.querySelectorAll('tr').forEach(tr => {
+        const l = alvoDaLinha(tr);
+        tr.querySelector('.rev-resp').addEventListener('input', (e) => { l.responsavel = e.target.value.toUpperCase(); });
+        tr.querySelector('.rev-tag').addEventListener('input', (e) => { l.tag = e.target.value; });
     });
-    window.addEventListener('scroll', (e) => { if (cbBaixaAtivo && !ddBaixaLinha.contains(e.target)) fecharDdBaixaLinha(); }, true);
-})();
+    document.getElementById('btnAplicarTodosRevisao').addEventListener('click', () => {
+        const T = linhaTodosRevisao;
+        itensRevisaoAtual.forEach(l => {
+            ['setorId', 'subsetorId', 'veiculoId', 'planoContasId', 'evento', 'responsavel', 'tag'].forEach(c => { if (T[c] !== '') l[c] = T[c]; });
+            // trocou o setor sem escolher subsetor: o subsetor antigo pode não pertencer ao novo setor
+            if (T.setorId !== '' && T.subsetorId === '' && l.subsetorId !== '') {
+                const sub = (catalogosBaixa.subsetores || []).find(x => String(x.id) === String(l.subsetorId));
+                if (!sub || String(sub.setor_id) !== String(T.setorId)) l.subsetorId = '';
+            }
+        });
+        renderGridRevisaoBaixa();   // a linha "Aplicar a todos" mantém o que foi escolhido (fica em linhaTodosRevisao)
+    });
+}
+// id como o catálogo guarda (número ou texto), a partir do valor da linha
+function idCatalogoRevisao(tipo, l) { const it = itemCbBaixaDaLinha(tipo, l); return it ? it.id : null; }
+['btnFecharRevisarBaixa', 'btnCancelarRevisarBaixa'].forEach(id => document.getElementById(id).addEventListener('click', () => { fecharDdBaixaLinha(); document.getElementById('modalRevisarBaixa').classList.remove('aberto'); }));
+document.getElementById('btnSalvarRevisarBaixa').addEventListener('click', async () => {
+    const statusEl = document.getElementById('statusRevisarBaixa');
+    const alteradas = itensRevisaoAtual.filter(l => Object.keys(l.original).some(c => String(l[c]).trim() !== String(l.original[c]).trim()));
+    if (!alteradas.length) { statusEl.className = 'status-msg sucesso'; statusEl.textContent = 'Nada foi alterado.'; return; }
+    const btn = document.getElementById('btnSalvarRevisarBaixa'); btn.disabled = true;
+    statusEl.className = ''; statusEl.textContent = 'Salvando...';
+    try {
+        iniciarLoteRateio();
+        try {
+            for (const l of alteradas) {
+                await chamarPost('editarMovimentacao', {
+                    movId: l.movId, novaQtd: l.qtd,        // quantidade/valor/almoxarifado ficam como estão (só a classificação muda)
+                    responsavel: l.responsavel.trim().toUpperCase(), tag: l.tag.trim(), evento: l.evento || '',
+                    setorId: idCatalogoRevisao('setor', l), subsetorId: idCatalogoRevisao('subsetor', l),
+                    veiculoId: idCatalogoRevisao('veiculo', l), planoContasId: idCatalogoRevisao('planocontas', l)
+                });
+            }
+        } finally { await encerrarLoteRateio(); }
+        await registrarSentinela('revisao_baixa_direta', `Revisou a classificação de ${alteradas.length} lançamento(s) de baixa direta: ` +
+            alteradas.slice(0, 8).map(l => `#${l.movId} ${l.produtoNome}`).join('; ') + (alteradas.length > 8 ? '…' : ''));
+        statusEl.className = 'status-msg sucesso';
+        statusEl.textContent = `✅ ${alteradas.length} lançamento(s) atualizado(s).`;
+        await Promise.all([carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
+        atualizarTagContagem();
+        if (document.getElementById('modalNotaEntrada').classList.contains('aberto') && notaEmEdicaoId) { try { await carregarItensETitulosDaNota(notaEmEdicaoId); } catch (_) { /* só atualização visual */ } }
+        else if (document.getElementById('aba-movpainel') && document.getElementById('aba-movpainel').classList.contains('ativa')) { try { await buscarPainelMovimentacoes(); } catch (_) { /* só atualização visual */ } }
+        setTimeout(() => { document.getElementById('modalRevisarBaixa').classList.remove('aberto'); }, 900);
+    } catch (err) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = '⚠️ ' + (err.message || err);
+    } finally { btn.disabled = false; }
+});
 
 function renderGridBaixa() {
     const corpo = document.getElementById('corpoBaixaItensNota');
@@ -13733,9 +13923,10 @@ document.getElementById('btnConfirmarBaixaItensNota').addEventListener('click', 
     statusEl.textContent = 'Registrando...';
     try {
         iniciarLoteRateio();
+        iniciarColetaBaixas();
         try {
         for (const linha of linhasValidas) {
-            await chamarPost('registrarMovimentacaoBaixaNota', {
+            coletarBaixa(await chamarPost('registrarMovimentacaoBaixaNota', {
                 movimentacao: {
                     data, produtoId: linha.produtoId, descricaoAvulsa: linha.descricaoAvulsa || null,
                     qtd: Number(linha.qtdABaixar), valorUnit: linha.valorUnit,
@@ -13749,7 +13940,7 @@ document.getElementById('btnConfirmarBaixaItensNota').addEventListener('click', 
                     movimentacaoOrigemId: linha.itemOrigemId,
                     observacao: `Baixa direto da nota #${notaEmEdicaoId}`
                 }
-            });
+            }));
         }
         } finally { await encerrarLoteRateio(); }
         statusEl.className = 'status-msg sucesso';
@@ -13760,7 +13951,9 @@ document.getElementById('btnConfirmarBaixaItensNota').addEventListener('click', 
         setTimeout(() => {
             document.getElementById('modalBaixaItensNota').classList.remove('aberto');
         }, 1200);
+        finalizarColetaBaixas();   // pergunta se quer revisar setor/solicitante/plano/evento/tag
     } catch (err) {
+        coletaBaixas = null;
         statusEl.className = 'status-msg erro';
         statusEl.textContent = '⚠️ ' + err.message;
     } finally {

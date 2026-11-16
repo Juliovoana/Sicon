@@ -468,6 +468,7 @@
             </div>
             <div class="toolbar">
                 <button class="btn btn-principal btn-inline" id="btnNovoCad">+ Novo</button>
+                <button class="btn btn-cinza btn-sm hidden" id="btnNovaAcomodacao" title="Abre o cadastro já como Acomodação, liberada em Reservas, Eventos e Pacotes">+ Nova acomodação</button>
                 <button class="btn btn-cinza btn-sm hidden" id="btnCadPadrao">Criar acomodações padrão (SGL, DBL, TPL, QPL, QTL, SPL)</button>
                 <input type="text" class="busca" id="cadBusca" placeholder="Buscar por nome ou código" style="margin-left:auto;">
             </div>
@@ -554,7 +555,7 @@
                         <div class="linha-form">
                             <div class="campo"><label>Hóspede *</label><input type="text" id="lnHospede"></div>
                             <div class="campo"><label>Acompanhante</label><input type="text" id="lnAcompanhante"></div>
-                            <div class="campo"><label>Acomodação</label><div class="linha-busca"><input type="text" id="lnServico_busca" placeholder="SGL, DBL, TPL..." autocomplete="off"><input type="hidden" id="lnServico"><div class="resultados-busca" id="lnServico_resultados"></div></div></div>
+                            <div class="campo"><label>Acomodação</label><div style="display:flex; gap:6px;"><div class="linha-busca" style="flex:1;"><input type="text" id="lnServico_busca" placeholder="SGL, DBL, TPL..." autocomplete="off"><input type="hidden" id="lnServico"><div class="resultados-busca" id="lnServico_resultados"></div></div><button type="button" class="btn btn-cinza btn-sm" id="btnNovaAcomodacaoLinha" title="Cadastrar nova acomodação">+</button></div></div>
                             <div class="campo"><label>Regime</label><select id="lnRegime"></select></div>
                             <div class="campo"><label>Entrada *</label><input type="date" id="lnDe"></div>
                             <div class="campo"><label>Saída *</label><input type="date" id="lnAte"></div>
@@ -2229,17 +2230,21 @@ function renderizarCadastro() {
         <td style="white-space:nowrap;"><button class="btn btn-cinza btn-sm" data-cad-edit="${r.id}">Editar</button> <button class="btn btn-cinza btn-sm" data-cad-ativo="${r.id}">${r.ativo ? 'Desativar' : 'Ativar'}</button></td></tr>`).join('')
         || `<tr><td colspan="${c.colunas.length + 2}" class="vazio">${todos.length ? 'Nada encontrado.' : 'Nada cadastrado ainda.'}</td></tr>`;
     $('btnCadPadrao').classList.toggle('hidden', !(cadAtual === 'servicos' && !todos.length));
+    $('btnNovaAcomodacao').classList.toggle('hidden', cadAtual !== 'servicos');
 }
 document.querySelectorAll('.sub-aba').forEach(b => b.addEventListener('click', () => { cadAtual = b.dataset.cad; $('cadBusca').value = ''; renderizarCadastro(); }));
 $('cadBusca').addEventListener('input', renderizarCadastro);
-function abrirCadastro(tipo, id, aoSalvar) {
+// padroes (opcional): valores iniciais de um cadastro NOVO (ex.: atalho de acomodação já nasce com tipo Acomodação e liberada nos usos)
+const PADROES_ACOMODACAO = { tipo: 'acomodacao', usa_reservas: true, usa_eventos: true, usa_pacotes: true };
+function abrirCadastro(tipo, id, aoSalvar, padroes) {
     const c = CADASTROS[tipo]; cadAtual = tipo; cadEditandoId = id || null; cadAoSalvar = aoSalvar || null;
     const r = id ? c.lista().find(x => x.id === id) : null;
-    $('cadTitulo').textContent = (id ? 'Editar ' : 'Novo(a) ') + c.rotulo.toLowerCase();
+    const pad = (!r && padroes) ? padroes : {};
+    $('cadTitulo').textContent = (id ? 'Editar ' : 'Novo(a) ') + (pad.tipo === 'acomodacao' ? 'acomodação' : c.rotulo.toLowerCase());
     $('cadCampos').innerHTML = c.campos.map(f => {
         if (f.opcoesFn) return `<div class="campo"><label>${f.rot}</label><select id="cad_${f.id}"><option value="">—</option>${f.opcoesFn().map(o => `<option value="${o.id}" ${r && r[f.id] === o.id ? 'selected' : ''}>${escapeHtml(o.texto)}</option>`).join('')}</select></div>`;
-        if (f.bool) return `<label class="campo-check"><input type="checkbox" id="cad_${f.id}" ${(r ? r[f.id] : f.def) ? 'checked' : ''}> ${f.rot}</label>`;
-        const v = r ? (f.dec ? fmtNum(Number(r[f.id])) : (r[f.id] ?? '')) : (f.id === 'pessoas' ? 1 : f.id === 'ordem' ? (c.lista().length + 1) : '');
+        if (f.bool) return `<label class="campo-check"><input type="checkbox" id="cad_${f.id}" ${(r ? r[f.id] : (f.id in pad ? pad[f.id] : f.def)) ? 'checked' : ''}> ${f.rot}</label>`;
+        const v = r ? (f.dec ? fmtNum(Number(r[f.id])) : (r[f.id] ?? '')) : (f.id in pad ? pad[f.id] : f.id === 'pessoas' ? 1 : f.id === 'ordem' ? (c.lista().length + 1) : '');
         const ctl = f.opcoes ? `<select id="cad_${f.id}">${Object.entries(f.opcoes).map(([k, t]) => `<option value="${k}" ${v === k ? 'selected' : ''}>${t}</option>`).join('')}</select>`
             : f.area ? `<textarea id="cad_${f.id}">${escapeHtml(v)}</textarea>` : `<input type="text" id="cad_${f.id}" ${f.num ? 'inputmode="numeric"' : f.dec ? 'inputmode="decimal"' : ''} ${f.max ? `maxlength="${f.max}"` : ''} value="${escapeHtml(v)}">`;
         return `<div class="campo"><label>${f.rot}</label>${ctl}</div>`;
@@ -2249,6 +2254,9 @@ function abrirCadastro(tipo, id, aoSalvar) {
     const primeiro = $('cadCampos').querySelector('input,select,textarea'); if (primeiro) primeiro.focus();
 }
 $('btnNovoCad').addEventListener('click', () => abrirCadastro(cadAtual, null, null));
+// atalhos de acomodação: já abrem como tipo Acomodação, liberada em Reservas, Eventos e Pacotes
+$('btnNovaAcomodacao').addEventListener('click', () => abrirCadastro('servicos', null, null, PADROES_ACOMODACAO));
+$('btnNovaAcomodacaoLinha').addEventListener('click', () => abrirCadastro('servicos', null, (r) => { $('lnServico').value = r.id; campoServico.mostrar(); aplicarTarifa(); }, PADROES_ACOMODACAO));
 $('btnFecharCad').addEventListener('click', () => $('modal-cad').classList.remove('aberto'));
 $('btnNovaOperadora').addEventListener('click', () => abrirCadastro('operadoras', null, (r) => { $('gOperadora').value = r.id; campoOperadora.mostrar(); }));
 $('btnNovoHotel').addEventListener('click', () => abrirCadastro('hoteis', null, async (r) => { $('gHotel').value = r.id; campoHotel.mostrar(); await carregarTarifasHotel(); }));
@@ -2303,7 +2311,7 @@ $('btnCadPadrao').addEventListener('click', async () => {
 // ---------------------------------------------------------------
 const AJUDA_VIAGENS = {
     titulo: 'Agência de Viagens',
-    ultimaRevisao: '06/11/2026',
+    ultimaRevisao: '16/11/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>Módulo para agências que <strong>reservam hospedagem em hotéis</strong> para grupos de passageiros ou passageiros individuais, vendidos por operadoras.
@@ -2366,7 +2374,7 @@ const AJUDA_VIAGENS = {
             <ul>
                 <li><strong>Código externo</strong> (operadoras, hotéis e grupos): o código do registro no outro sistema. É opcional, tem no máximo 20 caracteres e não pode se repetir dentro da unidade (não diferencia maiúsculas nem espaços). É por ele que as importações e a integração ligam os registros sem duplicar.</li>
                 <li><strong>Operadoras</strong> e <strong>hotéis</strong> podem ser cadastrados também dentro da tela do grupo, pelo botão "+".</li>
-                <li><strong>Serviços</strong>: o catálogo de serviços do sistema antigo (código, nome e onde cada um é usado: <strong>Reservas, Eventos, Pacotes</strong>). Tipo <strong>Acomodação</strong> (SGL, DBL, TPL, QPL, QTL, SPL...) ocupa quarto, aparece no campo "Acomodação" da linha e entra no rooming list; tipo <strong>Serviço</strong> (taxas, café extra, seguro...) é lançado como extra da linha. Só aparecem nas reservas os serviços marcados "Usar em Reservas". O código do sistema antigo fica em "Código externo". Se a lista estiver vazia, "Criar acomodações padrão" cadastra SGL, DBL, TPL, QPL, QTL e SPL.</li>
+                <li><strong>Serviços</strong>: o catálogo de serviços do sistema antigo (código, nome e onde cada um é usado: <strong>Reservas, Eventos, Pacotes</strong>). Tipo <strong>Acomodação</strong> (SGL, DBL, TPL, QPL, QTL, SPL...) ocupa quarto, aparece no campo "Acomodação" da linha e entra no rooming list; tipo <strong>Serviço</strong> (taxas, café extra, seguro...) é lançado como extra da linha. Só aparecem nas reservas os serviços marcados "Usar em Reservas". O código do sistema antigo fica em "Código externo". Se a lista estiver vazia, "Criar acomodações padrão" cadastra SGL, DBL, TPL, QPL, QTL e SPL. <strong>Atalho de acomodação</strong>: o botão "+ Nova acomodação" (em Cadastros → Serviços) e o botão "+" ao lado do campo "Acomodação" da linha abrem o cadastro já como tipo Acomodação e marcado em Reservas, Eventos e Pacotes (dá para desmarcar); pelo "+" da linha, a acomodação criada já fica escolhida na linha.</li>
                 <li>Itens em uso não são apagados, só <strong>desativados</strong>: deixam de aparecer nas buscas, mas continuam nas reservas antigas.</li>
             </ul>
         ` },
