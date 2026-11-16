@@ -837,7 +837,7 @@
         <h3 id="erpDetTitulo"></h3>
         <p class="sub" id="erpDetSub"></p>
         <div class="tabela-scroll"><table class="tabela">
-            <thead><tr><th>Venda</th><th>Baixa</th><th>Loja</th><th>Pedido</th><th>Cliente</th><th class="num">Valor líquido</th><th class="num" title="Itens marcados como oferta (promoção) no ERP: não geram comissão">Em oferta</th><th class="num" title="Soma das notas de devolução registradas para o pedido: reduz a base da comissão">Devolvido</th><th class="num" title="Valor líquido menos a parte em oferta e a parte devolvida: é a base da comissão">Comissionável</th><th class="num col-receb" title="Já recebido do pedido (pagamento no ato e parcelas pagas)">Recebido</th><th class="num col-receb" title="Parcelas ainda não pagas: não geram comissão">A receber</th><th class="num">%</th><th class="num">Comissão</th><th></th></tr></thead>
+            <thead><tr><th>Venda</th><th>Baixa</th><th>Loja</th><th>Pedido</th><th>Cliente</th><th class="num" title="Valor do pedido no ERP, antes do desconto dado no pagamento: por isso pode ser maior que o recebido">Valor bruto</th><th class="num" title="Itens marcados como oferta (promoção) no ERP: não geram comissão">Em oferta</th><th class="num" title="Soma das notas de devolução registradas para o pedido: reduz a base da comissão">Devolvido</th><th class="num" title="Valor bruto menos a parte em oferta e a parte devolvida; no formato por recebimento nunca passa do que o cliente pagou (recebido + a receber). É a base da comissão">Comissionável</th><th class="num col-receb" title="Já recebido do pedido (pagamento no ato e parcelas pagas)">Recebido</th><th class="num col-receb" title="Parcelas ainda não pagas: não geram comissão">A receber</th><th class="num">%</th><th class="num">Comissão</th><th></th></tr></thead>
             <tbody id="erpDetCorpo"></tbody>
         </table></div>
         <div class="acoes-linha" style="margin-top:14px;"><button class="btn btn-cinza" id="erpDetFechar">Fechar</button></div>
@@ -2673,7 +2673,7 @@ async function gerarReciboPdf(reciboId) {
                 const oQue = (i) => i.tipo === 'imediato' ? 'No ato' : 'Parcela ' + (i.parcela || '') + (nParc(i) > 1 ? ' de ' + nParc(i) : '');
                 doc.autoTable({
                     startY: ya + 6, margin: { left: M, right: M }, theme: 'striped',
-                    head: [rec ? ['Pedido', 'Cliente', 'Recebido em', 'O que é', 'Vencimento', 'Recebido', 'Comissionável', '%', 'Comissão'] : ['Pedido', 'Cliente', 'Data', 'Valor líquido', 'Em oferta', 'Comissionável', '%', 'Comissão']],
+                    head: [rec ? ['Pedido', 'Cliente', 'Recebido em', 'O que é', 'Vencimento', 'Recebido', 'Comissionável', '%', 'Comissão'] : ['Pedido', 'Cliente', 'Data', 'Valor bruto', 'Em oferta', 'Comissionável', '%', 'Comissão']],
                     body: itens.map(i => rec
                         ? [i.pedido, i.cliente || '', dt(i.dataRef), oQue(i), i.tipo === 'imediato' ? '-' : dt(i.vcto), m(i.recebido), m(i.base), String(i.pct == null ? '' : i.pct).replace('.', ',') + '%', m(i.comissao)]
                         : [i.pedido, i.cliente || '', dt(i.dataRef), m(i.valorPedido), i.oferta > 0 ? m(i.oferta) : '-', m(i.base), String(i.pct == null ? '' : i.pct).replace('.', ',') + '%', m(i.comissao)])
@@ -3279,7 +3279,7 @@ function erpComissaoPedido(o) {
     }
     return arredondar2(erpBasePedido(o) * erpPctPedido(o) / 100);
 }
-// base da comissão = valor líquido do pedido menos a parte em itens de OFERTA (promoção), na proporção do que NÃO foi devolvido (nota de devolução)
+// base da comissão = valor (BRUTO) do pedido menos a parte em itens de OFERTA (promoção), na proporção do que NÃO foi devolvido (nota de devolução)
 // (16/11/2026) no formato POR RECEBIMENTO o valor do pedido vem BRUTO (antes do desconto dado no pagamento) e o que o cliente pagou (recebido + a receber)
 // já é líquido: o comissionável exibido nunca passa do líquido pago, na mesma proporção (sem oferta, sem devolução). Fora desse formato nada muda.
 function erpBasePedido(o) {
@@ -3292,7 +3292,7 @@ function erpBasePedido(o) {
     return Math.min(bruto, Math.max(arredondar2(pago * prop * fatDev), 0));
 }
 // base de cada RECEBIMENTO (formato por recebimento), igual ao banco (parceiros_base_receb_rc): percorre os recebimentos na ordem (data, id);
-// só conta até o valor líquido do pedido depois das devoluções (teto), na proporção do comissionável; a taxa de cartão não abate.
+// só conta até o valor do pedido depois das devoluções (teto), na proporção do comissionável; a taxa de cartão não abate.
 // Soma em g.abertoBase só o que ainda não foi fechado.
 function erpCalcularBasesReceb(o) {
     const g = o.rec; if (!g) return;
@@ -3768,7 +3768,7 @@ function erpAbrirDevolucao(id) {
     const o = erpDb.find(x => String(x.id) === String(id));
     if (!o) return;
     erpDevId = o.id;
-    $('devSub').textContent = `Pedido ${o.ref} · ${o.loja} · ${o.cli || 'sem cliente'} · valor líquido ${formatarMoeda(o.v)}` + (o.dev > 0 ? ` · já devolvido ${formatarMoeda(o.dev)}` : '');
+    $('devSub').textContent = `Pedido ${o.ref} · ${o.loja} · ${o.cli || 'sem cliente'} · valor bruto ${formatarMoeda(o.v)}` + (o.dev > 0 ? ` · já devolvido ${formatarMoeda(o.dev)}` : '');
     $('devNf').value = ''; $('devValor').value = ''; $('devObs').value = ''; $('devData').value = hojeISO(); devMsg('', '');
     $('modal-devolucao').classList.add('aberto');
     erpDevCarregarLista(o);
@@ -4126,7 +4126,7 @@ function fechTabelaDetalhe(itens, modo) {
         ${rec ? '' : `<td style="font-size:.82rem;">${recebimentosDoPedido(i)}</td>`}</tr>`).join('');
     const cab = rec
         ? '<th>Pedido</th><th>Cliente</th><th>Venda</th><th>O que é</th><th>Vencimento</th><th>Recebido em</th><th class="num">Valor do pedido</th><th class="num">Recebido</th><th class="num" title="Oferta do pedido todo: fica fora da comissão, na proporção">Em oferta</th><th class="num">Comissionável</th><th class="num">%</th><th class="num">Comissão</th>'
-        : '<th>Pedido</th><th>Cliente</th><th>Venda</th><th>Data de referência</th><th class="num">Valor líquido</th><th class="num">Em oferta</th><th class="num">Comissionável</th><th class="num">%</th><th class="num">Comissão</th><th>Como foi / será recebido</th>';
+        : '<th>Pedido</th><th>Cliente</th><th>Venda</th><th>Data de referência</th><th class="num">Valor bruto</th><th class="num">Em oferta</th><th class="num">Comissionável</th><th class="num">%</th><th class="num">Comissão</th><th>Como foi / será recebido</th>';
     const colsAntes = rec ? 6 : 4;
     const rodape = `<tr><td colspan="${colsAntes}"><strong>Total</strong></td>${rec ? `<td></td><td class="num"><strong>${formatarMoeda(tot('recebido'))}</strong></td>` : '<td class="num"><strong>' + formatarMoeda(tot('valorPedido')) + '</strong></td>'}<td></td><td class="num"><strong>${formatarMoeda(tot('base'))}</strong></td><td></td><td class="num"><strong>${formatarMoeda(tot('comissao'))}</strong></td>${rec ? '' : '<td></td>'}</tr>`;
     return `<div class="tabela-scroll"><table class="tabela"><thead><tr>${cab}</tr></thead><tbody>${linhas || `<tr><td colspan="${rec ? 12 : 10}" class="vazio">Nada a mostrar.</td></tr>`}${itens.length ? rodape : ''}</tbody></table></div>`;
@@ -4189,7 +4189,7 @@ $('fechCorpo').addEventListener('click', (e) => {
 
 const AJUDA_PARCEIROS = {
     titulo: 'Parceiros Comerciais',
-    ultimaRevisao: '10/11/2026',
+    ultimaRevisao: '16/11/2026',
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>Módulo pra lojas (de material de construção, por exemplo) que recebem profissionais
@@ -4305,9 +4305,9 @@ const AJUDA_PARCEIROS = {
                 <li>A data de referência e as regras <strong>"só pedidos baixados"</strong> e <strong>"ignorar compra do próprio indicador"</strong> ficam salvas na unidade e valem
                 também para a página do parceiro e o Dashboard — mudar aqui muda para todos. Enquanto o pedido está <strong>em aberto</strong>, a comissão é <strong>calculada</strong>
                 (valor × % de acordo do pedido, ou o % atual do parceiro) e <strong>ainda não está no saldo</strong>: ela só vai para o saldo/extrato no <strong>Fechamento ERP</strong>. Se a loja também lançou na mão a mesma venda, ela conta duas vezes.</li>
-                <li><strong>Produtos em oferta (promoção) não geram comissão</strong>: o ERP marca a linha como oferta, e o app mostra por pedido o <em>Em oferta</em> e o <em>Comissionável</em> (valor líquido menos a oferta). A comissão é % × <strong>comissionável</strong>.
+                <li><strong>Produtos em oferta (promoção) não geram comissão</strong>: o ERP marca a linha como oferta, e o app mostra por pedido o <em>Em oferta</em> e o <em>Comissionável</em> (valor bruto menos a oferta; no formato por recebimento, limitado ao que o cliente pagou). A comissão é % × <strong>comissionável</strong>.
                 Pedido só com oferta tem comissão zero.</li>
-                <li><strong>Valor do pedido = valor líquido dos produtos</strong>: soma dos itens <strong>com o desconto de cada linha (produto)</strong> descontado, menos o desconto do pedido, se houver.
+                <li><strong>Valor do pedido = valor BRUTO dos produtos</strong> (antes do desconto dado no pagamento, por isso pode ser maior que o recebido): soma dos itens <strong>com o desconto de cada linha (produto)</strong> descontado, menos o desconto do pedido, se houver.
                 <strong>Frete, taxa de entrega e despesas acessórias não entram.</strong> Isso é definido na consulta do coletor; pedidos já gravados passam a usar o novo valor na próxima coleta
                 (pedido já fechado só muda o crédito com <em>Refazer cálculo</em>).</li>
                 <li><strong>Comissão por RECEBIMENTO</strong> (escolha em <em>Parâmetros</em>): em vez do pedido inteiro, só o que foi <strong>recebido</strong> gera comissão. O coletor importa, de cada pedido, o <strong>pagamento no ato</strong> (venda à vista, na data da baixa) e cada <strong>parcela</strong> do financeiro do ERP (só conta quando está baixada; valor recebido = valor − descontos, e a <strong>taxa de cartão não abate</strong>). Cada recebimento entra na proporção do que <strong>não é oferta</strong> do pedido. No detalhe do parceiro aparecem as colunas <em>Recebido</em> e <em>A receber</em>.</li>
