@@ -225,6 +225,31 @@
   .barra-linha .valores{ font-size:.82rem; text-align:right; font-variant-numeric:tabular-nums; }
   .barra-linha .valores small{ display:block; color:var(--muted); font-size:.74rem; }
   @media (max-width:720px){ .barra-linha{ grid-template-columns:1fr; gap:4px; } .barra-linha .valores{ text-align:left; } }
+
+  /* ---- Extrato de contas ---- */
+  .ext-chip{ background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:6px 12px; font-size:.78rem; cursor:pointer; font-family:inherit; color:var(--muted); }
+  .ext-chip:hover{ border-color:var(--brand-2); color:var(--brand-2); }
+  .ext-chip[disabled]{ opacity:.5; cursor:not-allowed; }
+  .ext-tabela-wrap{ overflow-x:auto; border:1px solid var(--border); border-radius:12px; background:var(--surface); }
+  .ext-tabela{ width:100%; border-collapse:collapse; font-size:.82rem; }
+  .ext-tabela th{ text-align:left; padding:10px 12px; font-weight:600; color:var(--muted); background:var(--bg); border-bottom:1px solid var(--border); position:sticky; top:0; white-space:nowrap; }
+  .ext-tabela td{ padding:9px 12px; border-bottom:1px solid var(--border); vertical-align:top; }
+  .ext-tabela tfoot td{ background:var(--bg); border-bottom:none; font-weight:600; }
+  .ext-tabela tr.ext-linha:hover{ background:var(--brand-soft); cursor:pointer; }
+  .ext-tabela .num, .ext-tabela th.num{ text-align:right; font-family:'JetBrains Mono', monospace; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .ext-neg{ color:var(--danger); }
+  .ext-tabs{ display:flex; gap:6px; margin:6px 0 16px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
+  .ext-tab{ background:none; border:none; padding:10px 14px; font-size:.85rem; font-family:inherit; cursor:pointer; color:var(--muted); border-bottom:2px solid transparent; margin-bottom:-1px; }
+  .ext-tab.ativo{ color:var(--brand); border-bottom-color:var(--brand); font-weight:600; }
+  .ext-selo{ font-size:.7rem; background:var(--brand-soft); color:var(--brand-2); border-radius:10px; padding:2px 8px; margin-left:8px; font-weight:600; }
+  .ext-cod{ font-size:.72rem; color:var(--muted-2); margin-left:8px; }
+  .ext-nota{ font-size:.78rem; color:var(--muted); margin-top:10px; }
+  .ext-cab{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:16px; }
+  .ext-cab h2{ font-size:1.1rem; flex:1; min-width:200px; }
+  .ext-rodape{ display:flex; align-items:center; gap:12px; margin-top:10px; font-size:.8rem; color:var(--muted); }
+  .ext-graf{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px; margin-bottom:16px; }
+  .ext-graf h3{ font-size:.9rem; margin-bottom:10px; }
+  .ext-canvas{ position:relative; height:280px; }
 </style>
 <script>
 /* Aviso padrão quando o banco recusa a ação por falta de permissão (RLS) */
@@ -366,6 +391,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
           <span class="nav-label">Movimentação de Contas</span>
         </button>
+        <button class="nav-item tab-app-btn" data-app-tab="extrato">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
+          <span class="nav-label">Extrato de contas</span>
+        </button>
         <button class="nav-item tab-app-btn" data-app-tab="cadastros">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>
           <span class="nav-label">Cadastros</span>
@@ -492,6 +521,13 @@
               </div>
               <div id="statusFiltroAvancado" style="font-size:.78rem; color:var(--muted); margin-top:8px;"></div>
             </div>
+            <div id="barraResumoTitulos" style="display:flex; gap:10px 22px; flex-wrap:wrap; align-items:center; background:var(--brand-soft); border:1px solid var(--border); border-radius:10px; padding:10px 14px; margin-bottom:14px; font-size:.82rem; color:var(--muted);">
+              <span><strong class="mono" id="topoQtdTitulos" style="color:var(--ink);">0</strong> título(s)</span>
+              <span id="topoTotais"></span>
+              <span id="topoMarcadosWrap" style="display:none;">Marcados (<strong class="mono" id="topoQtdMarcados" style="color:var(--ink);">0</strong>): <strong class="mono" id="topoValorMarcados" style="color:var(--brand-2);">R$ 0,00</strong></span>
+              <span style="flex:1;"></span>
+              <button id="btnListaPagamentos" type="button" title="Gera a lista (por conta, com caixa de PAGO) seguindo exatamente os filtros atuais" style="background:var(--brand); color:#fff; border:none; border-radius:8px; padding:7px 14px; font-size:.78rem; font-weight:600; cursor:pointer; font-family:inherit;">📋 Lista de pagamentos (PDF)</button>
+            </div>
             <div class="lista-cadastro" id="listaTitulos"></div>
             <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin-top:18px; padding-top:14px; border-top:1px solid var(--border); font-size:.8rem; color:var(--muted);">
               <span><strong class="mono" id="resumoQtdTitulos" style="color:var(--ink);">0</strong> título(s) encontrado(s)</span>
@@ -521,6 +557,23 @@
               <span style="flex:1;"></span>
               <button id="btnGerarPdfLivroCaixa" style="background:none; border:1px solid var(--border); color:var(--muted); border-radius:8px; padding:6px 12px; font-size:.78rem; cursor:pointer; font-family:inherit;">📄 Gerar relatório (livro caixa)</button>
             </div>
+          </div>
+
+          <!-- ================= EXTRATO DE CONTAS ================= -->
+          <div class="panel-app" id="app-panel-extrato">
+            <div class="filtros">
+              <label style="font-size:.8rem; color:var(--muted); display:flex; align-items:center; gap:4px;">De <input type="date" id="extDe" style="padding:8px;"></label>
+              <label style="font-size:.8rem; color:var(--muted); display:flex; align-items:center; gap:4px;">Até <input type="date" id="extAte" style="padding:8px;"></label>
+              <button class="ext-chip" data-ext-atalho="mes">Mês</button>
+              <button class="ext-chip" data-ext-atalho="mes_ant">Mês anterior</button>
+              <button class="ext-chip" data-ext-atalho="ano">Ano</button>
+              <button class="ext-chip" data-ext-atalho="tudo">Tudo</button>
+              <label id="extLabelPassagem" style="font-size:.8rem; color:var(--muted); display:none; align-items:center; gap:5px; cursor:pointer;"><input type="checkbox" id="extMostrarPassagem"> Mostrar contas que não acompanham saldo (<span id="extQtdPassagem">0</span>)</label>
+              <span style="flex:1;"></span>
+              <button class="ext-chip" id="extPdf">📄 PDF</button>
+              <button class="ext-chip" id="extExcel">⬇ Excel</button>
+            </div>
+            <div id="extConteudo"><div class="vazio">Abra a aba para carregar.</div></div>
           </div>
 
           <!-- ================= CADASTROS ================= -->
@@ -688,6 +741,10 @@
             </div>
             <button type="button" class="btn-add-inline" id="btnCriarPessoaRapido" title="Cadastrar nova pessoa">+</button>
           </div>
+        </div>
+        <div class="field-group" id="blocoEmpresaRapida">
+          <label>Empresa <span style="font-weight:400; color:var(--muted); font-size:.78rem;">(vale para todas as linhas do rateio — para dividir entre empresas, use o rateio abaixo)</span></label>
+          <select id="t_empresa_rapida"></select>
         </div>
         <div class="field-group" id="blocoToggleParcelamento">
           <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600;">
@@ -1267,7 +1324,7 @@
   // =================================================================
   // TABS DO APP
   // =================================================================
-  const titulosAba = { dashboard: 'Dashboard', titulos: 'Títulos', movimentacao: 'Movimentação de Contas', cadastros: 'Cadastros', parametros: 'Parâmetros' };
+  const titulosAba = { dashboard: 'Dashboard', titulos: 'Títulos', movimentacao: 'Movimentação de Contas', extrato: 'Extrato de contas', cadastros: 'Cadastros', parametros: 'Parâmetros' };
   document.querySelectorAll('.tab-app-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tab-app-btn').forEach(b => b.classList.remove('active'));
@@ -1275,9 +1332,325 @@
       btn.classList.add('active');
       document.getElementById('app-panel-' + btn.dataset.appTab).classList.add('active');
       if(btn.dataset.appTab === 'dashboard') renderizarDashboardFinanceiro();
+      if(btn.dataset.appTab === 'extrato') iniciarExtrato();
+      if(btn.dataset.appTab === 'movimentacao') abrirAbaMovimentacao();
       document.getElementById('tituloConteudo').textContent = titulosAba[btn.dataset.appTab] || '';
     });
   });
+
+  // =================================================================
+  // EXTRATO DE CONTAS -- visão por conta (saldo anterior, entradas, saídas, saldo atual), dia a dia, extrato
+  // detalhado com saldo corrido (e a versão conciliada com plano de contas/evento/setor do rateio) e gráficos.
+  // Tudo calculado NO BANCO (financeiro-extrato.sql: financeiro_extrato_resumo / _diario / _conta), porque uma
+  // conta pode ter dezenas de milhares de lançamentos e a API devolve no máximo 10.000 linhas por consulta.
+  // Conta que NÃO acompanha saldo (PIX, cartões, carteira... = contas de passagem) = financeiro_contas_correntes.acompanha_saldo = false;
+  // some da lista do extrato até marcar "Mostrar contas que não acompanham saldo". Editável em Cadastros → Contas Correntes.
+  // =================================================================
+  const extFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+  const extNum = v => extFmt.format(Number(v) || 0);
+  const extClasseValor = v => Number(v) < -0.004 ? 'ext-neg' : '';
+  const EXT_PAGINA = 500;
+  const extEstado = { iniciado: false, de: '', ate: '', fimDados: '', resumo: [], contaId: null, aba: 'dia', dias: [], linhas: [], total: 0, busca: '', diaFiltro: null, grafLib: null, carregando: false };
+  function extLerPref(){ try { return localStorage.getItem('fin_extrato_passagem_v1') === '1'; } catch(e){ return false; } }
+  function extGravarPref(v){ try { localStorage.setItem('fin_extrato_passagem_v1', v ? '1' : '0'); } catch(e){ /* sem localStorage */ } }
+  function extMsg(html){ document.getElementById('extConteudo').innerHTML = '<div class="vazio">' + html + '</div>'; }
+  function extDataISO(d){ return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+  function extConta(id){ return todasContas.find(c => c.id === id) || null; }
+  function extNomeConta(id){ const c = extConta(id); return c ? c.nome : ('Conta #' + id); }
+  function extEhPassagem(id){ const c = extConta(id); return !!(c && c.acompanha_saldo === false); }   // true aqui = conta que NÃO acompanha saldo
+
+  async function iniciarExtrato(){
+    if(!extEstado.iniciado){
+      extEstado.iniciado = true;
+      document.getElementById('extMostrarPassagem').checked = extLerPref();
+      // período padrão = o mês do último lançamento (a unidade pode ter dados antigos, só do legado)
+      let ultimo = null;
+      try{
+        const { data } = await sb.from('financeiro_movimentacao_contas').select('data').eq('unidade_negocio_id', agenciaId).order('data', { ascending: false }).limit(1);
+        if(data && data.length) ultimo = data[0].data;
+      } catch(e){ /* usa hoje */ }
+      const fim = ultimo ? new Date(ultimo + 'T00:00:00') : new Date();
+      extEstado.fimDados = extDataISO(fim);
+      document.getElementById('extDe').value = extDataISO(new Date(fim.getFullYear(), fim.getMonth(), 1));
+      document.getElementById('extAte').value = extEstado.fimDados;
+    }
+    await extRecarregar();
+  }
+
+  async function extRecarregar(){
+    extEstado.de = document.getElementById('extDe').value;
+    extEstado.ate = document.getElementById('extAte').value;
+    extMsg('Carregando...');
+    const { data, error } = await sb.rpc('financeiro_extrato_resumo', { p_unidade: agenciaId, p_de: extEstado.de || null, p_ate: extEstado.ate || null });
+    if(error){
+      const faltaSql = /financeiro_extrato_resumo|function|schema cache/i.test(error.message || '');
+      extMsg(faltaSql ? 'O extrato ainda não está instalado neste banco. Rode o arquivo <strong>financeiro-extrato.sql</strong> no Supabase e atualize a página.' : 'Não consegui carregar o extrato: ' + escapeHtml(error.message));
+      return;
+    }
+    extEstado.resumo = data || [];
+    if(extEstado.contaId) await extAbrirConta(extEstado.contaId, true); else extRenderLista();
+  }
+
+  function extAtalho(nome){
+    const fim = extEstado.fimDados ? new Date(extEstado.fimDados + 'T00:00:00') : new Date();
+    let de = '', ate = extDataISO(fim);
+    if(nome === 'mes') de = extDataISO(new Date(fim.getFullYear(), fim.getMonth(), 1));
+    else if(nome === 'mes_ant'){ de = extDataISO(new Date(fim.getFullYear(), fim.getMonth() - 1, 1)); ate = extDataISO(new Date(fim.getFullYear(), fim.getMonth(), 0)); }
+    else if(nome === 'ano') de = extDataISO(new Date(fim.getFullYear(), 0, 1));
+    document.getElementById('extDe').value = de; document.getElementById('extAte').value = ate;
+    extEstado.diaFiltro = null;
+    extRecarregar();
+  }
+
+  // ---------------- lista de contas ----------------
+  function extContasVisiveis(){
+    const mostrar = document.getElementById('extMostrarPassagem').checked;
+    // junta as contas cadastradas (ativas) com as que têm lançamento no período (mesmo inativas)
+    const porId = new Map(extEstado.resumo.map(r => [r.id_conta, r]));
+    const ids = new Set([...todasContas.map(c => c.id), ...extEstado.resumo.map(r => r.id_conta)]);
+    const linhas = [...ids].map(id => {
+      const r = porId.get(id) || { id_conta: id, saldo_anterior: 0, entradas: 0, saidas: 0, qtd: 0, saldo_atual: 0 };
+      return { ...r, nome: extNomeConta(id), codigo: (extConta(id) || {}).codigo, passagem: extEhPassagem(id) };
+    });
+    const qtdPassagem = linhas.filter(l => l.passagem && (Number(l.qtd) || Number(l.saldo_atual))).length;
+    document.getElementById('extQtdPassagem').textContent = qtdPassagem;
+    document.getElementById('extLabelPassagem').style.display = linhas.some(l => l.passagem) ? '' : 'none';
+    return linhas
+      .filter(l => (mostrar || !l.passagem) && (Number(l.qtd) || Number(l.saldo_anterior) || Number(l.saldo_atual)))   // esconde conta sem nenhum movimento nem saldo
+      .sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+  }
+
+  function extRenderLista(){
+    extEstado.contaId = null;
+    const linhas = extContasVisiveis();
+    if(!linhas.length){ extMsg('Nenhuma conta com movimento neste período.'); return; }
+    const soma = k => linhas.reduce((a, l) => a + (Number(l[k]) || 0), 0);
+    document.getElementById('extConteudo').innerHTML = `
+      <div class="ext-tabela-wrap"><table class="ext-tabela">
+        <thead><tr><th>Conta</th><th class="num">Saldo anterior</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Saldo atual</th><th class="num">Lançamentos</th></tr></thead>
+        <tbody>${linhas.map(l => `
+          <tr class="ext-linha" data-ext-conta="${l.id_conta}">
+            <td><strong>${escapeHtml(l.nome)}</strong>${l.passagem ? '<span class="ext-selo">não acompanha saldo</span>' : ''}${l.codigo != null ? `<span class="ext-cod">cód. ${l.codigo}</span>` : ''}</td>
+            <td class="num ${extClasseValor(l.saldo_anterior)}">${extNum(l.saldo_anterior)}</td>
+            <td class="num">${extNum(l.entradas)}</td>
+            <td class="num">${extNum(l.saidas)}</td>
+            <td class="num ${extClasseValor(l.saldo_atual)}"><strong>${extNum(l.saldo_atual)}</strong></td>
+            <td class="num">${Number(l.qtd).toLocaleString('pt-BR')}</td>
+          </tr>`).join('')}</tbody>
+        <tfoot><tr>
+          <td><strong>Total (${linhas.length} conta${linhas.length > 1 ? 's' : ''})</strong></td>
+          <td class="num">${extNum(soma('saldo_anterior'))}</td><td class="num">${extNum(soma('entradas'))}</td><td class="num">${extNum(soma('saidas'))}</td>
+          <td class="num"><strong>${extNum(soma('saldo_atual'))}</strong></td><td class="num">${soma('qtd').toLocaleString('pt-BR')}</td></tr></tfoot>
+      </table></div>
+      <p class="ext-nota">Clique numa conta para ver o dia a dia, o extrato detalhado e os gráficos. Transferências entre contas da própria unidade aparecem como saída de uma e entrada de outra.</p>`;
+    document.querySelectorAll('[data-ext-conta]').forEach(tr => tr.addEventListener('click', () => { extEstado.aba = 'dia'; extEstado.busca = ''; extEstado.diaFiltro = null; extAbrirConta(Number(tr.dataset.extConta)); }));
+  }
+
+  // ---------------- uma conta ----------------
+  async function extAbrirConta(id, manterAba){
+    extEstado.contaId = id;
+    if(!manterAba){ extEstado.aba = extEstado.aba || 'dia'; }
+    const r = extEstado.resumo.find(x => x.id_conta === id) || { saldo_anterior: 0, entradas: 0, saidas: 0, qtd: 0, saldo_atual: 0 };
+    const c = extConta(id);
+    const podeMarcar = !!c && Object.prototype.hasOwnProperty.call(c, 'acompanha_saldo');
+    document.getElementById('extConteudo').innerHTML = `
+      <div class="ext-cab">
+        <button class="ext-chip" id="extVoltar">← Contas</button>
+        <h2>${escapeHtml(extNomeConta(id))}${extEhPassagem(id) ? '<span class="ext-selo">não acompanha saldo</span>' : ''}</h2>
+        ${podeMarcar ? `<button class="ext-chip" id="extTogglePassagem" title="Conta que não acompanha saldo some da lista do extrato (PIX, cartões, carteira...)">${extEhPassagem(id) ? 'Voltar a acompanhar o saldo' : 'Deixar de acompanhar o saldo'}</button>` : ''}
+      </div>
+      <div class="stat-cards">
+        <div class="stat-card"><span class="label">Saldo anterior</span><span class="value ${extClasseValor(r.saldo_anterior)}">${extNum(r.saldo_anterior)}</span></div>
+        <div class="stat-card"><span class="label">Entradas</span><span class="value">${extNum(r.entradas)}</span></div>
+        <div class="stat-card"><span class="label">Saídas</span><span class="value">${extNum(r.saidas)}</span></div>
+        <div class="stat-card"><span class="label">Saldo atual</span><span class="value ${extClasseValor(r.saldo_atual)}">${extNum(r.saldo_atual)}</span></div>
+      </div>
+      <div class="ext-tabs">
+        ${[['dia', 'Dia a dia'], ['det', 'Detalhado'], ['conc', 'Detalhado conciliado'], ['graf', 'Gráficos']].map(([k, t]) => `<button class="ext-tab ${extEstado.aba === k ? 'ativo' : ''}" data-ext-aba="${k}">${t}</button>`).join('')}
+      </div>
+      <div id="extCorpo"></div>`;
+    document.getElementById('extVoltar').addEventListener('click', () => { extEstado.contaId = null; extRenderLista(); });
+    const bt = document.getElementById('extTogglePassagem');
+    if(bt) bt.addEventListener('click', () => extAlternarPassagem(id));
+    document.querySelectorAll('[data-ext-aba]').forEach(b => b.addEventListener('click', () => { extEstado.aba = b.dataset.extAba; extEstado.diaFiltro = null; extAbrirConta(id, true); }));
+    await extRenderAba();
+  }
+
+  async function extAlternarPassagem(id){
+    const c = extConta(id); if(!c) return;
+    const novo = c.acompanha_saldo === false;   // true = passa a acompanhar o saldo
+    const { error } = await sb.from('financeiro_contas_correntes').update({ acompanha_saldo: novo }).eq('id', id);
+    if(error){ alert('Não consegui alterar: ' + error.message); return; }
+    c.acompanha_saldo = novo;
+    await registrarSentinela('financeiro_conta_acompanha_saldo', `Conta "${c.nome}" ${novo ? 'voltou a acompanhar o saldo (aparece no extrato)' : 'deixou de acompanhar o saldo (some da lista do extrato)'}`);
+    await extAbrirConta(id, true);
+  }
+
+  async function extRenderAba(){
+    const corpo = document.getElementById('extCorpo'); if(!corpo) return;
+    if(extEstado.aba === 'dia' || extEstado.aba === 'graf'){
+      corpo.innerHTML = '<div class="vazio">Carregando...</div>';
+      const { data, error } = await sb.rpc('financeiro_extrato_diario', { p_unidade: agenciaId, p_conta: extEstado.contaId, p_de: extEstado.de || null, p_ate: extEstado.ate || null });
+      if(error){ corpo.innerHTML = '<div class="vazio">Não consegui carregar: ' + escapeHtml(error.message) + '</div>'; return; }
+      extEstado.dias = data || [];
+      if(extEstado.aba === 'dia') extRenderDia(corpo); else await extRenderGraficos(corpo);
+    } else {
+      extEstado.linhas = []; extEstado.total = 0;
+      corpo.innerHTML = `
+        <div class="filtros"><input type="text" id="extBusca" placeholder="Buscar por histórico ou pessoa..." value="${escapeHtml(extEstado.busca)}" style="min-width:260px;">
+          ${extEstado.diaFiltro ? `<span class="ext-selo">Somente ${formatarData(extEstado.diaFiltro)} <a href="#" id="extLimparDia">(ver o período todo)</a></span>` : ''}</div>
+        <div id="extTabelaDet"></div>`;
+      let t = null;
+      document.getElementById('extBusca').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { extEstado.busca = e.target.value.trim(); extCarregarLinhas(true); }, 400); });
+      const lim = document.getElementById('extLimparDia'); if(lim) lim.addEventListener('click', e => { e.preventDefault(); extEstado.diaFiltro = null; extRenderAba(); });
+      await extCarregarLinhas(true);
+    }
+  }
+
+  function extRenderDia(corpo){
+    const dias = extEstado.dias;
+    if(!dias.length){ corpo.innerHTML = '<div class="vazio">Nenhum lançamento nesta conta no período.</div>'; return; }
+    const te = dias.reduce((a, d) => a + Number(d.entradas), 0), ts = dias.reduce((a, d) => a + Number(d.saidas), 0);
+    corpo.innerHTML = `<div class="ext-tabela-wrap"><table class="ext-tabela">
+      <thead><tr><th>Dia</th><th class="num">Lançamentos</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Saldo no fim do dia</th></tr></thead>
+      <tbody>${dias.map(d => `<tr class="ext-linha" data-ext-dia="${d.dia}"><td>${formatarData(d.dia)}</td><td class="num">${d.qtd}</td><td class="num">${Number(d.entradas) ? extNum(d.entradas) : ''}</td><td class="num">${Number(d.saidas) ? extNum(d.saidas) : ''}</td><td class="num ${extClasseValor(d.saldo_fim)}">${extNum(d.saldo_fim)}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td><strong>${dias.length} dia${dias.length > 1 ? 's' : ''} com lançamento</strong></td><td class="num">${dias.reduce((a, d) => a + Number(d.qtd), 0).toLocaleString('pt-BR')}</td><td class="num">${extNum(te)}</td><td class="num">${extNum(ts)}</td><td></td></tr></tfoot>
+    </table></div><p class="ext-nota">Clique num dia para ver os lançamentos dele.</p>`;
+    corpo.querySelectorAll('[data-ext-dia]').forEach(tr => tr.addEventListener('click', () => { extEstado.diaFiltro = tr.dataset.extDia; extEstado.aba = 'det'; extAbrirConta(extEstado.contaId, true); }));
+  }
+
+  async function extBuscarLinhas(de, ate, busca, limite, desloc){
+    return sb.rpc('financeiro_extrato_conta', { p_unidade: agenciaId, p_conta: extEstado.contaId, p_de: de || null, p_ate: ate || null, p_busca: busca || null, p_limite: limite, p_deslocamento: desloc });
+  }
+  async function extCarregarLinhas(reiniciar){
+    const alvo = document.getElementById('extTabelaDet'); if(!alvo) return;
+    if(reiniciar){ extEstado.linhas = []; extEstado.total = 0; alvo.innerHTML = '<div class="vazio">Carregando...</div>'; }
+    const de = extEstado.diaFiltro || extEstado.de, ate = extEstado.diaFiltro || extEstado.ate;
+    const { data, error } = await extBuscarLinhas(de, ate, extEstado.busca, EXT_PAGINA, extEstado.linhas.length);
+    if(error){ alert('Não consegui carregar o extrato: ' + error.message); return; }
+    extEstado.linhas = extEstado.linhas.concat(data || []);
+    extEstado.total = data && data.length ? Number(data[0].total_linhas) : (extEstado.linhas.length ? extEstado.total : 0);
+    extRenderLinhas(alvo);
+  }
+  function extRenderLinhas(alvo){
+    const conc = extEstado.aba === 'conc', L = extEstado.linhas;
+    if(!L.length){ alvo.innerHTML = '<div class="vazio">Nenhum lançamento encontrado.</div>'; return; }
+    alvo.innerHTML = `<div class="ext-tabela-wrap" style="max-height:70vh; overflow:auto;"><table class="ext-tabela">
+      <thead><tr><th>Data</th><th>Histórico</th><th>Pessoa</th>${conc ? '<th>Plano de contas</th><th>Evento</th><th>Setor</th>' : ''}<th class="num">Entrada</th><th class="num">Saída</th><th class="num">Saldo</th></tr></thead>
+      <tbody>${L.map(l => `<tr><td style="white-space:nowrap;">${formatarData(l.data)}</td><td>${escapeHtml(l.historico || '')}</td><td>${escapeHtml(l.pessoa || '')}</td>${conc ? `<td>${escapeHtml(l.plano || '')}</td><td>${escapeHtml(l.evento || '')}</td><td>${escapeHtml(l.setor || '')}</td>` : ''}<td class="num">${l.entrada != null ? extNum(l.entrada) : ''}</td><td class="num">${l.saida != null ? extNum(l.saida) : ''}</td><td class="num ${extClasseValor(l.saldo)}">${extNum(l.saldo)}</td></tr>`).join('')}</tbody>
+    </table></div>
+    <div class="ext-rodape">Mostrando ${L.length.toLocaleString('pt-BR')} de ${extEstado.total.toLocaleString('pt-BR')} lançamento${extEstado.total > 1 ? 's' : ''}
+      ${L.length < extEstado.total ? '<button class="ext-chip" id="extMais">Carregar mais ' + Math.min(EXT_PAGINA, extEstado.total - L.length) + '</button>' : ''}</div>`;
+    const m = document.getElementById('extMais'); if(m) m.addEventListener('click', () => extCarregarLinhas(false));
+  }
+
+  // ---------------- gráficos ----------------
+  async function extRenderGraficos(corpo){
+    const dias = extEstado.dias;
+    if(!dias.length){ corpo.innerHTML = '<div class="vazio">Nenhum lançamento nesta conta no período.</div>'; return; }
+    corpo.innerHTML = '<div class="ext-graf"><h3>Saldo no fim do dia</h3><div class="ext-canvas"><canvas id="extGrafSaldo"></canvas></div></div><div class="ext-graf"><h3>Entradas × saídas por mês</h3><div class="ext-canvas"><canvas id="extGrafMes"></canvas></div></div>';
+    try{
+      if(!window.Chart) await carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js');
+    } catch(e){ corpo.innerHTML = '<div class="vazio">Não consegui carregar a biblioteca de gráficos (internet?).</div>'; return; }
+    const meses = {};
+    dias.forEach(d => { const k = String(d.dia).slice(0, 7); meses[k] = meses[k] || { e: 0, s: 0 }; meses[k].e += Number(d.entradas); meses[k].s += Number(d.saidas); });
+    const ks = Object.keys(meses).sort();
+    new Chart(document.getElementById('extGrafSaldo'), { type: 'line',
+      data: { labels: dias.map(d => formatarData(d.dia)), datasets: [{ label: 'Saldo', data: dias.map(d => Number(d.saldo_fim)), borderColor: '#2D6A4F', backgroundColor: 'rgba(45,106,79,.12)', fill: true, pointRadius: dias.length > 120 ? 0 : 2, tension: .15 }] },
+      options: { maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => extNum(c.parsed.y) } } }, scales: { y: { ticks: { callback: v => extNum(v) } }, x: { ticks: { maxTicksLimit: 10 } } } } });
+    new Chart(document.getElementById('extGrafMes'), { type: 'bar',
+      data: { labels: ks.map(k => k.slice(5) + '/' + k.slice(0, 4)), datasets: [{ label: 'Entradas', data: ks.map(k => meses[k].e), backgroundColor: '#2D6A4F' }, { label: 'Saídas', data: ks.map(k => meses[k].s), backgroundColor: '#C0392B' }] },
+      options: { maintainAspectRatio: false, plugins: { tooltip: { callbacks: { label: c => c.dataset.label + ': ' + extNum(c.parsed.y) } } }, scales: { y: { ticks: { callback: v => extNum(v) } } } } });
+  }
+
+  // ---------------- exportar (Excel e PDF) ----------------
+  async function extTodasLinhas(){
+    const de = extEstado.diaFiltro || extEstado.de, ate = extEstado.diaFiltro || extEstado.ate;
+    let tudo = [];
+    for(;;){
+      const { data, error } = await extBuscarLinhas(de, ate, extEstado.busca, 1000, tudo.length);
+      if(error) throw new Error(error.message);
+      if(!data || !data.length) break;
+      tudo = tudo.concat(data);
+      if(tudo.length >= Number(data[0].total_linhas)) break;
+    }
+    return tudo;
+  }
+  let extLibXlsx = null;
+  async function extPrepararXlsx(){ if(window.XLSX) return; await carregarScriptExterno('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'); }
+  function extPeriodoTexto(){ return (extEstado.de ? formatarData(extEstado.de) : 'início') + ' a ' + (extEstado.ate ? formatarData(extEstado.ate) : 'hoje'); }
+
+  async function extExportarExcel(){
+    const btn = document.getElementById('extExcel'); btn.disabled = true; const rot = btn.textContent; btn.textContent = 'Gerando...';
+    try{
+      await extPrepararXlsx(); const X = window.XLSX; const wb = X.utils.book_new();
+      const add = (nome, dados, largs) => { const ws = X.utils.json_to_sheet(dados.length ? dados : [{ Aviso: 'Sem dados' }]); if(largs) ws['!cols'] = largs.map(w => ({ wch: w })); X.utils.book_append_sheet(wb, ws, nome); };
+      let nomeArq;
+      if(!extEstado.contaId){
+        add('Contas', extContasVisiveis().map(l => ({ Código: l.codigo ?? '', Conta: l.nome, 'Acompanha saldo': l.passagem ? 'Não' : 'Sim', 'Saldo anterior': Number(l.saldo_anterior), Entradas: Number(l.entradas), Saídas: Number(l.saidas), 'Saldo atual': Number(l.saldo_atual), Lançamentos: Number(l.qtd) })), [8, 34, 10, 16, 16, 16, 16, 12]);
+        nomeArq = 'extrato_contas';
+      } else {
+        const { data: dias, error: eD } = await sb.rpc('financeiro_extrato_diario', { p_unidade: agenciaId, p_conta: extEstado.contaId, p_de: extEstado.de || null, p_ate: extEstado.ate || null });
+        if(eD) throw new Error(eD.message);
+        const linhas = await extTodasLinhas();
+        add('Dia a dia', (dias || []).map(d => ({ Dia: formatarData(d.dia), Lançamentos: Number(d.qtd), Entradas: Number(d.entradas), Saídas: Number(d.saidas), 'Saldo no fim do dia': Number(d.saldo_fim) })), [12, 12, 16, 16, 20]);
+        add('Lançamentos', linhas.map(l => ({ Data: formatarData(l.data), Histórico: l.historico || '', Pessoa: l.pessoa || '', 'Plano de contas': l.plano || '', Evento: l.evento || '', Setor: l.setor || '', Entrada: l.entrada != null ? Number(l.entrada) : '', Saída: l.saida != null ? Number(l.saida) : '', Saldo: Number(l.saldo) })), [12, 50, 30, 34, 12, 20, 14, 14, 16]);
+        nomeArq = 'extrato_' + extNomeConta(extEstado.contaId).replace(/[^\w]+/g, '_').toLowerCase();
+      }
+      X.writeFile(wb, nomeArq + '_' + (extEstado.ate || extDataISO(new Date())) + '.xlsx');
+    } catch(e){ alert('Não consegui gerar o Excel: ' + e.message); }
+    finally { btn.disabled = false; btn.textContent = rot; }
+  }
+
+  async function extExportarPdf(){
+    const btn = document.getElementById('extPdf'); btn.disabled = true; const rot = btn.textContent; btn.textContent = 'Gerando...';
+    try{
+      await carregarJsPdf();
+      const { jsPDF } = window.jspdf;
+      const porConta = !!extEstado.contaId;
+      const doc = new jsPDF({ orientation: 'landscape' });
+      const titulo = porConta ? `Extrato — ${extNomeConta(extEstado.contaId)} (${extPeriodoTexto()})` : `Extrato das contas (${extPeriodoTexto()})`;
+      let y = await montarCabecalhoPdf(doc, titulo);
+      const estilo = { styles: { fontSize: 8, cellPadding: 1.6 }, headStyles: { fillColor: [27, 67, 50] }, margin: { left: 14, right: 14 } };
+      let nomeArq;
+      if(!porConta){
+        const ls = extContasVisiveis();
+        doc.autoTable({ ...estilo, startY: y, head: [['Conta', 'Saldo anterior', 'Entradas', 'Saídas', 'Saldo atual', 'Lançamentos']],
+          body: ls.map(l => [l.nome + (l.passagem ? ' (não acompanha saldo)' : ''), extNum(l.saldo_anterior), extNum(l.entradas), extNum(l.saidas), extNum(l.saldo_atual), String(l.qtd)]),
+          foot: [['Total', extNum(ls.reduce((a, l) => a + Number(l.saldo_anterior), 0)), extNum(ls.reduce((a, l) => a + Number(l.entradas), 0)), extNum(ls.reduce((a, l) => a + Number(l.saidas), 0)), extNum(ls.reduce((a, l) => a + Number(l.saldo_atual), 0)), String(ls.reduce((a, l) => a + Number(l.qtd), 0))]],
+          footStyles: { fillColor: [234, 242, 238], textColor: 0 }, columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } } });
+        nomeArq = 'extrato_contas';
+      } else if(extEstado.aba === 'dia' || extEstado.aba === 'graf'){
+        const { data: dias, error } = await sb.rpc('financeiro_extrato_diario', { p_unidade: agenciaId, p_conta: extEstado.contaId, p_de: extEstado.de || null, p_ate: extEstado.ate || null });
+        if(error) throw new Error(error.message);
+        doc.autoTable({ ...estilo, startY: y, head: [['Dia', 'Lançamentos', 'Entradas', 'Saídas', 'Saldo no fim do dia']],
+          body: (dias || []).map(d => [formatarData(d.dia), String(d.qtd), Number(d.entradas) ? extNum(d.entradas) : '', Number(d.saidas) ? extNum(d.saidas) : '', extNum(d.saldo_fim)]),
+          columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } } });
+        nomeArq = 'extrato_dia_a_dia';
+      } else {
+        const conc = extEstado.aba === 'conc';
+        if(extEstado.total > 3000 && !confirm(`O extrato tem ${extEstado.total.toLocaleString('pt-BR')} lançamentos; o PDF pode demorar e ficar grande. Continuar? (Para planilhas grandes, prefira o Excel.)`)) return;
+        const linhas = await extTodasLinhas();
+        const cab = ['Data', 'Histórico', 'Pessoa'].concat(conc ? ['Plano de contas', 'Evento'] : []).concat(['Entrada', 'Saída', 'Saldo']);
+        const n = cab.length;
+        const cs = {}; for(let i = n - 3; i < n; i++) cs[i] = { halign: 'right' };
+        doc.autoTable({ ...estilo, startY: y, head: [cab], columnStyles: cs,
+          body: linhas.map(l => [formatarData(l.data), (l.historico || '').slice(0, 90), (l.pessoa || '').slice(0, 30)].concat(conc ? [(l.plano || '').slice(0, 40), (l.evento || '')] : []).concat([l.entrada != null ? extNum(l.entrada) : '', l.saida != null ? extNum(l.saida) : '', extNum(l.saldo)])) });
+        nomeArq = conc ? 'extrato_conciliado' : 'extrato_detalhado';
+      }
+      const total = doc.getNumberOfPages();
+      for(let i = 1; i <= total; i++){ doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text(`Página ${i} de ${total}`, doc.internal.pageSize.getWidth() - 14, doc.internal.pageSize.getHeight() - 6, { align: 'right' }); }
+      mostrarPopupAcoesPdf('Extrato de contas', doc.output('blob'), nomeArq + '_' + (extEstado.ate || extDataISO(new Date())) + '.pdf');
+    } catch(e){ alert('Não consegui gerar o PDF: ' + e.message); }
+    finally { btn.disabled = false; btn.textContent = rot; }
+  }
+
+  document.querySelectorAll('[data-ext-atalho]').forEach(b => b.addEventListener('click', () => extAtalho(b.dataset.extAtalho)));
+  document.getElementById('extDe').addEventListener('change', () => { extEstado.diaFiltro = null; extRecarregar(); });
+  document.getElementById('extAte').addEventListener('change', () => { extEstado.diaFiltro = null; extRecarregar(); });
+  document.getElementById('extMostrarPassagem').addEventListener('change', e => { extGravarPref(e.target.checked); if(!extEstado.contaId) extRenderLista(); });
+  document.getElementById('extPdf').addEventListener('click', extExportarPdf);
+  document.getElementById('extExcel').addEventListener('click', extExportarExcel);
 
   // =================================================================
   // AJUDA DO MÓDULO -- conteúdo educativo pro operador (não é
@@ -1291,7 +1664,7 @@
   // =================================================================
   const AJUDA_FINANCEIRO = {
     titulo: 'Financeiro — Títulos, Contas e Rateio',
-    ultimaRevisao: '01/10/2026',
+    ultimaRevisao: '17/11/2026',
     secoes: [
       { id: 'dashboard', titulo: 'Dashboard', corpo: `
         <p>Visão geral do contas a pagar e a receber da unidade, no mesmo estilo do painel do
@@ -1350,6 +1723,15 @@
           Evento) e <strong>se combina</strong> com os outros filtros — diferente do Código da Operação.</li>
           <li><strong>Relatório PDF</strong> sai com Pagar e Receber em <strong>seções separadas</strong>,
           cada uma agrupada por conta → status, com subtotal e contagem em cada nível.</li>
+          <li><strong>Empresa</strong>: aparece em cada linha da lista (🏢) e no topo do título, onde dá para trocá-la — a escolha vale para <strong>todas as linhas
+          do rateio</strong> (completa só os campos vazios com o padrão da empresa). Para dividir um título entre empresas, use as linhas do rateio; nesse caso a lista
+          mostra "VÁRIAS EMPRESAS" e o campo do topo fica em "Várias empresas".</li>
+          <li><strong>Totais no topo</strong>: logo acima da lista aparecem a quantidade e a <strong>soma do que está filtrado</strong>
+          (a pagar e/ou a receber, conforme o filtro de tipo). Ao <strong>marcar</strong> títulos aparece também a soma dos marcados.</li>
+          <li><strong>📋 Lista de pagamentos (PDF)</strong>: no estilo da lista do Access — um bloco por <strong>conta pagadora</strong>, com Empresa,
+          vencimento, fornecedor, título, valor e uma <strong>caixa PAGO</strong> para marcar à mão (título já pago sai com ✓), "ITENS n" e subtotal
+          por conta e total geral. Segue exatamente os filtros da tela (tipo, em aberto/pagos, datas, busca, operação, filtro avançado) e abre o popup
+          Visualizar/Baixar/Compartilhar, para enviar o PDF.</li>
         </ul>
       ` },
       { id: 'movimentacao', titulo: 'Movimentação de Contas', corpo: `
@@ -1361,6 +1743,25 @@
           — selecione a conta no filtro pra ela aparecer.</li>
           <li><strong>Gerar relatório (livro caixa)</strong> sai em PDF com os mesmos totais da barra de
           saldo.</li>
+        </ul>
+      ` },
+      { id: 'extrato', titulo: 'Extrato de contas', corpo: `
+        <p>Visão por conta corrente, calculada no banco (aguenta dezenas de milhares de lançamentos). Escolha o
+        período em <strong>De / Até</strong> (ou os atalhos Mês, Mês anterior, Ano e Tudo — o padrão é o mês do último lançamento).</p>
+        <ul>
+          <li><strong>Lista de contas</strong>: saldo anterior (tudo antes da data inicial), entradas, saídas, saldo atual e nº de lançamentos de cada conta,
+          com o total no rodapé. Entrada = crédito; saída = débito. Transferência entre contas da própria unidade aparece como saída de uma e entrada da outra.</li>
+          <li><strong>Acompanha saldo</strong>: toda conta corrente tem esse campo (Cadastros → Contas Correntes, padrão <strong>Sim</strong>). Conta marcada <strong>Não</strong>
+          (PIX, cartões de crédito, carteira — contas de passagem) fica <strong>fora do extrato</strong>; marque "Mostrar contas que não acompanham saldo" para vê-las. Dentro de uma conta,
+          o botão <strong>Deixar de acompanhar o saldo</strong> / <strong>Voltar a acompanhar o saldo</strong> faz o mesmo sem sair do extrato (precisa da coluna criada por <code>financeiro-extrato.sql</code>).</li>
+          <li>Clique numa conta: <strong>Dia a dia</strong> (resumo por dia, com o saldo no fim do dia; clique num dia para ver os lançamentos dele),
+          <strong>Detalhado</strong> (data, histórico, pessoa, entrada, saída e <strong>saldo corrido</strong>, com busca por histórico/pessoa),
+          <strong>Detalhado conciliado</strong> (acrescenta plano de contas, evento e setor do rateio) e <strong>Gráficos</strong> (evolução do saldo e entradas × saídas por mês).</li>
+          <li>O saldo corrido é sempre calculado sobre <strong>todos</strong> os lançamentos do período; a busca só filtra o que aparece.</li>
+          <li><strong>PDF</strong> (Visualizar/Baixar/Compartilhar) e <strong>Excel</strong> seguem o que está na tela: sem conta aberta = lista de contas; com conta = o dia a dia ou o detalhado.
+          O PDF de extratos muito grandes pede confirmação — para milhares de linhas prefira o Excel.</li>
+          <li>A lista da aba <strong>Movimentação de Contas</strong> só é carregada quando você abre a aba (o app abre mais rápido), os filtros (conta, datas, busca) são aplicados no servidor e ela mostra os
+          <strong>500 lançamentos mais recentes</strong> do filtro, com o total dito no aviso; a barra de saldo vem do banco e o PDF do livro caixa traz todos os lançamentos do filtro. Para o histórico inteiro use este extrato.</li>
         </ul>
       ` },
       { id: 'cadastros', titulo: 'Cadastros', corpo: `
@@ -1610,12 +2011,79 @@
   // -----------------------------------------------------------------
   // TÍTULOS
   // -----------------------------------------------------------------
+  // A API devolve no máximo 10.000 linhas por consulta: lista grande (ex.: legado importado) precisa vir em páginas.
+  // Busca 3 páginas de 5.000 AO MESMO TEMPO; depois de cada lote continua exatamente de onde parou (tudo.length), para a
+  // lista nunca ficar com buraco mesmo que o servidor devolva menos que o pedido; termina quando uma página vem vazia.
+  async function buscarTodasLinhas(montarConsulta){
+    const TAM = 5000, PARALELO = 3;
+    let tudo = [];
+    for(;;){
+      const inicio = tudo.length;
+      const respostas = await Promise.all(Array.from({ length: PARALELO }, (_, k) => montarConsulta().range(inicio + k * TAM, inicio + (k + 1) * TAM - 1)));
+      for(const r of respostas) if(r.error) return { data: null, error: r.error };
+      let acabou = false;
+      for(const r of respostas){
+        const n = (r.data || []).length;
+        if(!n){ acabou = true; break; }
+        tudo = tudo.concat(r.data);
+        if(n < TAM) break;               // página incompleta: ignora as seguintes deste lote e recomeça daqui (evita buraco)
+      }
+      if(acabou) break;
+    }
+    return { data: tudo, error: null };
+  }
+  // empresa(s) de um título = empresas das linhas do rateio da operação (vem junto na carga dos títulos)
+  function empresasDoTitulo(t){
+    const linhas = (t.unidade_operacao && t.unidade_operacao.unidade_rateios) || [];
+    return [...new Set(linhas.map(l => l.empresa_id).filter(x => x != null))];
+  }
+  function rotuloEmpresaTitulo(t){
+    const ids = empresasDoTitulo(t);
+    if(!ids.length) return '';
+    if(ids.length > 1) return 'VÁRIAS EMPRESAS';
+    const e = todasEmpresas.find(x => x.id === ids[0]);
+    return e ? e.nome : 'Empresa #' + ids[0];
+  }
+  // Abertura rápida: a tela carrega SÓ os títulos em aberto (poucos) e traz os já pagos em segundo plano (são milhares no legado);
+  // quem precisa dos pagos (filtro "pagos/ambos", código da operação, lançamento de baixa) espera esse carregamento terminar.
+  const SELECT_TITULOS = '*, pessoa(codigo, nome), unidade_operacao(codigo, unidade_rateios(empresa_id))';
+  let titulosPagosCache = null, promessaTitulosPagos = null, titulosAbertosAtuais = [];
+  function montarTodosTitulos(){
+    const idsAbertos = new Set(titulosAbertosAtuais.map(t => t.id));
+    todosTitulos = titulosAbertosAtuais.concat((titulosPagosCache || []).filter(t => !idsAbertos.has(t.id)));
+  }
+  function invalidarTitulosPagos(){ titulosPagosCache = null; promessaTitulosPagos = null; }
+  function garantirTitulosPagos(){
+    if(titulosPagosCache) return Promise.resolve();
+    if(!promessaTitulosPagos){
+      promessaTitulosPagos = (async () => {
+        const { data, error } = await buscarTodasLinhas(() => sb.from('financeiro_titulos').select(SELECT_TITULOS).eq('unidade_negocio_id', agenciaId).not('data_pagamento', 'is', null).order('id', { ascending: true }));
+        if(error){ console.error(error.message); promessaTitulosPagos = null; return; }
+        titulosPagosCache = data || [];
+        montarTodosTitulos();
+        renderizarListaTitulos();
+      })();
+    }
+    return promessaTitulosPagos;
+  }
   async function carregarTitulos(){
-    const { data, error } = await sb.from('financeiro_titulos').select('*, pessoa(codigo, nome), unidade_operacao(codigo)').eq('unidade_negocio_id', agenciaId).order('data_vencimento', { ascending: true });
+    const { data, error } = await buscarTodasLinhas(() => sb.from('financeiro_titulos').select(SELECT_TITULOS).eq('unidade_negocio_id', agenciaId).is('data_pagamento', null).order('data_vencimento', { ascending: true }).order('id', { ascending: true }));
     if(error){ console.error(error.message); return; }
-    todosTitulos = data || [];
+    titulosAbertosAtuais = data || [];
+    if(titulosPagosCache){
+      // baixas recentes (desta sessão ou de outro usuário) entram já, sem recarregar todos os pagos
+      const desde = new Date(Date.now() - 3 * 86400000).toISOString();
+      const { data: recentes } = await sb.from('financeiro_titulos').select(SELECT_TITULOS).eq('unidade_negocio_id', agenciaId).not('data_pagamento', 'is', null).gte('atualizado_em', desde).limit(3000);
+      if(recentes && recentes.length){
+        const porId = new Map(titulosPagosCache.map(t => [t.id, t]));
+        recentes.forEach(t => porId.set(t.id, t));
+        titulosPagosCache = Array.from(porId.values());
+      }
+    }
+    montarTodosTitulos();
     renderizarListaTitulos();
     renderizarDashboardFinanceiro();
+    if(!titulosPagosCache) garantirTitulosPagos();    // em segundo plano (sem await)
   }
 
   // -----------------------------------------------------------------
@@ -1776,12 +2244,18 @@
     if(ativo) document.getElementById('painelFiltroAvancado').style.display = 'none';
   }
   function renderizarListaTitulos(){
+    if(!titulosPagosCache && (document.getElementById('filtroStatusPagamento').value !== 'aberto' || document.getElementById('filtroCodigoOperacao').value.trim())){
+      document.getElementById('listaTitulos').innerHTML = '<div class="vazio">Carregando os títulos já pagos...</div>';
+      garantirTitulosPagos().then(() => renderizarListaTitulos());
+      return;
+    }
     const filtrados = obterTitulosFiltrados();
     document.getElementById('resumoQtdTitulos').textContent = filtrados.length;
     const totalPagar = filtrados.filter(t => t.tipo_movimento === 'PAGAR').reduce((acc, t) => acc + Number(t.valor_titulo), 0);
     const totalReceber = filtrados.filter(t => t.tipo_movimento === 'RECEBER').reduce((acc, t) => acc + Number(t.valor_titulo), 0);
     document.getElementById('resumoTotalPagar').textContent = formatarMoeda(totalPagar);
     document.getElementById('resumoTotalReceber').textContent = formatarMoeda(totalReceber);
+    atualizarBarraTopoTitulos(filtrados.length, totalPagar, totalReceber);
     const lista = document.getElementById('listaTitulos');
     if(!filtrados.length){ lista.innerHTML = '<div class="vazio">Nenhum título encontrado.</div>'; return; }
     lista.innerHTML = filtrados.map(t => `
@@ -1790,7 +2264,7 @@
         <div class="cadastro-thumb">${t.codigo ?? '—'}</div>
         <div class="cadastro-info" data-abrir-titulo="${t.id}" style="cursor:pointer;">
           <div class="principal">${escapeHtml(t.titulo || t.pessoa?.nome || 'Sem título')} <span class="pill pill-${t.tipo_movimento.toLowerCase()}">${t.tipo_movimento === 'PAGAR' ? 'Pagar' : 'Receber'}</span>${t.data_pagamento ? `<span class="pill pill-pago">${t.tipo_movimento === 'PAGAR' ? 'Paga' : 'Recebida'}</span>` : ''}</div>
-          <div class="meta">${escapeHtml(t.pessoa?.nome || (t.descricao_avulsa ? '0 — ' + t.descricao_avulsa : '—'))} · Vence ${formatarData(t.data_vencimento)}${t.data_pagamento ? ' · Pago em ' + formatarData(t.data_pagamento) : ''}</div>
+          <div class="meta">${escapeHtml(t.pessoa?.nome || (t.descricao_avulsa ? '0 — ' + t.descricao_avulsa : '—'))} · Vence ${formatarData(t.data_vencimento)}${t.data_pagamento ? ' · Pago em ' + formatarData(t.data_pagamento) : ''}${rotuloEmpresaTitulo(t) ? ` <span class="pill" style="background:var(--brand-soft); color:var(--brand-2); margin-left:6px;" title="Empresa do rateio">🏢 ${escapeHtml(rotuloEmpresaTitulo(t))}</span>` : ''}</div>
           ${(t.documento_fiscal || t.observacao) ? `<div class="meta" style="font-size:.72rem; opacity:.85;">${t.documento_fiscal ? 'Doc. fiscal: ' + escapeHtml(t.documento_fiscal) : ''}${t.documento_fiscal && t.observacao ? ' · ' : ''}${t.observacao ? escapeHtml(t.observacao) : ''}</div>` : ''}
         </div>
         <div class="cadastro-valor" data-abrir-titulo="${t.id}" style="cursor:pointer;"><div class="valor mono">${formatarMoeda(t.valor_titulo)}</div></div>
@@ -1811,6 +2285,23 @@
     const qtd = document.querySelectorAll('[data-checkbox-titulo]:checked').length;
     document.getElementById('btnBaixarLote').style.display = qtd > 0 ? 'inline-block' : 'none';
     document.getElementById('qtdSelecionadosLote').textContent = qtd;
+    // soma dos títulos marcados (útil para conferir o que vai ser baixado em lote)
+    const marcados = Array.from(document.querySelectorAll('[data-checkbox-titulo]:checked')).map(c => Number(c.dataset.checkboxTitulo));
+    const soma = todosTitulos.filter(t => marcados.includes(t.id)).reduce((acc, t) => acc + Number(t.valor_titulo), 0);
+    document.getElementById('topoMarcadosWrap').style.display = qtd > 0 ? 'inline' : 'none';
+    document.getElementById('topoQtdMarcados').textContent = qtd;
+    document.getElementById('topoValorMarcados').textContent = formatarMoedaMilhar(soma);
+  }
+  // R$ com separador de milhar (os totais ficam grandes); o formatarMoeda antigo é mantido nas listas por compatibilidade
+  function formatarMoedaMilhar(v){ return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+  function atualizarBarraTopoTitulos(qtd, totalPagar, totalReceber){
+    document.getElementById('topoQtdTitulos').textContent = Number(qtd).toLocaleString('pt-BR');
+    const tipo = document.getElementById('filtroTipoTitulo').value;
+    const caixa = (rot, v, cor) => `${rot}: <strong class="mono" style="color:${cor}; font-size:1rem;">${formatarMoedaMilhar(v)}</strong>`;
+    document.getElementById('topoTotais').innerHTML =
+      tipo === 'PAGAR' ? caixa('Total a pagar', totalPagar, 'var(--danger)') :
+      tipo === 'RECEBER' ? caixa('Total a receber', totalReceber, 'var(--brand-2)') :
+      caixa('A pagar', totalPagar, 'var(--danger)') + ' &nbsp;·&nbsp; ' + caixa('A receber', totalReceber, 'var(--brand-2)');
   }
   document.getElementById('filtroBuscaTitulo').addEventListener('input', renderizarListaTitulos);
   document.getElementById('filtroTipoTitulo').addEventListener('change', renderizarListaTitulos);
@@ -2293,7 +2784,7 @@
         const { data: op } = await sb.from('unidade_operacao').select('*').eq('id', t.operacao_id).single();
         if(op){ document.getElementById('t_origem').value = op.origem; document.getElementById('t_id_origem').value = op.id_registro_na_origem || ''; }
         const { data: linhas } = await sb.from('unidade_rateios').select('*').eq('operacao_id', t.operacao_id);
-        rateioInicial = linhas || [];
+        rateioInicial = await enriquecerLinhasRateio(linhas || []);
       }
       if(t.lote_baixa_id){
         const { data: outrosDoLote } = await sb.from('financeiro_titulos').select('id').eq('lote_baixa_id', t.lote_baixa_id);
@@ -2323,6 +2814,7 @@
       rateioInicial = await montarRateioInicialComPadrao();
     }
     renderizarCaixaRateio('t_caixa_rateio', rateioInicial, () => parseFloat(document.getElementById('t_valor').value) || 0);
+    popularEmpresaRapida(); sincronizarEmpresaRapida();
     ligarNavegacaoEnter(document.getElementById('modalTitulo'));
     ligarAvisoDiaUtil(document.getElementById('t_vencimento'), document.getElementById('avisoDiaUtilTitulo'));
     document.getElementById('modalTitulo').classList.add('show');
@@ -2336,6 +2828,7 @@
     if(!confirm(`Excluir o título #${titulo.codigo}${titulo.titulo ? ' "' + titulo.titulo + '"' : ''}? Isso também apaga o rateio e a movimentação de contas ligada a ele (se tiver). Não dá pra desfazer.`)) return;
 
     const btn = document.getElementById('btnExcluirTitulo');
+    invalidarTitulosPagos();
     btn.disabled = true; btn.textContent = 'Excluindo...';
     try{
       let codigoOperacaoExcluida = titulo.operacao_id;
@@ -2434,6 +2927,49 @@
         </div>
       </div>`;
   }
+  // As linhas de rateio vindas do banco só têm os IDs; sem o texto, os campos Empresa/Setor/Plano/Fornecedor apareciam EM BRANCO
+  // na edição (embora o valor estivesse gravado). Aqui monta o texto "código — nome" de cada um antes de desenhar a linha.
+  async function enriquecerLinhasRateio(linhas){
+    const L = (linhas || []).map(l => ({ ...l }));
+    const idsPessoa = [...new Set(L.map(l => l.pessoa_id).filter(Boolean))];
+    const pessoas = {};
+    if(idsPessoa.length){
+      const { data } = await sb.from('pessoa').select('id, codigo, nome').in('id', idsPessoa);
+      (data || []).forEach(x => { pessoas[x.id] = x; });
+    }
+    L.forEach(l => {
+      if(l.empresa_id){ const e = todasEmpresas.find(x => x.id === l.empresa_id); l._empresaTexto = e ? `${e.codigo ?? e.id} — ${e.nome}` : String(l.empresa_id); }
+      if(l.setor_id){ const x = todosSetores.find(y => y.id === l.setor_id); l._setorTexto = x ? `${x.codigo ?? x.id} — ${x.nome}` : String(l.setor_id); }
+      if(l.plano_de_contas_id){ const x = todosPlanosContas.find(y => y.id === l.plano_de_contas_id); l._planoTexto = x ? `${x.codigo ?? x.id} — ${x.descricao}` : String(l.plano_de_contas_id); }
+      if(l.pessoa_id){ const x = pessoas[l.pessoa_id]; l._pessoaTexto = x ? `${x.codigo ?? x.id} — ${x.nome}` : String(l.pessoa_id); }
+    });
+    return L;
+  }
+  // Empresa no topo do título: um atalho que aplica a empresa escolhida em TODAS as linhas do rateio (e fica sincronizado com o rateio)
+  function popularEmpresaRapida(){
+    const sel = document.getElementById('t_empresa_rapida');
+    sel.innerHTML = '<option value="">— escolha a empresa —</option>' + todasEmpresas.map(e => `<option value="${e.id}">${escapeHtml(e.nome)}</option>`).join('') +
+      '<option value="__varias" disabled>Várias empresas (veja o rateio abaixo)</option>';
+  }
+  function sincronizarEmpresaRapida(){
+    const sel = document.getElementById('t_empresa_rapida'); if(!sel) return;
+    const ids = [...new Set(Array.from(document.querySelectorAll('#t_caixa_rateio_linhas [data-linha-rateio] [data-campo="empresa_id"]')).map(i => i.value).filter(Boolean))];
+    if(ids.length === 1 && !sel.querySelector(`option[value="${ids[0]}"]`)){
+      const o = document.createElement('option'); o.value = ids[0]; o.textContent = 'Empresa #' + ids[0]; sel.insertBefore(o, sel.querySelector('option[value="__varias"]'));
+    }
+    sel.value = ids.length === 1 ? ids[0] : (ids.length > 1 ? '__varias' : '');
+  }
+  document.getElementById('t_empresa_rapida').addEventListener('change', async (e) => {
+    const empresa = todasEmpresas.find(x => String(x.id) === e.target.value); if(!empresa) return;
+    for(const linha of document.querySelectorAll('#t_caixa_rateio_linhas [data-linha-rateio]')){
+      linha.querySelector('[data-campo="empresa_id"]').value = empresa.id;
+      linha.querySelector('[data-campo="empresa_id_busca"]').value = `${empresa.codigo ?? empresa.id} — ${empresa.nome}`;
+      await preencherPadraoDaEmpresaNaLinha(linha);   // só preenche setor/plano/evento que ainda estiverem vazios
+    }
+    atualizarSomaRateio('t_caixa_rateio');
+  });
+  ['change', 'input', 'click', 'focusout'].forEach(ev => document.getElementById('t_caixa_rateio').addEventListener(ev, () => setTimeout(sincronizarEmpresaRapida, 80)));
+
   function renderizarCaixaRateio(containerId, linhasIniciais, valorTotalGetter){
     const box = document.getElementById(containerId);
     const linhas = (linhasIniciais && linhasIniciais.length) ? linhasIniciais : [{}];
@@ -3088,49 +3624,62 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
   // -----------------------------------------------------------------
   // MOVIMENTAÇÃO DE CONTAS
   // -----------------------------------------------------------------
+  // ABERTURA RÁPIDA: a lista de movimentações NÃO é carregada ao abrir o app (eram 23 mil linhas, ~25 s). Só quando a aba é aberta, e já
+  // filtrada no servidor (conta, datas, busca): vêm só os 500 mais recentes + a contagem total; o saldo da barra vem de financeiro_extrato_resumo.
+  const MOV_LIMITE = 500;
+  let movimentacaoAbaAberta = false, movimentacaoPendente = false, carregamentoMovId = 0, totalMovimentacoesFiltro = 0, barraSaldoDados = null;
+  function abrirAbaMovimentacao(){
+    if(!movimentacaoAbaAberta || movimentacaoPendente){ movimentacaoAbaAberta = true; movimentacaoPendente = false; carregarMovimentacoes(); }
+  }
   async function carregarMovimentacoes(){
-    const { data, error } = await sb.from('financeiro_movimentacao_contas').select('*, financeiro_contas_correntes(nome), pessoa(codigo, nome)').eq('unidade_negocio_id', agenciaId).order('data', { ascending: false });
-    if(error){ console.error(error.message); return; }
+    if(!movimentacaoAbaAberta){ movimentacaoPendente = true; return; }
+    const meuId = ++carregamentoMovId;
+    const contaFiltro = document.getElementById('filtroContaMov').value;
+    const de = document.getElementById('filtroMovDataInicio').value, ate = document.getElementById('filtroMovDataFim').value;
+    const busca = document.getElementById('filtroBuscaMov').value.trim();
+    document.getElementById('listaMovimentacao').innerHTML = '<div class="vazio">Carregando...</div>';
+    let q = sb.from('financeiro_movimentacao_contas').select('*, financeiro_contas_correntes(nome), pessoa(codigo, nome)', { count: 'exact' }).eq('unidade_negocio_id', agenciaId);
+    if(contaFiltro) q = q.eq('id_conta', Number(contaFiltro));
+    if(de) q = q.gte('data', de);
+    if(ate) q = q.lte('data', ate);
+    if(busca) q = q.ilike('historico', '%' + busca.replace(/[%_,()]/g, ' ') + '%');
+    const { data, error, count } = await q.order('data', { ascending: false }).order('id', { ascending: false }).limit(MOV_LIMITE);
+    if(meuId !== carregamentoMovId) return;          // chegou uma resposta mais nova
+    if(error){ console.error(error.message); document.getElementById('listaMovimentacao').innerHTML = '<div class="vazio">Não consegui carregar: ' + escapeHtml(error.message) + '</div>'; return; }
     todasMovimentacoes = data || [];
+    totalMovimentacoesFiltro = count != null ? count : todasMovimentacoes.length;
+    barraSaldoDados = null;
+    if(contaFiltro){
+      const { data: res, error: eRes } = await sb.rpc('financeiro_extrato_resumo', { p_unidade: agenciaId, p_de: de || null, p_ate: ate || null });
+      if(meuId !== carregamentoMovId) return;
+      const r = !eRes && (res || []).find(x => String(x.id_conta) === contaFiltro);
+      if(r) barraSaldoDados = { anterior: Number(r.saldo_anterior), debitos: Number(r.saidas), creditos: Number(r.entradas), atual: Number(r.saldo_atual) };
+      else if(totalMovimentacoesFiltro <= todasMovimentacoes.length && !de){   // sem o SQL do extrato: só dá para somar quando veio tudo
+        const deb = todasMovimentacoes.filter(m => m.tipo_movimento === 'D').reduce((a, m) => a + Number(m.valor), 0);
+        const cre = todasMovimentacoes.filter(m => m.tipo_movimento === 'C').reduce((a, m) => a + Number(m.valor), 0);
+        barraSaldoDados = { anterior: 0, debitos: deb, creditos: cre, atual: cre - deb };
+      }
+    }
     renderizarListaMovimentacao();
   }
-  function obterMovimentacoesFiltradas(){
-    const busca = document.getElementById('filtroBuscaMov').value.trim().toLowerCase();
-    const contaFiltro = document.getElementById('filtroContaMov').value;
-    const dataInicioMov = document.getElementById('filtroMovDataInicio').value;
-    const dataFimMov = document.getElementById('filtroMovDataFim').value;
-    return todasMovimentacoes.filter(m =>
-      (!contaFiltro || String(m.id_conta) === contaFiltro) &&
-      (!dataInicioMov || m.data >= dataInicioMov) &&
-      (!dataFimMov || m.data <= dataFimMov) &&
-      (!busca || (m.historico || '').toLowerCase().includes(busca))
-    );
-  }
+  function obterMovimentacoesFiltradas(){ return todasMovimentacoes; }   // já vem filtrada do servidor
   function renderizarListaMovimentacao(){
-    const contaFiltro = document.getElementById('filtroContaMov').value;
-    const dataInicioMov = document.getElementById('filtroMovDataInicio').value;
     const filtrados = obterMovimentacoesFiltradas();
 
     const barraSaldo = document.getElementById('barraSaldoConta');
-    if(contaFiltro){
-      const todasDaConta = todasMovimentacoes.filter(m => String(m.id_conta) === contaFiltro);
-      const anteriores = dataInicioMov ? todasDaConta.filter(m => m.data < dataInicioMov) : [];
-      const saldoAnterior = anteriores.reduce((acc, m) => acc + (m.tipo_movimento === 'C' ? Number(m.valor) : -Number(m.valor)), 0);
-      const debitosPeriodo = filtrados.filter(m => m.tipo_movimento === 'D').reduce((acc, m) => acc + Number(m.valor), 0);
-      const creditosPeriodo = filtrados.filter(m => m.tipo_movimento === 'C').reduce((acc, m) => acc + Number(m.valor), 0);
-      const saldoAtual = saldoAnterior + creditosPeriodo - debitosPeriodo;
-      document.getElementById('saldoContaAnterior').textContent = formatarMoeda(saldoAnterior);
-      document.getElementById('saldoContaDebitos').textContent = formatarMoeda(debitosPeriodo);
-      document.getElementById('saldoContaCreditos').textContent = formatarMoeda(creditosPeriodo);
-      document.getElementById('saldoContaAtual').textContent = formatarMoeda(saldoAtual);
+    if(barraSaldoDados){
+      document.getElementById('saldoContaAnterior').textContent = formatarMoedaMilhar(barraSaldoDados.anterior);
+      document.getElementById('saldoContaDebitos').textContent = formatarMoedaMilhar(barraSaldoDados.debitos);
+      document.getElementById('saldoContaCreditos').textContent = formatarMoedaMilhar(barraSaldoDados.creditos);
+      document.getElementById('saldoContaAtual').textContent = formatarMoedaMilhar(barraSaldoDados.atual);
       barraSaldo.style.display = 'flex';
     } else {
-      barraSaldo.style.display = 'none';
+      barraSaldo.style.display = document.getElementById('filtroContaMov').value ? 'none' : 'none';
     }
 
     const lista = document.getElementById('listaMovimentacao');
     if(!filtrados.length){ lista.innerHTML = '<div class="vazio">Nenhum lançamento encontrado.</div>'; return; }
-    lista.innerHTML = filtrados.map(m => `
+    lista.innerHTML = (totalMovimentacoesFiltro > filtrados.length ? `<div class="vazio" style="padding:12px;">Mostrando os ${filtrados.length.toLocaleString('pt-BR')} mais recentes de ${totalMovimentacoesFiltro.toLocaleString('pt-BR')} lançamentos — refine os filtros (conta, datas, busca) ou use a aba <strong>Extrato de contas</strong>.</div>` : '') + filtrados.map(m => `
       <div class="cadastro-row">
         <div class="cadastro-thumb">${m.codigo ?? '—'}</div>
         <div class="cadastro-info">
@@ -3145,10 +3694,11 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
       row.addEventListener('click', () => abrirModalMovimentacao(filtrados[i].id));
     });
   }
-  document.getElementById('filtroBuscaMov').addEventListener('input', renderizarListaMovimentacao);
-  document.getElementById('filtroContaMov').addEventListener('change', renderizarListaMovimentacao);
-  document.getElementById('filtroMovDataInicio').addEventListener('change', renderizarListaMovimentacao);
-  document.getElementById('filtroMovDataFim').addEventListener('change', renderizarListaMovimentacao);
+  let temporizadorBuscaMov = null;
+  document.getElementById('filtroBuscaMov').addEventListener('input', () => { clearTimeout(temporizadorBuscaMov); temporizadorBuscaMov = setTimeout(carregarMovimentacoes, 350); });
+  document.getElementById('filtroContaMov').addEventListener('change', carregarMovimentacoes);
+  document.getElementById('filtroMovDataInicio').addEventListener('change', carregarMovimentacoes);
+  document.getElementById('filtroMovDataFim').addEventListener('change', carregarMovimentacoes);
   let movimentacaoIdAtual = null;
   async function abrirModalMovimentacao(id){
     movimentacaoIdAtual = id;
@@ -3158,6 +3708,7 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
 
     if(id){
       const m = todasMovimentacoes.find(x => x.id === id);
+      if(m.operacao_id && !titulosPagosCache) await garantirTitulosPagos();   // o título baixado pode ser dos "pagos" ainda em carga
       // veio de baixa de título? -- mesma operacao_id compartilhada com um título
       const tituloVinculado = m.operacao_id ? todosTitulos.find(t => t.operacao_id === m.operacao_id) : null;
       if(tituloVinculado){
@@ -3188,7 +3739,7 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
       let rateioInicialMov = [];
       if(m.operacao_id){
         const { data: linhas } = await sb.from('unidade_rateios').select('*').eq('operacao_id', m.operacao_id);
-        rateioInicialMov = linhas || [];
+        rateioInicialMov = await enriquecerLinhasRateio(linhas || []);
       }
       renderizarCaixaRateio('m_caixa_rateio', rateioInicialMov, () => parseFloat(document.getElementById('m_valor').value) || 0);
     } else {
@@ -3353,7 +3904,7 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
     unidade_plano_de_contas: {
       campos: [{ campo: 'codigo', label: 'Código', tipo: 'text', obrigatorio: true }, { campo: 'descricao', label: 'Descrição', tipo: 'text', obrigatorio: true }]
     },
-    financeiro_contas_correntes: { campos: [{ campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true }] },
+    financeiro_contas_correntes: { campos: [{ campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true }, { campo: 'acompanha_saldo', label: 'Acompanha saldo (aparece no Extrato de contas)', tipo: 'booleano', exigeColuna: true }] },
     financeiro_forma_pagamento: { campos: [{ campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true }] },
     financeiro_sub_contas: {
       campos: [{ campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true }, { campo: 'limite_valor', label: 'Limite (R$)', tipo: 'number' }]
@@ -3571,6 +4122,10 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
     lista.querySelectorAll('[data-abrir-cadastro]').forEach(row => row.addEventListener('click', () => abrirModalCadastro(row.dataset.abrirCadastro)));
   }
 
+  // campos do cadastro; os marcados com "exigeColuna" só aparecem se a coluna já existe no banco (evita erro antes de rodar o SQL)
+  function camposDaEntidade(entidade){
+    return CONFIG_CADASTROS[entidade].campos.filter(c => !c.exigeColuna || (dadosCadastroAtual || []).some(x => Object.prototype.hasOwnProperty.call(x, c.campo)));
+  }
   function abrirModalCadastro(id){
     if(document.getElementById('seletorEntidadeCadastro').value === 'unidade_setores' && !podeCadastrarSetorFlag){ alert(MSG_SEM_PERMISSAO_SETOR); origemCriacaoRapida = null; return; }
     cadastroIdAtual = id;
@@ -3580,8 +4135,12 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
 
     document.getElementById('tituloModalCadastro').textContent = id ? 'Editar' : 'Novo';
     document.getElementById('btnExcluirCadastro').style.display = id ? 'block' : 'none';
-    document.getElementById('corpoModalCadastro').innerHTML = config.campos.map(c => {
+    document.getElementById('corpoModalCadastro').innerHTML = camposDaEntidade(entidade).map(c => {
       const valor = item[c.campo] ?? '';
+      if(c.tipo === 'booleano'){
+        const atual = (item[c.campo] === undefined || item[c.campo] === null) ? true : item[c.campo];
+        return `<div class="field-group"><label>${c.label}</label><select data-campo-cadastro="${c.campo}"><option value="true" ${atual ? 'selected' : ''}>Sim</option><option value="false" ${atual ? '' : 'selected'}>Não — conta de passagem (fora do extrato)</option></select></div>`;
+      }
       if(c.tipo === 'select'){
         return `<div class="field-group"><label>${c.label}</label><select data-campo-cadastro="${c.campo}">${c.opcoes.map(([v, l]) => `<option value="${v}" ${valor === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`;
       }
@@ -3601,8 +4160,9 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
     const entidade = document.getElementById('seletorEntidadeCadastro').value;
     const config = CONFIG_CADASTROS[entidade];
     const payload = { unidade_negocio_id: agenciaId };
-    for(const c of config.campos){
+    for(const c of camposDaEntidade(entidade)){
       const el = document.querySelector(`[data-campo-cadastro="${c.campo}"]`);
+      if(c.tipo === 'booleano'){ payload[c.campo] = el.value === 'true'; continue; }
       const valor = el.value.trim();
       if(c.obrigatorio && !valor){ alert(`Preencha o campo "${c.label}".`); return; }
       if(c.tipo === 'documento' && valor && !validarCpfCnpj(valor)){ alert('CPF ou CNPJ inválido -- confira os números digitados.'); return; }
@@ -3836,6 +4396,95 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
   });
 
   // -----------------------------------------------------------------
+  // LISTA DE PAGAMENTOS (PDF) -- no estilo da "LISTA PAGAMENTOS" do Access: um bloco por CONTA (pagadora),
+  // com EMP, vencimento, fornecedor, título, valor e uma caixa PAGO para marcar à mão; "ITENS n" + subtotal por
+  // conta e total geral. Segue EXATAMENTE os filtros da tela de Títulos (obterTitulosFiltrados).
+  // -----------------------------------------------------------------
+  document.getElementById('btnListaPagamentos').addEventListener('click', async () => {
+    const btn = document.getElementById('btnListaPagamentos');
+    const filtrados = obterTitulosFiltrados();
+    if(!filtrados.length){ alert('Nenhum título encontrado com os filtros atuais.'); return; }
+    btn.disabled = true; const rotulo = btn.textContent; btn.textContent = 'Gerando...';
+    try{
+      await carregarJsPdf();
+      const nomeEmpresa = (t) => rotuloEmpresaTitulo(t);   // a empresa do rateio já vem junto com os títulos
+      const filtroTipo = document.getElementById('filtroTipoTitulo').value;
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF();
+      let y = await montarCabecalhoPdf(doc, 'Lista de pagamentos');
+      // resumo dos filtros usados
+      const sel = id => { const el = document.getElementById(id); return el.options[el.selectedIndex].text; };
+      const partes = [sel('filtroTipoTitulo'), sel('filtroStatusPagamento')];
+      const di = document.getElementById('filtroTituloDataInicio').value, df = document.getElementById('filtroTituloDataFim').value;
+      if(di || df) partes.push('vencimento ' + (di ? 'de ' + formatarData(di) : '') + (di && df ? ' ' : '') + (df ? 'até ' + formatarData(df) : ''));
+      const busca = document.getElementById('filtroBuscaTitulo').value.trim(); if(busca) partes.push('busca "' + busca + '"');
+      const op = document.getElementById('filtroCodigoOperacao').value.trim(); if(op) partes.push('operação ' + op);
+      if(operacaoIdsFiltroAvancado) partes.push('filtro avançado por rateio');
+      doc.setFontSize(8); doc.setTextColor(90); doc.text('Filtros: ' + partes.join(' · '), 14, y - 2); doc.setTextColor(0);
+      y += 3;
+
+      // grupos: (tipo se Pagar e Receber juntos) + conta pagadora
+      const grupos = {};
+      filtrados.forEach(t => {
+        const conta = todasContas.find(c => c.id === t.id_conta_pagamento);
+        const nomeConta = conta ? conta.nome : 'SEM CONTA DEFINIDA';
+        const prefixo = filtroTipo ? '' : (t.tipo_movimento === 'PAGAR' ? 'A PAGAR — ' : 'A RECEBER — ');
+        const chave = prefixo + nomeConta;
+        (grupos[chave] = grupos[chave] || []).push(t);
+      });
+      const nomesOrdenados = Object.keys(grupos).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+      let totalGeral = 0, qtdGeral = 0;
+      nomesOrdenados.forEach(nome => {
+        const itens = grupos[nome].slice().sort((a, b) => (a.data_vencimento || '').localeCompare(b.data_vencimento || '') || String(a.pessoa?.nome || '').localeCompare(String(b.pessoa?.nome || ''), 'pt-BR'));
+        const subtotal = itens.reduce((acc, t) => acc + Number(t.valor_titulo), 0);
+        totalGeral += subtotal; qtdGeral += itens.length;
+        doc.autoTable({
+          startY: y,
+          head: [
+            [{ content: nome + '   (' + itens.length + ' ite' + (itens.length === 1 ? 'm' : 'ns') + ')', colSpan: 6, styles: { fillColor: [221, 225, 232], textColor: 0, halign: 'left', fontStyle: 'bold', fontSize: 9 } }],
+            ['EMP', 'VENC.', 'FORNECEDOR', 'TÍTULO / OBS.', 'VALOR', 'PAGO']
+          ],
+          body: itens.map(t => [
+            nomeEmpresa(t), formatarData(t.data_vencimento),
+            (t.pessoa?.nome || t.descricao_avulsa || '—'),
+            [t.titulo, t.observacao].filter(Boolean).join(' — ').slice(0, 70),
+            formatarMoedaMilhar(t.valor_titulo), ''
+          ]),
+          foot: [[{ content: 'ITENS ' + itens.length, colSpan: 4, styles: { halign: 'left' } }, { content: formatarMoedaMilhar(subtotal), styles: { halign: 'right' } }, '']],
+          styles: { fontSize: 8, cellPadding: 1.6, valign: 'middle', minCellHeight: 7 },
+          headStyles: { fillColor: [255, 255, 255], textColor: 0, lineColor: [150, 150, 150], lineWidth: 0.1 },
+          footStyles: { fillColor: [244, 245, 247], textColor: 0, fontStyle: 'bold' },
+          alternateRowStyles: { fillColor: [247, 248, 250] },
+          columnStyles: { 0: { cellWidth: 26, fontSize: 6.5 }, 1: { cellWidth: 19 }, 2: { cellWidth: 52 }, 3: { cellWidth: 'auto' }, 4: { cellWidth: 27, halign: 'right' }, 5: { cellWidth: 14, halign: 'center' } },
+          margin: { left: 14, right: 14 },
+          didParseCell: (d) => { if(d.section === 'head' && d.row.index === 1 && d.column.index >= 4) d.cell.styles.halign = d.column.index === 4 ? 'right' : 'center'; },
+          // caixa de PAGO: vazia para marcar à mão; já pago = caixa com um ✓ desenhado
+          didDrawCell: (d) => {
+            if(d.section === 'body' && d.column.index === 5){
+              const cx = d.cell.x + d.cell.width / 2 - 2, cy = d.cell.y + d.cell.height / 2 - 2;
+              doc.setDrawColor(60); doc.setLineWidth(0.25); doc.rect(cx, cy, 4, 4);
+              if(itens[d.row.index].data_pagamento){ doc.setLineWidth(0.5); doc.line(cx + 0.8, cy + 2.2, cx + 1.8, cy + 3.2); doc.line(cx + 1.8, cy + 3.2, cx + 3.4, cy + 0.9); }
+              doc.setLineWidth(0.1);
+            }
+          }
+        });
+        y = doc.lastAutoTable.finalY + 7;
+      });
+      if(y > 275){ doc.addPage(); y = 20; }
+      doc.setFontSize(10); doc.setFont(undefined, 'bold');
+      doc.text(`TOTAL GERAL — ${qtdGeral} título${qtdGeral === 1 ? '' : 's'}: ${formatarMoedaMilhar(totalGeral)}`, 14, y);
+      doc.setFont(undefined, 'normal');
+      const totalPaginas = doc.getNumberOfPages();
+      for(let i = 1; i <= totalPaginas; i++){ doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text(`Página ${i} de ${totalPaginas}`, 196, 290, { align: 'right' }); }
+      mostrarPopupAcoesPdf('Lista de pagamentos', doc.output('blob'), 'lista-de-pagamentos.pdf');
+    } catch(erro){
+      alert('Erro ao gerar a lista de pagamentos: ' + erro.message);
+    } finally{
+      btn.disabled = false; btn.textContent = rotulo;
+    }
+  });
+
+  // -----------------------------------------------------------------
   // RELATÓRIO PDF -- LIVRO CAIXA (só quando uma conta específica está
   // selecionada no filtro, já que livro caixa é por conta)
   // -----------------------------------------------------------------
@@ -3853,13 +4502,23 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
       let y = await montarCabecalhoPdf(doc, 'Livro Caixa -- ' + (conta?.nome || 'Conta'));
 
       const dataInicioMov = document.getElementById('filtroMovDataInicio').value;
-      const todasDaConta = todasMovimentacoes.filter(m => String(m.id_conta) === contaFiltro);
-      const anteriores = dataInicioMov ? todasDaConta.filter(m => m.data < dataInicioMov) : [];
-      let saldoCorrente = anteriores.reduce((acc, m) => acc + (m.tipo_movimento === 'C' ? Number(m.valor) : -Number(m.valor)), 0);
+      const dataFimMov = document.getElementById('filtroMovDataFim').value;
+      const buscaMov = document.getElementById('filtroBuscaMov').value.trim();
+      // a lista da tela tem só os 500 mais recentes; o PDF traz TODOS do filtro pelas funções do extrato (financeiro-extrato.sql)
+      const { data: resumoConta, error: eResumo } = await sb.rpc('financeiro_extrato_resumo', { p_unidade: agenciaId, p_de: dataInicioMov || null, p_ate: dataFimMov || null });
+      if(eResumo) throw new Error('Rode o financeiro-extrato.sql no Supabase para gerar o livro caixa (' + eResumo.message + ')');
+      const resumoDaConta = (resumoConta || []).find(x => String(x.id_conta) === contaFiltro);
+      let saldoCorrente = resumoDaConta ? Number(resumoDaConta.saldo_anterior) : 0;
       const saldoAnterior = saldoCorrente;
-
-      const filtradas = obterMovimentacoesFiltradas().filter(m => String(m.id_conta) === contaFiltro)
-        .sort((a, b) => (a.data || '').localeCompare(b.data || ''));
+      let linhasRpc = [];
+      for(;;){
+        const { data: pagina, error: ePag } = await sb.rpc('financeiro_extrato_conta', { p_unidade: agenciaId, p_conta: Number(contaFiltro), p_de: dataInicioMov || null, p_ate: dataFimMov || null, p_busca: buscaMov || null, p_limite: 1000, p_deslocamento: linhasRpc.length });
+        if(ePag) throw new Error(ePag.message);
+        if(!pagina || !pagina.length) break;
+        linhasRpc = linhasRpc.concat(pagina);
+        if(linhasRpc.length >= Number(pagina[0].total_linhas)) break;
+      }
+      const filtradas = linhasRpc.map(l => ({ data: l.data, historico: l.historico, pessoa: { nome: l.pessoa }, tipo_movimento: l.entrada != null ? 'C' : 'D', valor: l.entrada != null ? l.entrada : l.saida }));
 
       const corpo = filtradas.map(m => {
         saldoCorrente += m.tipo_movimento === 'C' ? Number(m.valor) : -Number(m.valor);
