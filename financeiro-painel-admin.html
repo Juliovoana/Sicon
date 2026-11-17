@@ -395,6 +395,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>
           <span class="nav-label">Extrato de contas</span>
         </button>
+        <button class="nav-item tab-app-btn" data-app-tab="conciliacao">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/><path d="M9 11l2 2 4-4"/></svg>
+          <span class="nav-label">Conciliação bancária</span>
+        </button>
         <button class="nav-item tab-app-btn" data-app-tab="cadastros">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>
           <span class="nav-label">Cadastros</span>
@@ -574,6 +578,26 @@
               <button class="ext-chip" id="extExcel">⬇ Excel</button>
             </div>
             <div id="extConteudo"><div class="vazio">Abra a aba para carregar.</div></div>
+          </div>
+
+          <!-- ================= CONCILIAÇÃO BANCÁRIA ================= -->
+          <div class="panel-app" id="app-panel-conciliacao">
+            <div class="filtros">
+              <select id="concConta" style="min-width:240px;"><option value="">Escolha a conta...</option></select>
+              <label style="font-size:.8rem; color:var(--muted); display:flex; align-items:center; gap:4px;">De <input type="date" id="concDe" style="padding:8px;"></label>
+              <label style="font-size:.8rem; color:var(--muted); display:flex; align-items:center; gap:4px;">Até <input type="date" id="concAte" style="padding:8px;"></label>
+              <button class="ext-chip" data-conc-atalho="mes">Mês</button>
+              <button class="ext-chip" data-conc-atalho="mes_ant">Mês anterior</button>
+              <button class="ext-chip" data-conc-atalho="tudo">Tudo</button>
+            </div>
+            <div class="ext-tabs">
+              <button class="ext-tab ativo" data-conc-aba="importar">1 · Importar extrato</button>
+              <button class="ext-tab" data-conc-aba="conciliar">2 · Conciliar</button>
+              <button class="ext-tab" data-conc-aba="gerar">3 · Gerar lançamentos</button>
+              <button class="ext-tab" data-conc-aba="feitas">Conciliações feitas</button>
+              <button class="ext-tab" data-conc-aba="regras">Regras</button>
+            </div>
+            <div id="concCorpo"><div class="vazio">Abra a aba para carregar.</div></div>
           </div>
 
           <!-- ================= CADASTROS ================= -->
@@ -959,6 +983,26 @@
     </div>
   </div>
 
+  <!-- ================= MODAIS: CONCILIAÇÃO BANCÁRIA ================= -->
+  <div class="modal-lista-overlay" id="modalConcSug">
+    <div class="modal-lista" style="max-width:920px;">
+      <div class="modal-lista-head"><h3>Sugestões de conciliação</h3><button class="drawer-close" id="btnConcSugFechar">✕</button></div>
+      <div class="modal-lista-body"><div id="concSugCorpo"></div><div style="margin-top:12px; text-align:right;"><button class="btn-novo" id="btnConcSugAplicar">Conciliar as marcadas</button></div></div>
+    </div>
+  </div>
+  <div class="modal-lista-overlay" id="modalConcGerar">
+    <div class="modal-lista" style="max-width:520px;">
+      <div class="modal-lista-head"><h3 id="tituloModalConcGerar">Gerar lançamentos</h3><button class="drawer-close" id="btnConcGerarFechar">✕</button></div>
+      <div class="modal-lista-body"><div id="concGerarForm"></div><div style="margin-top:12px;"><button class="btn-novo" id="btnConcGerarOk" style="width:100%;">Gerar e conciliar</button></div></div>
+    </div>
+  </div>
+  <div class="modal-lista-overlay" id="modalConcRegra">
+    <div class="modal-lista" style="max-width:520px;">
+      <div class="modal-lista-head"><h3 id="tituloModalConcRegra">Regra</h3><button class="drawer-close" id="btnConcRegraFechar">✕</button></div>
+      <div class="modal-lista-body"><div id="concRegraForm"></div><div style="margin-top:12px;"><button class="btn-novo" id="btnConcRegraOk" style="width:100%;">Salvar regra</button></div></div>
+    </div>
+  </div>
+
   <!-- ================= MODAL: AÇÕES DO PDF ================= -->
   <div class="modal-lista-overlay" id="modalAcoesPdf">
     <div class="modal-lista" style="max-width:360px;">
@@ -1324,7 +1368,7 @@
   // =================================================================
   // TABS DO APP
   // =================================================================
-  const titulosAba = { dashboard: 'Dashboard', titulos: 'Títulos', movimentacao: 'Movimentação de Contas', extrato: 'Extrato de contas', cadastros: 'Cadastros', parametros: 'Parâmetros' };
+  const titulosAba = { dashboard: 'Dashboard', titulos: 'Títulos', movimentacao: 'Movimentação de Contas', extrato: 'Extrato de contas', conciliacao: 'Conciliação bancária', cadastros: 'Cadastros', parametros: 'Parâmetros' };
   document.querySelectorAll('.tab-app-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tab-app-btn').forEach(b => b.classList.remove('active'));
@@ -1333,6 +1377,7 @@
       document.getElementById('app-panel-' + btn.dataset.appTab).classList.add('active');
       if(btn.dataset.appTab === 'dashboard') renderizarDashboardFinanceiro();
       if(btn.dataset.appTab === 'extrato') iniciarExtrato();
+      if(btn.dataset.appTab === 'conciliacao') iniciarConciliacao();
       if(btn.dataset.appTab === 'movimentacao') abrirAbaMovimentacao();
       document.getElementById('tituloConteudo').textContent = titulosAba[btn.dataset.appTab] || '';
     });
@@ -1653,6 +1698,615 @@
   document.getElementById('extExcel').addEventListener('click', extExportarExcel);
 
   // =================================================================
+  // CONCILIAÇÃO BANCÁRIA -- importa o extrato do banco (Bradesco .csv, Itaú .txt, Sicoob .xlsx, OFX), concilia com os lançamentos de
+  // Movimentação de Contas por um CÓDIGO DE CONCILIAÇÃO sequencial e gera (com regras por palavra-chave) o que o banco cobrou e não está
+  // no contas a pagar (tarifa, cesta, juros, IOF, rendimento...). Tabelas/funções: financeiro-conciliacao.sql.
+  // =================================================================
+  const concEstado = { aba: 'importar', contaId: '', de: '', ate: '', extratos: [], movs: [], selE: new Set(), selM: new Set(), regras: [], previa: null, iniciado: false, pessoaNomes: {} };
+  const concNum = v => extFmt.format(Number(v) || 0);
+  const concNorm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+  const concValorBR = s => { const t = String(s == null ? '' : s).trim(); if(!t) return 0; const n = parseFloat(t.replace(/\./g, '').replace(',', '.')); return isNaN(n) ? 0 : n; };
+  const concDataBR = s => { const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(s).trim()); return m ? `${m[3]}-${m[2]}-${m[1]}` : null; };
+  const concLiquido = e => Number(e.credito) - Number(e.debito);
+  const concLiquidoMov = m => (m.tipo_movimento === 'C' ? 1 : -1) * Number(m.valor);
+  function concMsg(html){ document.getElementById('concCorpo').innerHTML = '<div class="vazio">' + html + '</div>'; }
+  function concDiasEntre(a, b){ return Math.abs((new Date(a + 'T00:00:00') - new Date(b + 'T00:00:00')) / 86400000); }
+  function concSomaDias(iso, d){ const x = new Date(iso + 'T00:00:00'); x.setDate(x.getDate() + d); return extDataISO(x); }
+
+  // ---------------- leitores de extrato ----------------
+  function concParseBradesco(texto){
+    // o arquivo vem com as linhas coladas: cada lançamento começa numa data; o saldo termina logo antes da próxima data
+    texto = texto.split(/Saldos\s+Invest/i)[0];
+    const re = /(\d{2}\/\d{2}\/\d{4});([^;\r\n]*);([^;\r\n]*);([^;\r\n]*);([^;\r\n]*);(-?\d{1,3}(?:\.\d{3})*,\d{2})?/g;
+    const linhas = []; let m;
+    while((m = re.exec(texto))){
+      const hist = m[2].trim().replace(/\s+/g, ' ');
+      if(!hist || /^SALDO (ANTERIOR|INICIAL)/i.test(hist)) continue;
+      const cred = Math.abs(concValorBR(m[4])), deb = Math.abs(concValorBR(m[5]));
+      if(!cred && !deb) continue;
+      linhas.push({ data: concDataBR(m[1]), historico: hist, documento: m[3].trim(), credito: cred, debito: deb, saldo: m[6] ? concValorBR(m[6]) : null });
+    }
+    return linhas;
+  }
+  function concParseItau(texto){
+    const linhas = [];
+    texto.split(/\r?\n/).forEach(l => {
+      const m = /^\s*(\d{2}\/\d{2}\/\d{4});(.*);(-?[\d.]*\d,\d{2});?\s*$/.exec(l);
+      if(!m) return;
+      const hist = m[2].trim().replace(/\s+/g, ' ');
+      if(/^SALDO (ANTERIOR|FINAL|PARCIAL|DO DIA)/i.test(hist)) return;
+      const v = concValorBR(m[3]); if(!v) return;
+      linhas.push({ data: concDataBR(m[1]), historico: hist, documento: '', credito: v > 0 ? v : 0, debito: v < 0 ? -v : 0, saldo: null });
+    });
+    return linhas;
+  }
+  function concParseOfx(texto){
+    const linhas = [];
+    const re = /<STMTTRN>([\s\S]*?)(?=<\/STMTTRN>|<STMTTRN>|<\/BANKTRANLIST>|$)/gi; let m;
+    const tag = (bloco, t) => { const r = new RegExp('<' + t + '>([^<\\r\\n]*)', 'i').exec(bloco); return r ? r[1].trim() : ''; };
+    while((m = re.exec(texto))){
+      const d = tag(m[1], 'DTPOSTED').slice(0, 8); const v = parseFloat(tag(m[1], 'TRNAMT').replace(',', '.'));
+      if(!/^\d{8}$/.test(d) || isNaN(v) || !v) continue;
+      const hist = (tag(m[1], 'MEMO') || tag(m[1], 'NAME') || tag(m[1], 'TRNTYPE')).replace(/\s+/g, ' ');
+      linhas.push({ data: `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`, historico: hist, documento: tag(m[1], 'FITID') || tag(m[1], 'CHECKNUM'), credito: v > 0 ? v : 0, debito: v < 0 ? -v : 0, saldo: null });
+    }
+    return linhas;
+  }
+  async function concParseXlsx(buffer){
+    await extPrepararXlsx();
+    const wb = window.XLSX.read(buffer, { type: 'array' });
+    const nome = wb.SheetNames.find(n => !/FUTUR/i.test(n)) || wb.SheetNames[0];
+    const rows = window.XLSX.utils.sheet_to_json(wb.Sheets[nome], { header: 1, raw: true, defval: '' });
+    const hi = rows.findIndex(r => r.some(c => /^DATA$/i.test(String(c).trim())) && r.some(c => /VALOR/i.test(String(c))));
+    if(hi < 0) throw new Error('Não achei o cabeçalho (DATA ... VALOR) na planilha.');
+    const cab = rows[hi].map(c => concNorm(c));
+    const iData = cab.findIndex(c => c === 'DATA'), iDoc = cab.findIndex(c => c.startsWith('DOCUMENTO')), iHist = cab.findIndex(c => c.startsWith('HISTORICO')),
+          iInfo = cab.findIndex(c => c.startsWith('INFORMACOES')), iVal = cab.findIndex(c => c.startsWith('VALOR'));
+    const linhas = [];
+    rows.slice(hi + 1).forEach(r => {
+      let d = r[iData]; if(d instanceof Date) d = extDataISO(d); else d = concDataBR(d);
+      if(!d) return;
+      const hist = String(r[iHist] || '').trim();
+      if(/^SALDO (DO DIA|ANTERIOR|INICIAL)/i.test(hist)) return;
+      const v = typeof r[iVal] === 'number' ? r[iVal] : concValorBR(r[iVal]);
+      if(!v) return;
+      const info = String(iInfo >= 0 ? r[iInfo] : '').split(/\r?\n/).map(x => x.trim()).filter(Boolean).join(' · ');
+      linhas.push({ data: d, historico: [hist, info].filter(Boolean).join(' — '), documento: String(r[iDoc] || '').trim(), credito: v > 0 ? v : 0, debito: v < 0 ? -v : 0, saldo: null });
+    });
+    return linhas;
+  }
+  function concDecodificar(buffer){
+    try { return new TextDecoder('utf-8', { fatal: true }).decode(buffer); } catch(e){ return new TextDecoder('windows-1252').decode(buffer); }
+  }
+  async function concLerArquivo(arquivo, layout){
+    const nome = arquivo.name.toLowerCase();
+    const buffer = await arquivo.arrayBuffer();
+    if(layout === 'sicoob' || (layout === 'auto' && /\.xlsx?$/.test(nome))) return { formato: 'Sicoob (planilha)', linhas: await concParseXlsx(buffer) };
+    const texto = concDecodificar(buffer);
+    if(layout === 'ofx' || (layout === 'auto' && (/\.(ofx|ofc)$/.test(nome) || /<STMTTRN>/i.test(texto)))) return { formato: 'OFX', linhas: concParseOfx(texto) };
+    if(layout === 'bradesco' || (layout === 'auto' && /(Lan.amento;Dcto|Extrato de:|Cr.dito \(R\$\))/i.test(texto))) return { formato: 'Bradesco (CSV)', linhas: concParseBradesco(texto) };
+    return { formato: 'Itaú (TXT)', linhas: concParseItau(texto) };
+  }
+  async function concHash(s){
+    try { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return Array.from(new Uint8Array(b)).map(x => x.toString(16).padStart(2, '0')).join(''); }
+    catch(e){ let h = 5381; for(let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return 'h' + (h >>> 0).toString(16) + s.length; }
+  }
+
+  // ---------------- início / filtros ----------------
+  async function iniciarConciliacao(){
+    if(!concEstado.iniciado){
+      concEstado.iniciado = true;
+      const sel = document.getElementById('concConta');
+      sel.innerHTML = '<option value="">Escolha a conta...</option>' + todasContas.slice().sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR')).map(c => `<option value="${c.id}">${escapeHtml((c.codigo != null ? c.codigo + ' — ' : '') + c.nome)}</option>`).join('');
+      let guardada = ''; try { guardada = localStorage.getItem('fin_conc_conta_v1') || ''; } catch(e){ /* sem localStorage */ }
+      if(guardada && todasContas.some(c => String(c.id) === guardada)) sel.value = guardada;
+      concEstado.contaId = sel.value;
+      const hoje = new Date();
+      document.getElementById('concDe').value = extDataISO(new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1));
+      document.getElementById('concAte').value = extDataISO(hoje);
+      try { await concRecarregarRegras(); } catch(e){ concEstado.regras = []; }
+    }
+    concLerFiltros();
+    await concRender();
+  }
+  function concLerFiltros(){
+    concEstado.contaId = document.getElementById('concConta').value;
+    concEstado.de = document.getElementById('concDe').value; concEstado.ate = document.getElementById('concAte').value;
+    try { localStorage.setItem('fin_conc_conta_v1', concEstado.contaId); } catch(e){ /* sem localStorage */ }
+  }
+  function concAtalho(nome){
+    const hoje = new Date(); let de = '', ate = extDataISO(hoje);
+    if(nome === 'mes') de = extDataISO(new Date(hoje.getFullYear(), hoje.getMonth(), 1));
+    else if(nome === 'mes_ant'){ de = extDataISO(new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1)); ate = extDataISO(new Date(hoje.getFullYear(), hoje.getMonth(), 0)); }
+    document.getElementById('concDe').value = de; document.getElementById('concAte').value = ate;
+    concLerFiltros(); concRender();
+  }
+  async function concRender(){
+    document.querySelectorAll('[data-conc-aba]').forEach(b => b.classList.toggle('ativo', b.dataset.concAba === concEstado.aba));
+    if(concEstado.aba === 'regras') return concRenderRegras();
+    if(!concEstado.contaId && concEstado.aba !== 'feitas'){ concMsg('Escolha a conta do banco acima para começar.'); return; }
+    if(concEstado.aba === 'importar') return concRenderImportar();
+    if(concEstado.de && concEstado.ate && concEstado.de > concEstado.ate){ concMsg('⚠️ A data inicial (De) é maior que a final (Até), por isso nada aparece. Ajuste o período ou use <strong>Mês</strong>, <strong>Mês anterior</strong> ou <strong>Tudo</strong>.'); return; }
+    if(concEstado.aba === 'conciliar') return concRenderConciliar();
+    if(concEstado.aba === 'gerar') return concRenderGerar();
+    if(concEstado.aba === 'feitas') return concRenderFeitas();
+  }
+
+  // ---------------- 1) importar ----------------
+  function concRenderImportar(){
+    document.getElementById('concCorpo').innerHTML = `
+      <div class="ext-graf">
+        <h3>Importar extrato do banco para a conta <strong>${escapeHtml(extNomeConta(Number(concEstado.contaId)))}</strong></h3>
+        <p class="ext-nota" style="margin:0 0 10px;">Aceita Bradesco (.csv), Itaú (.txt), Sicoob (.xlsx) e OFX. Linhas já importadas antes (mesma data, histórico, documento e valor) são reconhecidas e não duplicam.</p>
+        <div class="filtros">
+          <input type="file" id="concArquivo" accept=".csv,.txt,.xlsx,.xls,.ofx,.ofc">
+          <select id="concLayout"><option value="auto">Formato: detectar sozinho</option><option value="bradesco">Bradesco (.csv)</option><option value="itau">Itaú (.txt)</option><option value="sicoob">Sicoob (.xlsx)</option><option value="ofx">OFX</option></select>
+          <button class="ext-chip" id="concLer">📂 Ler arquivo</button>
+        </div>
+        <div id="concPrevia"></div>
+      </div>`;
+    document.getElementById('concLer').addEventListener('click', concLerEPrevia);
+    document.getElementById('concArquivo').addEventListener('change', concLerEPrevia);
+    if(concEstado.previa) concDesenharPrevia();
+  }
+  async function concLerEPrevia(){
+    const arq = document.getElementById('concArquivo').files[0]; if(!arq){ alert('Escolha o arquivo do extrato.'); return; }
+    const alvo = document.getElementById('concPrevia'); alvo.innerHTML = '<div class="vazio">Lendo o arquivo...</div>';
+    try{
+      const { formato, linhas } = await concLerArquivo(arq, document.getElementById('concLayout').value);
+      if(!linhas.length){ alvo.innerHTML = '<div class="vazio">Não encontrei lançamentos nesse arquivo. Confira o formato escolhido.</div>'; concEstado.previa = null; return; }
+      // chave de duplicidade: data|histórico|documento|valores + nº da ocorrência igual dentro do arquivo
+      const vistos = {};
+      for(const l of linhas){
+        const base = [concEstado.contaId, l.data, l.historico, l.documento, l.credito.toFixed(2), l.debito.toFixed(2)].join('|');
+        vistos[base] = (vistos[base] || 0) + 1;
+        l.hash = await concHash(base + '#' + vistos[base]);
+      }
+      const datas = linhas.map(l => l.data).sort();
+      const { data: ex, error } = await buscarTodasLinhas(() => sb.from('financeiro_extrato_bancario').select('hash').eq('unidade_negocio_id', agenciaId).eq('id_conta', Number(concEstado.contaId)).gte('data', datas[0]).lte('data', datas[datas.length - 1]).order('id'));
+      if(error) throw new Error(/relation|does not exist|schema cache/i.test(error.message) ? 'A conciliação ainda não está instalada neste banco. Rode o arquivo financeiro-conciliacao.sql no Supabase.' : error.message);
+      const existentes = new Set((ex || []).map(x => x.hash));
+      linhas.forEach(l => { l._ja = existentes.has(l.hash); });
+      concEstado.previa = { arquivo: arq.name, formato, linhas };
+      concDesenharPrevia();
+    } catch(e){ alvo.innerHTML = '<div class="vazio">Não consegui ler: ' + escapeHtml(e.message) + '</div>'; concEstado.previa = null; }
+  }
+  function concDesenharPrevia(){
+    const p = concEstado.previa; const alvo = document.getElementById('concPrevia'); if(!p || !alvo) return;
+    const novas = p.linhas.filter(l => !l._ja), cred = novas.reduce((a, l) => a + l.credito, 0), deb = novas.reduce((a, l) => a + l.debito, 0);
+    const datas = p.linhas.map(l => l.data).sort();
+    alvo.innerHTML = `
+      <p class="ext-nota" style="margin:10px 0;">Arquivo <strong>${escapeHtml(p.arquivo)}</strong> · formato ${escapeHtml(p.formato)} · ${p.linhas.length} lançamento(s) de ${formatarData(datas[0])} a ${formatarData(datas[datas.length - 1])} ·
+        <strong>${novas.length} nova(s)</strong> (créditos ${concNum(cred)} · débitos ${concNum(deb)}) · ${p.linhas.length - novas.length} já importada(s).</p>
+      <div class="ext-tabela-wrap" style="max-height:50vh; overflow:auto;"><table class="ext-tabela">
+        <thead><tr><th>Data</th><th>Histórico</th><th>Documento</th><th class="num">Crédito</th><th class="num">Débito</th><th>Situação</th></tr></thead>
+        <tbody>${p.linhas.slice(0, 400).map(l => `<tr style="${l._ja ? 'opacity:.5;' : ''}"><td>${formatarData(l.data)}</td><td>${escapeHtml(l.historico)}</td><td>${escapeHtml(l.documento)}</td><td class="num">${l.credito ? concNum(l.credito) : ''}</td><td class="num">${l.debito ? concNum(l.debito) : ''}</td><td>${l._ja ? 'já importada' : 'nova'}</td></tr>`).join('')}</tbody>
+      </table></div>
+      ${p.linhas.length > 400 ? `<p class="ext-nota">Mostrando as 400 primeiras linhas; todas as ${p.linhas.length} serão consideradas.</p>` : ''}
+      <div class="filtros" style="margin-top:12px;"><button class="btn-novo" id="concImportar" ${novas.length ? '' : 'disabled'}>Importar ${novas.length} lançamento(s)</button></div>
+      <div id="concImportStatus" class="ext-nota"></div>`;
+    document.getElementById('concImportar').addEventListener('click', concImportar);
+  }
+  async function concImportar(){
+    const p = concEstado.previa; if(!p) return;
+    const novas = p.linhas.filter(l => !l._ja); if(!novas.length) return;
+    const btn = document.getElementById('concImportar'), st = document.getElementById('concImportStatus'); btn.disabled = true;
+    try{
+      const lote = crypto.randomUUID ? crypto.randomUUID() : null;
+      const registros = novas.map(l => ({ unidade_negocio_id: agenciaId, id_conta: Number(concEstado.contaId), data: l.data, historico: l.historico, documento: l.documento || null,
+        credito: l.credito, debito: l.debito, saldo: l.saldo, arquivo: p.arquivo, lote_importacao: lote, hash: l.hash, situacao: 'pendente' }));
+      for(let i = 0; i < registros.length; i += 500){
+        st.textContent = `Gravando ${Math.min(i + 500, registros.length)} de ${registros.length}...`;
+        const { error } = await sb.from('financeiro_extrato_bancario').upsert(registros.slice(i, i + 500), { onConflict: 'unidade_negocio_id,id_conta,hash', ignoreDuplicates: true });
+        if(error) throw new Error(error.message);
+      }
+      await registrarSentinela('financeiro_extrato_importado', `Importou ${registros.length} lançamento(s) do extrato "${p.arquivo}" (${p.formato}) na conta "${extNomeConta(Number(concEstado.contaId))}"`);
+      concEstado.previa = null;
+      concEstado.aba = 'conciliar';
+      const datas = registros.map(r => r.data).sort();
+      document.getElementById('concDe').value = datas[0]; document.getElementById('concAte').value = datas[datas.length - 1]; concLerFiltros();
+      await concRender();
+    } catch(e){ st.textContent = 'Erro: ' + e.message; btn.disabled = false; }
+  }
+
+  // ---------------- 2) conciliar ----------------
+  async function concCarregarListas(){
+    const contaId = Number(concEstado.contaId), de = concEstado.de, ate = concEstado.ate;
+    let qe = sb.from('financeiro_extrato_bancario').select('*').eq('unidade_negocio_id', agenciaId).eq('id_conta', contaId).eq('situacao', 'pendente');
+    if(de) qe = qe.gte('data', de); if(ate) qe = qe.lte('data', ate);
+    const re = await qe.order('data').order('id').limit(3000);
+    if(re.error) throw new Error(/relation|does not exist|schema cache/i.test(re.error.message) ? 'A conciliação ainda não está instalada neste banco. Rode o arquivo financeiro-conciliacao.sql no Supabase.' : re.error.message);
+    let qm = sb.from('financeiro_movimentacao_contas').select('id, data, historico, valor, tipo_movimento, pessoa(nome)').eq('unidade_negocio_id', agenciaId).eq('id_conta', contaId).is('cod_conciliacao', null);
+    if(de) qm = qm.gte('data', concSomaDias(de, -7)); if(ate) qm = qm.lte('data', concSomaDias(ate, 7));
+    const rm = await qm.order('data').order('id').limit(3000);
+    if(rm.error) throw new Error(rm.error.message);
+    concEstado.extratos = re.data || []; concEstado.movs = rm.data || [];
+    concEstado.selE = new Set([...concEstado.selE].filter(id => concEstado.extratos.some(e => e.id === id)));
+    concEstado.selM = new Set([...concEstado.selM].filter(id => concEstado.movs.some(m => m.id === id)));
+  }
+  async function concRenderConciliar(){
+    concMsg('Carregando...');
+    try{ await concCarregarListas(); } catch(e){ concMsg(escapeHtml(e.message)); return; }
+    document.getElementById('concCorpo').innerHTML = `
+      <div class="filtros">
+        <button class="btn-novo" id="concSugerir">🔗 Sugestões automáticas</button>
+        <button class="ext-chip" id="concIgnorar" title="Marca as linhas selecionadas do extrato como ignoradas (ficam fora da conciliação)">Ignorar linhas marcadas</button>
+        <span style="flex:1;"></span><span id="concTotais" class="ext-nota"></span>
+        <button class="btn-novo" id="concConciliar" style="background:var(--brand-2);">✔ Conciliar marcados</button>
+      </div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(420px, 1fr)); gap:14px;">
+        <div><h3 style="font-size:.9rem; margin-bottom:6px;">Extrato do banco — pendentes (${concEstado.extratos.length})</h3><div class="ext-tabela-wrap" style="max-height:60vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th><th>Data</th><th>Histórico</th><th class="num">Valor</th></tr></thead><tbody id="concTbE"></tbody></table></div></div>
+        <div><h3 style="font-size:.9rem; margin-bottom:6px;">Lançamentos sem conciliação (${concEstado.movs.length})</h3><div class="ext-tabela-wrap" style="max-height:60vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th><th>Data</th><th>Histórico</th><th class="num">Valor</th></tr></thead><tbody id="concTbM"></tbody></table></div></div>
+      </div>`;
+    const linha = (tipo, id, d, h, sub, v) => `<tr><td><input type="checkbox" data-conc-${tipo}="${id}" ${(tipo === 'e' ? concEstado.selE : concEstado.selM).has(id) ? 'checked' : ''}></td><td style="white-space:nowrap;">${formatarData(d)}</td><td>${escapeHtml(h || '')}${sub ? `<div class="ext-cod" style="margin:0;">${escapeHtml(sub)}</div>` : ''}</td><td class="num ${v < 0 ? 'ext-neg' : ''}">${concNum(v)}</td></tr>`;
+    document.getElementById('concTbE').innerHTML = concEstado.extratos.map(e => linha('e', e.id, e.data, e.historico, e.documento, concLiquido(e))).join('') || '<tr><td colspan="4" class="vazio">Nenhuma linha pendente neste período.</td></tr>';
+    document.getElementById('concTbM').innerHTML = concEstado.movs.map(m => linha('m', m.id, m.data, m.historico, m.pessoa && m.pessoa.nome, concLiquidoMov(m))).join('') || '<tr><td colspan="4" class="vazio">Nenhum lançamento sem conciliação neste período.</td></tr>';
+    document.querySelectorAll('[data-conc-e]').forEach(c => c.addEventListener('change', () => { const id = Number(c.dataset.concE); c.checked ? concEstado.selE.add(id) : concEstado.selE.delete(id); concAtualizarTotais(); }));
+    document.querySelectorAll('[data-conc-m]').forEach(c => c.addEventListener('change', () => { const id = Number(c.dataset.concM); c.checked ? concEstado.selM.add(id) : concEstado.selM.delete(id); concAtualizarTotais(); }));
+    document.getElementById('concConciliar').addEventListener('click', () => concConciliarMarcados());
+    document.getElementById('concSugerir').addEventListener('click', concMostrarSugestoes);
+    document.getElementById('concIgnorar').addEventListener('click', concIgnorarMarcados);
+    concAtualizarTotais();
+  }
+  function concAtualizarTotais(){
+    const se = concEstado.extratos.filter(e => concEstado.selE.has(e.id)).reduce((a, e) => a + concLiquido(e), 0);
+    const sm = concEstado.movs.filter(m => concEstado.selM.has(m.id)).reduce((a, m) => a + concLiquidoMov(m), 0);
+    const dif = se - sm, ok = concEstado.selE.size && concEstado.selM.size && Math.abs(dif) < 0.01;
+    document.getElementById('concTotais').innerHTML = `Extrato marcado: <strong>${concNum(se)}</strong> (${concEstado.selE.size}) · Lançamentos: <strong>${concNum(sm)}</strong> (${concEstado.selM.size}) · Diferença: <strong style="color:${ok ? 'var(--brand-2)' : 'var(--danger)'};">${concNum(dif)}</strong>`;
+    document.getElementById('concConciliar').disabled = !ok;
+  }
+  async function concChamarConciliar(extratos, movs, origem, obs){
+    const { data, error } = await sb.rpc('financeiro_conciliar', { p_unidade: agenciaId, p_extratos: extratos, p_movimentacoes: movs, p_observacao: obs || null, p_origem: origem || 'manual' });
+    if(error) throw new Error(error.message);
+    return data;
+  }
+  async function concConciliarMarcados(){
+    const btn = document.getElementById('concConciliar'); btn.disabled = true;
+    try{
+      const cod = await concChamarConciliar([...concEstado.selE], [...concEstado.selM], 'manual');
+      await registrarSentinela('financeiro_conciliacao', `Conciliação #${cod}: ${concEstado.selE.size} linha(s) do extrato × ${concEstado.selM.size} lançamento(s) na conta "${extNomeConta(Number(concEstado.contaId))}"`);
+      concEstado.selE.clear(); concEstado.selM.clear();
+      await concRenderConciliar();
+      alert('Conciliação gravada com o código #' + cod + '.');
+    } catch(e){ alert('Não consegui conciliar: ' + e.message); concAtualizarTotais(); }
+  }
+  async function concIgnorarMarcados(){
+    if(!concEstado.selE.size){ alert('Marque as linhas do extrato que quer ignorar.'); return; }
+    if(!confirm(`Ignorar ${concEstado.selE.size} linha(s) do extrato? Elas saem da conciliação (podem ser reativadas depois em "Conciliações feitas").`)) return;
+    const { error } = await sb.from('financeiro_extrato_bancario').update({ situacao: 'ignorado' }).eq('unidade_negocio_id', agenciaId).in('id', [...concEstado.selE]).eq('situacao', 'pendente');
+    if(error){ alert('Não consegui: ' + error.message); return; }
+    concEstado.selE.clear(); await concRenderConciliar();
+  }
+
+  // sugestões: 1 linha do extrato ↔ 1 lançamento de mesmo valor (data até 3 dias de diferença); depois grupos (vários lançamentos somando a linha)
+  function concAcharSubconjunto(alvo, itens, max){
+    const alvoC = Math.round(alvo * 100); let achada = null, qtd = 0;
+    const vs = itens.map(m => Math.round(concLiquidoMov(m) * 100));
+    (function rec(i, restante, escolhidos){
+      if(qtd > 1) return;
+      if(restante === 0 && escolhidos.length > 1){ qtd++; achada = escolhidos.slice(); return; }
+      if(i >= itens.length || escolhidos.length >= max) return;
+      for(let k = i; k < itens.length; k++){ escolhidos.push(itens[k]); rec(k + 1, restante - vs[k], escolhidos); escolhidos.pop(); if(qtd > 1) return; }
+    })(0, alvoC, []);
+    return qtd === 1 ? achada : null;
+  }
+  function concCalcularSugestoes(){
+    const livresM = new Map(concEstado.movs.map(m => [m.id, m])); const pares = [];
+    const porValor = new Map();
+    concEstado.movs.forEach(m => { const k = concLiquidoMov(m).toFixed(2); (porValor.get(k) || porValor.set(k, []).get(k)).push(m); });
+    const cand = concEstado.extratos.map(e => ({ e, c: (porValor.get(concLiquido(e).toFixed(2)) || []).filter(m => concDiasEntre(m.data, e.data) <= 3) }));
+    const uso = new Map(); cand.forEach(x => x.c.forEach(m => uso.set(m.id, (uso.get(m.id) || 0) + 1)));
+    const jaE = new Set();
+    cand.forEach(x => { if(x.c.length === 1 && uso.get(x.c[0].id) === 1 && livresM.has(x.c[0].id)){ pares.push({ extratos: [x.e], movs: [x.c[0]], tipo: 'exata' }); livresM.delete(x.c[0].id); jaE.add(x.e.id); } });
+    // empates (valores repetidos): a mais próxima em data, marcada como "provável"
+    cand.filter(x => !jaE.has(x.e.id) && x.c.length).sort((a, b) => a.e.data.localeCompare(b.e.data)).forEach(x => {
+      const livres = x.c.filter(m => livresM.has(m.id)).sort((a, b) => concDiasEntre(a.data, x.e.data) - concDiasEntre(b.data, x.e.data));
+      if(livres.length){ pares.push({ extratos: [x.e], movs: [livres[0]], tipo: 'provavel' }); livresM.delete(livres[0].id); jaE.add(x.e.id); }
+    });
+    // grupos: uma linha do banco paga vários lançamentos (mesmo sentido, até 4, janela de 3 dias)
+    concEstado.extratos.filter(e => !jaE.has(e.id)).forEach(e => {
+      const sinal = concLiquido(e) >= 0 ? 1 : -1;
+      const pool = [...livresM.values()].filter(m => Math.sign(concLiquidoMov(m)) === sinal && concDiasEntre(m.data, e.data) <= 3).slice(0, 28);
+      const g = pool.length > 1 ? concAcharSubconjunto(concLiquido(e), pool, 4) : null;
+      if(g){ pares.push({ extratos: [e], movs: g, tipo: 'lote' }); g.forEach(m => livresM.delete(m.id)); jaE.add(e.id); }
+    });
+    return pares;
+  }
+  function concMostrarSugestoes(){
+    const pares = concCalcularSugestoes();
+    const ov = document.getElementById('modalConcSug');
+    document.getElementById('concSugCorpo').innerHTML = pares.length ? `
+      <div class="ext-tabela-wrap" style="max-height:55vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th><th>Confiança</th><th>Extrato</th><th>Lançamento(s)</th><th class="num">Valor</th></tr></thead>
+      <tbody>${pares.map((p, i) => `<tr><td><input type="checkbox" data-conc-par="${i}" ${p.tipo === 'exata' ? 'checked' : ''}></td><td>${p.tipo === 'exata' ? 'exata' : p.tipo === 'lote' ? 'em lote' : 'provável'}</td>
+        <td>${p.extratos.map(e => formatarData(e.data) + ' · ' + escapeHtml(e.historico || '')).join('<br>')}</td>
+        <td>${p.movs.map(m => formatarData(m.data) + ' · ' + escapeHtml(m.historico || '') + (m.pessoa && m.pessoa.nome ? ' · ' + escapeHtml(m.pessoa.nome) : '')).join('<br>')}</td>
+        <td class="num">${concNum(p.extratos.reduce((a, e) => a + concLiquido(e), 0))}</td></tr>`).join('')}</tbody></table></div>
+      <p class="ext-nota">As <strong>exatas</strong> (mesmo valor e data até 3 dias, sem outra candidata) já vêm marcadas; confira as <strong>prováveis</strong> e as <strong>em lote</strong> antes de marcar.</p>`
+      : '<div class="vazio">Nenhuma sugestão encontrada para este período.</div>';
+    document.getElementById('btnConcSugAplicar').style.display = pares.length ? '' : 'none';
+    window.__concPares = pares; ov.classList.add('show');
+  }
+  async function concAplicarSugestoes(){
+    const marcados = Array.from(document.querySelectorAll('[data-conc-par]:checked')).map(c => window.__concPares[Number(c.dataset.concPar)]);
+    if(!marcados.length){ alert('Marque ao menos uma sugestão.'); return; }
+    const btn = document.getElementById('btnConcSugAplicar'); btn.disabled = true; let ok = 0; const erros = [];
+    for(const p of marcados){
+      try{ btn.textContent = `Conciliando ${ok + erros.length + 1} de ${marcados.length}...`; await concChamarConciliar(p.extratos.map(e => e.id), p.movs.map(m => m.id), 'automatica'); ok++; }
+      catch(e){ erros.push(e.message); }
+    }
+    btn.disabled = false; btn.textContent = 'Conciliar as marcadas';
+    if(ok) await registrarSentinela('financeiro_conciliacao', `Conciliação automática: ${ok} conciliação(ões) na conta "${extNomeConta(Number(concEstado.contaId))}"`);
+    document.getElementById('modalConcSug').classList.remove('show');
+    concEstado.selE.clear(); concEstado.selM.clear(); await concRenderConciliar();
+    alert(`${ok} conciliação(ões) feita(s).` + (erros.length ? `\n${erros.length} falhou(aram):\n` + erros.slice(0, 3).join('\n') : ''));
+  }
+
+  // ---------------- 3) gerar lançamentos (tarifa, cesta, juros, IOF...) ----------------
+  function concRegraDaLinha(l){
+    const tipo = concLiquido(l) >= 0 ? 'C' : 'D', h = concNorm(l.historico);
+    return concEstado.regras.find(r => r.ativo && (!r.tipo_movimento || r.tipo_movimento === tipo) && h.includes(concNorm(r.palavra))) || null;
+  }
+  // padrões: a empresa vem da CONTA (empresa titular) ou, na falta, da empresa padrão da unidade; setor/plano/evento vêm dos "Padrões por empresa" (Parâmetros)
+  function concEmpresaDaConta(){
+    const c = todasContas.find(x => String(x.id) === String(concEstado.contaId));
+    return (c && c.empresa_id) || (parametrosGerais && parametrosGerais.empresa_padrao_id) || null;
+  }
+  function concCompletar(r){
+    r = r || {};
+    const empresa = r.empresa_id || concEmpresaDaConta();
+    const p = parametrosPorEmpresa.find(x => String(x.empresa_id) === String(empresa)) || {};
+    return { empresa_id: empresa || null, setor_id: r.setor_id || p.setor_padrao || null, plano_de_contas_id: r.plano_de_contas_id || p.plano_contas_padrao || null,
+             evento: r.evento || p.evento_padrao || null, pessoa_id: r.pessoa_id || null };
+  }
+  // palavra sugerida para a regra: o 1º trecho do histórico sem números/datas e sem termos genéricos (PIX, TED, COMPRA...); sempre contígua no histórico
+  function concSugerirPalavra(h){
+    const parar = new Set(['PIX', 'TED', 'DOC', 'COMPRA', 'PAGTO', 'PAGAMENTO', 'PGTO', 'TRANSF', 'TRANSFERENCIA', 'ENVIADO', 'RECEBIDO', 'ENVIADA', 'RECEBIDA', 'DEBITO', 'CREDITO', 'DEB', 'CRED', 'CARTAO', 'DE', 'DA', 'DO', 'DAS', 'DOS', 'EM', 'COM', 'PARA', 'REM', 'DES', 'CONTA', 'CORRENTE', 'LANC', 'LANCAMENTO', 'BOLETO', 'COBRANCA']);
+    const toks = concNorm(h).replace(/[^A-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
+    const ok = t => t.length > 2 && !/\d/.test(t) && !parar.has(t);
+    const i = toks.findIndex(ok); if(i < 0) return '';
+    return toks[i] + (toks[i + 1] && ok(toks[i + 1]) ? ' ' + toks[i + 1] : '');
+  }
+  function concBlocoClassificacao(p, valores){
+    const v = valores || {};
+    return `
+      <div class="field-group"><label>Fornecedor / cliente <span style="font-weight:400; color:var(--muted);">(opcional)</span></label><div class="campo-autocomplete"><input type="text" id="${p}_pessoa_busca" placeholder="Buscar nome ou código..." autocomplete="off"><input type="hidden" id="${p}_pessoa" value="${escapeHtml(v.pessoa_id || '')}"><div class="lista-sugestoes-autocomplete" id="${p}_pessoa_res"></div></div></div>
+      <div class="field-group"><label>Plano de contas</label><div class="campo-autocomplete"><input type="text" id="${p}_plano_busca" placeholder="Buscar código ou descrição..." autocomplete="off"><input type="hidden" id="${p}_plano" value="${escapeHtml(v.plano_de_contas_id || '')}"><div class="lista-sugestoes-autocomplete" id="${p}_plano_res"></div></div></div>
+      <div class="field-group"><label>Empresa</label><select id="${p}_empresa"><option value="">— escolha —</option>${todasEmpresas.map(e => `<option value="${e.id}" ${String(v.empresa_id) === String(e.id) ? 'selected' : ''}>${escapeHtml(e.nome)}</option>`).join('')}</select></div>
+      <div class="field-group"><label>Setor</label><select id="${p}_setor"><option value="">— escolha —</option>${todosSetores.map(s => `<option value="${s.id}" ${String(v.setor_id) === String(s.id) ? 'selected' : ''}>${escapeHtml((s.codigo != null ? s.codigo + ' — ' : '') + s.nome)}</option>`).join('')}</select></div>
+      <div class="field-group"><label>Evento (código)</label><input type="text" id="${p}_evento" value="${escapeHtml(v.evento || '')}" placeholder="Ex.: 1"></div>`;
+  }
+  function concLigarClassificacao(p, valores){
+    ligarBuscaAutocomplete(document.getElementById(p + '_plano_busca'), document.getElementById(p + '_plano'), document.getElementById(p + '_plano_res'), (t) => buscarLocal(todosPlanosContas, 'codigo', 'descricao', t), 'id');
+    const pl = valores && valores.plano_de_contas_id ? todosPlanosContas.find(x => String(x.id) === String(valores.plano_de_contas_id)) : null;
+    if(pl) document.getElementById(p + '_plano_busca').value = `${pl.codigo ?? pl.id} — ${pl.descricao}`;
+    const bp = document.getElementById(p + '_pessoa_busca');
+    ligarBuscaAutocomplete(bp, document.getElementById(p + '_pessoa'), document.getElementById(p + '_pessoa_res'), buscarPessoaParaCampo, 'id');
+    if(valores && valores.pessoa_id){
+      if(concEstado.pessoaNomes[valores.pessoa_id]) bp.value = concEstado.pessoaNomes[valores.pessoa_id];
+      else sb.from('pessoa').select('id, codigo, nome').eq('id', valores.pessoa_id).maybeSingle().then(({ data }) => { if(data){ concEstado.pessoaNomes[data.id] = `${data.codigo ?? data.id} — ${data.nome}`; bp.value = concEstado.pessoaNomes[data.id]; } });
+    }
+  }
+  function concLerClassificacao(p){
+    return { empresa_id: Number(document.getElementById(p + '_empresa').value) || null, setor_id: Number(document.getElementById(p + '_setor').value) || null,
+             plano_de_contas_id: Number(document.getElementById(p + '_plano').value) || null, evento: document.getElementById(p + '_evento').value.trim() || null,
+             pessoa_id: Number(document.getElementById(p + '_pessoa').value) || null };
+  }
+  async function concRenderGerar(){
+    concMsg('Carregando...');
+    try{ await concCarregarListas(); } catch(e){ concMsg(escapeHtml(e.message)); return; }
+    const L = concEstado.extratos;
+    document.getElementById('concCorpo').innerHTML = `
+      <p class="ext-nota" style="margin:0 0 10px;">Linhas do banco que <strong>não existem no contas a pagar</strong> (tarifa, cesta, juros, IOF, rendimento...). Marque as linhas e gere o lançamento: ele é criado na Movimentação com rateio e já fica conciliado (um código por linha).</p>
+      <div class="filtros">
+        <button class="btn-novo" id="concGerarRegras">⚡ Gerar com a regra de cada linha</button>
+        <button class="btn-novo" id="concGerarManual" style="background:var(--brand-2);">Gerar com a classificação que eu escolher…</button>
+        <button class="ext-chip" id="concGerarTodas">Marcar todas as linhas com regra</button>
+        <span style="flex:1;"></span><span id="concGerarTotal" class="ext-nota"></span>
+      </div>
+      <div class="ext-tabela-wrap" style="max-height:62vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th><th>Data</th><th>Histórico</th><th class="num">Valor</th><th>Regra</th><th></th></tr></thead>
+        <tbody>${L.map(e => { const r = concRegraDaLinha(e); const c = r ? concCompletar(r) : null; const pl = c && c.plano_de_contas_id ? todosPlanosContas.find(x => x.id === c.plano_de_contas_id) : null; const pn = r && r.pessoa_id ? concEstado.pessoaNomes[r.pessoa_id] : '';
+          return `<tr><td><input type="checkbox" data-conc-g="${e.id}" ${concEstado.selE.has(e.id) ? 'checked' : ''}></td><td style="white-space:nowrap;">${formatarData(e.data)}</td><td>${escapeHtml(e.historico || '')}</td><td class="num ${concLiquido(e) < 0 ? 'ext-neg' : ''}">${concNum(concLiquido(e))}</td><td>${r ? `<span class="ext-selo" title="${escapeHtml(pn || '')}">${escapeHtml(r.palavra)}${pl ? ' → ' + escapeHtml(pl.codigo) : ''}${pn ? ' · ' + escapeHtml(pn.split(' — ').slice(1).join(' — ')) : ''}</span>` : '<span class="ext-cod">sem regra</span>'}</td><td style="white-space:nowrap;"><button class="ext-chip" data-conc-cls="${e.id}">Classificar…</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="vazio">Nenhuma linha pendente neste período.</td></tr>'}</tbody></table></div>`;
+    const atualizar = () => { const s = L.filter(e => concEstado.selE.has(e.id)).reduce((a, e) => a + concLiquido(e), 0); document.getElementById('concGerarTotal').textContent = `${concEstado.selE.size} marcada(s) · ${concNum(s)}`; };
+    document.querySelectorAll('[data-conc-g]').forEach(c => c.addEventListener('change', () => { const id = Number(c.dataset.concG); c.checked ? concEstado.selE.add(id) : concEstado.selE.delete(id); atualizar(); }));
+    document.getElementById('concGerarTodas').addEventListener('click', () => { L.forEach(e => { if(concRegraDaLinha(e)) concEstado.selE.add(e.id); }); concRenderGerar(); });
+    document.getElementById('concGerarRegras').addEventListener('click', concGerarPorRegras);
+    document.getElementById('concGerarManual').addEventListener('click', () => concAbrirGerarManual(null));
+    document.querySelectorAll('[data-conc-cls]').forEach(b => b.addEventListener('click', () => concAbrirGerarManual(Number(b.dataset.concCls))));
+    atualizar();
+  }
+  async function concGerar(ids, c, historico){
+    const { data, error } = await sb.rpc('financeiro_gerar_e_conciliar', { p_unidade: agenciaId, p_extratos: ids, p_empresa: c.empresa_id, p_setor: c.setor_id, p_plano: c.plano_de_contas_id, p_evento: c.evento, p_pessoa: c.pessoa_id || null, p_historico: historico || null });
+    if(error) throw new Error(error.message);
+    return (data || []).length;
+  }
+  async function concGerarPorRegras(){
+    const sel = concEstado.extratos.filter(e => concEstado.selE.has(e.id)); const base = sel.length ? sel : concEstado.extratos;
+    const grupos = new Map(); let semRegra = 0, incompletas = 0;
+    // a regra pode ser parcial: empresa vem da conta e setor/plano/evento dos "Padrões por empresa" (Parâmetros)
+    base.forEach(e => { const r = concRegraDaLinha(e); if(!r){ semRegra++; return; } const c = concCompletar(r);
+      if(!c.empresa_id || !c.setor_id || !c.plano_de_contas_id || !c.evento){ incompletas++; return; }
+      const chave = JSON.stringify([c, r.descricao || '']); (grupos.get(chave) || grupos.set(chave, { r, c, ids: [] }).get(chave)).ids.push(e.id); });
+    const total = [...grupos.values()].reduce((a, g) => a + g.ids.length, 0);
+    if(!total){ alert('Nenhuma das linhas tem classificação completa (empresa, setor, plano e evento).' + (semRegra ? `\n${semRegra} sem regra.` : '') + (incompletas ? `\n${incompletas} com regra incompleta: complete a regra em "Regras" ou os padrões da empresa em Parâmetros.` : '')); return; }
+    if(!confirm(`Gerar ${total} lançamento(s) pela regra de cada linha e conciliar?` + (semRegra ? `\n${semRegra} linha(s) sem regra ficam de fora.` : '') + (incompletas ? `\n${incompletas} com regra incompleta ficam de fora.` : ''))) return;
+    const btn = document.getElementById('concGerarRegras'); btn.disabled = true; let feitos = 0;
+    try{
+      for(const g of grupos.values()){
+        feitos += await concGerar(g.ids, g.c, g.r.descricao);
+      }
+      await registrarSentinela('financeiro_conciliacao_gerar', `Gerou ${feitos} lançamento(s) a partir do extrato por regras (conta "${extNomeConta(Number(concEstado.contaId))}")`);
+    } catch(e){ alert('Parou: ' + e.message + (feitos ? `\n${feitos} lançamento(s) já tinham sido gerados.` : '')); }
+    concEstado.selE.clear(); await concRenderGerar();
+  }
+  // idUnico = botão "Classificar…" de uma linha (mostra também "lembrar como regra"); null = linhas marcadas
+  let concGerarAlvo = [];
+  function concAbrirGerarManual(idUnico){
+    const alvo = idUnico ? [idUnico] : [...concEstado.selE];
+    if(!alvo.length){ alert('Marque ao menos uma linha do extrato.'); return; }
+    concGerarAlvo = alvo;
+    const primeira = concEstado.extratos.find(e => e.id === alvo[0]); const r = primeira ? concRegraDaLinha(primeira) : null;
+    const unica = alvo.length === 1 && primeira;
+    document.getElementById('tituloModalConcGerar').textContent = unica ? 'Classificar e conciliar esta linha' : `Gerar ${alvo.length} lançamento(s) e conciliar`;
+    const info = unica ? `<div class="ext-nota" style="margin:0 0 10px; padding:8px 10px; background:var(--brand-soft); border-radius:8px;"><strong>${formatarData(primeira.data)}</strong> · ${escapeHtml(primeira.historico || '')} · <strong class="${concLiquido(primeira) < 0 ? 'ext-neg' : ''}">${concNum(concLiquido(primeira))}</strong>${r ? `<br>Regra reconhecida: <strong>${escapeHtml(r.palavra)}</strong> (completei o que faltava com a conta/padrões da empresa)` : ''}</div>` : '';
+    const regra = unica ? `<label style="display:flex; align-items:center; gap:6px; font-size:.85rem; margin-top:6px;"><input type="checkbox" id="cg_regra" ${r ? '' : 'checked'}> Lembrar como regra para os próximos extratos</label>
+      <div class="field-group" id="cg_regra_box"><label>Quando o histórico tiver a palavra</label><input type="text" id="cg_regra_palavra" value="${escapeHtml(r ? r.palavra : concSugerirPalavra(primeira.historico))}"></div>` : '';
+    document.getElementById('concGerarForm').innerHTML = info + concBlocoClassificacao('cg', concCompletar(r || {})) + '<div class="field-group"><label>Histórico (opcional — vazio = o do extrato)</label><input type="text" id="cg_hist"></div>' + regra;
+    concLigarClassificacao('cg', concCompletar(r || {}));
+    if(unica){
+      const chk = document.getElementById('cg_regra'), box = document.getElementById('cg_regra_box');
+      const ver = () => { box.style.display = chk.checked ? '' : 'none'; }; chk.addEventListener('change', ver); ver();
+    }
+    document.getElementById('modalConcGerar').classList.add('show');
+  }
+  async function concConfirmarGerarManual(){
+    const c = concLerClassificacao('cg');
+    if(!c.empresa_id || !c.setor_id || !c.plano_de_contas_id || !c.evento){ alert('Informe empresa, setor, plano de contas e evento (o rateio é obrigatório).'); return; }
+    const alvo = concGerarAlvo.slice();
+    const chk = document.getElementById('cg_regra'); const querRegra = alvo.length === 1 && chk && chk.checked;
+    const linha = alvo.length === 1 ? concEstado.extratos.find(e => e.id === alvo[0]) : null;
+    const palavra = querRegra ? document.getElementById('cg_regra_palavra').value.trim() : '';
+    if(querRegra){
+      if(!palavra){ alert('Informe a palavra da regra (ou desmarque "Lembrar como regra").'); return; }
+      if(!concNorm(linha.historico).includes(concNorm(palavra)) && !confirm('Essa palavra não aparece no histórico desta linha, então a regra não a reconheceria. Salvar mesmo assim?')) return;
+    }
+    const btn = document.getElementById('btnConcGerarOk'); btn.disabled = true;
+    try{
+      const n = await concGerar(alvo, c, document.getElementById('cg_hist').value.trim());
+      await registrarSentinela('financeiro_conciliacao_gerar', `Gerou ${n} lançamento(s) a partir do extrato (conta "${extNomeConta(Number(concEstado.contaId))}")`);
+      document.getElementById('modalConcGerar').classList.remove('show'); concEstado.selE.clear();
+      let extra = '';
+      if(querRegra){
+        try{ extra = await concSalvarRegraDaLinha(palavra, linha, c, document.getElementById('cg_hist').value.trim()); }
+        catch(e){ alert('O lançamento foi gerado, mas não consegui salvar a regra: ' + e.message); }
+      }
+      await concRenderGerar();
+      if(extra) await concAplicarRegraNovaNasOutras(extra);
+    } catch(e){ alert('Não consegui gerar: ' + e.message); }
+    finally { btn.disabled = false; }
+  }
+  // grava (ou atualiza, se a mesma palavra e tipo já existem) a regra a partir da classificação escolhida; devolve o id da regra
+  async function concSalvarRegraDaLinha(palavra, linha, c, historico){
+    const tipo = concLiquido(linha) >= 0 ? 'C' : 'D';
+    const reg = { unidade_negocio_id: agenciaId, palavra, tipo_movimento: tipo,
+      empresa_id: c.empresa_id === concEmpresaDaConta() ? null : c.empresa_id,   // empresa igual à da conta fica em branco: a regra serve para qualquer conta
+      setor_id: c.setor_id, plano_de_contas_id: c.plano_de_contas_id, evento: c.evento, pessoa_id: c.pessoa_id, descricao: historico || null, ativo: true };
+    const igual = concEstado.regras.find(r => concNorm(r.palavra) === concNorm(palavra) && (r.tipo_movimento || '') === tipo);
+    const { data, error } = igual ? await sb.from('financeiro_conciliacao_regras').update(reg).eq('id', igual.id).select('id').single()
+                                  : await sb.from('financeiro_conciliacao_regras').insert({ ...reg, ordem: 100 }).select('id').single();
+    if(error) throw new Error(/pessoa_id/.test(error.message) ? 'rode de novo o financeiro-conciliacao.sql no Supabase (falta a coluna do fornecedor).' : error.message);
+    await concRecarregarRegras();
+    await registrarSentinela('financeiro_conciliacao_regra', `${igual ? 'Atualizou' : 'Criou'} a regra "${palavra}" a partir do extrato`);
+    return data.id;
+  }
+  // depois de salvar uma regra: oferece gerar já as outras linhas pendentes que ela reconhece
+  async function concAplicarRegraNovaNasOutras(regraId){
+    const outras = concEstado.extratos.filter(e => { const r = concRegraDaLinha(e); return r && r.id === regraId; });
+    if(!outras.length) return;
+    const r = concEstado.regras.find(x => x.id === regraId); const c = concCompletar(r);
+    if(!c.empresa_id || !c.setor_id || !c.plano_de_contas_id || !c.evento) return;
+    const soma = outras.reduce((a, e) => a + concLiquido(e), 0);
+    if(!confirm(`A regra "${r.palavra}" também reconhece mais ${outras.length} linha(s) pendente(s) deste período (total ${concNum(soma)}).\nGerar e conciliar essas linhas agora?`)) return;
+    try{
+      const n = await concGerar(outras.map(e => e.id), c, r.descricao);
+      await registrarSentinela('financeiro_conciliacao_gerar', `Gerou ${n} lançamento(s) pela regra "${r.palavra}" (conta "${extNomeConta(Number(concEstado.contaId))}")`);
+    } catch(e){ alert('Parou: ' + e.message); }
+    await concRenderGerar();
+  }
+
+  // ---------------- 4) conciliações feitas ----------------
+  async function concRenderFeitas(){
+    concMsg('Carregando...');
+    let q = sb.from('financeiro_conciliacoes').select('*').eq('unidade_negocio_id', agenciaId);
+    if(concEstado.contaId) q = q.eq('id_conta', Number(concEstado.contaId));
+    if(concEstado.de) q = q.gte('data', concEstado.de); if(concEstado.ate) q = q.lte('data', concEstado.ate);
+    const { data, error } = await q.order('codigo', { ascending: false }).limit(500);
+    if(error){ concMsg(escapeHtml(error.message)); return; }
+    document.getElementById('concCorpo').innerHTML = data.length ? `<div class="ext-tabela-wrap"><table class="ext-tabela"><thead><tr><th>Código</th><th>Data</th><th>Conta</th><th class="num">Valor</th><th>Origem</th><th>Observação</th><th></th></tr></thead>
+      <tbody>${data.map(c => `<tr><td><strong>#${c.codigo}</strong></td><td>${formatarData(c.data)}</td><td>${escapeHtml(extNomeConta(c.id_conta))}</td><td class="num ${Number(c.valor) < 0 ? 'ext-neg' : ''}">${concNum(c.valor)}</td><td>${c.origem}</td><td>${escapeHtml(c.observacao || '')}</td>
+        <td style="white-space:nowrap;"><button class="ext-chip" data-conc-ver="${c.codigo}">Ver</button> <button class="ext-chip" data-conc-desf="${c.codigo}" style="color:var(--danger);">Desfazer</button></td></tr>
+        <tr id="concDet${c.codigo}" style="display:none;"><td colspan="7"></td></tr>`).join('')}</tbody></table></div><p class="ext-nota">Mostra até 500 conciliações do período e da conta escolhidos.</p>` : '<div class="vazio">Nenhuma conciliação neste período.</div>';
+    document.querySelectorAll('[data-conc-ver]').forEach(b => b.addEventListener('click', () => concVer(Number(b.dataset.concVer))));
+    document.querySelectorAll('[data-conc-desf]').forEach(b => b.addEventListener('click', () => concDesfazer(Number(b.dataset.concDesf))));
+  }
+  async function concVer(cod){
+    const tr = document.getElementById('concDet' + cod); const td = tr.firstElementChild;
+    if(tr.style.display !== 'none'){ tr.style.display = 'none'; return; }
+    td.innerHTML = 'Carregando...'; tr.style.display = '';
+    const [e, m] = await Promise.all([
+      sb.from('financeiro_extrato_bancario').select('data, historico, credito, debito').eq('unidade_negocio_id', agenciaId).eq('cod_conciliacao', cod),
+      sb.from('financeiro_movimentacao_contas').select('data, historico, valor, tipo_movimento').eq('unidade_negocio_id', agenciaId).eq('cod_conciliacao', cod)]);
+    td.innerHTML = `<div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; font-size:.8rem;"><div><strong>Extrato</strong>${(e.data || []).map(x => `<div>${formatarData(x.data)} · ${escapeHtml(x.historico || '')} · ${concNum(Number(x.credito) - Number(x.debito))}</div>`).join('')}</div>
+      <div><strong>Lançamentos</strong>${(m.data || []).map(x => `<div>${formatarData(x.data)} · ${escapeHtml(x.historico || '')} · ${concNum(concLiquidoMov(x))}</div>`).join('')}</div></div>`;
+  }
+  async function concDesfazer(cod){
+    if(!confirm(`Desfazer a conciliação #${cod}? As linhas do extrato voltam para pendentes. Se ela foi GERADA a partir do extrato, o lançamento gerado também é apagado.`)) return;
+    const { error } = await sb.rpc('financeiro_desconciliar', { p_unidade: agenciaId, p_codigo: cod });
+    if(error){ alert('Não consegui desfazer: ' + error.message); return; }
+    await registrarSentinela('financeiro_conciliacao_desfeita', `Desfez a conciliação #${cod}`);
+    await concRenderFeitas();
+  }
+
+  // ---------------- 5) regras ----------------
+  async function concRecarregarRegras(){
+    const { data } = await sb.from('financeiro_conciliacao_regras').select('*').eq('unidade_negocio_id', agenciaId).order('ordem').order('id'); concEstado.regras = data || [];
+    const ids = [...new Set(concEstado.regras.map(r => r.pessoa_id).filter(x => x && !concEstado.pessoaNomes[x]))];
+    if(ids.length){
+      const { data: ps } = await sb.from('pessoa').select('id, codigo, nome').in('id', ids);
+      (ps || []).forEach(p => { concEstado.pessoaNomes[p.id] = `${p.codigo ?? p.id} — ${p.nome}`; });
+    }
+  }
+  async function concRenderRegras(){
+    await concRecarregarRegras();
+    const nomeDe = (lista, id, f) => { const x = lista.find(y => String(y.id) === String(id)); return x ? f(x) : ''; };
+    document.getElementById('concCorpo').innerHTML = `
+      <div class="filtros"><button class="btn-novo" id="concNovaRegra">+ Nova regra</button><span class="ext-nota">Quando o histórico do extrato contém a palavra, a regra sugere (ou aplica, em "Gerar") a classificação. Vale para qualquer banco da unidade; a de menor ordem vence.</span></div>
+      ${concEstado.regras.length ? `<div class="ext-tabela-wrap"><table class="ext-tabela"><thead><tr><th>Ordem</th><th>Palavra</th><th>Tipo</th><th>Fornecedor</th><th>Empresa</th><th>Setor</th><th>Plano de contas</th><th>Evento</th><th>Ativa</th><th></th></tr></thead><tbody>
+        ${concEstado.regras.map(r => `<tr><td>${r.ordem}</td><td><strong>${escapeHtml(r.palavra)}</strong></td><td>${r.tipo_movimento === 'D' ? 'Débito' : r.tipo_movimento === 'C' ? 'Crédito' : 'Ambos'}</td><td>${escapeHtml(concEstado.pessoaNomes[r.pessoa_id] || '')}</td><td>${escapeHtml(r.empresa_id ? nomeDe(todasEmpresas, r.empresa_id, x => x.nome) : '(da conta)')}</td><td>${escapeHtml(nomeDe(todosSetores, r.setor_id, x => x.nome))}</td><td>${escapeHtml(nomeDe(todosPlanosContas, r.plano_de_contas_id, x => x.codigo + ' · ' + x.descricao))}</td><td>${escapeHtml(r.evento || '')}</td><td>${r.ativo ? 'Sim' : 'Não'}</td>
+          <td style="white-space:nowrap;"><button class="ext-chip" data-conc-edit="${r.id}">Editar</button> <button class="ext-chip" data-conc-del="${r.id}" style="color:var(--danger);">Excluir</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="vazio">Nenhuma regra cadastrada. Exemplos: TARIFA, CESTA, JUROS, IOF, RENDIMENTO.</div>'}`;
+    document.getElementById('concNovaRegra').addEventListener('click', () => concAbrirRegra(null));
+    document.querySelectorAll('[data-conc-edit]').forEach(b => b.addEventListener('click', () => concAbrirRegra(Number(b.dataset.concEdit))));
+    document.querySelectorAll('[data-conc-del]').forEach(b => b.addEventListener('click', async () => {
+      const r = concEstado.regras.find(x => x.id === Number(b.dataset.concDel)); if(!r || !confirm(`Excluir a regra "${r.palavra}"?`)) return;
+      const { error } = await sb.from('financeiro_conciliacao_regras').delete().eq('id', r.id); if(error){ alert(error.message); return; } concRenderRegras();
+    }));
+  }
+  let concRegraEditandoId = null;
+  function concAbrirRegra(id){
+    concRegraEditandoId = id; const r = id ? concEstado.regras.find(x => x.id === id) : { ordem: 100, ativo: true };
+    document.getElementById('tituloModalConcRegra').textContent = id ? 'Editar regra' : 'Nova regra';
+    document.getElementById('concRegraForm').innerHTML = `
+      <div class="field-group"><label>Palavra no histórico do extrato *</label><input type="text" id="cr_palavra" value="${escapeHtml(r.palavra || '')}" placeholder="Ex.: TARIFA"></div>
+      <div class="field-group"><label>Vale para</label><select id="cr_tipo"><option value="">Crédito e débito</option><option value="D" ${r.tipo_movimento === 'D' ? 'selected' : ''}>Só débito (saída)</option><option value="C" ${r.tipo_movimento === 'C' ? 'selected' : ''}>Só crédito (entrada)</option></select></div>
+      ${concBlocoClassificacao('cr', r)}
+      <div class="field-group"><label>Histórico a gravar (opcional — vazio = o do extrato)</label><input type="text" id="cr_desc" value="${escapeHtml(r.descricao || '')}"></div>
+      <div class="field-group"><label>Ordem (menor vence)</label><input type="number" id="cr_ordem" value="${r.ordem ?? 100}"></div>
+      <label style="display:flex; align-items:center; gap:6px; font-size:.85rem;"><input type="checkbox" id="cr_ativo" ${r.ativo === false ? '' : 'checked'}> Regra ativa</label>`;
+    concLigarClassificacao('cr', r);
+    document.getElementById('modalConcRegra').classList.add('show');
+  }
+  async function concSalvarRegra(){
+    const palavra = document.getElementById('cr_palavra').value.trim(); if(!palavra){ alert('Informe a palavra.'); return; }
+    const c = concLerClassificacao('cr');
+    const reg = { unidade_negocio_id: agenciaId, palavra, tipo_movimento: document.getElementById('cr_tipo').value || null, empresa_id: c.empresa_id, setor_id: c.setor_id, plano_de_contas_id: c.plano_de_contas_id, evento: c.evento, pessoa_id: c.pessoa_id,
+                  descricao: document.getElementById('cr_desc').value.trim() || null, ordem: parseInt(document.getElementById('cr_ordem').value, 10) || 100, ativo: document.getElementById('cr_ativo').checked };
+    const { error } = concRegraEditandoId ? await sb.from('financeiro_conciliacao_regras').update(reg).eq('id', concRegraEditandoId) : await sb.from('financeiro_conciliacao_regras').insert(reg);
+    if(error){ alert('Não consegui salvar: ' + error.message); return; }
+    document.getElementById('modalConcRegra').classList.remove('show'); concRenderRegras();
+  }
+
+  document.getElementById('concConta').addEventListener('change', () => { concEstado.selE.clear(); concEstado.selM.clear(); concEstado.previa = null; concLerFiltros(); concRender(); });
+  document.getElementById('concDe').addEventListener('change', () => { concLerFiltros(); concRender(); });
+  document.getElementById('concAte').addEventListener('change', () => { concLerFiltros(); concRender(); });
+  document.querySelectorAll('[data-conc-atalho]').forEach(b => b.addEventListener('click', () => concAtalho(b.dataset.concAtalho)));
+  document.querySelectorAll('[data-conc-aba]').forEach(b => b.addEventListener('click', () => { concEstado.aba = b.dataset.concAba; concEstado.selE.clear(); concEstado.selM.clear(); concRender(); }));
+  document.getElementById('btnConcSugAplicar').addEventListener('click', concAplicarSugestoes);
+  document.getElementById('btnConcSugFechar').addEventListener('click', () => document.getElementById('modalConcSug').classList.remove('show'));
+  document.getElementById('btnConcGerarOk').addEventListener('click', concConfirmarGerarManual);
+  document.getElementById('btnConcGerarFechar').addEventListener('click', () => document.getElementById('modalConcGerar').classList.remove('show'));
+  document.getElementById('btnConcRegraOk').addEventListener('click', concSalvarRegra);
+  document.getElementById('btnConcRegraFechar').addEventListener('click', () => document.getElementById('modalConcRegra').classList.remove('show'));
+
+  // =================================================================
   // AJUDA DO MÓDULO -- conteúdo educativo pro operador (não é
   // documentação técnica pra dev, é o "manual" de quem lança no dia a
   // dia). IMPORTANTE: toda vez que uma decisão de negócio ou um
@@ -1762,6 +2416,24 @@
           O PDF de extratos muito grandes pede confirmação — para milhares de linhas prefira o Excel.</li>
           <li>A lista da aba <strong>Movimentação de Contas</strong> só é carregada quando você abre a aba (o app abre mais rápido), os filtros (conta, datas, busca) são aplicados no servidor e ela mostra os
           <strong>500 lançamentos mais recentes</strong> do filtro, com o total dito no aviso; a barra de saldo vem do banco e o PDF do livro caixa traz todos os lançamentos do filtro. Para o histórico inteiro use este extrato.</li>
+        </ul>
+      ` },
+      { id: 'conciliacao', titulo: 'Conciliação bancária', corpo: `
+        <p>Confere o <strong>extrato do banco</strong> com o que foi pago/recebido na Movimentação de Contas, por um <strong>código de conciliação</strong> sequencial.
+        Escolha a conta do banco no topo e siga as etapas:</p>
+        <ul>
+          <li><strong>1 · Importar extrato</strong>: escolha o arquivo do banco — Bradesco (.csv), Itaú (.txt), Sicoob (.xlsx) ou OFX (o formato é detectado sozinho). Aparece uma prévia com o que é novo e o que já foi importado
+          (linha igual — mesma data, histórico, documento e valor — não duplica; dá para importar de novo um período que se sobrepõe). Linhas de saldo e lançamentos futuros são ignorados.</li>
+          <li><strong>2 · Conciliar</strong>: à esquerda as linhas pendentes do banco, à direita os lançamentos da conta ainda sem conciliação (do período ± 7 dias). Marque dos dois lados — os valores precisam <strong>fechar</strong>
+          (crédito soma, débito subtrai; pode ser 1 linha do banco para vários lançamentos e o contrário) — e clique em <strong>Conciliar marcados</strong>: nasce um <strong>código de conciliação</strong>, gravado nas linhas do extrato e nos lançamentos.
+          <strong>Sugestões automáticas</strong> procura pares de mesmo valor com data até 3 dias de diferença (as exatas já vêm marcadas; as prováveis e as em lote pedem conferência). <strong>Ignorar</strong> tira linhas da conciliação.</li>
+          <li><strong>3 · Gerar lançamentos</strong>: tarifas, cesta, juros, IOF, rendimentos etc. que o banco lançou e <strong>não estão no contas a pagar</strong>. Marque as linhas e escolha <strong>Gerar com a regra de cada linha</strong> ou
+          <strong>Gerar com a classificação que eu escolher</strong> (empresa, setor, plano de contas e evento são obrigatórios). Cada linha vira um lançamento na Movimentação, com rateio de 100%, já conciliado (um código por linha).
+          Para uma linha só, use o botão <strong>Classificar…</strong> dela: escolha <strong>fornecedor, plano de contas</strong> e confira empresa/setor/evento (a <strong>empresa já vem da conta</strong> — veja "Empresa titular" em Cadastros → Contas correntes — e setor/evento/plano padrão vêm de Parâmetros → Padrões por empresa).
+          Marcando <strong>Lembrar como regra</strong>, a palavra do histórico (sugerida, editável) vira uma regra com o fornecedor e a classificação escolhidos; em seguida o sistema avisa se a regra reconhece <strong>outras linhas pendentes</strong> e oferece gerar todas de uma vez.</li>
+          <li><strong>Regras</strong>: cadastre palavras do histórico (TARIFA, CESTA, JUROS, IOF, RENDIMENTO...) com fornecedor e classificação padrão; valem para todos os bancos da unidade e a de menor ordem vence. A regra pode ser <strong>parcial</strong>: o que faltar (empresa, setor, plano, evento) é completado pela conta e pelos padrões da empresa; se ainda faltar algo, a linha fica de fora do "gerar por regra".</li>
+          <li><strong>Conciliações feitas</strong>: lista os códigos (com as linhas e lançamentos de cada um). <strong>Desfazer</strong> devolve as linhas ao pendente e solta os lançamentos; se a conciliação foi gerada a partir do extrato, o lançamento gerado também é apagado.</li>
+          <li>Precisa do arquivo <code>financeiro-conciliacao.sql</code> rodado no Supabase.</li>
         </ul>
       ` },
       { id: 'cadastros', titulo: 'Cadastros', corpo: `
@@ -3904,7 +4576,7 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
     unidade_plano_de_contas: {
       campos: [{ campo: 'codigo', label: 'Código', tipo: 'text', obrigatorio: true }, { campo: 'descricao', label: 'Descrição', tipo: 'text', obrigatorio: true }]
     },
-    financeiro_contas_correntes: { campos: [{ campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true }, { campo: 'acompanha_saldo', label: 'Acompanha saldo (aparece no Extrato de contas)', tipo: 'booleano', exigeColuna: true }] },
+    financeiro_contas_correntes: { campos: [{ campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true }, { campo: 'acompanha_saldo', label: 'Acompanha saldo (aparece no Extrato de contas)', tipo: 'booleano', exigeColuna: true }, { campo: 'empresa_id', label: 'Empresa titular da conta (padrão nos lançamentos gerados pela Conciliação bancária)', tipo: 'empresa', exigeColuna: true }] },
     financeiro_forma_pagamento: { campos: [{ campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true }] },
     financeiro_sub_contas: {
       campos: [{ campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true }, { campo: 'limite_valor', label: 'Limite (R$)', tipo: 'number' }]
@@ -4140,6 +4812,9 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
       if(c.tipo === 'booleano'){
         const atual = (item[c.campo] === undefined || item[c.campo] === null) ? true : item[c.campo];
         return `<div class="field-group"><label>${c.label}</label><select data-campo-cadastro="${c.campo}"><option value="true" ${atual ? 'selected' : ''}>Sim</option><option value="false" ${atual ? '' : 'selected'}>Não — conta de passagem (fora do extrato)</option></select></div>`;
+      }
+      if(c.tipo === 'empresa'){
+        return `<div class="field-group"><label>${c.label}</label><select data-campo-cadastro="${c.campo}"><option value="">— nenhuma —</option>${todasEmpresas.map(e => `<option value="${e.id}" ${String(valor) === String(e.id) ? 'selected' : ''}>${escapeHtml(e.nome)}</option>`).join('')}</select></div>`;
       }
       if(c.tipo === 'select'){
         return `<div class="field-group"><label>${c.label}</label><select data-campo-cadastro="${c.campo}">${c.opcoes.map(([v, l]) => `<option value="${v}" ${valor === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`;
