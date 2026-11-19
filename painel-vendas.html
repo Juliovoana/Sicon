@@ -166,6 +166,17 @@
   #tbDemo th.txt, #tbCentro th.txt{ left:0; z-index:2; }
   #tbDemo tr.tot td.txt{ background:var(--cab); }
   .tit-bloco-aux{ font-weight:500; font-size:.8rem; opacity:.9; }
+  .filtro-mes{ display:flex; gap:8px 14px; flex-wrap:wrap; align-items:center; margin:0 12px 12px; padding:8px 12px; background:var(--brand-soft); border:1px solid var(--line); border-left:4px solid var(--brand); border-radius:8px; font-size:.84rem; }
+  .filtro-mes[hidden]{ display:none; }
+  .filtro-mes .det{ flex-basis:100%; color:var(--muted); font-size:.8rem; }
+  .dica{ position:fixed; z-index:60; max-width:300px; min-width:210px; padding:9px 11px; background:var(--card); color:var(--ink); border:1px solid var(--line-forte); border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,.22); font-size:.78rem; line-height:1.35; pointer-events:none; }
+  .dica[hidden]{ display:none; }
+  .dica h5{ margin:0 0 5px; font-size:.82rem; }
+  .dica .l{ display:flex; justify-content:space-between; gap:12px; padding:1px 0; }
+  .dica .l span{ color:var(--muted); } .dica .l b{ text-align:right; }
+  .dica .pos{ color:var(--pos); } .dica .neg{ color:var(--neg); }
+  .dica .sep{ border-top:1px solid var(--line); margin:5px 0; }
+  .filtro-mes .btn{ padding:5px 10px; font-size:.78rem; }
 </style>
 <div class="pagina">
   <div class="topo">
@@ -205,7 +216,7 @@
 
     <div class="aba" id="aba-geral">
       <div class="kpis" id="kpis"></div>
-      <div class="bloco"><h2><span>Por mês</span><span class="tit-bloco-aux">clique na legenda para mostrar ou ocultar · clique numa barra para abrir o mês no calendário</span></h2><div class="graf"><canvas id="gMes"></canvas></div></div>
+      <div class="bloco"><h2><span>Por mês</span><span class="tit-bloco-aux">clique na legenda para mostrar ou ocultar · clique numa barra para ver só aquele mês (clique de novo para ver todos)</span></h2><div class="graf"><canvas id="gMes"></canvas></div><div class="filtro-mes" id="filtroMes" hidden></div></div>
       <div class="grade2">
         <div class="bloco"><h2><span>Recebimentos por forma</span></h2><div class="graf"><canvas id="gForma"></canvas></div></div>
         <div class="bloco"><h2><span>Calendário de vendas · <span id="calTit"></span></span><span class="cal-nav"><button type="button" id="calAnt" aria-label="Mês anterior">‹</button><button type="button" id="calProx" aria-label="Próximo mês">›</button></span></h2><div class="cal" id="cal"></div></div>
@@ -244,6 +255,7 @@
   <div class="rodape" id="rodape"></div>
 </div>
 
+<div class="dica" id="dica" hidden></div>
 <div class="fundo" id="popup" hidden>
   <div class="caixa" role="dialog" aria-modal="true" aria-labelledby="popTitulo">
     <button class="fecha" id="popFechar" type="button" aria-label="Fechar">×</button>
@@ -385,47 +397,54 @@
   const qual = { vendas: null, entradas: null, pagamentos: null, recebimentos: null, estoque: null };
   const EMP0 = 'Empresa', SEM_VEND = '(sem vendedor)', SEM_FORMA = '(sem forma)', SEM_CENTRO = '(sem centro de custo)';
   const ehVerdade = (s) => /^(s|sim|-1|1|true|verdadeiro|v)$/i.test(String(s || '').trim());
-  function tabela(texto, defs){ const { idx, linhas } = lerCsvTabela(texto), c = {}; Object.keys(defs).forEach(k => { c[k] = colDe(idx, ...defs[k]); }); return { c, linhas }; }
+  // cabeçalho real do arquivo (para as mensagens de erro dizerem QUE arquivo é esse)
+  function listaCols(texto){
+    const p = String(texto || '').replace(/^\ufeff/, '').split(/\r|\n/)[0] || '';
+    const sep = [',', ';', '\t'].sort((a, b) => p.split(b).length - p.split(a).length)[0];
+    const cols = p.split(sep).map(s => s.replace(/^"|"$/g, '').trim()).filter(Boolean);
+    return cols.length ? ' Colunas encontradas nesse arquivo: ' + cols.slice(0, 12).join(', ') + (cols.length > 12 ? ', …' : '') + '.' : ' O arquivo está vazio ou sem cabeçalho.';
+  }
+  function tabela(texto, defs){ const { idx, linhas } = lerCsvTabela(texto), c = {}; Object.keys(defs).forEach(k => { c[k] = colDe(idx, ...defs[k]); }); return { c, linhas, cols: Object.keys(idx) }; }
   const EMPR = ['empresa', 'empresa_nome', 'emp', 'filial'];
 
   function montarVendas(texto){
-    const { c, linhas } = tabela(texto, { data: ['sai_data', 'data', 'dt_emissao', 'data_venda', 'emissao'], emp: EMPR, ven: ['ven_nome', 'vendedor', 'vendedor_nome'], val: ['total_notas_sai', 'sai_total', 'valor', 'total'], desc: ['descontos', 'desconto', 'sai_desc'], acre: ['acre', 'acrescimo', 'acrescimos'], ped: ['sai_ped', 'pedido', 'numero', 'nota'], canc: ['cancelado'] });
-    if(c.data < 0 || c.val < 0) throw new Error('O arquivo de vendas não tem as colunas de data (SAI_DATA) e de valor (TOTAL_NOTAS_SAI). Confira se é o ' + ARQ.vendas + '.');
+    const { c, linhas, cols } = tabela(texto, { data: ['sai_data', 'data', 'dt_emissao', 'data_venda', 'emissao'], emp: EMPR, ven: ['ven_nome', 'vendedor', 'vendedor_nome'], val: ['total_notas_sai', 'sai_total', 'valor', 'total'], desc: ['descontos', 'desconto', 'sai_desc'], acre: ['acre', 'acrescimo', 'acrescimos'], ped: ['sai_ped', 'pedido', 'numero', 'nota'], canc: ['cancelado'] });
+    if(c.data < 0 || c.val < 0) throw new Error('O arquivo de vendas não tem as colunas de data (SAI_DATA) e de valor (TOTAL_NOTAS_SAI). Confira se é o ' + ARQ.vendas + '.' + listaCols(texto));
     const out = []; let semData = 0, canc = 0;
     for(const r of linhas){
       const d = isoData(at(r, c.data)); if(!d){ semData++; continue; }
       if(c.canc >= 0 && ehVerdade(at(r, c.canc))){ canc++; continue; }
       out.push({ d, emp: nomeProprio(at(r, c.emp)) || EMP0, ven: nomeProprio(at(r, c.ven)) || SEM_VEND, v: num(at(r, c.val)), desc: num(at(r, c.desc)), acre: num(at(r, c.acre)), ped: String(at(r, c.ped)).trim() });
     }
-    VEN = out; qual.vendas = { total: linhas.length, semData, canc };
+    VEN = out; qual.vendas = { cols, total: linhas.length, semData, canc };
   }
   function montarEntradas(texto){
-    const { c, linhas } = tabela(texto, { data: ['ent_data', 'ent_dt', 'data', 'dt_entrada', 'emissao'], emp: EMPR, val: ['ent_tot', 'valor', 'total'], desc: ['ent_descon', 'desconto', 'descontos'], forn: ['for_cod', 'fornecedor'] });
-    if(c.data < 0 || c.val < 0) throw new Error('O arquivo de compras não tem as colunas de data (ENT_DATA) e de valor (ENT_TOT). Confira se é o ' + ARQ.entradas + '.');
+    const { c, linhas, cols } = tabela(texto, { data: ['ent_data', 'ent_dt', 'data', 'dt_entrada', 'emissao'], emp: EMPR, val: ['ent_tot', 'valor', 'total'], desc: ['ent_descon', 'desconto', 'descontos'], forn: ['for_cod', 'fornecedor'] });
+    if(c.data < 0 || c.val < 0) throw new Error('O arquivo de compras não tem as colunas de data (ENT_DATA) e de valor (ENT_TOT). Confira se é o ' + ARQ.entradas + '.' + listaCols(texto));
     const out = []; let semData = 0;
     for(const r of linhas){ const d = isoData(at(r, c.data)); if(!d){ semData++; continue; } out.push({ d, emp: nomeProprio(at(r, c.emp)) || '', v: num(at(r, c.val)), desc: num(at(r, c.desc)), forn: String(at(r, c.forn)).trim() }); }
-    ENT = out; qual.entradas = { total: linhas.length, semData };
+    ENT = out; qual.entradas = { cols, total: linhas.length, semData };
   }
   function montarPagamentos(texto){
-    const { c, linhas } = tabela(texto, { data: ['pag_dpag', 'pag_data', 'data_pagamento', 'data'], emp: EMPR, val: ['pag_pag', 'pag_val', 'valor'], cen: ['cen_desc', 'plano', 'centro_custo', 'descricao'], cod: ['cen_cod', 'codigo'], hist: ['pag_hist', 'historico'] });
-    if(c.data < 0 || c.val < 0) throw new Error('O arquivo de pagamentos não tem as colunas de data (PAG_DPAG) e de valor (PAG_PAG). Confira se é o ' + ARQ.pagamentos + '.');
+    const { c, linhas, cols } = tabela(texto, { data: ['pag_dpag', 'pag_data', 'data_pagamento', 'data'], emp: EMPR, val: ['pag_pag', 'pag_val', 'valor'], cen: ['cen_desc', 'plano', 'centro_custo', 'descricao'], cod: ['cen_cod', 'codigo'], hist: ['pag_hist', 'historico'] });
+    if(c.data < 0 || c.val < 0) throw new Error('O arquivo de pagamentos não tem as colunas de data (PAG_DPAG) e de valor (PAG_PAG). Confira se é o ' + ARQ.pagamentos + '.' + listaCols(texto));
     const out = []; let semData = 0;
     for(const r of linhas){ const d = isoData(at(r, c.data)); if(!d){ semData++; continue; } out.push({ d, emp: nomeProprio(at(r, c.emp)) || '', v: num(at(r, c.val)), cen: nomeProprio(at(r, c.cen)) || SEM_CENTRO, hist: nomeProprio(at(r, c.hist)) }); }
-    PAG = out; qual.pagamentos = { total: linhas.length, semData };
+    PAG = out; qual.pagamentos = { cols, total: linhas.length, semData };
   }
   function montarRecebimentos(texto){
-    const { c, linhas } = tabela(texto, { data: ['rec_dpag', 'rec_data', 'data_recebimento', 'data'], emp: EMPR, val: ['rec_val', 'valor'], forma: ['forma', 'rec_forma', 'forma_pagamento', 'conta', 'descricao', 'tipo'] });
-    if(c.data < 0 || c.val < 0) throw new Error('O arquivo de recebimentos não tem as colunas de data (REC_DPAG) e de valor (REC_VAL). Confira se é o ' + ARQ.recebimentos + '.');
+    const { c, linhas, cols } = tabela(texto, { data: ['rec_dpag', 'rec_data', 'data_recebimento', 'data'], emp: EMPR, val: ['rec_val', 'valor'], forma: ['forma', 'rec_forma', 'forma_pagamento', 'conta', 'descricao', 'tipo'] });
+    if(c.data < 0 || c.val < 0) throw new Error('O arquivo de recebimentos não tem as colunas de data (REC_DPAG) e de valor (REC_VAL). Confira se é o ' + ARQ.recebimentos + '.' + listaCols(texto));
     const out = []; let semData = 0;
     for(const r of linhas){ const d = isoData(at(r, c.data)); if(!d){ semData++; continue; } out.push({ d, emp: nomeProprio(at(r, c.emp)) || '', v: num(at(r, c.val)), forma: nomeProprio(at(r, c.forma)) || SEM_FORMA }); }
-    REC = out; qual.recebimentos = { total: linhas.length, semData };
+    REC = out; qual.recebimentos = { cols, total: linhas.length, semData };
   }
   function montarEstoque(texto){
-    const { c, linhas } = tabela(texto, { data: ['data', 'dt', 'fluxo_data'], emp: EMPR, evol: ['evolucao', 'variacao'], valor: ['ult_valor', 'valor_estoque', 'valor', 'saldo'] });
-    if(c.data < 0 || (c.evol < 0 && c.valor < 0)) throw new Error('O arquivo do estoque não tem as colunas de data e de EVOLUCAO/ULT_VALOR. Confira se é o ' + ARQ.estoque + '.');
+    const { c, linhas, cols } = tabela(texto, { data: ['data', 'dt', 'fluxo_data'], emp: EMPR, evol: ['evolucao', 'variacao'], valor: ['ult_valor', 'valor_estoque', 'valor', 'saldo'] });
+    if(c.data < 0 || (c.evol < 0 && c.valor < 0)) throw new Error('O arquivo do estoque não tem as colunas de data e de EVOLUCAO/ULT_VALOR. Confira se é o ' + ARQ.estoque + '.' + listaCols(texto));
     const out = []; let semData = 0;
     for(const r of linhas){ const d = isoData(at(r, c.data)); if(!d){ semData++; continue; } out.push({ d, emp: nomeProprio(at(r, c.emp)) || '', evol: num(at(r, c.evol)), valor: num(at(r, c.valor)) }); }
-    EST = out; qual.estoque = { total: linhas.length, semData };
+    EST = out; qual.estoque = { cols, total: linhas.length, semData };
   }
 
   // ===================== filtros e cálculo =====================
@@ -444,10 +463,11 @@
     return ['', ''];
   }
   function limitesDe(obj){ if(obj.periodo === 'pers') return [obj.de || '', obj.ate || '']; return periodo(obj.periodo); }
-  let R = null, calMes = '';
-  function calcular(){
+  // R = o período inteiro (gráfico por mês, Fluxo de caixa, Demonstrativo); RS = a visão da Visão geral e dos popups: igual a R, ou só o MÊS clicado no gráfico (MES_SEL = 'AAAA-MM')
+  let R = null, RS = null, calMes = '', MES_SEL = '';
+  function construir(mesF){
     const [de, ate] = limitesDe(FIL);
-    const noPer = (x) => (!de || x.d >= de) && (!ate || x.d <= ate), semOff = (x) => !EMPOFF.has(x.emp);
+    const noPer = (x) => (!de || x.d >= de) && (!ate || x.d <= ate) && (!mesF || x.d.slice(0, 7) === mesF), semOff = (x) => !EMPOFF.has(x.emp);
     const base = (a) => a.filter(noPer), v0 = base(VEN);
     const v = v0.filter(semOff), e = base(ENT).filter(semOff), p = base(PAG).filter(semOff), r = base(REC).filter(semOff), s = base(EST).filter(semOff);
     const soma = (a, f) => a.reduce((t, x) => t + f(x), 0);
@@ -456,12 +476,75 @@
     const ks = [...meses.keys()].sort();
     const grp = (a, k, f) => { const m = new Map(); a.forEach(x => { const kk = k(x); m.set(kk, (m.get(kk) || 0) + f(x)); }); return m; };
     const ult = s.length ? s.slice().sort((a, b) => cmp(a.d, b.d))[s.length - 1] : null;
-    R = { de, ate, v, e, p, r, s, ks, meses,
+    return { de, ate, v, e, p, r, s, ks, meses,
       T: { v: soma(v, x => x.v), nv: v.length, desc: soma(v, x => x.desc), acre: soma(v, x => x.acre), c: soma(e, x => x.v), p: soma(p, x => x.v), r: soma(r, x => x.v), evol: soma(s, x => x.evol), estoque: ult ? ult.valor : 0 },
       porEmp: grp(v0, x => x.emp, x => x.v), formas: grp(r, x => x.forma, x => x.v), vend: grp(v, x => x.ven, x => x.v), centros: grp(p, x => x.cen, x => x.v) };
-    const ksV = ks.filter(k => meses.get(k).v);
-    if(!calMes || !ks.includes(calMes)) calMes = ksV.length ? ksV[ksV.length - 1] : (ks.length ? ks[ks.length - 1] : '');
   }
+  function calcular(){
+    HIST = null; R = construir('');
+    if(MES_SEL && !R.ks.includes(MES_SEL)) MES_SEL = '';       // o mês escolhido saiu do período filtrado
+    RS = MES_SEL ? construir(MES_SEL) : R;
+    const ks = R.ks, meses = R.meses, ksV = ks.filter(k => meses.get(k).v);
+    if(MES_SEL) calMes = MES_SEL;
+    else if(!calMes || !ks.includes(calMes)) calMes = ksV.length ? ksV[ksV.length - 1] : (ks.length ? ks[ks.length - 1] : '');
+  }
+  // ----- informações complementares (dicas ao parar o mouse no calendário / nas barras e popup do dia) -----
+  let HIST = null;   // vendas por mês de TODO o histórico (empresas marcadas): base da comparação com o mês anterior e com o mesmo mês do ano anterior
+  function histMes(){ if(HIST) return HIST; HIST = new Map(); VEN.filter(x => !EMPOFF.has(x.emp)).forEach(x => { const k = x.d.slice(0, 7), m = HIST.get(k) || { v: 0, nv: 0 }; m.v += x.v; m.nv++; HIST.set(k, m); }); return HIST; }
+  const DOW_PLURAL = ['segundas', 'terças', 'quartas', 'quintas', 'sextas', 'sábados', 'domingos'], DOW_NOME = ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo'];
+  const dowDe = (iso) => (new Date(iso + 'T00:00:00Z').getUTCDay() + 6) % 7;
+  const maisVendido = (l, f) => { const m = new Map(); l.forEach(x => m.set(f(x), (m.get(f(x)) || 0) + x.v)); let b = null; m.forEach((v, k) => { if(!b || v > b[1]) b = [k, v]; }); return b; };
+  function statsV(l){ const v = l.reduce((s, x) => s + x.v, 0), n = l.length, desc = l.reduce((s, x) => s + x.desc, 0); return { v, n, ticket: n ? v / n : 0, desc, descPct: v + desc > 0 ? desc / (v + desc) * 100 : 0, maior: l.reduce((m, x) => !m || x.v > m.v ? x : m, null), vend: maisVendido(l, x => x.ven), emp: [...(() => { const m = new Map(); l.forEach(x => m.set(x.emp, (m.get(x.emp) || 0) + x.v)); return m; })().entries()].sort((a, b) => b[1] - a[1]) }; }
+  function infoDia(iso){
+    const l = R.v.filter(x => x.d === iso); if(!l.length) return null; const S = statsV(l), ym = iso.slice(0, 7), mesL = R.v.filter(x => x.d.slice(0, 7) === ym), totMes = mesL.reduce((s, x) => s + x.v, 0);
+    const porDia = new Map(); mesL.forEach(x => porDia.set(x.d, (porDia.get(x.d) || 0) + x.v)); const dw = dowDe(iso);
+    const outros = [...porDia.entries()].filter(([d]) => d !== iso && dowDe(d) === dw).map(([, v]) => v), media = outros.length ? outros.reduce((a, b) => a + b, 0) / outros.length : null;
+    return Object.assign(S, { iso, dw, pctMes: totMes ? S.v / totMes * 100 : 0, vsDow: media ? (S.v / media - 1) * 100 : null, nOutros: outros.length });
+  }
+  function infoMes(ym){
+    const l = R.v.filter(x => x.d.slice(0, 7) === ym); if(!l.length) return null; const S = statsV(l), dias = new Map(); l.forEach(x => dias.set(x.d, (dias.get(x.d) || 0) + x.v));
+    let melhor = null; dias.forEach((v, d) => { if(!melhor || v > melhor[1]) melhor = [d, v]; });
+    const H = histMes(), y = +ym.slice(0, 4), m = +ym.slice(5, 7), ant = m === 1 ? (y - 1) + '-12' : y + '-' + pad2(m - 1), aa = (y - 1) + '-' + pad2(m);
+    const andamento = ym === hoje().slice(0, 7), lim = andamento ? Math.max(...l.map(x => +x.d.slice(8, 10))) : 99;
+    // mês em andamento: compara com o MESMO TRECHO (até o mesmo dia) do mês de comparação, não com o mês fechado inteiro
+    const base = (k) => !andamento ? (H.get(k) ? H.get(k).v : 0) : VEN.reduce((t, x) => t + (!EMPOFF.has(x.emp) && x.d.slice(0, 7) === k && +x.d.slice(8, 10) <= lim ? x.v : 0), 0);
+    const bAnt = base(ant), bAA = base(aa);
+    return Object.assign(S, { ym, diasN: dias.size, porDia: dias.size ? S.v / dias.size : 0, melhor, ant, aa, vsAnt: bAnt ? (S.v / bAnt - 1) * 100 : null, vsAA: bAA ? (S.v / bAA - 1) * 100 : null, emAndamento: andamento, lim, M: R.meses.get(ym) });
+  }
+  const sinalCls = (x) => x === null ? '' : x < 0 ? 'neg' : 'pos';
+  // linhas {rot, val, cls} da dica/popup do dia e do mês (a mesma lista alimenta os três lugares)
+  function linhasDia(I){
+    const L = [{ rot: 'Vendas', val: fmtR(I.v) }, { rot: 'Pedidos', val: I.n.toLocaleString('pt-BR') }, { rot: 'Ticket médio', val: fmtR(I.ticket) }, { rot: '% das vendas do mês', val: pctTxt(I.pctMes) }];
+    if(I.vsDow !== null) L.push({ rot: 'vs média das ' + DOW_PLURAL[I.dw] + ' do mês', val: pctSinal(I.vsDow), cls: sinalCls(I.vsDow) });
+    if(I.maior) L.push({ rot: 'Maior pedido', val: fmtR(I.maior.v) + (I.maior.ped ? ' (nº ' + I.maior.ped + ')' : '') });
+    if(I.vend) L.push({ rot: 'Vendedor destaque', val: nomeCurto(I.vend[0], 22) + ' · ' + fmtCurto(I.vend[1]) });
+    if(I.desc > 0) L.push({ rot: 'Descontos', val: fmtR(I.desc) + ' (' + pctTxt(I.descPct) + ')' });
+    if(I.emp.length > 1) I.emp.slice(0, 3).forEach(([nm, v]) => L.push({ rot: nomeCurto(nm || EMP0, 20), val: fmtR(v) + ' (' + pctTxt(I.v ? v / I.v * 100 : 0) + ')' }));
+    return L;
+  }
+  function linhasMes(I){
+    const L = [{ rot: 'Pedidos', val: I.n.toLocaleString('pt-BR') }, { rot: 'Ticket médio', val: fmtR(I.ticket) }, { rot: 'Dias com venda', val: I.diasN + ' · média ' + fmtCurto(I.porDia) + '/dia' }];
+    if(I.melhor) L.push({ rot: 'Melhor dia', val: fmtDia(I.melhor[0]).slice(0, 5) + ' · ' + fmtCurto(I.melhor[1]) });
+    if(I.vend) L.push({ rot: 'Vendedor destaque', val: nomeCurto(I.vend[0], 22) + ' · ' + fmtCurto(I.vend[1]) });
+    if(I.vsAnt !== null) L.push({ rot: 'vs ' + rotMes(I.ant), val: pctSinal(I.vsAnt), cls: sinalCls(I.vsAnt) });
+    if(I.vsAA !== null) L.push({ rot: 'vs ' + rotMes(I.aa), val: pctSinal(I.vsAA), cls: sinalCls(I.vsAA) });
+    if(I.desc > 0) L.push({ rot: 'Descontos', val: fmtR(I.desc) + ' (' + pctTxt(I.descPct) + ')' });
+    if(I.M && (I.M.r || I.M.p)) L.push({ rot: 'Recebido − pago', val: fmtR(I.M.r - I.M.p), cls: sinalCls(I.M.r - I.M.p) });
+    return L;
+  }
+  // dica flutuante (calendário): aparece ao parar o mouse sobre o dia
+  function mostrarDica(titulo, linhas, ev){
+    const d = $('dica'); d.replaceChildren(); d.appendChild(el('h5', '', titulo));
+    linhas.forEach((x, i) => { if(i === 4) d.appendChild(el('div', 'sep')); const r = el('div', 'l'); r.appendChild(el('span', '', x.rot)); r.appendChild(el('b', x.cls || '', x.val)); d.appendChild(r); });
+    d.hidden = false; posicionarDica(ev);
+  }
+  function posicionarDica(ev){
+    const d = $('dica'); if(d.hidden) return; const w = d.offsetWidth, h = d.offsetHeight; let x = ev.clientX + 16, y = ev.clientY + 16;
+    if(x + w > innerWidth - 8) x = ev.clientX - w - 16; if(y + h > innerHeight - 8) y = ev.clientY - h - 16;
+    d.style.left = Math.max(8, x) + 'px'; d.style.top = Math.max(8, y) + 'px';
+  }
+  const esconderDica = () => { const d = $('dica'); if(d) d.hidden = true; };
+  function escolherMes(k){ MES_SEL = (!k || MES_SEL === k) ? '' : k; calcular(); render(); }
   const listaEmpresas = () => { const s = new Set(); [VEN, ENT, PAG, REC, EST].forEach(a => a.forEach(x => { if(x.emp) s.add(x.emp); })); return [...s].sort(cmp); };
 
   // ===================== tela =====================
@@ -491,55 +574,62 @@
   function kpi(rot, valor, sub, tipo){ const d = el('div', 'kpi cl'); d.dataset.k = tipo; d.appendChild(el('span', '', rot)); d.appendChild(el('b', '', valor)); if(sub) d.appendChild(el('small', '', sub)); return d; }
   const ausente = (q) => !q;
   function desenharKpis(){
-    const T = R.T, k = $('kpis'); k.replaceChildren();
+    const T = RS.T, k = $('kpis'); k.replaceChildren();
     k.append(
       kpi('Vendas', ausente(qual.vendas) ? '—' : fmtR(T.v), ausente(qual.vendas) ? 'arquivo não carregado' : T.nv.toLocaleString('pt-BR') + ' pedidos · ticket médio ' + fmtR(T.nv ? T.v / T.nv : 0), 'vendas'),
-      kpi('Compras', ausente(qual.entradas) ? '—' : fmtR(T.c), ausente(qual.entradas) ? 'arquivo não carregado' : R.e.length.toLocaleString('pt-BR') + ' notas de entrada', 'compras'),
+      kpi('Compras', ausente(qual.entradas) ? '—' : fmtR(T.c), ausente(qual.entradas) ? 'arquivo não carregado' : RS.e.length.toLocaleString('pt-BR') + ' notas de entrada', 'compras'),
       kpi('Evolução do estoque', ausente(qual.estoque) ? '—' : fmtR(T.evol), ausente(qual.estoque) ? 'arquivo não carregado' : 'estoque atual ' + fmtR(T.estoque), 'estoque'),
-      kpi('Pagamentos', ausente(qual.pagamentos) ? '—' : fmtR(T.p), ausente(qual.pagamentos) ? 'arquivo não carregado' : R.centros.size.toLocaleString('pt-BR') + ' centros de custo', 'pagamentos'),
+      kpi('Pagamentos', ausente(qual.pagamentos) ? '—' : fmtR(T.p), ausente(qual.pagamentos) ? 'arquivo não carregado' : RS.centros.size.toLocaleString('pt-BR') + ' centros de custo', 'pagamentos'),
       kpi('Recebimentos', ausente(qual.recebimentos) ? '—' : fmtR(T.r), ausente(qual.recebimentos) ? 'arquivo não carregado' : 'recebido − pago: ' + fmtR(T.r - T.p), 'recebimentos'));
   }
   function desenharGraficos(){
     if(!Chart || aberta !== 'geral') return;
     const { ks, meses, T } = R, ksV = ks.filter(k => meses.get(k).v), media = ksV.length ? T.v / ksV.length : 0;
-    const ds = [{ type: 'bar', label: 'Vendas', data: ks.map(k => meses.get(k).v), backgroundColor: COR.v },
-      { type: 'bar', label: 'Compras', data: ks.map(k => meses.get(k).c), backgroundColor: COR.c, hidden: true },
-      { type: 'bar', label: 'Pagamentos', data: ks.map(k => meses.get(k).p), backgroundColor: COR.p, hidden: true },
-      { type: 'bar', label: 'Recebimentos', data: ks.map(k => meses.get(k).r), backgroundColor: COR.r, hidden: true },
+    const cor = (c) => ks.map(k => !MES_SEL || k === MES_SEL ? c : c + '4d');      // mês escolhido = cor cheia; os demais ficam esmaecidos
+    const ds = [{ type: 'bar', label: 'Vendas', data: ks.map(k => meses.get(k).v), backgroundColor: cor(COR.v) },
+      { type: 'bar', label: 'Compras', data: ks.map(k => meses.get(k).c), backgroundColor: cor(COR.c), hidden: true },
+      { type: 'bar', label: 'Pagamentos', data: ks.map(k => meses.get(k).p), backgroundColor: cor(COR.p), hidden: true },
+      { type: 'bar', label: 'Recebimentos', data: ks.map(k => meses.get(k).r), backgroundColor: cor(COR.r), hidden: true },
       { type: 'line', label: 'Média mensal de vendas', data: ks.map(() => media), borderColor: COR.media, borderDash: [6, 4], pointRadius: 0, borderWidth: 2 }];
-    const o = opcoes(false); o.onClick = (e, els) => { if(!els.length) return; calMes = ks[els[0].index]; desenharCalendario(); }; o.onHover = (e, els) => { if(e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; };
+    const o = opcoes(false); o.onClick = (e, els, ch) => {
+      if(els.length){ escolherMes(ks[els[0].index]); return; }
+      const ca = ch && ch.chartArea; if(MES_SEL && ca && e.x >= ca.left && e.x <= ca.right && e.y >= ca.top && e.y <= ca.bottom) escolherMes('');   // clique no vazio do gráfico (não na legenda) = todos os meses
+    }; o.onHover = (e, els) => { if(e.native && e.native.target) e.native.target.style.cursor = els.length ? 'pointer' : 'default'; };
+    const tt = o.plugins.tooltip; tt.callbacks.title = (it) => { const k = ks[it[0].dataIndex]; return MESES_LONGOS[+k.slice(5, 7) - 1] + ' de ' + k.slice(0, 4); };
+    tt.callbacks.afterBody = (it) => { if(!it.length || it[0].dataset.type === 'line') return []; const I = infoMes(ks[it[0].dataIndex]); if(!I) return []; return ['', ...linhasMes(I).map(x => x.rot + ': ' + x.val), ...(I.emAndamento ? ['(mês em andamento: comparado com o mesmo trecho, até o dia ' + I.lim + ', dos outros meses)'] : [])]; };
+    tt.padding = 10; tt.bodySpacing = 3;
     grafico('gMes', { type: 'bar', data: { labels: ks.map(rotMes), datasets: ds }, options: o });
     const barras = (id, mapa, rot, cor, n) => {
       const l = [...mapa.entries()].filter(([, v]) => v).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, n).sort((a, b) => b[1] - a[1]), tot = l.reduce((s, x) => s + Math.max(0, x[1]), 0);
       const oo = opcoes(true); oo.plugins.rotulosPct = { textos: l.map(x => tot ? pctTxt(x[1] / tot * 100) : '') };
       grafico(id, { type: 'bar', data: { labels: l.map(x => nomeCurto(x[0], 24)), datasets: [{ label: rot, data: l.map(x => x[1]), backgroundColor: l.map(x => x[1] < 0 ? COR.p : cor) }] }, options: oo, plugins: [pluginPct] });
     };
-    barras('gForma', R.formas, 'Recebimentos', COR.r, 12); barras('gVend', R.vend, 'Vendas', COR.v, 15);
+    barras('gForma', RS.formas, 'Recebimentos', COR.r, 12); barras('gVend', RS.vend, 'Vendas', COR.v, 15);
   }
   function desenharCalendario(){
-    const box = $('cal'); box.replaceChildren();
+    const box = $('cal'); box.replaceChildren(); const nav = document.querySelector('.cal-nav'); if(nav) nav.style.display = MES_SEL ? 'none' : '';
     if(!calMes){ $('calTit').textContent = ''; box.appendChild(el('div', 'vazio', 'Sem vendas no período.')); box.style.display = 'block'; return; }
     box.style.display = '';
     const [y, m] = calMes.split('-').map(Number); $('calTit').textContent = MESES_LONGOS[m - 1] + ' de ' + y;
-    const porDia = new Map(); R.v.forEach(x => { if(x.d.slice(0, 7) === calMes) porDia.set(x.d, (porDia.get(x.d) || 0) + x.v); });
+    const porDia = new Map(); RS.v.forEach(x => { if(x.d.slice(0, 7) === calMes) porDia.set(x.d, (porDia.get(x.d) || 0) + x.v); });
     const max = Math.max(1, ...porDia.values());
     SEMANA.forEach(s => box.appendChild(el('div', 'sem', s)));
     const lead = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7, nd = new Date(Date.UTC(y, m, 0)).getUTCDate();
     for(let i = 0; i < lead; i++) box.appendChild(el('div', 'dia vazio'));
     for(let d = 1; d <= nd; d++){
       const iso = calMes + '-' + pad2(d), v = porDia.get(iso), c = el('div', 'dia' + (v ? ' tem' : ''));
-      if(v){ c.style.background = 'rgba(43,108,176,' + (0.1 + 0.55 * v / max).toFixed(2) + ')'; c.dataset.d = iso; c.title = fmtR(v); }
+      if(v){ c.style.background = 'rgba(43,108,176,' + (0.1 + 0.55 * v / max).toFixed(2) + ')'; c.dataset.d = iso; }
       c.appendChild(el('span', 'dn', String(d))); if(v) c.appendChild(el('span', 'dv', fmtCurto(v))); box.appendChild(c);
     }
   }
   function desenharEmpresas(){
-    const box = $('cardsEmp'); box.replaceChildren(); const tot = [...R.porEmp.values()].reduce((s, x) => s + x, 0);
-    [...R.porEmp.entries()].sort((a, b) => b[1] - a[1]).forEach(([nome, v]) => {
+    const box = $('cardsEmp'); box.replaceChildren(); const tot = [...RS.porEmp.values()].reduce((s, x) => s + x, 0);
+    [...RS.porEmp.entries()].sort((a, b) => b[1] - a[1]).forEach(([nome, v]) => {
       const c = el('div', 'emp-card' + (EMPOFF.size && !EMPOFF.has(nome) ? ' sel' : '')); c.dataset.emp = nome;
       c.appendChild(el('div', 'nm', nome)); c.appendChild(el('div', 'vl', fmtR(v))); c.appendChild(el('div', 'pc', tot ? pctTxt(v / tot * 100) : '0%'));
       const b = el('div', 'barra-pct'), i = el('i'); i.style.width = (tot ? Math.max(0, v / tot * 100) : 0) + '%'; b.appendChild(i); c.appendChild(b); box.appendChild(c);
     });
-    if(!R.porEmp.size) box.appendChild(el('div', 'vazio', 'Sem vendas no período.'));
+    if(!RS.porEmp.size) box.appendChild(el('div', 'vazio', 'Sem vendas no período.'));
   }
   function desenharChips(){
     const box = $('chipsEmp'); box.replaceChildren(); const l = listaEmpresas();
@@ -676,17 +766,18 @@
       (tot ? '<tfoot><tr>' + tot.map((v, i) => '<td class="' + (i === 0 ? 'txt' : '') + '">' + (typeof v === 'number' ? fmt(v) : esc(v)) + '</td>').join('') + '</tr></tfoot>' : '') + '</table></div>';
   }
   function abrirKpi(tipo){
-    const T = R.T, ks = R.ks, M = (k) => R.meses.get(k), h4 = (t) => el('h4', '', t), top = (mapa, n) => [...mapa.entries()].filter(([, v]) => v).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, n);
-    if(tipo === 'vendas') return abrirPopup('Vendas por mês', [['Total:', fmtR(T.v)], ['Pedidos:', T.nv.toLocaleString('pt-BR')], ['Descontos:', fmtR(T.desc)], ['Acréscimos:', fmtR(T.acre)]],
-      [div(tabelaHtml(['Mês', 'Vendas', 'Pedidos', 'Ticket médio'], ks.filter(k => M(k).v).map(k => [rotMes(k), M(k).v, M(k).nv.toLocaleString('pt-BR'), M(k).nv ? M(k).v / M(k).nv : 0]), ['Total', T.v, T.nv.toLocaleString('pt-BR'), T.nv ? T.v / T.nv : 0])), h4('Principais vendedores'), div(tabelaHtml(['Vendedor', 'Vendas'], top(R.vend, 15)))]);
-    if(tipo === 'compras') return abrirPopup('Compras por mês', [['Total:', fmtR(T.c)], ['Notas:', R.e.length.toLocaleString('pt-BR')]], [div(tabelaHtml(['Mês', 'Compras'], ks.filter(k => M(k).c).map(k => [rotMes(k), M(k).c]), ['Total', T.c]))]);
-    if(tipo === 'estoque') return abrirPopup('Evolução do estoque', [['Variação no período:', fmtR(T.evol)], ['Estoque atual:', fmtR(T.estoque)]], [div(tabelaHtml(['Mês', 'Variação'], ks.filter(k => M(k).ev).map(k => [rotMes(k), M(k).ev]), ['Total', T.evol]))]);
-    if(tipo === 'pagamentos') return abrirPopup('Pagamentos', [['Total:', fmtR(T.p)]], [h4('Por centro de custo'), div(tabelaHtml(['Centro de custo', 'Pago'], top(R.centros, 40), ['Total', T.p])), h4('Por mês'), div(tabelaHtml(['Mês', 'Pago'], ks.filter(k => M(k).p).map(k => [rotMes(k), M(k).p])))]);
-    if(tipo === 'recebimentos') return abrirPopup('Recebimentos', [['Total:', fmtR(T.r)]], [h4('Por forma'), div(tabelaHtml(['Forma', 'Recebido'], top(R.formas, 40), ['Total', T.r])), h4('Por mês'), div(tabelaHtml(['Mês', 'Recebido'], ks.filter(k => M(k).r).map(k => [rotMes(k), M(k).r])))]);
+    const T = RS.T, ks = RS.ks, M = (k) => RS.meses.get(k), suf = MES_SEL ? ' · ' + MESES_LONGOS[+MES_SEL.slice(5, 7) - 1] + ' de ' + MES_SEL.slice(0, 4) : '', pop = (t, ...a) => abrirPopup(t + suf, ...a), h4 = (t) => el('h4', '', t), top = (mapa, n) => [...mapa.entries()].filter(([, v]) => v).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, n);
+    if(tipo === 'vendas') return pop('Vendas por mês', [['Total:', fmtR(T.v)], ['Pedidos:', T.nv.toLocaleString('pt-BR')], ['Descontos:', fmtR(T.desc)], ['Acréscimos:', fmtR(T.acre)]],
+      [div(tabelaHtml(['Mês', 'Vendas', 'Pedidos', 'Ticket médio'], ks.filter(k => M(k).v).map(k => [rotMes(k), M(k).v, M(k).nv.toLocaleString('pt-BR'), M(k).nv ? M(k).v / M(k).nv : 0]), ['Total', T.v, T.nv.toLocaleString('pt-BR'), T.nv ? T.v / T.nv : 0])), h4('Principais vendedores'), div(tabelaHtml(['Vendedor', 'Vendas'], top(RS.vend, 15)))]);
+    if(tipo === 'compras') return pop('Compras por mês', [['Total:', fmtR(T.c)], ['Notas:', RS.e.length.toLocaleString('pt-BR')]], [div(tabelaHtml(['Mês', 'Compras'], ks.filter(k => M(k).c).map(k => [rotMes(k), M(k).c]), ['Total', T.c]))]);
+    if(tipo === 'estoque') return pop('Evolução do estoque', [['Variação no período:', fmtR(T.evol)], ['Estoque atual:', fmtR(T.estoque)]], [div(tabelaHtml(['Mês', 'Variação'], ks.filter(k => M(k).ev).map(k => [rotMes(k), M(k).ev]), ['Total', T.evol]))]);
+    if(tipo === 'pagamentos') return pop('Pagamentos', [['Total:', fmtR(T.p)]], [h4('Por centro de custo'), div(tabelaHtml(['Centro de custo', 'Pago'], top(RS.centros, 40), ['Total', T.p])), h4('Por mês'), div(tabelaHtml(['Mês', 'Pago'], ks.filter(k => M(k).p).map(k => [rotMes(k), M(k).p])))]);
+    if(tipo === 'recebimentos') return pop('Recebimentos', [['Total:', fmtR(T.r)]], [h4('Por forma'), div(tabelaHtml(['Forma', 'Recebido'], top(RS.formas, 40), ['Total', T.r])), h4('Por mês'), div(tabelaHtml(['Mês', 'Recebido'], ks.filter(k => M(k).r).map(k => [rotMes(k), M(k).r])))]);
   }
   function abrirDia(iso){
-    const l = R.v.filter(x => x.d === iso).sort((a, b) => b.v - a.v), tot = l.reduce((s, x) => s + x.v, 0);
-    abrirPopup('Vendas de ' + fmtDia(iso), [['Total:', fmtR(tot)], ['Pedidos:', l.length.toLocaleString('pt-BR')], ['Ticket médio:', fmtR(l.length ? tot / l.length : 0)]],
+    const l = RS.v.filter(x => x.d === iso).sort((a, b) => b.v - a.v), tot = l.reduce((s, x) => s + x.v, 0);
+    const I = infoDia(iso), extra = I ? linhasDia(I).slice(3).map(x => [x.rot + ':', x.val]) : [];
+    abrirPopup('Vendas de ' + DOW_NOME[dowDe(iso)] + ', ' + fmtDia(iso), [['Total:', fmtR(tot)], ['Pedidos:', l.length.toLocaleString('pt-BR')], ['Ticket médio:', fmtR(l.length ? tot / l.length : 0)], ...extra],
       [div(tabelaHtml(['Pedido', 'Vendedor', 'Empresa', 'Valor', 'Desconto'], l.slice(0, 300).map(x => [x.ped || '—', x.ven, x.emp, x.v, x.desc]), ['Total', '', '', tot, l.reduce((s, x) => s + x.desc, 0)])), el('div', 'op-obs', l.length > 300 ? 'Mostrando os 300 maiores de ' + l.length.toLocaleString('pt-BR') + ' pedidos.' : '')]);
   }
 
@@ -698,15 +789,25 @@
   // ----- render -----
   function desenharDados(){
     const ul = $('dadosLista'); ul.replaceChildren(); const li = (t) => ul.appendChild(el('li', '', t)); const n = (x) => (x || 0).toLocaleString('pt-BR');
-    const linha = (rot, q, arq, extra) => li(q ? rot + ' (' + arq + '): ' + n(q.total) + ' linhas' + (q.semData ? ', ' + n(q.semData) + ' sem data válida ficaram de fora' : '') + (extra || '') + '.' : rot + ': arquivo ' + arq + ' não carregado.');
+    const linha = (rot, q, arq, extra) => li(q ? rot + ' (' + arq + '): ' + n(q.total) + ' linhas' + (q.semData ? ', ' + n(q.semData) + ' sem data válida ficaram de fora' : '') + (extra || '') + '. Colunas: ' + (q.cols || []).slice(0, 8).join(', ') + ((q.cols || []).length > 8 ? ', …' : '') + '.' : rot + ': arquivo ' + arq + ' não carregado.');
     linha('Vendas', qual.vendas, ARQ.vendas, qual.vendas && qual.vendas.canc ? ', ' + n(qual.vendas.canc) + ' canceladas ignoradas' : ''); linha('Compras', qual.entradas, ARQ.entradas); linha('Pagamentos', qual.pagamentos, ARQ.pagamentos); linha('Recebimentos', qual.recebimentos, ARQ.recebimentos); linha('Estoque', qual.estoque, ARQ.estoque);
     li('Vendas = soma de TOTAL_NOTAS_SAI das notas de saída (canceladas ficam de fora). O percentual dos gráficos é a parte de cada barra no total do período.');
   }
+  function desenharFiltroMes(){
+    const box = $('filtroMes'); if(!box) return; box.replaceChildren();
+    if(!MES_SEL){ box.hidden = true; return; }
+    const nome = MESES_LONGOS[+MES_SEL.slice(5, 7) - 1] + ' de ' + MES_SEL.slice(0, 4), t = RS.T;
+    const txt = el('div', ''); txt.appendChild(document.createTextNode('Mostrando só ')); txt.appendChild(el('b', '', nome));
+    txt.appendChild(document.createTextNode(': os indicadores, as formas de recebimento, os vendedores, as empresas e o calendário abaixo são deste mês' + (t.nv ? ' (' + t.nv.toLocaleString('pt-BR') + ' pedidos)' : '') + '. O gráfico por mês, o Fluxo de caixa, o Demonstrativo e o Comparativo continuam com todo o período.'));
+    const bt = el('button', 'btn sec', 'Mostrar todos os meses'); bt.type = 'button'; bt.addEventListener('click', () => escolherMes(''));
+    const I = infoMes(MES_SEL), det = I ? el('div', 'det', linhasMes(I).map(x => x.rot + ': ' + x.val).join(' · ')) : null;
+    box.append(txt, bt); if(det) box.appendChild(det); box.hidden = false;
+  }
   function render(){
     if(!R) return;
-    desenharKpis(); desenharCalendario(); desenharEmpresas(); desenharFluxo(); desenharDemo(); desenharAnos(); desenharDados();
+    desenharFiltroMes(); desenharKpis(); desenharCalendario(); desenharEmpresas(); desenharFluxo(); desenharDemo(); desenharAnos(); desenharDados();
     prepararGraficos().then(() => { desenharGraficos(); if(aberta === 'fluxo') desenharFluxo(); if(aberta === 'anos') desenharGraficosAnos(); }).catch(() => {});
-    const a = R.de, b = R.ate; $('subtitulo').textContent = (a || b ? 'de ' + (a ? fmtDia(a) : 'o início') + ' até ' + (b ? fmtDia(b) : 'hoje') : 'todo o período') + (EMPOFF.size ? ' · ' + (listaEmpresas().length - EMPOFF.size) + ' de ' + listaEmpresas().length + ' empresas' : '');
+    const a = R.de, b = R.ate; $('subtitulo').textContent = (a || b ? 'de ' + (a ? fmtDia(a) : 'o início') + ' até ' + (b ? fmtDia(b) : 'hoje') : 'todo o período') + (EMPOFF.size ? ' · ' + (listaEmpresas().length - EMPOFF.size) + ' de ' + listaEmpresas().length + ' empresas' : '') + (MES_SEL ? ' · mês: ' + MESES_LONGOS[+MES_SEL.slice(5, 7) - 1] + ' de ' + MES_SEL.slice(0, 4) : '');
   }
   function lerCampos(){
     FIL.periodo = $('fPeriodo').value;
@@ -821,11 +922,17 @@
     try {
       for(const f of arqs){
         const texto = await f.text(), cab = semAcento(texto.slice(0, texto.search(/\r|\n/) > 0 ? texto.search(/\r|\n/) : 2000)), nome = semAcento(f.name);
-        if(nome.includes('entrada') || cab.includes('ent_tot')) montarEntradas(texto);
-        else if(nome.includes('pagament') || cab.includes('pag_pag') || cab.includes('pag_dpag')) montarPagamentos(texto);
-        else if(nome.includes('recebim') || cab.includes('rec_val') || cab.includes('rec_dpag')) montarRecebimentos(texto);
-        else if(nome.includes('estoque') || cab.includes('evolucao')) montarEstoque(texto);
-        else if(nome.includes('venda') || cab.includes('total_notas_sai') || cab.includes('sai_data')) montarVendas(texto);
+        // o CABEÇALHO decide primeiro (colunas próprias de cada arquivo); o nome só desempata — assim um «recebimentos_parceiros.csv» ou «vendas_parceiros.csv» não é confundido com os do painel
+        if(cab.includes('ent_tot') || cab.includes('ent_data')) montarEntradas(texto);
+        else if(cab.includes('pag_pag') || cab.includes('pag_dpag')) montarPagamentos(texto);
+        else if(cab.includes('rec_val') || cab.includes('rec_dpag')) montarRecebimentos(texto);
+        else if(cab.includes('total_notas_sai') || cab.includes('sai_data')) montarVendas(texto);
+        else if(cab.includes('evolucao') || cab.includes('ult_valor')) montarEstoque(texto);
+        else if(nome.includes('entrada')) montarEntradas(texto);
+        else if(nome.includes('pagament')) montarPagamentos(texto);
+        else if(nome.includes('recebim')) montarRecebimentos(texto);
+        else if(nome.includes('estoque')) montarEstoque(texto);
+        else if(nome.includes('venda')) montarVendas(texto);
         else throw new Error('Não reconheci o arquivo ' + f.name + ' (esperado: analise_vendas, analise_entradas, analise_pagamentos_loja, analise_recebimentos_loja ou analise_fluxo_estoque).');
       }
       aplicar(); aviso('', ''); $('rodape').textContent = 'Arquivo(s) aberto(s) neste computador: ' + arqs.map(f => f.name).join(', ');
@@ -836,15 +943,18 @@
   // ===================== eventos da tela =====================
   ['fPeriodo'].forEach(id => $(id).addEventListener('change', atualizar));
   ['fDe', 'fAte'].forEach(id => $(id).addEventListener('change', () => { $('fPeriodo').value = 'pers'; atualizar(); }));
-  $('btnLimpar').addEventListener('click', () => { EMPOFF.clear(); $('fPeriodo').value = '12m'; calMes = ''; atualizar(); });
+  $('btnLimpar').addEventListener('click', () => { EMPOFF.clear(); $('fPeriodo').value = '12m'; calMes = ''; MES_SEL = ''; atualizar(); });
   $('btnAtualizar').addEventListener('click', carregar);
   $('abas').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-aba]'); if(!b) return; aberta = b.dataset.aba;
     $('abas').querySelectorAll('button').forEach(x => x.classList.toggle('ativa', x === b)); ['geral', 'anos', 'fluxo', 'demo'].forEach(a => { $('aba-' + a).hidden = a !== aberta; });
     if(R){ if(aberta === 'geral') desenharGraficos(); else if(aberta === 'fluxo') desenharFluxo(); else if(aberta === 'anos') desenharGraficosAnos(); }
   });
-  $('kpis').addEventListener('click', (e) => { const k = e.target.closest('.kpi[data-k]'); if(k && R) abrirKpi(k.dataset.k); });
-  $('cal').addEventListener('click', (e) => { const d = e.target.closest('.dia[data-d]'); if(d && R) abrirDia(d.dataset.d); });
+  $('kpis').addEventListener('click', (e) => { const k = e.target.closest('.kpi[data-k]'); if(k && RS) abrirKpi(k.dataset.k); });
+  $('cal').addEventListener('mousemove', (e) => { const d = e.target.closest('.dia[data-d]'); if(!d || !R){ esconderDica(); return; } if(d.dataset.d !== ($('dica').dataset.d || '')){ const I = infoDia(d.dataset.d); if(!I){ esconderDica(); return; } $('dica').dataset.d = d.dataset.d; mostrarDica(DOW_NOME[dowDe(d.dataset.d)].replace(/^./, (c) => c.toUpperCase()) + ', ' + fmtDia(d.dataset.d), linhasDia(I), e); } else posicionarDica(e); });
+  $('cal').addEventListener('mouseleave', () => { esconderDica(); $('dica').dataset.d = ''; });
+  window.addEventListener('scroll', () => { esconderDica(); $('dica').dataset.d = ''; }, { passive: true });
+  $('cal').addEventListener('click', (e) => { const d = e.target.closest('.dia[data-d]'); if(d && RS) abrirDia(d.dataset.d); });
   const moverMes = (n) => { if(!R || !R.ks.length) return; const i = R.ks.indexOf(calMes); const j = Math.min(R.ks.length - 1, Math.max(0, (i < 0 ? R.ks.length - 1 : i) + n)); calMes = R.ks[j]; desenharCalendario(); };
   $('calAnt').addEventListener('click', () => moverMes(-1)); $('calProx').addEventListener('click', () => moverMes(1));
   $('cardsEmp').addEventListener('click', (e) => {
@@ -861,7 +971,7 @@
   $('popup').addEventListener('click', (e) => { if(e.target === $('popup')) fecharPopup(); });
   document.addEventListener('keydown', (e) => { if(e.key === 'Escape' && !$('popup').hidden) fecharPopup(); });
 
-  window.__pv = { dadosAnos, desenharAnos, setRitmo: (r) => { ritmo = r; $('fRitmo').value = r; }, montarVendas, montarEntradas, montarPagamentos, montarRecebimentos, montarEstoque, aplicar, atualizar, calcular, abrirKpi, abrirDia, FIL, EMPOFF, get R(){ return R; }, setChamar: (f) => { chamar = f; } };
+  window.__pv = { escolherMes, get RS(){ return RS; }, get MES_SEL(){ return MES_SEL; }, dadosAnos, desenharAnos, setRitmo: (r) => { ritmo = r; $('fRitmo').value = r; }, montarVendas, montarEntradas, montarPagamentos, montarRecebimentos, montarEstoque, aplicar, atualizar, calcular, abrirKpi, abrirDia, FIL, EMPOFF, get R(){ return R; }, setChamar: (f) => { chamar = f; } };
 
   // acesso: login do Servir + credenciais da unidade (mesmo módulo do Painel financeiro)
   (async function iniciar(){
