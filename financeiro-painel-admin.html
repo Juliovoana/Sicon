@@ -1009,6 +1009,13 @@
       <div class="modal-lista-body"><div id="concGerarForm"></div><div style="margin-top:12px;"><button class="btn-novo" id="btnConcGerarOk" style="width:100%;">Gerar e conciliar</button></div></div>
     </div>
   </div>
+  <div class="modal-lista-overlay" id="modalConcJuros">
+    <div class="modal-lista" style="max-width:500px;">
+      <div class="modal-lista-head"><h3>Ajustar o valor do título</h3><button class="drawer-close" id="btnConcJurosFechar">✕</button></div>
+      <div class="modal-lista-body"><div id="concJurosForm"></div>
+        <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;"><button class="ext-chip" id="btnConcJurosCancelar">Cancelar</button><button class="btn-novo" id="btnConcJurosSalvar">Salvar e marcar o título</button></div></div>
+    </div>
+  </div>
   <div class="modal-lista-overlay" id="modalConcTransf">
     <div class="modal-lista" style="max-width:560px;">
       <div class="modal-lista-head"><h3 id="tituloModalConcTransf">Transferência</h3><button class="drawer-close" id="btnConcTransfFechar">✕</button></div>
@@ -1973,15 +1980,17 @@
     document.getElementById('concCorpo').innerHTML = `
       <div class="ext-graf">
         <h3>Importar extrato do banco para a conta <strong>${escapeHtml(extNomeConta(Number(concEstado.contaId)))}</strong></h3>
-        <p class="ext-nota" style="margin:0 0 10px;">Aceita Bradesco (.csv), Itaú (.txt), Sicoob (.xlsx) e OFX. Linhas já importadas antes (mesma data, histórico, documento e valor) são reconhecidas e não duplicam.</p>
+        <p class="ext-nota" style="margin:0 0 10px;">Aceita Bradesco (.csv), Itaú (.txt), Sicoob (.xlsx) e OFX. Linhas já importadas antes (mesma data, histórico, documento e valor) são reconhecidas e não duplicam; o mesmo extrato em <strong>outro formato</strong> (ex.: .txt e depois .ofx) também é reconhecido por <strong>mesmo dia e mesmo valor</strong>.</p>
         <div class="filtros">
           <input type="file" id="concArquivo" accept=".csv,.txt,.xlsx,.xls,.ofx,.ofc">
           <select id="concLayout"><option value="auto">Formato: detectar sozinho</option><option value="bradesco">Bradesco (.csv)</option><option value="itau">Itaú (.txt)</option><option value="sicoob">Sicoob (.xlsx)</option><option value="ofx">OFX</option></select>
           <button class="ext-chip" id="concLer">📂 Ler arquivo</button>
         </div>
+        <label class="ext-nota" style="display:flex; align-items:center; gap:6px; margin:8px 0 0; cursor:pointer;" title="Evita duplicar quando você importa o mesmo período em outro formato (ex.: já veio em .txt e agora em .ofx)"><input type="checkbox" id="concCruzarFormato" ${concEstado.cruzarFormato === false ? '' : 'checked'}> Reconhecer lançamentos já importados em <strong>outro formato</strong> (mesmo dia e mesmo valor)</label>
         <div id="concPrevia"></div>
       </div>`;
     document.getElementById('concLer').addEventListener('click', concLerEPrevia);
+    document.getElementById('concCruzarFormato').addEventListener('change', ev => { concEstado.cruzarFormato = ev.target.checked; if(document.getElementById('concArquivo').files[0]) concLerEPrevia(); });
     document.getElementById('concArquivo').addEventListener('change', concLerEPrevia);
     if(concEstado.previa) concDesenharPrevia();
   }
@@ -1999,11 +2008,22 @@
         l.hash = await concHash(base + '#' + vistos[base]);
       }
       const datas = linhas.map(l => l.data).sort();
-      const { data: ex, error } = await buscarTodasLinhas(() => sb.from('financeiro_extrato_bancario').select('hash').eq('unidade_negocio_id', agenciaId).eq('id_conta', Number(concEstado.contaId)).gte('data', datas[0]).lte('data', datas[datas.length - 1]).order('id'));
+      const { data: ex, error } = await buscarTodasLinhas(() => sb.from('financeiro_extrato_bancario').select('hash, data, credito, debito').eq('unidade_negocio_id', agenciaId).eq('id_conta', Number(concEstado.contaId)).gte('data', datas[0]).lte('data', datas[datas.length - 1]).order('id'));
       if(error) throw new Error(/relation|does not exist|schema cache/i.test(error.message) ? 'A conciliação ainda não está instalada neste banco. Rode o arquivo financeiro-conciliacao.sql no Supabase.' : error.message);
       const existentes = new Set((ex || []).map(x => x.hash));
       linhas.forEach(l => { l._ja = existentes.has(l.hash); });
-      concEstado.previa = { arquivo: arq.name, formato, linhas };
+      // O mesmo extrato em OUTRO formato (ex.: o Itaú em .txt já importado e agora o .ofx) tem histórico/documento diferentes, então o hash não casa e as linhas
+      // duplicariam. Por isso, linhas ainda «novas» são reconhecidas pelo MESMO DIA + MESMO VALOR contra as que já existem na conta (contando ocorrências: 2 PIX de
+      // 100,00 no mesmo dia pedem 2 linhas já gravadas; só o que passar disso é novo). Pode ser desligado na tela.
+      let reconhecidas = 0;
+      if(concEstado.cruzarFormato !== false){
+        const chave = (d, c, dd) => `${d}|${Number(c || 0).toFixed(2)}|${Number(dd || 0).toFixed(2)}`;
+        const sobra = new Map();
+        (ex || []).forEach(x => { const k = chave(x.data, x.credito, x.debito); sobra.set(k, (sobra.get(k) || 0) + 1); });
+        linhas.filter(l => l._ja).forEach(l => { const k = chave(l.data, l.credito, l.debito); if(sobra.get(k) > 0) sobra.set(k, sobra.get(k) - 1); });   // as que já casaram pelo hash consomem a sua
+        linhas.filter(l => !l._ja).forEach(l => { const k = chave(l.data, l.credito, l.debito); if(sobra.get(k) > 0){ sobra.set(k, sobra.get(k) - 1); l._ja = true; l._outroFormato = true; reconhecidas++; } });
+      }
+      concEstado.previa = { arquivo: arq.name, formato, linhas, reconhecidas };
       concDesenharPrevia();
     } catch(e){ alvo.innerHTML = '<div class="vazio">Não consegui ler: ' + escapeHtml(e.message) + '</div>'; concEstado.previa = null; }
   }
@@ -2013,10 +2033,10 @@
     const datas = p.linhas.map(l => l.data).sort();
     alvo.innerHTML = `
       <p class="ext-nota" style="margin:10px 0;">Arquivo <strong>${escapeHtml(p.arquivo)}</strong> · formato ${escapeHtml(p.formato)} · ${p.linhas.length} lançamento(s) de ${formatarData(datas[0])} a ${formatarData(datas[datas.length - 1])} ·
-        <strong>${novas.length} nova(s)</strong> (créditos ${concNum(cred)} · débitos ${concNum(deb)}) · ${p.linhas.length - novas.length} já importada(s).</p>
+        <strong>${novas.length} nova(s)</strong> (créditos ${concNum(cred)} · débitos ${concNum(deb)}) · ${p.linhas.length - novas.length} já importada(s)${p.reconhecidas ? ` (${p.reconhecidas} reconhecida(s) de outro formato, por mesmo dia e valor)` : ''}.</p>
       <div class="ext-tabela-wrap" style="max-height:50vh; overflow:auto;"><table class="ext-tabela">
         <thead><tr><th>Data</th><th>Histórico</th><th>Documento</th><th class="num">Crédito</th><th class="num">Débito</th><th>Situação</th></tr></thead>
-        <tbody>${p.linhas.slice(0, 400).map(l => `<tr style="${l._ja ? 'opacity:.5;' : ''}"><td>${formatarData(l.data)}</td><td>${escapeHtml(l.historico)}</td><td>${escapeHtml(l.documento)}</td><td class="num">${l.credito ? concNum(l.credito) : ''}</td><td class="num">${l.debito ? concNum(l.debito) : ''}</td><td>${l._ja ? 'já importada' : 'nova'}</td></tr>`).join('')}</tbody>
+        <tbody>${p.linhas.slice(0, 400).map(l => `<tr style="${l._ja ? 'opacity:.5;' : ''}"><td>${formatarData(l.data)}</td><td>${escapeHtml(l.historico)}</td><td>${escapeHtml(l.documento)}</td><td class="num">${l.credito ? concNum(l.credito) : ''}</td><td class="num">${l.debito ? concNum(l.debito) : ''}</td><td>${l._ja ? (l._outroFormato ? 'já importada (outro formato)' : 'já importada') : 'nova'}</td></tr>`).join('')}</tbody>
       </table></div>
       ${p.linhas.length > 400 ? `<p class="ext-nota">Mostrando as 400 primeiras linhas; todas as ${p.linhas.length} serão consideradas.</p>` : ''}
       <div class="filtros" style="margin-top:12px;"><button class="btn-novo" id="concImportar" ${novas.length ? '' : 'disabled'}>Importar ${novas.length} lançamento(s)</button></div>
@@ -2099,10 +2119,84 @@
     const L = concTitulosVisiveis(); const MAX = 300;
     document.getElementById('concTitContagem').textContent = `(${L.length}${L.length > MAX ? ', mostrando ' + MAX : ''})`;
     tb.innerHTML = L.slice(0, MAX).map(t => { const v = concLiquidoTitulo(t); const nome = (t.pessoa && t.pessoa.nome) || (t.descricao_avulsa ? '0 — ' + t.descricao_avulsa : '');
-      return `<tr><td><input type="checkbox" data-conc-t="${t.id}" ${concEstado.selT.has(t.id) ? 'checked' : ''}></td><td style="white-space:nowrap;">${formatarData(t.data_vencimento)}</td><td>${escapeHtml(t.titulo || 'Título #' + t.codigo)}<div class="ext-cod" style="margin:0;">${escapeHtml(nome)} · ${t.tipo_movimento === 'PAGAR' ? 'a pagar' : 'a receber'}</div></td><td class="num ${v < 0 ? 'ext-neg' : ''}">${concNum(v)}</td></tr>`; }).join('')
+      const aj = (Number(t.acrescimos) > 0 ? ` · inclui juros/multa ${concNum(t.acrescimos)}` : '') + (Number(t.descontos) > 0 ? ` · desconto ${concNum(t.descontos)}` : '');
+      const dj = `data-conc-juros="${t.id}" style="cursor:pointer;" title="Clique para ajustar o valor deste título (juros, multa, desconto, acordo alterado) e fechar com o valor cobrado"`;
+      return `<tr><td><input type="checkbox" data-conc-t="${t.id}" ${concEstado.selT.has(t.id) ? 'checked' : ''}></td><td ${dj.replace('style="cursor:pointer;"', 'style="cursor:pointer; white-space:nowrap;"')}>${formatarData(t.data_vencimento)}</td><td ${dj}>${escapeHtml(t.titulo || 'Título #' + t.codigo)}<div class="ext-cod" style="margin:0;">${escapeHtml(nome)} · ${t.tipo_movimento === 'PAGAR' ? 'a pagar' : 'a receber'}${escapeHtml(aj)}</div></td><td class="num ${v < 0 ? 'ext-neg' : ''}" ${dj}>${concNum(v)}</td></tr>`; }).join('')
       || '<tr><td colspan="4" class="vazio">Nenhum título em aberto neste filtro. Use a busca ou marque «todos os vencimentos».</td></tr>';
     tb.querySelectorAll('[data-conc-t]').forEach(c => c.addEventListener('change', () => { const id = Number(c.dataset.concT); c.checked ? concEstado.selT.add(id) : concEstado.selT.delete(id); concAtualizarTotais(); }));
+    tb.querySelectorAll('[data-conc-juros]').forEach(el => el.addEventListener('click', () => concAbrirJuros(Number(el.dataset.concJuros))));
   }
+  // ---- JUROS/MULTA/DESCONTO do título: o pagamento no banco costuma sair diferente do título (atraso, multa, desconto). Clicar no título abre esta janela: lança o juros
+  // (ou o desconto) NO PRÓPRIO TÍTULO (financeiro_titulos.acrescimos/descontos, como a baixa do app), e o botão «Preencher para fechar» calcula o valor que faz o
+  // título + o que já está marcado fechar com a(s) linha(s) do extrato marcada(s). Ao salvar, o título fica marcado e os valores fecham.
+  let concJurosId = null;
+  function concParseNum(v){ let x = String(v == null ? '' : v).trim().replace(/\s/g, ''); if(!x) return 0; x = x.includes(',') ? x.replace(/\./g, '').replace(',', '.') : x; const n = Number(x); return isFinite(n) ? n : NaN; }
+  function concContextoJuros(t){
+    const sg = t.tipo_movimento === 'PAGAR' ? -1 : 1;
+    const se = concEstado.extratos.filter(e => concEstado.selE.has(e.id)).reduce((a, e) => a + concLiquido(e), 0);
+    const sm = concEstado.movs.filter(m => concEstado.selM.has(m.id)).reduce((a, m) => a + concLiquidoMov(m), 0);
+    const outros = concTitulosSelecionados().filter(x => x.id !== t.id).reduce((a, x) => a + concLiquidoTitulo(x), 0);
+    return { sg, temExtrato: concEstado.selE.size > 0, se, resto: se - sm - outros };      // resto = o que o extrato cobra e ainda não está nos outros marcados
+  }
+  function concAbrirJuros(id){
+    const t = concTitulosAbertos().find(x => x.id === id); if(!t) return; concJurosId = id;
+    const nome = (t.pessoa && t.pessoa.nome) || (t.descricao_avulsa ? '0 — ' + t.descricao_avulsa : '');
+    const cx = concContextoJuros(t);
+    document.getElementById('concJurosForm').innerHTML = `
+      <div class="ext-nota" style="margin:0 0 10px; padding:8px 10px; background:var(--brand-soft); border-radius:8px;"><strong>${escapeHtml(t.titulo || 'Título #' + t.codigo)}</strong> · ${escapeHtml(nome)}<br>${t.tipo_movimento === 'PAGAR' ? 'A pagar' : 'A receber'} · vence ${formatarData(t.data_vencimento)} · valor do título <strong>${concNum(t.valor_titulo)}</strong></div>
+      ${cx.temExtrato ? `<div class="ext-nota" style="margin:0 0 10px;">Cobrado/recebido no extrato (linhas marcadas): <strong>${concNum(Math.abs(cx.se))}</strong> · para este título fechar, o valor líquido precisa ser <strong id="ctj_alvo"></strong> <button class="ext-chip" id="btnCtjFechar" type="button">Preencher para fechar</button></div>` : '<div class="ext-nota" style="margin:0 0 10px;">Dica: marque a linha do extrato antes para o sistema calcular o juros que fecha com o valor cobrado.</div>'}
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div class="field-group"><label>Acréscimo (valor a mais)</label><input type="text" inputmode="decimal" id="ctj_acr" value="${Number(t.acrescimos) ? String(Number(t.acrescimos).toFixed(2)).replace('.', ',') : ''}" placeholder="0,00"></div>
+        <div class="field-group"><label>Desconto (valor a menos)</label><input type="text" inputmode="decimal" id="ctj_desc" value="${Number(t.descontos) ? String(Number(t.descontos).toFixed(2)).replace('.', ',') : ''}" placeholder="0,00"></div>
+      </div>
+      <div class="field-group" style="margin-top:8px;"><label>Motivo do ajuste</label>
+        <select id="ctj_motivo"><option value="">— escolha —</option><option>Juros / multa por atraso</option><option>Alteração do acordo de pagamento</option><option>Lançamento a maior ou a menor (correção)</option><option>Desconto concedido</option><option>Outro</option></select></div>
+      <div class="field-group" style="margin-top:8px;"><label>Observação (opcional)</label><input type="text" id="ctj_obs" placeholder="Ex.: acordo novo com o fornecedor, parcela renegociada…"></div>
+      <div class="ext-nota" style="margin-top:6px;">Valor líquido do título: <strong id="ctj_liq"></strong> <span id="ctj_dif"></span></div>`;
+    const atualizar = () => {
+      const acr = concParseNum(document.getElementById('ctj_acr').value), desc = concParseNum(document.getElementById('ctj_desc').value);
+      const liq = (Number(t.valor_titulo) || 0) + (isNaN(acr) ? 0 : acr) - (isNaN(desc) ? 0 : desc);
+      document.getElementById('ctj_liq').textContent = concNum(liq);
+      const alvoEl = document.getElementById('ctj_alvo'); if(alvoEl){ const alvo = cx.resto / cx.sg; alvoEl.textContent = alvo > 0 ? concNum(alvo) : '(valor inválido — confira as linhas marcadas)'; }
+      const d = document.getElementById('ctj_dif'); if(cx.temExtrato){ const resta = cx.resto - cx.sg * liq; d.innerHTML = Math.abs(resta) < 0.01 ? '<strong style="color:var(--brand-2);">✔ fecha com o extrato</strong>' : `· diferença com o extrato: <strong style="color:var(--danger);">${concNum(resta)}</strong>`; } else d.textContent = '';
+    };
+    ['ctj_acr', 'ctj_desc'].forEach(i => document.getElementById(i).addEventListener('input', atualizar));
+    const bf = document.getElementById('btnCtjFechar');
+    if(bf) bf.addEventListener('click', () => {
+      const alvo = cx.resto / cx.sg; if(!(alvo > 0)){ alert('Confira as linhas marcadas: o valor que fecharia este título ficou inválido.'); return; }
+      const dif = Math.round((alvo - Number(t.valor_titulo)) * 100) / 100;
+      document.getElementById('ctj_acr').value = dif > 0 ? dif.toFixed(2).replace('.', ',') : ''; document.getElementById('ctj_desc').value = dif < 0 ? (-dif).toFixed(2).replace('.', ',') : '';
+      const mt = document.getElementById('ctj_motivo'); if(!mt.value) mt.value = dif > 0 ? 'Juros / multa por atraso' : 'Desconto concedido';   // sugestão; o usuário troca (ex.: «Alteração do acordo»)
+      atualizar();
+    });
+    atualizar(); document.getElementById('modalConcJuros').classList.add('show');
+  }
+  async function concSalvarJuros(){
+    const t = concTitulosAbertos().find(x => x.id === concJurosId); if(!t) return;
+    const acr = concParseNum(document.getElementById('ctj_acr').value), desc = concParseNum(document.getElementById('ctj_desc').value);
+    if(isNaN(acr) || isNaN(desc) || acr < 0 || desc < 0){ alert('Informe valores válidos (zero ou maiores que zero).'); return; }
+    if((Number(t.valor_titulo) || 0) + acr - desc <= 0){ alert('O desconto não pode zerar ou passar do valor do título.'); return; }
+    const antes = { a: Number(t.acrescimos) || 0, d: Number(t.descontos) || 0 };
+    const mudou = Math.abs(acr - antes.a) > 0.004 || Math.abs(desc - antes.d) > 0.004;
+    const motivo = document.getElementById('ctj_motivo').value, obsAj = document.getElementById('ctj_obs').value.trim();
+    if(mudou && !motivo){ alert('Escolha o motivo do ajuste (juros, alteração de acordo, correção de lançamento…).'); return; }
+    const btn = document.getElementById('btnConcJurosSalvar'); btn.disabled = true;
+    try{
+      const dados = { acrescimos: acr, descontos: desc };
+      // o motivo fica registrado na observação do próprio título (histórico visível no card), sem apagar o que já havia
+      if(mudou){ const nota = `Ajuste na conciliação (${new Date().toLocaleDateString('pt-BR')}): ${motivo}${obsAj ? ' — ' + obsAj : ''}${acr ? ' · acréscimo ' + concNum(acr) : ''}${desc ? ' · desconto ' + concNum(desc) : ''}`; dados.observacao = (t.observacao ? t.observacao + ' -- ' : '') + nota; }
+      const { error } = await sb.from('financeiro_titulos').update(dados).eq('id', t.id).eq('unidade_negocio_id', agenciaId);
+      if(error) throw new Error(error.message);
+      t.acrescimos = acr; t.descontos = desc; if(dados.observacao) t.observacao = dados.observacao;
+      try{ await registrarSentinela('financeiro_titulo_juros', `Conciliação: ajustou o valor do título #${t.codigo ?? t.id}${t.titulo ? ' "' + t.titulo + '"' : ''} — acréscimo ${concNum(acr)} e desconto ${concNum(desc)} (antes ${concNum(antes.a)} / ${concNum(antes.d)})${motivo ? '; motivo: ' + motivo : ''}${obsAj ? ' — ' + obsAj : ''}`); } catch(e){}
+      concEstado.selT.add(t.id); document.getElementById('modalConcJuros').classList.remove('show');
+      concDesenharTitulos(); concAtualizarTotais();
+    } catch(e){ alert('Não consegui salvar: ' + e.message); }
+    finally { btn.disabled = false; }
+  }
+  document.getElementById('btnConcJurosSalvar').addEventListener('click', concSalvarJuros);
+  document.getElementById('btnConcJurosCancelar').addEventListener('click', () => document.getElementById('modalConcJuros').classList.remove('show'));
+  document.getElementById('btnConcJurosFechar').addEventListener('click', () => document.getElementById('modalConcJuros').classList.remove('show'));
   async function concCarregarListas(){
     const contaId = Number(concEstado.contaId), de = concEstado.de, ate = concEstado.ate;
     let qe = sb.from('financeiro_extrato_bancario').select('*').eq('unidade_negocio_id', agenciaId).eq('id_conta', contaId).eq('situacao', 'pendente');
@@ -2133,7 +2227,7 @@
           <h3 style="font-size:.9rem; margin:14px 0 6px;">Títulos em aberto — contas a pagar/receber <span id="concTitContagem" class="ext-nota"></span></h3>
           <div class="filtros" style="margin-bottom:6px;"><input type="text" id="concTitBusca" placeholder="Buscar fornecedor, título ou valor..." value="${escapeHtml(concEstado.titBusca)}" style="flex:1; min-width:180px;"><label style="display:flex; align-items:center; gap:5px; font-size:.8rem;"><input type="checkbox" id="concTitTodos" ${concEstado.titTodos ? 'checked' : ''}> todos os vencimentos</label></div>
           <div class="ext-tabela-wrap" style="max-height:30vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th>${concThOrd('tit', 'data', 'Venc.')}${concThOrd('tit', 'historico', 'Título / fornecedor')}${concThOrd('tit', 'valor', 'Valor líquido', 'num')}</tr></thead><tbody id="concTbT"></tbody></table></div>
-          <p class="ext-nota" style="margin-top:6px;">Marcar um <strong>título em aberto</strong> e conciliar <strong>quita o título</strong> (data do extrato, conta do banco) e cria o lançamento de caixa. Se o pagamento já está no caixa, marque o lançamento acima: aí só concilia.</p></div>
+          <p class="ext-nota" style="margin-top:6px;">Marcar um <strong>título em aberto</strong> e conciliar <strong>quita o título</strong> (data do extrato, conta do banco) e cria o lançamento de caixa. Se o pagamento já está no caixa, marque o lançamento acima: aí só concilia. O valor cobrado é diferente do título (juros, multa, desconto, <strong>acordo de pagamento alterado</strong>, lançamento errado)? <strong>Clique no título</strong> para ajustar o valor e fechar com o extrato.</p></div>
       </div>`;
     const linha = (tipo, id, d, h, sub, v) => `<tr><td><input type="checkbox" data-conc-${tipo}="${id}" ${(tipo === 'e' ? concEstado.selE : concEstado.selM).has(id) ? 'checked' : ''}></td><td style="white-space:nowrap;">${formatarData(d)}</td><td>${escapeHtml(h || '')}${sub ? `<div class="ext-cod" style="margin:0;">${escapeHtml(sub)}</div>` : ''}</td><td class="num ${v < 0 ? 'ext-neg' : ''}">${concNum(v)}</td></tr>`;
     document.getElementById('concTbE').innerHTML = concOrdenar(concEstado.extratos, 'ext', CONC_ACC_E).map(e => linha('e', e.id, e.data, e.historico, e.documento, concLiquido(e))).join('') || '<tr><td colspan="4" class="vazio">Nenhuma linha pendente neste período.</td></tr>';
@@ -2173,13 +2267,15 @@
   async function concConciliarMarcados(){
     const btn = document.getElementById('concConciliar'); btn.disabled = true;
     const tits = concTitulosSelecionados();
-    if(tits.length){
-      const linhas = concEstado.extratos.filter(e => concEstado.selE.has(e.id)); const dataBaixa = linhas.map(e => e.data).sort().pop();
-      if(!confirm(`Conciliar vai QUITAR ${tits.length} título(s) no contas a pagar/receber, com data ${formatarData(dataBaixa)} e conta "${extNomeConta(Number(concEstado.contaId))}", e criar o lançamento de caixa de cada um. Confirmar?`)){ concAtualizarTotais(); return; }
-    }
+    const linhas = concEstado.extratos.filter(e => concEstado.selE.has(e.id)); const dataBaixa = linhas.map(e => e.data).sort().pop();
+    const mudaData = concEstado.movs.filter(m => concEstado.selM.has(m.id) && m.data !== dataBaixa);     // a data do lançamento passa a ser a do extrato
+    const avisos = [];
+    if(tits.length) avisos.push(`QUITAR ${tits.length} título(s) no contas a pagar/receber, com data ${formatarData(dataBaixa)} e conta "${extNomeConta(Number(concEstado.contaId))}", e criar o lançamento de caixa de cada um`);
+    if(mudaData.length) avisos.push(`ALTERAR a data de ${mudaData.length} lançamento(s) do caixa para ${formatarData(dataBaixa)} (a do extrato): ${mudaData.slice(0, 4).map(m => formatarData(m.data)).join(', ')}${mudaData.length > 4 ? '…' : ''} → ${formatarData(dataBaixa)}. Se o lançamento veio da baixa de um título, a data de pagamento do título acompanha. A data anterior fica registrada e volta se você desfizer`);
+    if(avisos.length && !confirm('Conciliar vai:\n• ' + avisos.join('\n• ') + '\n\nConfirmar?')){ concAtualizarTotais(); return; }
     try{
       const cod = await concChamarConciliar([...concEstado.selE], [...concEstado.selM], 'manual', null, tits.map(t => t.id));
-      await registrarSentinela('financeiro_conciliacao', `Conciliação #${cod}: ${concEstado.selE.size} linha(s) do extrato × ${concEstado.selM.size} lançamento(s)${tits.length ? ' e ' + tits.length + ' título(s) quitado(s)' : ''} na conta "${extNomeConta(Number(concEstado.contaId))}"`);
+      await registrarSentinela('financeiro_conciliacao', `Conciliação #${cod}: ${concEstado.selE.size} linha(s) do extrato × ${concEstado.selM.size} lançamento(s)${tits.length ? ' e ' + tits.length + ' título(s) quitado(s)' : ''}${mudaData.length ? '; data de ' + mudaData.length + ' lançamento(s) alterada para ' + dataBaixa + ' (antes: ' + mudaData.map(m => m.data).join(', ') + ')' : ''} na conta "${extNomeConta(Number(concEstado.contaId))}"`);
       concEstado.selE.clear(); concEstado.selM.clear(); concEstado.selT.clear();
       if(tits.length) await concAtualizarAposQuitar();
       await concRenderConciliar();
@@ -2247,7 +2343,7 @@
         <td>${p.extratos.map(e => formatarData(e.data) + ' · ' + escapeHtml(e.historico || '')).join('<br>')}</td>
         <td>${p.movs.map(m => formatarData(m.data) + ' · ' + escapeHtml(m.historico || '') + (m.pessoa && m.pessoa.nome ? ' · ' + escapeHtml(m.pessoa.nome) : '')).concat((p.titulos || []).map(t => '<strong>TÍTULO</strong> venc. ' + formatarData(t.data_vencimento) + ' · ' + escapeHtml(t.titulo || '#' + t.codigo) + (t.pessoa && t.pessoa.nome ? ' · ' + escapeHtml(t.pessoa.nome) : ''))).join('<br>')}</td>
         <td class="num">${concNum(p.extratos.reduce((a, e) => a + concLiquido(e), 0))}</td></tr>`).join('')}</tbody></table></div>
-      <p class="ext-nota">As <strong>exatas</strong> (mesmo valor e data até 3 dias, sem outra candidata) já vêm marcadas; confira as <strong>prováveis</strong> e as <strong>em lote</strong> antes de marcar. As de <strong>título</strong> nunca vêm marcadas: conciliar <strong>quita o título</strong> no contas a pagar/receber e cria o lançamento de caixa.</p>`
+      <p class="ext-nota">As <strong>exatas</strong> (mesmo valor e data até 3 dias, sem outra candidata) já vêm marcadas; confira as <strong>prováveis</strong> e as <strong>em lote</strong> antes de marcar. As de <strong>título</strong> nunca vêm marcadas: conciliar <strong>quita o título</strong> no contas a pagar/receber e cria o lançamento de caixa. Ao conciliar, o lançamento que estava com <strong>data diferente</strong> passa a ter a <strong>data do extrato</strong> (e a data de pagamento do título dele acompanha; a anterior fica registrada).</p>`
       : '<div class="vazio">Nenhuma sugestão encontrada para este período.</div>';
     document.getElementById('btnConcSugAplicar').style.display = pares.length ? '' : 'none';
     window.__concPares = pares; ov.classList.add('show');
@@ -2256,7 +2352,11 @@
     const marcados = Array.from(document.querySelectorAll('[data-conc-par]:checked')).map(c => window.__concPares[Number(c.dataset.concPar)]);
     if(!marcados.length){ alert('Marque ao menos uma sugestão.'); return; }
     const nTit = marcados.reduce((a, p) => a + (p.titulos || []).length, 0);
-    if(nTit && !confirm(`Estas sugestões vão QUITAR ${nTit} título(s) no contas a pagar/receber e criar o lançamento de caixa de cada um. Confirmar?`)) return;
+    const nData = marcados.reduce((a, p) => { const d = p.extratos.map(e => e.data).sort().pop(); return a + p.movs.filter(m => m.data !== d).length; }, 0);
+    const avisos = [];
+    if(nTit) avisos.push(`QUITAR ${nTit} título(s) no contas a pagar/receber e criar o lançamento de caixa de cada um`);
+    if(nData) avisos.push(`ALTERAR a data de ${nData} lançamento(s) do caixa para a data do extrato (e a data de pagamento do título correspondente; a data anterior fica registrada e volta se você desfizer)`);
+    if(avisos.length && !confirm('Estas sugestões vão:\n• ' + avisos.join('\n• ') + '\n\nConfirmar?')) return;
     const btn = document.getElementById('btnConcSugAplicar'); btn.disabled = true; let ok = 0; const erros = [];
     for(const p of marcados){
       try{ btn.textContent = `Conciliando ${ok + erros.length + 1} de ${marcados.length}...`; await concChamarConciliar(p.extratos.map(e => e.id), p.movs.map(m => m.id), 'automatica', null, (p.titulos || []).map(t => t.id)); ok++; }
@@ -2607,14 +2707,16 @@
     const tr = document.getElementById('concDet' + cod); const td = tr.firstElementChild;
     if(tr.style.display !== 'none'){ tr.style.display = 'none'; return; }
     td.innerHTML = 'Carregando...'; tr.style.display = '';
-    const [e, m] = await Promise.all([
+    const [e, m, dts] = await Promise.all([
       sb.from('financeiro_extrato_bancario').select('data, historico, credito, debito').eq('unidade_negocio_id', agenciaId).eq('cod_conciliacao', cod),
-      sb.from('financeiro_movimentacao_contas').select('data, historico, valor, tipo_movimento').eq('unidade_negocio_id', agenciaId).eq('cod_conciliacao', cod)]);
+      sb.from('financeiro_movimentacao_contas').select('id, data, historico, valor, tipo_movimento').eq('unidade_negocio_id', agenciaId).eq('cod_conciliacao', cod),
+      sb.from('financeiro_conciliacao_datas').select('id_movimentacao, data_anterior').eq('unidade_negocio_id', agenciaId).eq('cod_conciliacao', cod)]);
+    const dataAnt = new Map(((dts && dts.data) || []).map(x => [x.id_movimentacao, x.data_anterior]));      // sem o SQL novo a consulta falha e simplesmente não mostra
     td.innerHTML = `<div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; font-size:.8rem;"><div><strong>Extrato</strong>${(e.data || []).map(x => `<div>${formatarData(x.data)} · ${escapeHtml(x.historico || '')} · ${concNum(Number(x.credito) - Number(x.debito))}</div>`).join('')}</div>
-      <div><strong>Lançamentos</strong>${(m.data || []).map(x => `<div>${formatarData(x.data)} · ${escapeHtml(x.historico || '')} · ${concNum(concLiquidoMov(x))}</div>`).join('')}</div></div>`;
+      <div><strong>Lançamentos</strong>${(m.data || []).map(x => `<div>${formatarData(x.data)}${dataAnt.has(x.id) ? ` <span class="pill" style="background:none; border:1px solid var(--border); color:var(--muted);" title="A data do lançamento foi trocada pela do extrato ao conciliar; a anterior volta se a conciliação for desfeita">data original ${formatarData(dataAnt.get(x.id))}</span>` : ''} · ${escapeHtml(x.historico || '')} · ${concNum(concLiquidoMov(x))}</div>`).join('')}</div></div>`;
   }
   async function concDesfazer(cod){
-    if(!confirm(`Desfazer a conciliação #${cod}? As linhas do extrato voltam para pendentes. Se ela foi GERADA a partir do extrato, o lançamento gerado também é apagado (na transferência, as DUAS pernas). Se ela quitou títulos do contas a pagar/receber, eles voltam a ficar em aberto e o lançamento de caixa que ela criou é apagado.`)) return;
+    if(!confirm(`Desfazer a conciliação #${cod}? As linhas do extrato voltam para pendentes. Se ela foi GERADA a partir do extrato, o lançamento gerado também é apagado (na transferência, as DUAS pernas). Se ela quitou títulos do contas a pagar/receber, eles voltam a ficar em aberto e o lançamento de caixa que ela criou é apagado. Lançamentos (e títulos) que tiveram a data trocada pela do extrato voltam à data anterior.`)) return;
     const { error } = await sb.rpc('financeiro_desconciliar', { p_unidade: agenciaId, p_codigo: cod });
     if(error){ alert('Não consegui desfazer: ' + error.message); return; }
     await registrarSentinela('financeiro_conciliacao_desfeita', `Desfez a conciliação #${cod}`);
@@ -2816,10 +2918,10 @@
         <p>Confere o <strong>extrato do banco</strong> com o que foi pago/recebido na Movimentação de Contas, por um <strong>código de conciliação</strong> sequencial.
         Escolha a conta do banco no topo e siga as etapas:</p>
         <ul>
-          <li><strong>1 · Importar extrato</strong>: escolha o arquivo do banco — Bradesco (.csv), Itaú (.txt), Sicoob (.xlsx) ou OFX (o formato é detectado sozinho). Aparece uma prévia com o que é novo e o que já foi importado
+          <li><strong>1 · Importar extrato</strong> (o mesmo período em <strong>outro formato</strong> — por exemplo o Itaú em .txt já importado e agora o .ofx — é reconhecido por <strong>mesmo dia e mesmo valor</strong> e não duplica; dá para desligar essa opção na tela): escolha o arquivo do banco — Bradesco (.csv), Itaú (.txt), Sicoob (.xlsx) ou OFX (o formato é detectado sozinho). Aparece uma prévia com o que é novo e o que já foi importado
           (linha igual — mesma data, histórico, documento e valor — não duplica; dá para importar de novo um período que se sobrepõe). Linhas de saldo e lançamentos futuros são ignorados.</li>
           <li><strong>2 · Conciliar</strong>: à esquerda as linhas pendentes do banco, à direita os lançamentos da conta ainda sem conciliação (do período ± 7 dias) <strong>e os títulos em aberto do contas a pagar/receber</strong>. Marque dos dois lados — os valores precisam <strong>fechar</strong>
-          (crédito soma, débito subtrai; pode ser 1 linha do banco para vários lançamentos e o contrário) — e clique em <strong>Conciliar marcados</strong>: nasce um <strong>código de conciliação</strong>, gravado nas linhas do extrato e nos lançamentos. Se o pagamento <strong>já está no caixa</strong>, marque o lançamento: só recebe o código. Se ainda <strong>não está</strong>, marque o <strong>título em aberto</strong> (um ou vários, que somem o valor do PIX/pagamento): ao conciliar, o título é <strong>quitado</strong> (data do extrato, conta do banco), o <strong>lançamento de caixa é criado</strong> com o rateio do próprio título e tudo fica conciliado. A lista de títulos mostra o sentido das linhas marcadas (débito = a pagar, crédito = a receber), por vencimento próximo do período; use a busca (fornecedor, título ou valor) ou «todos os vencimentos» para achar os outros. <strong>Desfazer</strong> reabre os títulos e apaga o lançamento de caixa que a conciliação criou.
+          (crédito soma, débito subtrai; pode ser 1 linha do banco para vários lançamentos e o contrário) — e clique em <strong>Conciliar marcados</strong>: nasce um <strong>código de conciliação</strong>, gravado nas linhas do extrato e nos lançamentos. Se o pagamento <strong>já está no caixa</strong>, marque o lançamento: só recebe o código. Se ainda <strong>não está</strong>, marque o <strong>título em aberto</strong> (um ou vários, que somem o valor do PIX/pagamento): ao conciliar, o título é <strong>quitado</strong> (data do extrato, conta do banco), o <strong>lançamento de caixa é criado</strong> com o rateio do próprio título e tudo fica conciliado. Se o valor do banco não bate com o do título — <strong>juros ou multa, desconto, alteração do acordo de pagamento ou lançamento a maior/menor</strong> — <strong>clique no título</strong> da lista: abre a janela «Ajustar o valor do título», onde você lança o acréscimo ou o desconto (o valor original do título é preservado), escolhe o <strong>motivo</strong> (fica gravado na observação do título e na auditoria) e usa <strong>Preencher para fechar</strong>, que calcula o valor para igualar o extrato; ao salvar, o título fica marcado e os valores fecham. A lista de títulos mostra o sentido das linhas marcadas (débito = a pagar, crédito = a receber), por vencimento próximo do período; use a busca (fornecedor, título ou valor) ou «todos os vencimentos» para achar os outros. <strong>Desfazer</strong> reabre os títulos e apaga o lançamento de caixa que a conciliação criou.
           <strong>Sugestões automáticas</strong> procura pares de mesmo valor com data até 3 dias de diferença (as exatas já vêm marcadas; as prováveis e as em lote pedem conferência). <strong>Ignorar</strong> tira linhas da conciliação.</li>
           <li><strong>3 · Gerar lançamentos</strong>: tarifas, cesta, juros, IOF, rendimentos etc. que o banco lançou e <strong>não estão no contas a pagar</strong>. Marque as linhas e escolha <strong>Gerar com a regra de cada linha</strong> ou
           <strong>Gerar com a classificação que eu escolher</strong> (empresa, setor, plano de contas e evento são obrigatórios). Cada linha vira um lançamento na Movimentação, com rateio de 100%, já conciliado (um código por linha).
@@ -2828,6 +2930,7 @@
           <li><strong>⇄ Transferência</strong>: use quando o dinheiro da linha <strong>veio de outra conta</strong> (PIX, cartões, outro banco) — ou foi para ela. É o botão «Transferência» do Sicon: em vez de um lançamento só, cria <strong>as duas pernas</strong>: no banco, já conciliada com a linha do extrato (entrada se o banco recebeu, saída se enviou), e na outra conta o lançamento contrário (a «baixa»). Você escolhe a <strong>outra conta</strong>, o <strong>plano do lado do banco</strong> (a receita, na entrada) e o <strong>plano da baixa</strong> na outra conta; a empresa vem da conta do banco; setor e evento são opcionais. A data é a do extrato nas duas contas (a da outra conta pode ser trocada numa linha só). Vale também para várias linhas marcadas (<strong>⇄ Transferência das marcadas…</strong>, todas entradas ou todas saídas) e <strong>sem loop</strong>: as 400 linhas «PIX RECEBIDO» viram transferências de uma vez pela regra. As duas pernas carregam o <strong>mesmo código de conciliação</strong>, então <strong>Desfazer</strong> apaga as duas juntas. O que é fixo (a outra conta e o plano da baixa) fica lembrado para a próxima; o plano da receita não, porque muda de recebimento para recebimento.</li>
           <li><strong>Regras</strong>: cadastre palavras do histórico (TARIFA, CESTA, JUROS, IOF, RENDIMENTO...) com fornecedor e classificação padrão; valem para todos os bancos da unidade e a de menor ordem vence. A regra pode ser <strong>parcial</strong>: o que faltar (empresa, setor, plano, evento) é completado pela conta e pelos padrões da empresa; se ainda faltar algo, a linha fica de fora do "gerar por regra".
           A regra tem uma <strong>ação</strong>: <em>Gerar um lançamento</em> (tarifa, juros, rendimento...) ou <em>Transferência de/para outra conta</em> (palavra como «PIX RECEBIDO» ou «RECEBIMENTO REDE» → a outra conta, o plano da baixa nela e, no campo «Plano de contas», o plano do lado do banco; o sentido crédito/débito é obrigatório). Um pagador com classificação diferente (por exemplo uma agência, cujo recebimento não é venda direta) ganha <strong>a sua própria regra com ordem menor</strong> que a regra geral — a de menor ordem vence.</li>
+          <li><strong>Data do lançamento = data do extrato</strong>: ao conciliar um lançamento que já estava no caixa com a linha do banco, o lançamento <strong>passa a ter a data do extrato</strong> (se forem várias linhas, a mais recente), pois é quando o banco realmente movimentou. O sistema avisa antes («alterar a data de N lançamento(s)»), <strong>guarda a data anterior</strong> (aparece como «data original» em <strong>Conciliações feitas → Ver</strong> e na auditoria) e <strong>Desfazer</strong> devolve a data anterior. Se o lançamento veio da <strong>baixa de um título</strong>, a <strong>data de pagamento do título</strong> também passa para a do extrato (só quando o sistema identifica um único título naquele pagamento; em caso de dúvida, o título não é alterado). A <strong>data de competência</strong> e o <strong>vencimento</strong> não mudam.</li>
           <li><strong>Conciliações feitas</strong>: lista os códigos (com as linhas e lançamentos de cada um). <strong>Desfazer</strong> devolve as linhas ao pendente e solta os lançamentos; se a conciliação foi gerada a partir do extrato, o lançamento gerado também é apagado.</li>
           <li><strong>Ordenar</strong>: clique no cabeçalho de uma coluna (Data, Histórico, Valor, Regra, Venc....) para ordenar — 1º clique crescente ▲, 2º decrescente ▼, 3º volta à ordem original. Vale para o extrato, os lançamentos, os títulos e as conciliações feitas; as linhas marcadas continuam marcadas.</li>
           <li>Precisa do arquivo <code>financeiro-conciliacao.sql</code> rodado no Supabase.</li>
