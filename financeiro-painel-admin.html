@@ -399,6 +399,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"/><path d="M5 21V10l7-5 7 5v11"/><path d="M9 21v-6h6v6"/><path d="M9 11l2 2 4-4"/></svg>
           <span class="nav-label">Conciliação bancária</span>
         </button>
+        <button class="nav-item tab-app-btn" data-app-tab="protocolos">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><polyline points="3 7 12 13 21 7"/></svg>
+          <span class="nav-label">Protocolos do Estoque</span>
+        </button>
         <button class="nav-item tab-app-btn" data-app-tab="cadastros">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="12" y2="17"/></svg>
           <span class="nav-label">Cadastros</span>
@@ -483,6 +487,7 @@
                 <option value="pago">Só pagos/quitados</option>
                 <option value="aberto" selected>Só em aberto</option>
               </select>
+              <select id="filtroContaTitulo" title="Mostra só os títulos da conta de pagamento escolhida (ou os que ainda estão sem conta)"><option value="">Todas as contas</option></select>
               <label style="font-size:.8rem; color:var(--muted); display:flex; align-items:center; gap:4px;">De <input type="date" id="filtroTituloDataInicio" style="padding:8px;"></label>
               <label style="font-size:.8rem; color:var(--muted); display:flex; align-items:center; gap:4px;">Até <input type="date" id="filtroTituloDataFim" style="padding:8px;"></label>
               <input type="text" id="filtroCodigoOperacao" placeholder="Código da operação..." style="max-width:170px;" title="Ao preencher, mostra todos os títulos dessa operação e ignora os outros filtros.">
@@ -529,6 +534,7 @@
               <span><strong class="mono" id="topoQtdTitulos" style="color:var(--ink);">0</strong> título(s)</span>
               <span id="topoTotais"></span>
               <span id="topoMarcadosWrap" style="display:none;">Marcados (<strong class="mono" id="topoQtdMarcados" style="color:var(--ink);">0</strong>): <strong class="mono" id="topoValorMarcados" style="color:var(--brand-2);">R$ 0,00</strong></span>
+              <label title="Marca (ou desmarca) todos os títulos em aberto que estão na lista, já com os filtros aplicados" style="display:flex; align-items:center; gap:6px; font-size:.78rem; cursor:pointer; color:var(--ink);"><input type="checkbox" id="chkMarcarTodosTitulos" style="width:16px; height:16px;"> Marcar todos os filtrados</label>
               <span style="flex:1;"></span>
               <button id="btnListaPagamentos" type="button" title="Gera a lista (por conta, com caixa de PAGO) seguindo exatamente os filtros atuais" style="background:var(--brand); color:#fff; border:none; border-radius:8px; padding:7px 14px; font-size:.78rem; font-weight:600; cursor:pointer; font-family:inherit;">📋 Lista de pagamentos (PDF)</button>
             </div>
@@ -598,6 +604,13 @@
               <button class="ext-tab" data-conc-aba="regras">Regras</button>
             </div>
             <div id="concCorpo"><div class="vazio">Abra a aba para carregar.</div></div>
+          </div>
+
+          <!-- ================= PROTOCOLOS DO ESTOQUE ================= -->
+          <div class="panel-app" id="app-panel-protocolos">
+            <p class="ext-nota" style="margin:0 0 10px;">Lotes de <strong>notas de entrada</strong> que o Estoque entrega ao financeiro. Ao <strong>aceitar</strong> um protocolo, todas as notas dele viram <strong>títulos a pagar</strong> aqui (uma parcela = um título; nota sem parcelas = um título com o valor total).</p>
+            <div class="filtros"><select id="protFiltro"><option value="pendentes">Pendentes de aceite</option><option value="todos">Todos os protocolos</option></select><button class="ext-chip" id="protAtualizar">Atualizar</button><span style="flex:1;"></span><span id="protContagem" class="ext-nota"></span></div>
+            <div id="protCorpo"><div class="vazio">Abra a aba para carregar.</div></div>
           </div>
 
           <!-- ================= CADASTROS ================= -->
@@ -1002,6 +1015,12 @@
       <div class="modal-lista-body"><div id="concTransfForm"></div><div style="margin-top:12px;"><button class="btn-novo" id="btnConcTransfOk" style="width:100%;">Gravar transferência e conciliar</button></div></div>
     </div>
   </div>
+  <div class="modal-lista-overlay" id="modalProtocolo">
+    <div class="modal-lista" style="max-width:980px;">
+      <div class="modal-lista-head"><h3 id="tituloModalProtocolo">Protocolo</h3><button class="drawer-close" id="btnProtocoloFechar">✕</button></div>
+      <div class="modal-lista-body"><div id="protDetalhe"></div><div id="protAcoes" style="margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;"></div></div>
+    </div>
+  </div>
   <div class="modal-lista-overlay" id="modalConcRegra">
     <div class="modal-lista" style="max-width:520px;">
       <div class="modal-lista-head"><h3 id="tituloModalConcRegra">Regra</h3><button class="drawer-close" id="btnConcRegraFechar">✕</button></div>
@@ -1374,7 +1393,7 @@
   // =================================================================
   // TABS DO APP
   // =================================================================
-  const titulosAba = { dashboard: 'Dashboard', titulos: 'Títulos', movimentacao: 'Movimentação de Contas', extrato: 'Extrato de contas', conciliacao: 'Conciliação bancária', cadastros: 'Cadastros', parametros: 'Parâmetros' };
+  const titulosAba = { dashboard: 'Dashboard', titulos: 'Títulos', movimentacao: 'Movimentação de Contas', extrato: 'Extrato de contas', conciliacao: 'Conciliação bancária', protocolos: 'Protocolos do Estoque', cadastros: 'Cadastros', parametros: 'Parâmetros' };
   document.querySelectorAll('.tab-app-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.tab-app-btn').forEach(b => b.classList.remove('active'));
@@ -1384,10 +1403,121 @@
       if(btn.dataset.appTab === 'dashboard') renderizarDashboardFinanceiro();
       if(btn.dataset.appTab === 'extrato') iniciarExtrato();
       if(btn.dataset.appTab === 'conciliacao') iniciarConciliacao();
+      if(btn.dataset.appTab === 'protocolos') iniciarProtocolos();
       if(btn.dataset.appTab === 'movimentacao') abrirAbaMovimentacao();
       document.getElementById('tituloConteudo').textContent = titulosAba[btn.dataset.appTab] || '';
     });
   });
+
+  // =================================================================
+  // PROTOCOLOS DO ESTOQUE -- o Financeiro ACEITA o lote de notas que o Estoque gerou (estoque_protocolos). Ao aceitar, as notas viram TÍTULOS A PAGAR
+  // (financeiro-protocolo-estoque.sql: financeiro_aceitar_protocolo_estoque): nota com parcelas = 1 título por parcela; nota sem parcelas = 1 título com o
+  // valor total, vencendo na data de entrada; sem valor = não gera. Os títulos entram na operação da compra (origem 'estoque', com o rateio do Estoque).
+  // O aceite marca o protocolo como sincronizado (o script do Sicon o ignora e o Estoque não deixa desfazer o protocolo).
+  // =================================================================
+  const protEstado = { lista: [], aberto: null };
+  function protStatus(p){
+    if(p.aceito_em) return { chave: 'aceito', html: `✅ Aceito em ${formatarData(String(p.aceito_em).slice(0, 10))}${p.aceito_modo === 'sem_titulos' ? ' <span class="ext-cod">(sem gerar títulos)</span>' : ''}` };
+    if(p.sincronizado_em) return { chave: 'sicon', html: `Levado ao Sicon em ${formatarData(String(p.sincronizado_em).slice(0, 10))}` };
+    return { chave: 'pendente', html: '⏳ Pendente de aceite' };
+  }
+  async function iniciarProtocolos(){
+    const alvo = document.getElementById('protCorpo'); alvo.innerHTML = '<div class="vazio">Carregando...</div>';
+    const { data, error } = await sb.from('estoque_protocolos').select('*').eq('unidade_negocio_id', agenciaId).order('nr_protocolo', { ascending: false }).limit(300);
+    if(error){ alvo.innerHTML = '<div class="vazio">' + escapeHtml(error.message) + '</div>'; return; }
+    protEstado.lista = (data || []).filter(p => !p.tipo || p.tipo === 'entrada');
+    protDesenharLista();
+  }
+  function protDesenharLista(){
+    const alvo = document.getElementById('protCorpo'); const so = document.getElementById('protFiltro').value === 'pendentes';
+    const L = protEstado.lista.filter(p => !so || protStatus(p).chave === 'pendente');
+    const pend = protEstado.lista.filter(p => protStatus(p).chave === 'pendente');
+    document.getElementById('protContagem').textContent = `${pend.length} pendente(s) de aceite · ${protEstado.lista.length} protocolo(s)`;
+    alvo.innerHTML = L.length ? `<div class="ext-tabela-wrap"><table class="ext-tabela"><thead><tr><th>Nº</th><th>Gerado em</th><th class="num">Notas</th><th class="num">Valor total</th><th>Situação</th><th></th></tr></thead><tbody>
+      ${L.map(p => `<tr><td><strong>#${p.nr_protocolo}</strong></td><td>${formatarData(String(p.criado_em).slice(0, 10))}</td><td class="num">${p.qtd_notas}</td><td class="num">${extNum(p.valor_total)}</td><td>${protStatus(p).html}</td>
+        <td style="white-space:nowrap;"><button class="ext-chip" data-prot-abrir="${p.nr_protocolo}">${protStatus(p).chave === 'pendente' ? 'Ver notas e aceitar' : 'Ver notas'}</button></td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="vazio">' + (so ? 'Nenhum protocolo pendente de aceite.' : 'Nenhum protocolo de entrada nesta unidade.') + '</div>';
+    alvo.querySelectorAll('[data-prot-abrir]').forEach(b => b.addEventListener('click', () => protAbrir(Number(b.dataset.protAbrir))));
+  }
+  function protEmBlocos(lista, n){ const r = []; for(let i = 0; i < lista.length; i += n) r.push(lista.slice(i, i + n)); return r; }
+  async function protAbrir(nr){
+    const p = protEstado.lista.find(x => x.nr_protocolo === nr); if(!p) return;
+    protEstado.aberto = p;
+    document.getElementById('tituloModalProtocolo').textContent = `Protocolo #${nr} — ${p.qtd_notas} nota(s) · ${extNum(p.valor_total)}`;
+    document.getElementById('protDetalhe').innerHTML = '<div class="vazio">Carregando as notas...</div>'; document.getElementById('protAcoes').innerHTML = '';
+    document.getElementById('modalProtocolo').classList.add('show');
+    try{
+      const [rn, rt] = await Promise.all([
+        sb.from('estoque_notas').select('id, numero_nf, nome_fornecedor, cnpj_fornecedor, data_entrada, valor_total, setor_id, evento, plano_contas_id, tipo').eq('unidade_negocio_id', agenciaId).eq('nr_protocolo', nr).eq('tipo', 'entrada').order('data_entrada').order('id').limit(2000),
+        sb.from('estoque_titulos_notas').select('id, estoque_nota_id, numero_titulo, data_vencimento, valor').eq('unidade_negocio_id', agenciaId).eq('nr_protocolo', nr).limit(5000)]);
+      if(rn.error) throw new Error(rn.error.message); if(rt.error) throw new Error(rt.error.message);
+      const notas = rn.data || [], parcelas = (rt.data || []).filter(x => Number(x.valor) > 0);
+      // operação da compra (origem 'estoque') e rateio de cada nota, para avisar de rateio incompleto
+      const ops = []; for(const bl of protEmBlocos(notas.map(n => String(n.id)), 150)){
+        const r = await sb.from('unidade_operacao').select('id, id_registro_na_origem').eq('unidade_negocio_id', agenciaId).eq('origem', 'estoque').in('id_registro_na_origem', bl); (r.data || []).forEach(o => ops.push(o)); }
+      const rat = []; for(const bl of protEmBlocos(ops.map(o => o.id), 150)){
+        const r = await sb.from('unidade_rateios').select('operacao_id, empresa_id, setor_id, plano_de_contas_id').in('operacao_id', bl); (r.data || []).forEach(x => rat.push(x)); }
+      const opDaNota = new Map(ops.map(o => [o.id_registro_na_origem, o.id]));
+      const linhas = notas.map(n => {
+        const ps = parcelas.filter(x => x.estoque_nota_id === n.id); const soma = ps.reduce((a, x) => a + Number(x.valor), 0);
+        const valor = Number(n.valor_total) || 0; const gera = ps.length || (valor > 0 ? 1 : 0);
+        const op = opDaNota.get(String(n.id)); const rs = op ? rat.filter(x => x.operacao_id === op) : [];
+        const rateio = !op ? 'sem' : (!rs.length || rs.some(x => !x.setor_id || !x.plano_de_contas_id || !x.empresa_id)) ? 'incompleto' : 'ok';
+        return { n, ps, soma, valor, gera, rateio, diverge: ps.length && Math.abs(soma - valor) >= 0.01 };
+      });
+      const tot = { titulos: linhas.reduce((a, l) => a + l.gera, 0), valor: linhas.reduce((a, l) => a + (l.ps.length ? l.soma : l.valor), 0), semParcela: linhas.filter(l => !l.ps.length && l.valor > 0).length,
+                    semValor: linhas.filter(l => !l.ps.length && l.valor <= 0).length, rateio: linhas.filter(l => l.rateio !== 'ok' && l.gera).length, diverge: linhas.filter(l => l.diverge).length };
+      protEstado.linhas = linhas; protEstado.tot = tot;
+      const st = protStatus(p);
+      document.getElementById('protDetalhe').innerHTML = `
+        <div class="ext-nota" style="margin:0 0 10px; padding:8px 10px; background:var(--brand-soft); border-radius:8px;">${st.html} · ao aceitar: <strong>${linhas.length} nota(s) → ${tot.titulos} título(s) a pagar, ${extNum(tot.valor)}</strong>
+          ${tot.semParcela ? `<br>• ${tot.semParcela} nota(s) <strong>sem parcelas</strong>: viram 1 título com o valor total, vencendo na data de entrada (à vista).` : ''}
+          ${tot.semValor ? `<br>• ${tot.semValor} nota(s) <strong>sem valor</strong>: não geram título.` : ''}
+          ${tot.rateio ? `<br>• ${tot.rateio} nota(s) com <strong>rateio incompleto ou sem operação</strong> (setor, plano ou empresa em branco): o título é gerado mesmo assim; complete o rateio depois.` : ''}
+          ${tot.diverge ? `<br>• ${tot.diverge} nota(s) em que a <strong>soma das parcelas difere do valor da nota</strong> (vale o valor das parcelas).` : ''}</div>
+        <div class="ext-tabela-wrap" style="max-height:52vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th>NF</th><th>Fornecedor</th><th>Entrada</th><th class="num">Valor da nota</th><th class="num">Parcelas</th><th class="num">Gera</th><th>Rateio</th></tr></thead><tbody>
+        ${linhas.map(l => `<tr><td>${escapeHtml(l.n.numero_nf || '#' + l.n.id)}</td><td>${escapeHtml(l.n.nome_fornecedor || '—')}</td><td style="white-space:nowrap;">${l.n.data_entrada ? formatarData(l.n.data_entrada) : '—'}</td><td class="num">${extNum(l.valor)}</td>
+          <td class="num">${l.ps.length ? l.ps.length + ' · ' + extNum(l.soma) + (l.diverge ? ' ⚠️' : '') : '<span class="ext-cod">sem parcelas</span>'}</td><td class="num">${l.gera ? l.gera + ' título(s)' : '<span class="ext-cod">nenhum</span>'}</td>
+          <td>${l.rateio === 'ok' ? '✅' : l.rateio === 'sem' ? '<span class="ext-cod" title="A operação será criada com o rateio do cabeçalho da nota">⚠️ sem operação</span>' : '<span class="ext-cod" title="Há linha de rateio sem setor, plano ou empresa">⚠️ incompleto</span>'}</td></tr>`).join('') || '<tr><td colspan="7" class="vazio">Este protocolo não tem notas de entrada.</td></tr>'}</tbody></table></div>`;
+      const ac = document.getElementById('protAcoes');
+      if(st.chave === 'pendente'){
+        ac.innerHTML = `<button class="ext-chip" id="btnProtSemTitulos" title="Só marca o protocolo como lançado (para protocolos antigos que já foram lançados por outro meio)">Marcar como já lançado (sem gerar títulos)</button>
+          <button class="btn-novo" id="btnProtAceitar" ${tot.titulos ? '' : 'disabled'}>✅ Aceitar protocolo e gerar ${tot.titulos} título(s)</button>`;
+        document.getElementById('btnProtAceitar').addEventListener('click', () => protAceitar(nr, true));
+        document.getElementById('btnProtSemTitulos').addEventListener('click', () => protAceitar(nr, false));
+      } else if(st.chave === 'aceito'){
+        ac.innerHTML = `<button class="ext-chip" id="btnProtDesfazer" style="color:var(--danger);">↩️ Desfazer o aceite</button>`;
+        document.getElementById('btnProtDesfazer').addEventListener('click', () => protDesfazer(nr));
+      }
+    } catch(e){ document.getElementById('protDetalhe').innerHTML = '<div class="vazio">' + escapeHtml(e.message) + '</div>'; }
+  }
+  async function protAceitar(nr, gerar){
+    const tot = protEstado.tot || { titulos: 0, valor: 0 };
+    if(!confirm(gerar ? `Aceitar o protocolo #${nr}?\n\nVão ser gerados ${tot.titulos} título(s) a pagar, no total de ${extNum(tot.valor)}, ligados às operações das compras do Estoque.` : `Marcar o protocolo #${nr} como JÁ LANÇADO, sem gerar nenhum título?\n(Use só para protocolos antigos que já foram lançados por outro meio.)`)) return;
+    const btns = ['btnProtAceitar', 'btnProtSemTitulos'].map(id => document.getElementById(id)).filter(Boolean); btns.forEach(b => b.disabled = true);
+    try{
+      const { data, error } = await sb.rpc('financeiro_aceitar_protocolo_estoque', { p_unidade: agenciaId, p_nr: nr, p_gerar_titulos: gerar });
+      if(error) throw new Error(/does not exist|schema cache|financeiro_aceitar_protocolo/.test(error.message) ? 'rode o financeiro-protocolo-estoque.sql no Supabase (falta a função de aceite).' : error.message);
+      await registrarSentinela('financeiro_protocolo_aceito', `Aceitou o protocolo #${nr} do Estoque (${gerar ? (data && data.titulos) + ' título(s) gerado(s), ' + extNum(data && data.valor) : 'marcado como lançado, sem títulos'})`);
+      document.getElementById('modalProtocolo').classList.remove('show');
+      if(gerar){ try{ await carregarTitulos(); } catch(e){} }
+      await iniciarProtocolos();
+      alert(gerar ? `Protocolo #${nr} aceito.\n${data.titulos} título(s) a pagar gerado(s), ${extNum(data.valor)}.` + (data.pessoas_criadas ? `\n${data.pessoas_criadas} fornecedor(es) novo(s) cadastrado(s).` : '') + (data.rateio_incompleto ? `\n${data.rateio_incompleto} nota(s) com rateio incompleto: complete em Títulos.` : '') : `Protocolo #${nr} marcado como lançado.`);
+    } catch(e){ alert('Não consegui aceitar: ' + e.message); btns.forEach(b => b.disabled = false); }
+  }
+  async function protDesfazer(nr){
+    if(!confirm(`Desfazer o aceite do protocolo #${nr}?\n\nOs títulos gerados por ele são APAGADOS e o protocolo volta a ficar pendente. Só é possível se nenhum deles foi pago ou baixado.`)) return;
+    const { data, error } = await sb.rpc('financeiro_desfazer_aceite_protocolo_estoque', { p_unidade: agenciaId, p_nr: nr });
+    if(error){ alert('Não consegui desfazer: ' + error.message); return; }
+    await registrarSentinela('financeiro_protocolo_desfeito', `Desfez o aceite do protocolo #${nr} do Estoque (${data && data.titulos_removidos} título(s) removido(s))`);
+    document.getElementById('modalProtocolo').classList.remove('show');
+    try{ await carregarTitulos(); } catch(e){}
+    await iniciarProtocolos();
+    alert(`Aceite desfeito: ${data.titulos_removidos} título(s) removido(s). O protocolo voltou a ficar pendente.`);
+  }
+  document.getElementById('protFiltro').addEventListener('change', protDesenharLista);
+  document.getElementById('protAtualizar').addEventListener('click', iniciarProtocolos);
+  document.getElementById('btnProtocoloFechar').addEventListener('click', () => document.getElementById('modalProtocolo').classList.remove('show'));
 
   // =================================================================
   // EXTRATO DE CONTAS -- visão por conta (saldo anterior, entradas, saídas, saldo atual), dia a dia, extrato
@@ -2579,7 +2709,7 @@
   // =================================================================
   const AJUDA_FINANCEIRO = {
     titulo: 'Financeiro — Títulos, Contas e Rateio',
-    ultimaRevisao: '18/11/2026',
+    ultimaRevisao: '19/11/2026',
     secoes: [
       { id: 'dashboard', titulo: 'Dashboard', corpo: `
         <p>Visão geral do contas a pagar e a receber da unidade, no mesmo estilo do painel do
@@ -2647,6 +2777,9 @@
           vencimento, fornecedor, título, valor e uma <strong>caixa PAGO</strong> para marcar à mão (título já pago sai com ✓), "ITENS n" e subtotal
           por conta e total geral. Segue exatamente os filtros da tela (tipo, em aberto/pagos, datas, busca, operação, filtro avançado) e abre o popup
           Visualizar/Baixar/Compartilhar, para enviar o PDF.</li>
+          <li><strong>🏦 Conta de pagamento no card</strong>: cada título em aberto mostra, discreta ao lado da empresa, a <strong>conta de pagamento</strong> («sem conta» em vermelho tracejado quando falta).
+          <strong>Clique nela</strong> para escolher outra conta — a mudança é gravada na hora e é a conta pela qual a <strong>Lista de pagamentos</strong> agrupa os títulos do dia. Título já pago mostra só a conta em que foi pago (não muda).
+          O filtro <strong>conta de pagamento</strong> (ao lado de «Só em aberto») mostra só os títulos de uma conta — ou os <strong>«Sem conta definida»</strong> — com a quantidade de títulos de cada uma dentro dos filtros atuais (só aparecem as contas que têm título); e o <strong>☑ Marcar todos os filtrados</strong> (na barra acima da lista) marca de uma vez tudo o que está na tela, já com os filtros aplicados (clique de novo para desmarcar). Assim: filtre uma conta, marque todos e baixe em lote ou gere a <strong>Lista de pagamentos</strong> só dela (o cabeçalho do PDF informa a conta filtrada).</li>
         </ul>
       ` },
       { id: 'movimentacao', titulo: 'Movimentação de Contas', corpo: `
@@ -2698,6 +2831,17 @@
           <li><strong>Conciliações feitas</strong>: lista os códigos (com as linhas e lançamentos de cada um). <strong>Desfazer</strong> devolve as linhas ao pendente e solta os lançamentos; se a conciliação foi gerada a partir do extrato, o lançamento gerado também é apagado.</li>
           <li><strong>Ordenar</strong>: clique no cabeçalho de uma coluna (Data, Histórico, Valor, Regra, Venc....) para ordenar — 1º clique crescente ▲, 2º decrescente ▼, 3º volta à ordem original. Vale para o extrato, os lançamentos, os títulos e as conciliações feitas; as linhas marcadas continuam marcadas.</li>
           <li>Precisa do arquivo <code>financeiro-conciliacao.sql</code> rodado no Supabase.</li>
+        </ul>
+      ` },
+      { id: 'protocolos', titulo: 'Protocolos do Estoque', corpo: `
+        <p>O <strong>protocolo</strong> é o lote de <strong>notas de entrada</strong> que o Estoque entrega ao financeiro (botão «📮 Protocolo» na guia Notas do Estoque). Aqui você <strong>aceita</strong> o lote:</p>
+        <ul>
+          <li><strong>Lista</strong>: mostra os protocolos de entrada — «Pendente de aceite», «Aceito» ou «Levado ao Sicon» (lote que o Sicon antigo já consumiu). O filtro mostra só os pendentes ou todos.</li>
+          <li><strong>Ver notas e aceitar</strong>: abre as notas do lote com o valor, as parcelas e o que será gerado. <strong>Aceitar</strong> grava <strong>tudo de uma vez</strong> (ou nada): <strong>nota com parcelas = um título a pagar por parcela</strong> (valor e vencimento da parcela); <strong>nota sem parcelas = um título com o valor total, vencendo na data de entrada</strong> (compra à vista — depois você baixa ou concilia com o extrato); <strong>nota sem valor não gera título</strong>.</li>
+          <li>Cada título entra na <strong>operação da compra</strong> do Estoque (origem «estoque»), então já nasce com o <strong>rateio</strong> (setor, plano de contas, evento) que o Estoque montou. Se a nota ainda não tem operação, ela é criada com o rateio do cabeçalho da nota; <strong>rateio incompleto</strong> (setor/plano/empresa em branco) aparece em amarelo, o título é gerado mesmo assim e você completa em Títulos. O <strong>fornecedor</strong> é a pessoa da nota (ou reaproveitada pelo CNPJ/nome; só é cadastrada se não existir).</li>
+          <li><strong>Marcar como já lançado (sem gerar títulos)</strong>: para protocolos <strong>antigos</strong> que já foram lançados por outro meio — só tira da fila, sem criar nada.</li>
+          <li><strong>Desfazer o aceite</strong>: apaga os títulos que o aceite gerou e devolve o protocolo a «pendente». <strong>Só vale se nenhum deles foi pago ou baixado</strong> (desfaça as baixas antes).</li>
+          <li>Depois de aceito, o Estoque <strong>não deixa desfazer o protocolo</strong> e o script do Sicon o ignora. Precisa do arquivo <code>financeiro-protocolo-estoque.sql</code> rodado no Supabase.</li>
         </ul>
       ` },
       { id: 'cadastros', titulo: 'Cadastros', corpo: `
@@ -3149,7 +3293,7 @@
     renderizarGraficoDashboard('RECEBER');
   }
   let operacaoIdsFiltroAvancado = null; // null = filtro avançado inativo; Set = restringe a esses operacao_id
-  function obterTitulosFiltrados(){
+  function obterTitulosFiltrados(ignorarConta){
     const codigoOperacao = document.getElementById('filtroCodigoOperacao').value.trim();
     if(codigoOperacao){
       // código da operação preenchido -- ignora todos os outros filtros e
@@ -3161,8 +3305,10 @@
     const filtroStatus = document.getElementById('filtroStatusPagamento').value;
     const dataInicio = document.getElementById('filtroTituloDataInicio').value;
     const dataFim = document.getElementById('filtroTituloDataFim').value;
+    const filtroConta = ignorarConta ? '' : document.getElementById('filtroContaTitulo').value;
     return todosTitulos.filter(t =>
       (!filtroTipo || t.tipo_movimento === filtroTipo) &&
+      (!filtroConta || (filtroConta === 'sem' ? !t.id_conta_pagamento : String(t.id_conta_pagamento) === filtroConta)) &&
       (!filtroStatus || (filtroStatus === 'pago' ? !!t.data_pagamento : !t.data_pagamento)) &&
       (!dataInicio || t.data_vencimento >= dataInicio) &&
       (!dataFim || t.data_vencimento <= dataFim) &&
@@ -3172,19 +3318,75 @@
   }
   function atualizarEstadoFiltrosPorOperacao(){
     const ativo = !!document.getElementById('filtroCodigoOperacao').value.trim();
-    ['filtroBuscaTitulo', 'filtroTipoTitulo', 'filtroStatusPagamento', 'filtroTituloDataInicio', 'filtroTituloDataFim', 'btnToggleFiltroAvancado'].forEach(id => {
+    ['filtroBuscaTitulo', 'filtroTipoTitulo', 'filtroStatusPagamento', 'filtroContaTitulo', 'filtroTituloDataInicio', 'filtroTituloDataFim', 'btnToggleFiltroAvancado'].forEach(id => {
       const el = document.getElementById(id);
       el.disabled = ativo;
       el.style.opacity = ativo ? '.45' : '1';
     });
     if(ativo) document.getElementById('painelFiltroAvancado').style.display = 'none';
   }
+  // CONTA DE PAGAMENTO no card do título: chip discreto («sem conta» em vermelho tracejado) que, nos títulos EM ABERTO, vira um seletor ao clicar — a conta
+  // escolhida é a que a «Lista de pagamentos» usa para agrupar. Título já pago mostra só a conta (não muda: o lançamento de caixa já está nela).
+  function nomeContaTitulo(t){ const c = todasContas.find(x => x.id === t.id_conta_pagamento); return c ? c.nome : (t.id_conta_pagamento ? 'Conta #' + t.id_conta_pagamento : ''); }
+  function chipContaTitulo(t){
+    const nome = nomeContaTitulo(t);
+    if(t.data_pagamento) return nome ? ` <span class="pill" style="background:none; border:1px solid var(--border); color:var(--muted); margin-left:6px;" title="Conta em que foi paga">🏦 ${escapeHtml(nome)}</span>` : '';
+    return ` <span class="pill" data-conta-titulo="${t.id}" title="Conta de pagamento (a Lista de pagamentos agrupa por ela) — clique para alterar" style="background:none; border:1px dashed ${nome ? 'var(--border)' : 'var(--danger)'}; color:${nome ? 'var(--muted)' : 'var(--danger)'}; margin-left:6px; cursor:pointer;">🏦 ${nome ? escapeHtml(nome) : 'sem conta'} ✎</span>`;
+  }
+  function ligarChipContaTitulo(el){ el.addEventListener('click', ev => { ev.stopPropagation(); abrirSeletorContaTitulo(el); }); }
+  function abrirSeletorContaTitulo(chip){
+    const t = todosTitulos.find(x => x.id === Number(chip.dataset.contaTitulo)); if(!t || t.data_pagamento) return;
+    const sel = document.createElement('select'); sel.style.cssText = 'font-size:.75rem; padding:2px 4px; margin-left:6px; max-width:240px;';
+    sel.innerHTML = '<option value="">— sem conta —</option>' + todasContas.filter(c => c.ativo !== false || c.id === t.id_conta_pagamento).map(c => `<option value="${c.id}" ${c.id === t.id_conta_pagamento ? 'selected' : ''}>${escapeHtml((c.codigo != null ? c.codigo + ' — ' : '') + c.nome)}</option>`).join('');
+    chip.replaceWith(sel); sel.focus(); try{ if(sel.showPicker) sel.showPicker(); } catch(e){}
+    let salvando = false;
+    const restaurar = () => { const tmp = document.createElement('span'); tmp.innerHTML = chipContaTitulo(t).trim(); const novo = tmp.firstElementChild; if(!novo) return; sel.replaceWith(novo); ligarChipContaTitulo(novo); };
+    sel.addEventListener('click', ev => ev.stopPropagation());
+    sel.addEventListener('blur', () => { if(!salvando) restaurar(); });
+    sel.addEventListener('change', async () => {
+      const nova = sel.value ? Number(sel.value) : null;
+      if(nova === (t.id_conta_pagamento || null)){ restaurar(); return; }
+      salvando = true;
+      const { error } = await sb.from('financeiro_titulos').update({ id_conta_pagamento: nova }).eq('id', t.id).eq('unidade_negocio_id', agenciaId);
+      if(error){ alert('Não consegui alterar a conta: ' + error.message); salvando = false; restaurar(); return; }
+      const antes = nomeContaTitulo(t); t.id_conta_pagamento = nova;
+      try{ await registrarSentinela('financeiro_titulo_conta', `Alterou a conta de pagamento do título #${t.codigo ?? t.id}${t.titulo ? ' "' + t.titulo + '"' : ''}: "${antes || 'sem conta'}" → "${nomeContaTitulo(t) || 'sem conta'}"`); } catch(e){}
+      restaurar(); atualizarFiltroContaTitulo();
+      if(document.getElementById('filtroContaTitulo').value) renderizarListaTitulosMantendoMarcas();   // com filtro de conta ativo, o título que mudou de conta sai da lista
+    });
+  }
+  // FILTRO por conta de pagamento: «Todas as contas», «Sem conta definida» e cada conta, com a quantidade de títulos EM ABERTO dela. Reconstruído a cada
+  // desenho da lista (as quantidades mudam quando a conta de um título é trocada); mantém a escolha.
+  function atualizarFiltroContaTitulo(){
+    const sel = document.getElementById('filtroContaTitulo'); if(!sel) return; const atual = sel.value;
+    // só entram as contas que TÊM título dentro dos FILTROS ATUAIS (tipo, situação, datas, busca — todos menos o próprio filtro de conta); o número é quantos
+    // títulos aquela conta mostraria. «Sem conta definida» só aparece se houver; a conta escolhida no momento nunca some da lista (mesmo com 0).
+    const cont = new Map();
+    obterTitulosFiltrados(true).forEach(t => { const k = t.id_conta_pagamento ? String(t.id_conta_pagamento) : 'sem'; cont.set(k, (cont.get(k) || 0) + 1); });
+    const contas = todasContas.filter(c => cont.has(String(c.id)) || String(c.id) === atual).slice().sort((a, b) => String(a.nome).localeCompare(String(b.nome), 'pt-BR'));
+    const rot = (nome, n) => `${nome} (${n})`;
+    sel.innerHTML = '<option value="">Todas as contas</option>' + ((cont.has('sem') || atual === 'sem') ? `<option value="sem">${rot('Sem conta definida', cont.get('sem') || 0)}</option>` : '')
+      + contas.map(c => `<option value="${c.id}">${escapeHtml(rot(c.nome, cont.get(String(c.id)) || 0))}</option>`).join('');
+    sel.value = [...sel.options].some(o => o.value === atual) ? atual : '';
+  }
+  // refaz a lista sem perder o que o usuário já marcou (usado quando a troca de conta tira o título do filtro)
+  function renderizarListaTitulosMantendoMarcas(){
+    const marcados = new Set([...document.querySelectorAll('[data-checkbox-titulo]:checked')].map(c => Number(c.dataset.checkboxTitulo)));
+    renderizarListaTitulos();
+    document.querySelectorAll('[data-checkbox-titulo]').forEach(c => { if(marcados.has(Number(c.dataset.checkboxTitulo))) c.checked = true; });
+    atualizarBotaoBaixaLote();
+  }
+  document.getElementById('chkMarcarTodosTitulos').addEventListener('change', (ev) => {
+    document.querySelectorAll('#listaTitulos [data-checkbox-titulo]').forEach(c => { c.checked = ev.target.checked; });
+    atualizarBotaoBaixaLote();
+  });
   function renderizarListaTitulos(){
     if(!titulosPagosCache && (document.getElementById('filtroStatusPagamento').value !== 'aberto' || document.getElementById('filtroCodigoOperacao').value.trim())){
       document.getElementById('listaTitulos').innerHTML = '<div class="vazio">Carregando os títulos já pagos...</div>';
       garantirTitulosPagos().then(() => renderizarListaTitulos());
       return;
     }
+    atualizarFiltroContaTitulo();
     const filtrados = obterTitulosFiltrados();
     document.getElementById('resumoQtdTitulos').textContent = filtrados.length;
     const totalPagar = filtrados.filter(t => t.tipo_movimento === 'PAGAR').reduce((acc, t) => acc + Number(t.valor_titulo), 0);
@@ -3200,7 +3402,7 @@
         <div class="cadastro-thumb">${t.codigo ?? '—'}</div>
         <div class="cadastro-info" data-abrir-titulo="${t.id}" style="cursor:pointer;">
           <div class="principal">${escapeHtml(t.titulo || t.pessoa?.nome || 'Sem título')} <span class="pill pill-${t.tipo_movimento.toLowerCase()}">${t.tipo_movimento === 'PAGAR' ? 'Pagar' : 'Receber'}</span>${t.data_pagamento ? `<span class="pill pill-pago">${t.tipo_movimento === 'PAGAR' ? 'Paga' : 'Recebida'}</span>` : ''}</div>
-          <div class="meta">${escapeHtml(t.pessoa?.nome || (t.descricao_avulsa ? '0 — ' + t.descricao_avulsa : '—'))} · Vence ${formatarData(t.data_vencimento)}${t.data_pagamento ? ' · Pago em ' + formatarData(t.data_pagamento) : ''}${rotuloEmpresaTitulo(t) ? ` <span class="pill" style="background:var(--brand-soft); color:var(--brand-2); margin-left:6px;" title="Empresa do rateio">🏢 ${escapeHtml(rotuloEmpresaTitulo(t))}</span>` : ''}</div>
+          <div class="meta">${escapeHtml(t.pessoa?.nome || (t.descricao_avulsa ? '0 — ' + t.descricao_avulsa : '—'))} · Vence ${formatarData(t.data_vencimento)}${t.data_pagamento ? ' · Pago em ' + formatarData(t.data_pagamento) : ''}${rotuloEmpresaTitulo(t) ? ` <span class="pill" style="background:var(--brand-soft); color:var(--brand-2); margin-left:6px;" title="Empresa do rateio">🏢 ${escapeHtml(rotuloEmpresaTitulo(t))}</span>` : ''}${chipContaTitulo(t)}</div>
           ${(t.documento_fiscal || t.observacao) ? `<div class="meta" style="font-size:.72rem; opacity:.85;">${t.documento_fiscal ? 'Doc. fiscal: ' + escapeHtml(t.documento_fiscal) : ''}${t.documento_fiscal && t.observacao ? ' · ' : ''}${t.observacao ? escapeHtml(t.observacao) : ''}</div>` : ''}
         </div>
         <div class="cadastro-valor" data-abrir-titulo="${t.id}" style="cursor:pointer;"><div class="valor mono">${formatarMoeda(t.valor_titulo)}</div></div>
@@ -3215,6 +3417,7 @@
     });
     lista.querySelectorAll('[data-abrir-titulo]').forEach(el => el.addEventListener('click', () => abrirModalTitulo(Number(el.dataset.abrirTitulo))));
     lista.querySelectorAll('[data-checkbox-titulo]').forEach(chk => chk.addEventListener('change', atualizarBotaoBaixaLote));
+    lista.querySelectorAll('[data-conta-titulo]').forEach(ligarChipContaTitulo);
     atualizarBotaoBaixaLote();
   }
   function atualizarBotaoBaixaLote(){
@@ -3227,6 +3430,8 @@
     document.getElementById('topoMarcadosWrap').style.display = qtd > 0 ? 'inline' : 'none';
     document.getElementById('topoQtdMarcados').textContent = qtd;
     document.getElementById('topoValorMarcados').textContent = formatarMoedaMilhar(soma);
+    const caixas = document.querySelectorAll('#listaTitulos [data-checkbox-titulo]'), mestre = document.getElementById('chkMarcarTodosTitulos');
+    if(mestre){ mestre.disabled = !caixas.length; mestre.checked = caixas.length > 0 && qtd === caixas.length; mestre.indeterminate = qtd > 0 && qtd < caixas.length; }
   }
   // R$ com separador de milhar (os totais ficam grandes); o formatarMoeda antigo é mantido nas listas por compatibilidade
   function formatarMoedaMilhar(v){ return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
@@ -3242,6 +3447,7 @@
   document.getElementById('filtroBuscaTitulo').addEventListener('input', renderizarListaTitulos);
   document.getElementById('filtroTipoTitulo').addEventListener('change', renderizarListaTitulos);
   document.getElementById('filtroStatusPagamento').addEventListener('change', renderizarListaTitulos);
+  document.getElementById('filtroContaTitulo').addEventListener('change', renderizarListaTitulos);
   document.getElementById('filtroTituloDataInicio').addEventListener('change', renderizarListaTitulos);
   document.getElementById('filtroTituloDataFim').addEventListener('change', renderizarListaTitulos);
   document.getElementById('filtroCodigoOperacao').addEventListener('input', () => {
@@ -5354,6 +5560,7 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
       // resumo dos filtros usados
       const sel = id => { const el = document.getElementById(id); return el.options[el.selectedIndex].text; };
       const partes = [sel('filtroTipoTitulo'), sel('filtroStatusPagamento')];
+      if(document.getElementById('filtroContaTitulo').value) partes.push('conta: ' + sel('filtroContaTitulo').replace(/\s*\(\d+\)$/, ''));
       const di = document.getElementById('filtroTituloDataInicio').value, df = document.getElementById('filtroTituloDataFim').value;
       if(di || df) partes.push('vencimento ' + (di ? 'de ' + formatarData(di) : '') + (di && df ? ' ' : '') + (df ? 'até ' + formatarData(df) : ''));
       const busca = document.getElementById('filtroBuscaTitulo').value.trim(); if(busca) partes.push('busca "' + busca + '"');
