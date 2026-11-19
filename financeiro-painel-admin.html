@@ -996,6 +996,12 @@
       <div class="modal-lista-body"><div id="concGerarForm"></div><div style="margin-top:12px;"><button class="btn-novo" id="btnConcGerarOk" style="width:100%;">Gerar e conciliar</button></div></div>
     </div>
   </div>
+  <div class="modal-lista-overlay" id="modalConcTransf">
+    <div class="modal-lista" style="max-width:560px;">
+      <div class="modal-lista-head"><h3 id="tituloModalConcTransf">Transferência</h3><button class="drawer-close" id="btnConcTransfFechar">✕</button></div>
+      <div class="modal-lista-body"><div id="concTransfForm"></div><div style="margin-top:12px;"><button class="btn-novo" id="btnConcTransfOk" style="width:100%;">Gravar transferência e conciliar</button></div></div>
+    </div>
+  </div>
   <div class="modal-lista-overlay" id="modalConcRegra">
     <div class="modal-lista" style="max-width:520px;">
       <div class="modal-lista-head"><h3 id="tituloModalConcRegra">Regra</h3><button class="drawer-close" id="btnConcRegraFechar">✕</button></div>
@@ -1702,7 +1708,7 @@
   // Movimentação de Contas por um CÓDIGO DE CONCILIAÇÃO sequencial e gera (com regras por palavra-chave) o que o banco cobrou e não está
   // no contas a pagar (tarifa, cesta, juros, IOF, rendimento...). Tabelas/funções: financeiro-conciliacao.sql.
   // =================================================================
-  const concEstado = { aba: 'importar', contaId: '', de: '', ate: '', extratos: [], movs: [], selE: new Set(), selM: new Set(), regras: [], previa: null, iniciado: false, pessoaNomes: {} };
+  const concEstado = { aba: 'importar', contaId: '', de: '', ate: '', extratos: [], movs: [], selE: new Set(), selM: new Set(), selT: new Set(), titBusca: '', titTodos: false, ord: {}, feitas: null, regras: [], previa: null, iniciado: false, pessoaNomes: {} };
   const concNum = v => extFmt.format(Number(v) || 0);
   const concNorm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
   const concValorBR = s => { const t = String(s == null ? '' : s).trim(); if(!t) return 0; const n = parseFloat(t.replace(/\./g, '').replace(',', '.')); return isNaN(n) ? 0 : n; };
@@ -1909,7 +1915,64 @@
     } catch(e){ st.textContent = 'Erro: ' + e.message; btn.disabled = false; }
   }
 
+  // ---------------- ordenação por clique no cabeçalho (1º clique crescente ▲, 2º decrescente ▼, 3º volta à ordem original) ----------------
+  const CONC_ACC_E = { data: e => e.data || '', historico: e => concNorm(e.historico), valor: e => concLiquido(e) };
+  const CONC_ACC_M = { data: m => m.data || '', historico: m => concNorm(m.historico), valor: m => concLiquidoMov(m) };
+  const CONC_ACC_G = { ...CONC_ACC_E, regra: e => { const r = concRegraDaLinha(e); return r ? concNorm(r.palavra) : '~sem regra'; } };
+  const CONC_ACC_F = { codigo: c => Number(c.codigo), data: c => c.data || '', conta: c => concNorm(extNomeConta(c.id_conta)), valor: c => Number(c.valor), origem: c => c.origem || '', obs: c => concNorm(c.observacao) };
+  function concOrdenar(lista, chave, acessos){
+    const o = concEstado.ord[chave]; if(!o || !acessos[o.c]) return lista;
+    const f = acessos[o.c];
+    return lista.slice().sort((a, b) => { const x = f(a), y = f(b);
+      const r = (typeof x === 'number' && typeof y === 'number') ? x - y : String(x).localeCompare(String(y), 'pt-BR', { numeric: true });
+      return (r || (a.id - b.id) || 0) * o.d; });
+  }
+  function concThOrd(chave, campo, rotulo, classe){
+    const o = concEstado.ord[chave]; const seta = o && o.c === campo ? (o.d === 1 ? ' ▲' : ' ▼') : '';
+    return `<th class="${classe || ''}" data-conc-ord="${chave}:${campo}" style="cursor:pointer; user-select:none;" title="Clique para ordenar (crescente, decrescente, original)">${rotulo}${seta}</th>`;
+  }
+  function concLigarOrd(redesenhar){
+    document.querySelectorAll('[data-conc-ord]').forEach(th => th.addEventListener('click', () => {
+      const [k, c] = th.dataset.concOrd.split(':'); const o = concEstado.ord[k];
+      if(!o || o.c !== c) concEstado.ord[k] = { c, d: 1 }; else if(o.d === 1) concEstado.ord[k].d = -1; else delete concEstado.ord[k];
+      redesenhar();
+    }));
+  }
+
   // ---------------- 2) conciliar ----------------
+  // TÍTULOS EM ABERTO (contas a pagar/receber) como o botão «Conciliar» do Sicon: o título marcado é QUITADO na conciliação e o lançamento de caixa é criado.
+  // PAGAR sai do banco (negativo), RECEBER entra (positivo). Usa os títulos em aberto que a tela de Títulos já carregou.
+  function concLiquidoTitulo(t){ return (t.tipo_movimento === 'PAGAR' ? -1 : 1) * valorLiquidoTitulo(t); }
+  function concTitulosAbertos(){ return (typeof todosTitulos !== 'undefined' ? todosTitulos : []).filter(t => !t.data_pagamento && t.ativo !== false); }
+  function concTitulosSelecionados(){ return concTitulosAbertos().filter(t => concEstado.selT.has(t.id)); }
+  // o que aparece na lista: do sentido das linhas marcadas; por vencimento próximo do período (−45/+30 dias) ou, se digitou na busca / marcou «todos», sem janela
+  function concTitulosVisiveis(){
+    const sel = concEstado.extratos.filter(e => concEstado.selE.has(e.id));
+    const sentidos = new Set(sel.map(e => concLiquido(e) >= 0 ? 'RECEBER' : 'PAGAR'));
+    let base = concTitulosAbertos();
+    if(sentidos.size === 1) base = base.filter(t => sentidos.has(t.tipo_movimento));
+    const busca = concNorm(concEstado.titBusca);
+    if(busca){
+      base = base.filter(t => concNorm(`${t.titulo || ''} ${t.pessoa && t.pessoa.nome || ''} ${t.descricao_avulsa || ''} ${t.codigo} ${valorLiquidoTitulo(t).toFixed(2).replace('.', ',')} ${concNum(valorLiquidoTitulo(t))}`).includes(busca));
+    } else if(!concEstado.titTodos){
+      const datas = concEstado.extratos.map(e => e.data).sort();
+      const de = concEstado.de || datas[0], ate = concEstado.ate || datas[datas.length - 1];
+      if(de && ate){ const ini = concSomaDias(de, -45), fim = concSomaDias(ate, 30); base = base.filter(t => t.data_vencimento && t.data_vencimento >= ini && t.data_vencimento <= fim); }
+    }
+    // mantém visíveis os já marcados, mesmo que a busca/janela os esconda
+    const ids = new Set(base.map(t => t.id)); concTitulosSelecionados().forEach(t => { if(!ids.has(t.id)) base.push(t); });
+    base.sort((a, b) => String(a.data_vencimento || '').localeCompare(String(b.data_vencimento || '')) || a.id - b.id);
+    return concOrdenar(base, 'tit', { data: t => t.data_vencimento || '', historico: t => concNorm((t.titulo || '') + ' ' + (t.pessoa && t.pessoa.nome || '')), valor: t => concLiquidoTitulo(t) });
+  }
+  function concDesenharTitulos(){
+    const tb = document.getElementById('concTbT'); if(!tb) return;
+    const L = concTitulosVisiveis(); const MAX = 300;
+    document.getElementById('concTitContagem').textContent = `(${L.length}${L.length > MAX ? ', mostrando ' + MAX : ''})`;
+    tb.innerHTML = L.slice(0, MAX).map(t => { const v = concLiquidoTitulo(t); const nome = (t.pessoa && t.pessoa.nome) || (t.descricao_avulsa ? '0 — ' + t.descricao_avulsa : '');
+      return `<tr><td><input type="checkbox" data-conc-t="${t.id}" ${concEstado.selT.has(t.id) ? 'checked' : ''}></td><td style="white-space:nowrap;">${formatarData(t.data_vencimento)}</td><td>${escapeHtml(t.titulo || 'Título #' + t.codigo)}<div class="ext-cod" style="margin:0;">${escapeHtml(nome)} · ${t.tipo_movimento === 'PAGAR' ? 'a pagar' : 'a receber'}</div></td><td class="num ${v < 0 ? 'ext-neg' : ''}">${concNum(v)}</td></tr>`; }).join('')
+      || '<tr><td colspan="4" class="vazio">Nenhum título em aberto neste filtro. Use a busca ou marque «todos os vencimentos».</td></tr>';
+    tb.querySelectorAll('[data-conc-t]').forEach(c => c.addEventListener('change', () => { const id = Number(c.dataset.concT); c.checked ? concEstado.selT.add(id) : concEstado.selT.delete(id); concAtualizarTotais(); }));
+  }
   async function concCarregarListas(){
     const contaId = Number(concEstado.contaId), de = concEstado.de, ate = concEstado.ate;
     let qe = sb.from('financeiro_extrato_bancario').select('*').eq('unidade_negocio_id', agenciaId).eq('id_conta', contaId).eq('situacao', 'pendente');
@@ -1924,9 +1987,9 @@
     concEstado.selE = new Set([...concEstado.selE].filter(id => concEstado.extratos.some(e => e.id === id)));
     concEstado.selM = new Set([...concEstado.selM].filter(id => concEstado.movs.some(m => m.id === id)));
   }
-  async function concRenderConciliar(){
-    concMsg('Carregando...');
-    try{ await concCarregarListas(); } catch(e){ concMsg(escapeHtml(e.message)); return; }
+  async function concRenderConciliar(semRecarregar){
+    if(!semRecarregar){ concMsg('Carregando...');
+      try{ await concCarregarListas(); } catch(e){ concMsg(escapeHtml(e.message)); return; } }
     document.getElementById('concCorpo').innerHTML = `
       <div class="filtros">
         <button class="btn-novo" id="concSugerir">🔗 Sugestões automáticas</button>
@@ -1935,14 +1998,22 @@
         <button class="btn-novo" id="concConciliar" style="background:var(--brand-2);">✔ Conciliar marcados</button>
       </div>
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(420px, 1fr)); gap:14px;">
-        <div><h3 style="font-size:.9rem; margin-bottom:6px;">Extrato do banco — pendentes (${concEstado.extratos.length})</h3><div class="ext-tabela-wrap" style="max-height:60vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th><th>Data</th><th>Histórico</th><th class="num">Valor</th></tr></thead><tbody id="concTbE"></tbody></table></div></div>
-        <div><h3 style="font-size:.9rem; margin-bottom:6px;">Lançamentos sem conciliação (${concEstado.movs.length})</h3><div class="ext-tabela-wrap" style="max-height:60vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th><th>Data</th><th>Histórico</th><th class="num">Valor</th></tr></thead><tbody id="concTbM"></tbody></table></div></div>
+        <div><h3 style="font-size:.9rem; margin-bottom:6px;">Extrato do banco — pendentes (${concEstado.extratos.length})</h3><div class="ext-tabela-wrap" style="max-height:60vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th>${concThOrd('ext', 'data', 'Data')}${concThOrd('ext', 'historico', 'Histórico')}${concThOrd('ext', 'valor', 'Valor', 'num')}</tr></thead><tbody id="concTbE"></tbody></table></div></div>
+        <div><h3 style="font-size:.9rem; margin-bottom:6px;">Lançamentos sem conciliação (${concEstado.movs.length})</h3><div class="ext-tabela-wrap" style="max-height:30vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th>${concThOrd('mov', 'data', 'Data')}${concThOrd('mov', 'historico', 'Histórico')}${concThOrd('mov', 'valor', 'Valor', 'num')}</tr></thead><tbody id="concTbM"></tbody></table></div>
+          <h3 style="font-size:.9rem; margin:14px 0 6px;">Títulos em aberto — contas a pagar/receber <span id="concTitContagem" class="ext-nota"></span></h3>
+          <div class="filtros" style="margin-bottom:6px;"><input type="text" id="concTitBusca" placeholder="Buscar fornecedor, título ou valor..." value="${escapeHtml(concEstado.titBusca)}" style="flex:1; min-width:180px;"><label style="display:flex; align-items:center; gap:5px; font-size:.8rem;"><input type="checkbox" id="concTitTodos" ${concEstado.titTodos ? 'checked' : ''}> todos os vencimentos</label></div>
+          <div class="ext-tabela-wrap" style="max-height:30vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th>${concThOrd('tit', 'data', 'Venc.')}${concThOrd('tit', 'historico', 'Título / fornecedor')}${concThOrd('tit', 'valor', 'Valor líquido', 'num')}</tr></thead><tbody id="concTbT"></tbody></table></div>
+          <p class="ext-nota" style="margin-top:6px;">Marcar um <strong>título em aberto</strong> e conciliar <strong>quita o título</strong> (data do extrato, conta do banco) e cria o lançamento de caixa. Se o pagamento já está no caixa, marque o lançamento acima: aí só concilia.</p></div>
       </div>`;
     const linha = (tipo, id, d, h, sub, v) => `<tr><td><input type="checkbox" data-conc-${tipo}="${id}" ${(tipo === 'e' ? concEstado.selE : concEstado.selM).has(id) ? 'checked' : ''}></td><td style="white-space:nowrap;">${formatarData(d)}</td><td>${escapeHtml(h || '')}${sub ? `<div class="ext-cod" style="margin:0;">${escapeHtml(sub)}</div>` : ''}</td><td class="num ${v < 0 ? 'ext-neg' : ''}">${concNum(v)}</td></tr>`;
-    document.getElementById('concTbE').innerHTML = concEstado.extratos.map(e => linha('e', e.id, e.data, e.historico, e.documento, concLiquido(e))).join('') || '<tr><td colspan="4" class="vazio">Nenhuma linha pendente neste período.</td></tr>';
-    document.getElementById('concTbM').innerHTML = concEstado.movs.map(m => linha('m', m.id, m.data, m.historico, m.pessoa && m.pessoa.nome, concLiquidoMov(m))).join('') || '<tr><td colspan="4" class="vazio">Nenhum lançamento sem conciliação neste período.</td></tr>';
-    document.querySelectorAll('[data-conc-e]').forEach(c => c.addEventListener('change', () => { const id = Number(c.dataset.concE); c.checked ? concEstado.selE.add(id) : concEstado.selE.delete(id); concAtualizarTotais(); }));
+    document.getElementById('concTbE').innerHTML = concOrdenar(concEstado.extratos, 'ext', CONC_ACC_E).map(e => linha('e', e.id, e.data, e.historico, e.documento, concLiquido(e))).join('') || '<tr><td colspan="4" class="vazio">Nenhuma linha pendente neste período.</td></tr>';
+    document.getElementById('concTbM').innerHTML = concOrdenar(concEstado.movs, 'mov', CONC_ACC_M).map(m => linha('m', m.id, m.data, m.historico, m.pessoa && m.pessoa.nome, concLiquidoMov(m))).join('') || '<tr><td colspan="4" class="vazio">Nenhum lançamento sem conciliação neste período.</td></tr>';
+    document.querySelectorAll('[data-conc-e]').forEach(c => c.addEventListener('change', () => { const id = Number(c.dataset.concE); c.checked ? concEstado.selE.add(id) : concEstado.selE.delete(id); concDesenharTitulos(); concAtualizarTotais(); }));
+    document.getElementById('concTitBusca').addEventListener('input', (ev) => { concEstado.titBusca = ev.target.value; concDesenharTitulos(); });
+    document.getElementById('concTitTodos').addEventListener('change', (ev) => { concEstado.titTodos = ev.target.checked; concDesenharTitulos(); });
+    concDesenharTitulos();
     document.querySelectorAll('[data-conc-m]').forEach(c => c.addEventListener('change', () => { const id = Number(c.dataset.concM); c.checked ? concEstado.selM.add(id) : concEstado.selM.delete(id); concAtualizarTotais(); }));
+    concLigarOrd(() => concRenderConciliar(true));
     document.getElementById('concConciliar').addEventListener('click', () => concConciliarMarcados());
     document.getElementById('concSugerir').addEventListener('click', concMostrarSugestoes);
     document.getElementById('concIgnorar').addEventListener('click', concIgnorarMarcados);
@@ -1951,23 +2022,38 @@
   function concAtualizarTotais(){
     const se = concEstado.extratos.filter(e => concEstado.selE.has(e.id)).reduce((a, e) => a + concLiquido(e), 0);
     const sm = concEstado.movs.filter(m => concEstado.selM.has(m.id)).reduce((a, m) => a + concLiquidoMov(m), 0);
-    const dif = se - sm, ok = concEstado.selE.size && concEstado.selM.size && Math.abs(dif) < 0.01;
-    document.getElementById('concTotais').innerHTML = `Extrato marcado: <strong>${concNum(se)}</strong> (${concEstado.selE.size}) · Lançamentos: <strong>${concNum(sm)}</strong> (${concEstado.selM.size}) · Diferença: <strong style="color:${ok ? 'var(--brand-2)' : 'var(--danger)'};">${concNum(dif)}</strong>`;
+    const tits = concTitulosSelecionados(); const st = tits.reduce((a, t) => a + concLiquidoTitulo(t), 0);
+    const dif = se - (sm + st), ok = concEstado.selE.size && (concEstado.selM.size || tits.length) && Math.abs(dif) < 0.01;
+    document.getElementById('concTotais').innerHTML = `Extrato marcado: <strong>${concNum(se)}</strong> (${concEstado.selE.size}) · Lançamentos: <strong>${concNum(sm)}</strong> (${concEstado.selM.size}) · Títulos: <strong>${concNum(st)}</strong> (${tits.length}) · Diferença: <strong style="color:${ok ? 'var(--brand-2)' : 'var(--danger)'};">${concNum(dif)}</strong>`;
     document.getElementById('concConciliar').disabled = !ok;
   }
-  async function concChamarConciliar(extratos, movs, origem, obs){
-    const { data, error } = await sb.rpc('financeiro_conciliar', { p_unidade: agenciaId, p_extratos: extratos, p_movimentacoes: movs, p_observacao: obs || null, p_origem: origem || 'manual' });
-    if(error) throw new Error(error.message);
+  async function concChamarConciliar(extratos, movs, origem, obs, titulos){
+    const comTitulos = titulos && titulos.length;
+    const { data, error } = comTitulos
+      ? await sb.rpc('financeiro_conciliar_com_titulos', { p_unidade: agenciaId, p_extratos: extratos, p_movimentacoes: movs, p_titulos: titulos, p_observacao: obs || null, p_origem: origem || 'manual' })
+      : await sb.rpc('financeiro_conciliar', { p_unidade: agenciaId, p_extratos: extratos, p_movimentacoes: movs, p_observacao: obs || null, p_origem: origem || 'manual' });
+    if(error) throw new Error(comTitulos && /does not exist|financeiro_conciliar_com_titulos/.test(error.message) ? 'rode de novo o financeiro-conciliacao.sql no Supabase (falta a conciliação com títulos).' : error.message);
     return data;
+  }
+  // depois de quitar títulos pela conciliação, atualiza a tela de Títulos e a Movimentação
+  async function concAtualizarAposQuitar(){
+    try{ await carregarTitulos(); } catch(e){}
+    try{ await carregarMovimentacoes(); } catch(e){}
   }
   async function concConciliarMarcados(){
     const btn = document.getElementById('concConciliar'); btn.disabled = true;
+    const tits = concTitulosSelecionados();
+    if(tits.length){
+      const linhas = concEstado.extratos.filter(e => concEstado.selE.has(e.id)); const dataBaixa = linhas.map(e => e.data).sort().pop();
+      if(!confirm(`Conciliar vai QUITAR ${tits.length} título(s) no contas a pagar/receber, com data ${formatarData(dataBaixa)} e conta "${extNomeConta(Number(concEstado.contaId))}", e criar o lançamento de caixa de cada um. Confirmar?`)){ concAtualizarTotais(); return; }
+    }
     try{
-      const cod = await concChamarConciliar([...concEstado.selE], [...concEstado.selM], 'manual');
-      await registrarSentinela('financeiro_conciliacao', `Conciliação #${cod}: ${concEstado.selE.size} linha(s) do extrato × ${concEstado.selM.size} lançamento(s) na conta "${extNomeConta(Number(concEstado.contaId))}"`);
-      concEstado.selE.clear(); concEstado.selM.clear();
+      const cod = await concChamarConciliar([...concEstado.selE], [...concEstado.selM], 'manual', null, tits.map(t => t.id));
+      await registrarSentinela('financeiro_conciliacao', `Conciliação #${cod}: ${concEstado.selE.size} linha(s) do extrato × ${concEstado.selM.size} lançamento(s)${tits.length ? ' e ' + tits.length + ' título(s) quitado(s)' : ''} na conta "${extNomeConta(Number(concEstado.contaId))}"`);
+      concEstado.selE.clear(); concEstado.selM.clear(); concEstado.selT.clear();
+      if(tits.length) await concAtualizarAposQuitar();
       await concRenderConciliar();
-      alert('Conciliação gravada com o código #' + cod + '.');
+      alert('Conciliação gravada com o código #' + cod + '.' + (tits.length ? `\n${tits.length} título(s) quitado(s).` : ''));
     } catch(e){ alert('Não consegui conciliar: ' + e.message); concAtualizarTotais(); }
   }
   async function concIgnorarMarcados(){
@@ -1979,9 +2065,9 @@
   }
 
   // sugestões: 1 linha do extrato ↔ 1 lançamento de mesmo valor (data até 3 dias de diferença); depois grupos (vários lançamentos somando a linha)
-  function concAcharSubconjunto(alvo, itens, max){
-    const alvoC = Math.round(alvo * 100); let achada = null, qtd = 0;
-    const vs = itens.map(m => Math.round(concLiquidoMov(m) * 100));
+  function concAcharSubconjunto(alvo, itens, max, fv){
+    const alvoC = Math.round(alvo * 100); let achada = null, qtd = 0; fv = fv || concLiquidoMov;
+    const vs = itens.map(m => Math.round(fv(m) * 100));
     (function rec(i, restante, escolhidos){
       if(qtd > 1) return;
       if(restante === 0 && escolhidos.length > 1){ qtd++; achada = escolhidos.slice(); return; }
@@ -2010,6 +2096,16 @@
       const g = pool.length > 1 ? concAcharSubconjunto(concLiquido(e), pool, 4) : null;
       if(g){ pares.push({ extratos: [e], movs: g, tipo: 'lote' }); g.forEach(m => livresM.delete(m.id)); jaE.add(e.id); }
     });
+    // títulos em aberto: o que o banco pagou/recebeu e ainda não tem lançamento no caixa (NUNCA vêm marcadas: conciliar quita o título)
+    const livresT = new Map(concTitulosAbertos().map(t => [t.id, t]));
+    concEstado.extratos.filter(e => !jaE.has(e.id)).forEach(e => {
+      const sinal = concLiquido(e) >= 0 ? 1 : -1;
+      const pool = [...livresT.values()].filter(t => Math.sign(concLiquidoTitulo(t)) === sinal && t.data_vencimento && concDiasEntre(t.data_vencimento, e.data) <= 30);
+      const exatos = pool.filter(t => Math.abs(concLiquidoTitulo(t) - concLiquido(e)) < 0.01).sort((a, b) => concDiasEntre(a.data_vencimento, e.data) - concDiasEntre(b.data_vencimento, e.data));
+      if(exatos.length){ pares.push({ extratos: [e], movs: [], titulos: [exatos[0]], tipo: exatos.length === 1 ? 'titulo' : 'titulo_provavel' }); livresT.delete(exatos[0].id); jaE.add(e.id); return; }
+      const g = pool.length > 1 ? concAcharSubconjunto(concLiquido(e), pool.slice(0, 28), 4, concLiquidoTitulo) : null;
+      if(g){ pares.push({ extratos: [e], movs: [], titulos: g, tipo: 'titulos_lote' }); g.forEach(t => livresT.delete(t.id)); jaE.add(e.id); }
+    });
     return pares;
   }
   function concMostrarSugestoes(){
@@ -2017,11 +2113,11 @@
     const ov = document.getElementById('modalConcSug');
     document.getElementById('concSugCorpo').innerHTML = pares.length ? `
       <div class="ext-tabela-wrap" style="max-height:55vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th><th>Confiança</th><th>Extrato</th><th>Lançamento(s)</th><th class="num">Valor</th></tr></thead>
-      <tbody>${pares.map((p, i) => `<tr><td><input type="checkbox" data-conc-par="${i}" ${p.tipo === 'exata' ? 'checked' : ''}></td><td>${p.tipo === 'exata' ? 'exata' : p.tipo === 'lote' ? 'em lote' : 'provável'}</td>
+      <tbody>${pares.map((p, i) => `<tr><td><input type="checkbox" data-conc-par="${i}" ${p.tipo === 'exata' ? 'checked' : ''}></td><td>${{ exata: 'exata', lote: 'em lote', titulo: 'título (quita)', titulo_provavel: 'título provável (quita)', titulos_lote: 'títulos em lote (quita)' }[p.tipo] || 'provável'}</td>
         <td>${p.extratos.map(e => formatarData(e.data) + ' · ' + escapeHtml(e.historico || '')).join('<br>')}</td>
-        <td>${p.movs.map(m => formatarData(m.data) + ' · ' + escapeHtml(m.historico || '') + (m.pessoa && m.pessoa.nome ? ' · ' + escapeHtml(m.pessoa.nome) : '')).join('<br>')}</td>
+        <td>${p.movs.map(m => formatarData(m.data) + ' · ' + escapeHtml(m.historico || '') + (m.pessoa && m.pessoa.nome ? ' · ' + escapeHtml(m.pessoa.nome) : '')).concat((p.titulos || []).map(t => '<strong>TÍTULO</strong> venc. ' + formatarData(t.data_vencimento) + ' · ' + escapeHtml(t.titulo || '#' + t.codigo) + (t.pessoa && t.pessoa.nome ? ' · ' + escapeHtml(t.pessoa.nome) : ''))).join('<br>')}</td>
         <td class="num">${concNum(p.extratos.reduce((a, e) => a + concLiquido(e), 0))}</td></tr>`).join('')}</tbody></table></div>
-      <p class="ext-nota">As <strong>exatas</strong> (mesmo valor e data até 3 dias, sem outra candidata) já vêm marcadas; confira as <strong>prováveis</strong> e as <strong>em lote</strong> antes de marcar.</p>`
+      <p class="ext-nota">As <strong>exatas</strong> (mesmo valor e data até 3 dias, sem outra candidata) já vêm marcadas; confira as <strong>prováveis</strong> e as <strong>em lote</strong> antes de marcar. As de <strong>título</strong> nunca vêm marcadas: conciliar <strong>quita o título</strong> no contas a pagar/receber e cria o lançamento de caixa.</p>`
       : '<div class="vazio">Nenhuma sugestão encontrada para este período.</div>';
     document.getElementById('btnConcSugAplicar').style.display = pares.length ? '' : 'none';
     window.__concPares = pares; ov.classList.add('show');
@@ -2029,15 +2125,18 @@
   async function concAplicarSugestoes(){
     const marcados = Array.from(document.querySelectorAll('[data-conc-par]:checked')).map(c => window.__concPares[Number(c.dataset.concPar)]);
     if(!marcados.length){ alert('Marque ao menos uma sugestão.'); return; }
+    const nTit = marcados.reduce((a, p) => a + (p.titulos || []).length, 0);
+    if(nTit && !confirm(`Estas sugestões vão QUITAR ${nTit} título(s) no contas a pagar/receber e criar o lançamento de caixa de cada um. Confirmar?`)) return;
     const btn = document.getElementById('btnConcSugAplicar'); btn.disabled = true; let ok = 0; const erros = [];
     for(const p of marcados){
-      try{ btn.textContent = `Conciliando ${ok + erros.length + 1} de ${marcados.length}...`; await concChamarConciliar(p.extratos.map(e => e.id), p.movs.map(m => m.id), 'automatica'); ok++; }
+      try{ btn.textContent = `Conciliando ${ok + erros.length + 1} de ${marcados.length}...`; await concChamarConciliar(p.extratos.map(e => e.id), p.movs.map(m => m.id), 'automatica', null, (p.titulos || []).map(t => t.id)); ok++; }
       catch(e){ erros.push(e.message); }
     }
     btn.disabled = false; btn.textContent = 'Conciliar as marcadas';
-    if(ok) await registrarSentinela('financeiro_conciliacao', `Conciliação automática: ${ok} conciliação(ões) na conta "${extNomeConta(Number(concEstado.contaId))}"`);
+    if(ok) await registrarSentinela('financeiro_conciliacao', `Conciliação automática: ${ok} conciliação(ões)${nTit ? ' (' + nTit + ' título(s) quitado(s))' : ''} na conta "${extNomeConta(Number(concEstado.contaId))}"`);
+    if(ok && nTit) await concAtualizarAposQuitar();
     document.getElementById('modalConcSug').classList.remove('show');
-    concEstado.selE.clear(); concEstado.selM.clear(); await concRenderConciliar();
+    concEstado.selE.clear(); concEstado.selM.clear(); concEstado.selT.clear(); await concRenderConciliar();
     alert(`${ok} conciliação(ões) feita(s).` + (erros.length ? `\n${erros.length} falhou(aram):\n` + erros.slice(0, 3).join('\n') : ''));
   }
 
@@ -2091,27 +2190,31 @@
              plano_de_contas_id: Number(document.getElementById(p + '_plano').value) || null, evento: document.getElementById(p + '_evento').value.trim() || null,
              pessoa_id: Number(document.getElementById(p + '_pessoa').value) || null };
   }
-  async function concRenderGerar(){
-    concMsg('Carregando...');
-    try{ await concCarregarListas(); } catch(e){ concMsg(escapeHtml(e.message)); return; }
-    const L = concEstado.extratos;
+  async function concRenderGerar(semRecarregar){
+    if(!semRecarregar){ concMsg('Carregando...');
+      try{ await concCarregarListas(); } catch(e){ concMsg(escapeHtml(e.message)); return; } }
+    const L = concOrdenar(concEstado.extratos, 'ger', CONC_ACC_G);
     document.getElementById('concCorpo').innerHTML = `
-      <p class="ext-nota" style="margin:0 0 10px;">Linhas do banco que <strong>não existem no contas a pagar</strong> (tarifa, cesta, juros, IOF, rendimento...). Marque as linhas e gere o lançamento: ele é criado na Movimentação com rateio e já fica conciliado (um código por linha).</p>
+      <p class="ext-nota" style="margin:0 0 10px;">Linhas do banco que <strong>não existem no contas a pagar</strong> (tarifa, cesta, juros, IOF, rendimento...). Marque as linhas e gere o lançamento: ele é criado na Movimentação com rateio e já fica conciliado (um código por linha). Se o dinheiro <strong>veio de outra conta</strong> (PIX, cartões, outro banco), use <strong>Transferência</strong>: ela cria as duas pernas (entrada no banco e baixa na outra conta).</p>
       <div class="filtros">
         <button class="btn-novo" id="concGerarRegras">⚡ Gerar com a regra de cada linha</button>
         <button class="btn-novo" id="concGerarManual" style="background:var(--brand-2);">Gerar com a classificação que eu escolher…</button>
+        <button class="btn-novo" id="concTransfMarcadas" style="background:var(--brand-2);" title="O dinheiro veio de (ou foi para) outra conta: PIX, cartões, outro banco">⇄ Transferência das marcadas…</button>
         <button class="ext-chip" id="concGerarTodas">Marcar todas as linhas com regra</button>
         <span style="flex:1;"></span><span id="concGerarTotal" class="ext-nota"></span>
       </div>
-      <div class="ext-tabela-wrap" style="max-height:62vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th><th>Data</th><th>Histórico</th><th class="num">Valor</th><th>Regra</th><th></th></tr></thead>
+      <div class="ext-tabela-wrap" style="max-height:62vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th>${concThOrd('ger', 'data', 'Data')}${concThOrd('ger', 'historico', 'Histórico')}${concThOrd('ger', 'valor', 'Valor', 'num')}${concThOrd('ger', 'regra', 'Regra')}<th></th></tr></thead>
         <tbody>${L.map(e => { const r = concRegraDaLinha(e); const c = r ? concCompletar(r) : null; const pl = c && c.plano_de_contas_id ? todosPlanosContas.find(x => x.id === c.plano_de_contas_id) : null; const pn = r && r.pessoa_id ? concEstado.pessoaNomes[r.pessoa_id] : '';
-          return `<tr><td><input type="checkbox" data-conc-g="${e.id}" ${concEstado.selE.has(e.id) ? 'checked' : ''}></td><td style="white-space:nowrap;">${formatarData(e.data)}</td><td>${escapeHtml(e.historico || '')}</td><td class="num ${concLiquido(e) < 0 ? 'ext-neg' : ''}">${concNum(concLiquido(e))}</td><td>${r ? `<span class="ext-selo" title="${escapeHtml(pn || '')}">${escapeHtml(r.palavra)}${pl ? ' → ' + escapeHtml(pl.codigo) : ''}${pn ? ' · ' + escapeHtml(pn.split(' — ').slice(1).join(' — ')) : ''}</span>` : '<span class="ext-cod">sem regra</span>'}</td><td style="white-space:nowrap;"><button class="ext-chip" data-conc-cls="${e.id}">Classificar…</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="vazio">Nenhuma linha pendente neste período.</td></tr>'}</tbody></table></div>`;
+          return `<tr><td><input type="checkbox" data-conc-g="${e.id}" ${concEstado.selE.has(e.id) ? 'checked' : ''}></td><td style="white-space:nowrap;">${formatarData(e.data)}</td><td>${escapeHtml(e.historico || '')}</td><td class="num ${concLiquido(e) < 0 ? 'ext-neg' : ''}">${concNum(concLiquido(e))}</td><td>${concRotuloRegra(r)}</td><td style="white-space:nowrap;"><button class="ext-chip" data-conc-cls="${e.id}">Classificar…</button> <button class="ext-chip" data-conc-transf="${e.id}" title="Veio de (ou foi para) outra conta">⇄ Transferência…</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="vazio">Nenhuma linha pendente neste período.</td></tr>'}</tbody></table></div>`;
     const atualizar = () => { const s = L.filter(e => concEstado.selE.has(e.id)).reduce((a, e) => a + concLiquido(e), 0); document.getElementById('concGerarTotal').textContent = `${concEstado.selE.size} marcada(s) · ${concNum(s)}`; };
     document.querySelectorAll('[data-conc-g]').forEach(c => c.addEventListener('change', () => { const id = Number(c.dataset.concG); c.checked ? concEstado.selE.add(id) : concEstado.selE.delete(id); atualizar(); }));
     document.getElementById('concGerarTodas').addEventListener('click', () => { L.forEach(e => { if(concRegraDaLinha(e)) concEstado.selE.add(e.id); }); concRenderGerar(); });
     document.getElementById('concGerarRegras').addEventListener('click', concGerarPorRegras);
     document.getElementById('concGerarManual').addEventListener('click', () => concAbrirGerarManual(null));
     document.querySelectorAll('[data-conc-cls]').forEach(b => b.addEventListener('click', () => concAbrirGerarManual(Number(b.dataset.concCls))));
+    concLigarOrd(() => concRenderGerar(true));
+    document.getElementById('concTransfMarcadas').addEventListener('click', () => concAbrirTransferencia(null));
+    document.querySelectorAll('[data-conc-transf]').forEach(b => b.addEventListener('click', () => concAbrirTransferencia(Number(b.dataset.concTransf))));
     atualizar();
   }
   async function concGerar(ids, c, historico){
@@ -2121,18 +2224,21 @@
   }
   async function concGerarPorRegras(){
     const sel = concEstado.extratos.filter(e => concEstado.selE.has(e.id)); const base = sel.length ? sel : concEstado.extratos;
-    const grupos = new Map(); let semRegra = 0, incompletas = 0;
+    const grupos = new Map(), gruposT = new Map(); let semRegra = 0, incompletas = 0;
     // a regra pode ser parcial: empresa vem da conta e setor/plano/evento dos "Padrões por empresa" (Parâmetros)
-    base.forEach(e => { const r = concRegraDaLinha(e); if(!r){ semRegra++; return; } const c = concCompletar(r);
+    base.forEach(e => { const r = concRegraDaLinha(e); if(!r){ semRegra++; return; } if(r.acao === 'transferencia'){ const t = concCompletarTransf(r); if(!t){ incompletas++; return; } const kt = JSON.stringify([t, r.descricao || '']); (gruposT.get(kt) || gruposT.set(kt, { r, t, ids: [] }).get(kt)).ids.push(e.id); return; } const c = concCompletar(r);
       if(!c.empresa_id || !c.setor_id || !c.plano_de_contas_id || !c.evento){ incompletas++; return; }
       const chave = JSON.stringify([c, r.descricao || '']); (grupos.get(chave) || grupos.set(chave, { r, c, ids: [] }).get(chave)).ids.push(e.id); });
-    const total = [...grupos.values()].reduce((a, g) => a + g.ids.length, 0);
-    if(!total){ alert('Nenhuma das linhas tem classificação completa (empresa, setor, plano e evento).' + (semRegra ? `\n${semRegra} sem regra.` : '') + (incompletas ? `\n${incompletas} com regra incompleta: complete a regra em "Regras" ou os padrões da empresa em Parâmetros.` : '')); return; }
-    if(!confirm(`Gerar ${total} lançamento(s) pela regra de cada linha e conciliar?` + (semRegra ? `\n${semRegra} linha(s) sem regra ficam de fora.` : '') + (incompletas ? `\n${incompletas} com regra incompleta ficam de fora.` : ''))) return;
+    const total = [...grupos.values(), ...gruposT.values()].reduce((a, g) => a + g.ids.length, 0);
+    if(!total){ alert('Nenhuma das linhas tem classificação completa (empresa, setor, plano e evento; na transferência: a outra conta, a empresa e os dois planos).' + (semRegra ? `\n${semRegra} sem regra.` : '') + (incompletas ? `\n${incompletas} com regra incompleta: complete a regra em "Regras" ou os padrões da empresa em Parâmetros.` : '')); return; }
+    if(!confirm(`Gerar ${total} lançamento(s)/transferência(s) pela regra de cada linha e conciliar?` + (gruposT.size ? `\n(${[...gruposT.values()].reduce((a, g) => a + g.ids.length, 0)} são transferências entre contas: cada uma cria as duas pernas.)` : '') + (semRegra ? `\n${semRegra} linha(s) sem regra ficam de fora.` : '') + (incompletas ? `\n${incompletas} com regra incompleta ficam de fora.` : ''))) return;
     const btn = document.getElementById('concGerarRegras'); btn.disabled = true; let feitos = 0;
     try{
       for(const g of grupos.values()){
         feitos += await concGerar(g.ids, g.c, g.r.descricao);
+      }
+      for(const g of gruposT.values()){
+        feitos += await concGerarTransf(g.ids, g.t, g.r.descricao);
       }
       await registrarSentinela('financeiro_conciliacao_gerar', `Gerou ${feitos} lançamento(s) a partir do extrato por regras (conta "${extNomeConta(Number(concEstado.contaId))}")`);
     } catch(e){ alert('Parou: ' + e.message + (feitos ? `\n${feitos} lançamento(s) já tinham sido gerados.` : '')); }
@@ -2144,7 +2250,7 @@
     const alvo = idUnico ? [idUnico] : [...concEstado.selE];
     if(!alvo.length){ alert('Marque ao menos uma linha do extrato.'); return; }
     concGerarAlvo = alvo;
-    const primeira = concEstado.extratos.find(e => e.id === alvo[0]); const r = primeira ? concRegraDaLinha(primeira) : null;
+    const primeira = concEstado.extratos.find(e => e.id === alvo[0]); let r = primeira ? concRegraDaLinha(primeira) : null; if(r && r.acao === 'transferencia') r = null;   // regra de transferência: use o botão Transferência
     const unica = alvo.length === 1 && primeira;
     document.getElementById('tituloModalConcGerar').textContent = unica ? 'Classificar e conciliar esta linha' : `Gerar ${alvo.length} lançamento(s) e conciliar`;
     const info = unica ? `<div class="ext-nota" style="margin:0 0 10px; padding:8px 10px; background:var(--brand-soft); border-radius:8px;"><strong>${formatarData(primeira.data)}</strong> · ${escapeHtml(primeira.historico || '')} · <strong class="${concLiquido(primeira) < 0 ? 'ext-neg' : ''}">${concNum(concLiquido(primeira))}</strong>${r ? `<br>Regra reconhecida: <strong>${escapeHtml(r.palavra)}</strong> (completei o que faltava com a conta/padrões da empresa)` : ''}</div>` : '';
@@ -2189,8 +2295,8 @@
     const tipo = concLiquido(linha) >= 0 ? 'C' : 'D';
     const reg = { unidade_negocio_id: agenciaId, palavra, tipo_movimento: tipo,
       empresa_id: c.empresa_id === concEmpresaDaConta() ? null : c.empresa_id,   // empresa igual à da conta fica em branco: a regra serve para qualquer conta
-      setor_id: c.setor_id, plano_de_contas_id: c.plano_de_contas_id, evento: c.evento, pessoa_id: c.pessoa_id, descricao: historico || null, ativo: true };
-    const igual = concEstado.regras.find(r => concNorm(r.palavra) === concNorm(palavra) && (r.tipo_movimento || '') === tipo);
+      setor_id: c.setor_id, plano_de_contas_id: c.plano_de_contas_id, evento: c.evento, pessoa_id: c.pessoa_id, descricao: historico || null, ativo: true, acao: 'lancamento', conta_outra_id: null, plano_outra_id: null };
+    const igual = concEstado.regras.find(r => (r.acao || 'lancamento') === 'lancamento' && concNorm(r.palavra) === concNorm(palavra) && (r.tipo_movimento || '') === tipo);
     const { data, error } = igual ? await sb.from('financeiro_conciliacao_regras').update(reg).eq('id', igual.id).select('id').single()
                                   : await sb.from('financeiro_conciliacao_regras').insert({ ...reg, ordem: 100 }).select('id').single();
     if(error) throw new Error(/pessoa_id/.test(error.message) ? 'rode de novo o financeiro-conciliacao.sql no Supabase (falta a coluna do fornecedor).' : error.message);
@@ -2202,7 +2308,7 @@
   async function concAplicarRegraNovaNasOutras(regraId){
     const outras = concEstado.extratos.filter(e => { const r = concRegraDaLinha(e); return r && r.id === regraId; });
     if(!outras.length) return;
-    const r = concEstado.regras.find(x => x.id === regraId); const c = concCompletar(r);
+    const r = concEstado.regras.find(x => x.id === regraId); if(r.acao === 'transferencia') return concAplicarTransfNasOutras(r, outras); const c = concCompletar(r);
     if(!c.empresa_id || !c.setor_id || !c.plano_de_contas_id || !c.evento) return;
     const soma = outras.reduce((a, e) => a + concLiquido(e), 0);
     if(!confirm(`A regra "${r.palavra}" também reconhece mais ${outras.length} linha(s) pendente(s) deste período (total ${concNum(soma)}).\nGerar e conciliar essas linhas agora?`)) return;
@@ -2213,20 +2319,159 @@
     await concRenderGerar();
   }
 
+  // ---------------- transferência a partir do extrato (o dinheiro veio de OUTRA conta: PIX, cartões, outro banco) ----------------
+  // cria as DUAS pernas (como o botão «Transferência» do Sicon): no banco, conciliada com a linha do extrato, e na outra conta, o lançamento contrário (a «baixa»).
+  // Entrada no banco: plano do banco = a RECEITA e plano da outra conta = a BAIXA (varia por unidade; fica na regra).
+  function concRotuloRegra(r){
+    if(!r) return '<span class="ext-cod">sem regra</span>';
+    if(r.acao === 'transferencia'){
+      const co = todasContas.find(x => String(x.id) === String(r.conta_outra_id));
+      return `<span class="ext-selo" title="Regra de transferência: cria as duas pernas">⇄ ${escapeHtml(r.palavra)} · ${r.tipo_movimento === 'D' ? 'para' : 'de'} ${escapeHtml(co ? co.nome : '?')}</span>`;
+    }
+    const c = concCompletar(r); const pl = c.plano_de_contas_id ? todosPlanosContas.find(x => x.id === c.plano_de_contas_id) : null; const pn = r.pessoa_id ? concEstado.pessoaNomes[r.pessoa_id] : '';
+    return `<span class="ext-selo" title="${escapeHtml(pn || '')}">${escapeHtml(r.palavra)}${pl ? ' → ' + escapeHtml(pl.codigo) : ''}${pn ? ' · ' + escapeHtml(pn.split(' — ').slice(1).join(' — ')) : ''}</span>`;
+  }
+  // regra de transferência completa (a outra conta, a empresa e os DOIS planos); setor e evento são opcionais (no Sicon as transferências usam 0/0)
+  function concCompletarTransf(r){
+    const t = { conta_outra_id: r.conta_outra_id || null, empresa_id: r.empresa_id || concEmpresaDaConta() || null, setor_id: r.setor_id || null,
+                evento: (r.evento && String(r.evento).trim()) || null, plano_banco: r.plano_de_contas_id || null, plano_outra: r.plano_outra_id || null };
+    return (t.conta_outra_id && t.empresa_id && t.plano_banco && t.plano_outra) ? t : null;
+  }
+  // só o que é FIXO é lembrado (a outra conta e o plano da baixa); o plano da receita muda de recebimento para recebimento e NÃO é lembrado
+  function concTransfUltima(tipo){
+    try{ const m = JSON.parse(localStorage.getItem('fin_conc_transf_v1') || '{}'); return m[`${concEstado.contaId}|${tipo}`] || {}; } catch(e){ return {}; }
+  }
+  function concTransfLembrar(tipo, contaOutra, planoOutra){
+    try{ const m = JSON.parse(localStorage.getItem('fin_conc_transf_v1') || '{}'); m[`${concEstado.contaId}|${tipo}`] = { conta_outra: contaOutra, plano_outra: planoOutra }; localStorage.setItem('fin_conc_transf_v1', JSON.stringify(m)); } catch(e){}
+  }
+  function concCampoPlano(id, rotulo){
+    return `<div class="field-group"><label>${rotulo}</label><div class="campo-autocomplete"><input type="text" id="${id}_busca" placeholder="Buscar código ou descrição..." autocomplete="off"><input type="hidden" id="${id}" value=""><div class="lista-sugestoes-autocomplete" id="${id}_res"></div></div></div>`;
+  }
+  function concLigarPlano(id, planoId){
+    ligarBuscaAutocomplete(document.getElementById(id + '_busca'), document.getElementById(id), document.getElementById(id + '_res'), (t) => buscarLocal(todosPlanosContas, 'codigo', 'descricao', t), 'id');
+    const pl = planoId ? todosPlanosContas.find(x => String(x.id) === String(planoId)) : null;
+    if(pl){ document.getElementById(id).value = pl.id; document.getElementById(id + '_busca').value = `${pl.codigo ?? pl.id} — ${pl.descricao}`; }
+  }
+  let concTransfAlvo = [];
+  function concAbrirTransferencia(idUnico){
+    const alvo = idUnico ? [idUnico] : [...concEstado.selE];
+    if(!alvo.length){ alert('Marque ao menos uma linha do extrato.'); return; }
+    const linhas = alvo.map(id => concEstado.extratos.find(e => e.id === id)).filter(Boolean);
+    const sinais = new Set(linhas.map(l => concLiquido(l) >= 0 ? 'C' : 'D'));
+    if(sinais.size > 1){ alert('Marque só entradas ou só saídas: a transferência é num sentido só.'); return; }
+    const tipo = [...sinais][0], unica = linhas.length === 1, l0 = linhas[0];
+    concTransfAlvo = alvo;
+    const r0 = unica ? concRegraDaLinha(l0) : null; const rt = r0 && r0.acao === 'transferencia' ? r0 : null;
+    const ult = concTransfUltima(tipo);
+    const entrada = tipo === 'C';
+    const total = linhas.reduce((a, l) => a + concLiquido(l), 0);
+    document.getElementById('tituloModalConcTransf').textContent = unica ? 'Transferência desta linha' : `Transferência de ${linhas.length} linhas`;
+    const contas = todasContas.filter(c => String(c.id) !== String(concEstado.contaId) && c.ativo !== false);
+    const empresaPadrao = (rt && rt.empresa_id) || concEmpresaDaConta() || '';
+    const info = unica ? `<div class="ext-nota" style="margin:0 0 10px; padding:8px 10px; background:var(--brand-soft); border-radius:8px;"><strong>${formatarData(l0.data)}</strong> · ${escapeHtml(l0.historico || '')} · <strong class="${concLiquido(l0) < 0 ? 'ext-neg' : ''}">${concNum(concLiquido(l0))}</strong>${rt ? `<br>Regra reconhecida: <strong>${escapeHtml(rt.palavra)}</strong>` : ''}</div>`
+      : `<div class="ext-nota" style="margin:0 0 10px; padding:8px 10px; background:var(--brand-soft); border-radius:8px;"><strong>${linhas.length} linhas</strong> · total <strong class="${total < 0 ? 'ext-neg' : ''}">${concNum(total)}</strong> · cada linha vira uma transferência, na data e com o histórico do extrato.</div>`;
+    document.getElementById('concTransfForm').innerHTML = info + `
+      <div class="field-group"><label>${entrada ? 'Veio da conta (origem do dinheiro)' : 'Foi para a conta (destino do dinheiro)'}</label><select id="ct_conta"><option value="">— escolha —</option>${contas.map(c => `<option value="${c.id}" ${String((rt && rt.conta_outra_id) || ult.conta_outra || '') === String(c.id) ? 'selected' : ''}>${escapeHtml((c.codigo != null ? c.codigo + ' — ' : '') + c.nome)}</option>`).join('')}</select></div>
+      ${concCampoPlano('ct_pb', entrada ? 'Plano da ENTRADA no banco (a receita)' : 'Plano da SAÍDA no banco')}
+      ${concCampoPlano('ct_po', entrada ? 'Plano da BAIXA na conta de origem' : 'Plano da ENTRADA na conta de destino')}
+      <div class="field-group"><label>Empresa</label><select id="ct_empresa"><option value="">— escolha —</option>${todasEmpresas.map(e => `<option value="${e.id}" ${String(empresaPadrao) === String(e.id) ? 'selected' : ''}>${escapeHtml(e.nome)}</option>`).join('')}</select></div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div class="field-group"><label>Setor <span style="font-weight:400; color:var(--muted);">(opcional)</span></label><select id="ct_setor"><option value="">—</option>${todosSetores.map(s => `<option value="${s.id}" ${rt && String(rt.setor_id) === String(s.id) ? 'selected' : ''}>${escapeHtml((s.codigo != null ? s.codigo + ' — ' : '') + s.nome)}</option>`).join('')}</select></div>
+        <div class="field-group"><label>Evento <span style="font-weight:400; color:var(--muted);">(opcional)</span></label><input type="text" id="ct_evento" value="${escapeHtml((rt && rt.evento) || '')}" placeholder="Ex.: 1"></div>
+      </div>
+      ${unica ? `<div class="field-group"><label>Data na outra conta <span style="font-weight:400; color:var(--muted);">(no banco é a data do extrato)</span></label><input type="date" id="ct_data" value="${l0.data}"></div>
+      <div class="field-group"><label>Histórico no banco <span style="font-weight:400; color:var(--muted);">(vazio = o do extrato)</span></label><input type="text" id="ct_hist_b" placeholder="${escapeHtml(l0.historico || '')}"></div>
+      <div class="field-group"><label>Histórico na outra conta <span style="font-weight:400; color:var(--muted);">(vazio = o do extrato)</span></label><input type="text" id="ct_hist_o" placeholder="${escapeHtml(l0.historico || '')}"></div>
+      <label style="display:flex; align-items:center; gap:6px; font-size:.85rem; margin-top:6px;"><input type="checkbox" id="ct_regra" ${rt ? '' : 'checked'}> Lembrar como regra de transferência para os próximos extratos</label>
+      <div class="field-group" id="ct_regra_box"><label>Quando o histórico tiver a palavra</label><input type="text" id="ct_regra_palavra" value="${escapeHtml(rt ? rt.palavra : concSugerirPalavra(l0.historico))}">
+        <div class="ext-nota">Um pagador com classificação diferente (ex.: uma agência, que não é venda direta) ganha a sua própria regra com <strong>ordem menor</strong> que a regra geral: a de menor ordem vence.</div></div>` : ''}`;
+    concLigarPlano('ct_pb', rt ? rt.plano_de_contas_id : null);
+    concLigarPlano('ct_po', (rt && rt.plano_outra_id) || ult.plano_outra || null);
+    if(unica){ const chk = document.getElementById('ct_regra'), box = document.getElementById('ct_regra_box'); const ver = () => { box.style.display = chk.checked ? '' : 'none'; }; chk.addEventListener('change', ver); ver(); }
+    document.getElementById('modalConcTransf').classList.add('show');
+  }
+  async function concGerarTransf(ids, t, historico){
+    const { data, error } = await sb.rpc('financeiro_gerar_transferencia_e_conciliar', { p_unidade: agenciaId, p_extratos: ids, p_conta_outra: t.conta_outra_id, p_empresa: t.empresa_id, p_setor: t.setor_id || null, p_evento: t.evento || null,
+      p_plano_banco: t.plano_banco, p_plano_outra: t.plano_outra, p_hist_banco: historico || null, p_hist_outra: historico || null, p_data_outra: null });
+    if(error) throw new Error(/does not exist|financeiro_gerar_transferencia/.test(error.message) ? 'rode de novo o financeiro-conciliacao.sql no Supabase (falta a função de transferência).' : error.message);
+    return (data || []).length;
+  }
+  async function concConfirmarTransferencia(){
+    const t = { conta_outra_id: Number(document.getElementById('ct_conta').value) || null, empresa_id: Number(document.getElementById('ct_empresa').value) || null, setor_id: Number(document.getElementById('ct_setor').value) || null,
+                evento: document.getElementById('ct_evento').value.trim() || null, plano_banco: Number(document.getElementById('ct_pb').value) || null, plano_outra: Number(document.getElementById('ct_po').value) || null };
+    if(!t.conta_outra_id){ alert('Escolha a outra conta da transferência.'); return; }
+    if(!t.plano_banco || !t.plano_outra){ alert('Informe os dois planos de contas: o do banco e o da outra conta.'); return; }
+    if(!t.empresa_id){ alert('Informe a empresa.'); return; }
+    const alvo = concTransfAlvo.slice(); const unica = alvo.length === 1; const linha = unica ? concEstado.extratos.find(e => e.id === alvo[0]) : null;
+    const chk = document.getElementById('ct_regra'); const querRegra = unica && chk && chk.checked;
+    const palavra = querRegra ? document.getElementById('ct_regra_palavra').value.trim() : '';
+    if(querRegra){
+      if(!palavra){ alert('Informe a palavra da regra (ou desmarque "Lembrar como regra").'); return; }
+      if(!concNorm(linha.historico).includes(concNorm(palavra)) && !confirm('Essa palavra não aparece no histórico desta linha, então a regra não a reconheceria. Salvar mesmo assim?')) return;
+    }
+    const btn = document.getElementById('btnConcTransfOk'); btn.disabled = true;
+    try{
+      let n;
+      if(unica){
+        const dataOutra = document.getElementById('ct_data').value || null;
+        const { data, error } = await sb.rpc('financeiro_gerar_transferencia_e_conciliar', { p_unidade: agenciaId, p_extratos: alvo, p_conta_outra: t.conta_outra_id, p_empresa: t.empresa_id, p_setor: t.setor_id || null, p_evento: t.evento || null,
+          p_plano_banco: t.plano_banco, p_plano_outra: t.plano_outra, p_hist_banco: document.getElementById('ct_hist_b').value.trim() || null, p_hist_outra: document.getElementById('ct_hist_o').value.trim() || null, p_data_outra: dataOutra });
+        if(error) throw new Error(/does not exist|financeiro_gerar_transferencia/.test(error.message) ? 'rode de novo o financeiro-conciliacao.sql no Supabase (falta a função de transferência).' : error.message);
+        n = (data || []).length;
+      } else n = await concGerarTransf(alvo, t, null);
+      const tipo = concLiquido(concEstado.extratos.find(e => e.id === alvo[0])) >= 0 ? 'C' : 'D';
+      concTransfLembrar(tipo, t.conta_outra_id, t.plano_outra);
+      await registrarSentinela('financeiro_conciliacao_transferencia', `Gerou ${n} transferência(s) a partir do extrato (conta "${extNomeConta(Number(concEstado.contaId))}" com "${extNomeConta(t.conta_outra_id)}")`);
+      document.getElementById('modalConcTransf').classList.remove('show'); concEstado.selE.clear();
+      let extra = '';
+      if(querRegra){
+        try{ extra = await concSalvarRegraTransf(palavra, linha, t); }
+        catch(e){ alert('A transferência foi gerada, mas não consegui salvar a regra: ' + e.message); }
+      }
+      await concRenderGerar();
+      if(extra) await concAplicarRegraNovaNasOutras(extra);
+    } catch(e){ alert('Não consegui gerar a transferência: ' + e.message); }
+    finally { btn.disabled = false; }
+  }
+  async function concSalvarRegraTransf(palavra, linha, t){
+    const tipo = concLiquido(linha) >= 0 ? 'C' : 'D';
+    const reg = { unidade_negocio_id: agenciaId, palavra, tipo_movimento: tipo, acao: 'transferencia', conta_outra_id: t.conta_outra_id, plano_outra_id: t.plano_outra, plano_de_contas_id: t.plano_banco,
+      empresa_id: t.empresa_id === concEmpresaDaConta() ? null : t.empresa_id, setor_id: t.setor_id || null, evento: t.evento || null, pessoa_id: null, descricao: null, ativo: true };
+    const igual = concEstado.regras.find(r => r.acao === 'transferencia' && concNorm(r.palavra) === concNorm(palavra) && (r.tipo_movimento || '') === tipo);
+    const { data, error } = igual ? await sb.from('financeiro_conciliacao_regras').update(reg).eq('id', igual.id).select('id').single()
+                                  : await sb.from('financeiro_conciliacao_regras').insert({ ...reg, ordem: 100 }).select('id').single();
+    if(error) throw new Error(/acao|conta_outra_id|plano_outra_id/.test(error.message) ? 'rode de novo o financeiro-conciliacao.sql no Supabase (faltam as colunas da regra de transferência).' : error.message);
+    await concRecarregarRegras();
+    await registrarSentinela('financeiro_conciliacao_regra', `${igual ? 'Atualizou' : 'Criou'} a regra de transferência "${palavra}" a partir do extrato`);
+    return data.id;
+  }
+  async function concAplicarTransfNasOutras(r, outras){
+    const t = concCompletarTransf(r); if(!t) return;
+    const soma = outras.reduce((a, e) => a + concLiquido(e), 0);
+    if(!confirm(`A regra "${r.palavra}" também reconhece mais ${outras.length} linha(s) pendente(s) deste período (total ${concNum(soma)}).\nGerar as transferências e conciliar essas linhas agora?`)) return;
+    try{
+      const n = await concGerarTransf(outras.map(e => e.id), t, r.descricao);
+      await registrarSentinela('financeiro_conciliacao_transferencia', `Gerou ${n} transferência(s) pela regra "${r.palavra}" (conta "${extNomeConta(Number(concEstado.contaId))}")`);
+    } catch(e){ alert('Parou: ' + e.message); }
+    await concRenderGerar();
+  }
+
   // ---------------- 4) conciliações feitas ----------------
-  async function concRenderFeitas(){
-    concMsg('Carregando...');
+  async function concRenderFeitas(semRecarregar){
+    if(!(semRecarregar && concEstado.feitas)) concMsg('Carregando...');
     let q = sb.from('financeiro_conciliacoes').select('*').eq('unidade_negocio_id', agenciaId);
     if(concEstado.contaId) q = q.eq('id_conta', Number(concEstado.contaId));
     if(concEstado.de) q = q.gte('data', concEstado.de); if(concEstado.ate) q = q.lte('data', concEstado.ate);
-    const { data, error } = await q.order('codigo', { ascending: false }).limit(500);
-    if(error){ concMsg(escapeHtml(error.message)); return; }
-    document.getElementById('concCorpo').innerHTML = data.length ? `<div class="ext-tabela-wrap"><table class="ext-tabela"><thead><tr><th>Código</th><th>Data</th><th>Conta</th><th class="num">Valor</th><th>Origem</th><th>Observação</th><th></th></tr></thead>
-      <tbody>${data.map(c => `<tr><td><strong>#${c.codigo}</strong></td><td>${formatarData(c.data)}</td><td>${escapeHtml(extNomeConta(c.id_conta))}</td><td class="num ${Number(c.valor) < 0 ? 'ext-neg' : ''}">${concNum(c.valor)}</td><td>${c.origem}</td><td>${escapeHtml(c.observacao || '')}</td>
+    let data, error;
+    if(semRecarregar && concEstado.feitas) data = concEstado.feitas;
+    else { ({ data, error } = await q.order('codigo', { ascending: false }).limit(500)); if(error){ concMsg(escapeHtml(error.message)); return; } concEstado.feitas = data; }
+    document.getElementById('concCorpo').innerHTML = data.length ? `<div class="ext-tabela-wrap"><table class="ext-tabela"><thead><tr>${concThOrd('fei', 'codigo', 'Código')}${concThOrd('fei', 'data', 'Data')}${concThOrd('fei', 'conta', 'Conta')}${concThOrd('fei', 'valor', 'Valor', 'num')}${concThOrd('fei', 'origem', 'Origem')}${concThOrd('fei', 'obs', 'Observação')}<th></th></tr></thead>
+      <tbody>${concOrdenar(data, 'fei', CONC_ACC_F).map(c => `<tr><td><strong>#${c.codigo}</strong></td><td>${formatarData(c.data)}</td><td>${escapeHtml(extNomeConta(c.id_conta))}</td><td class="num ${Number(c.valor) < 0 ? 'ext-neg' : ''}">${concNum(c.valor)}</td><td>${c.origem}</td><td>${escapeHtml(c.observacao || '')}</td>
         <td style="white-space:nowrap;"><button class="ext-chip" data-conc-ver="${c.codigo}">Ver</button> <button class="ext-chip" data-conc-desf="${c.codigo}" style="color:var(--danger);">Desfazer</button></td></tr>
         <tr id="concDet${c.codigo}" style="display:none;"><td colspan="7"></td></tr>`).join('')}</tbody></table></div><p class="ext-nota">Mostra até 500 conciliações do período e da conta escolhidos.</p>` : '<div class="vazio">Nenhuma conciliação neste período.</div>';
     document.querySelectorAll('[data-conc-ver]').forEach(b => b.addEventListener('click', () => concVer(Number(b.dataset.concVer))));
     document.querySelectorAll('[data-conc-desf]').forEach(b => b.addEventListener('click', () => concDesfazer(Number(b.dataset.concDesf))));
+    concLigarOrd(() => concRenderFeitas(true));
   }
   async function concVer(cod){
     const tr = document.getElementById('concDet' + cod); const td = tr.firstElementChild;
@@ -2239,7 +2484,7 @@
       <div><strong>Lançamentos</strong>${(m.data || []).map(x => `<div>${formatarData(x.data)} · ${escapeHtml(x.historico || '')} · ${concNum(concLiquidoMov(x))}</div>`).join('')}</div></div>`;
   }
   async function concDesfazer(cod){
-    if(!confirm(`Desfazer a conciliação #${cod}? As linhas do extrato voltam para pendentes. Se ela foi GERADA a partir do extrato, o lançamento gerado também é apagado.`)) return;
+    if(!confirm(`Desfazer a conciliação #${cod}? As linhas do extrato voltam para pendentes. Se ela foi GERADA a partir do extrato, o lançamento gerado também é apagado (na transferência, as DUAS pernas). Se ela quitou títulos do contas a pagar/receber, eles voltam a ficar em aberto e o lançamento de caixa que ela criou é apagado.`)) return;
     const { error } = await sb.rpc('financeiro_desconciliar', { p_unidade: agenciaId, p_codigo: cod });
     if(error){ alert('Não consegui desfazer: ' + error.message); return; }
     await registrarSentinela('financeiro_conciliacao_desfeita', `Desfez a conciliação #${cod}`);
@@ -2260,8 +2505,8 @@
     const nomeDe = (lista, id, f) => { const x = lista.find(y => String(y.id) === String(id)); return x ? f(x) : ''; };
     document.getElementById('concCorpo').innerHTML = `
       <div class="filtros"><button class="btn-novo" id="concNovaRegra">+ Nova regra</button><span class="ext-nota">Quando o histórico do extrato contém a palavra, a regra sugere (ou aplica, em "Gerar") a classificação. Vale para qualquer banco da unidade; a de menor ordem vence.</span></div>
-      ${concEstado.regras.length ? `<div class="ext-tabela-wrap"><table class="ext-tabela"><thead><tr><th>Ordem</th><th>Palavra</th><th>Tipo</th><th>Fornecedor</th><th>Empresa</th><th>Setor</th><th>Plano de contas</th><th>Evento</th><th>Ativa</th><th></th></tr></thead><tbody>
-        ${concEstado.regras.map(r => `<tr><td>${r.ordem}</td><td><strong>${escapeHtml(r.palavra)}</strong></td><td>${r.tipo_movimento === 'D' ? 'Débito' : r.tipo_movimento === 'C' ? 'Crédito' : 'Ambos'}</td><td>${escapeHtml(concEstado.pessoaNomes[r.pessoa_id] || '')}</td><td>${escapeHtml(r.empresa_id ? nomeDe(todasEmpresas, r.empresa_id, x => x.nome) : '(da conta)')}</td><td>${escapeHtml(nomeDe(todosSetores, r.setor_id, x => x.nome))}</td><td>${escapeHtml(nomeDe(todosPlanosContas, r.plano_de_contas_id, x => x.codigo + ' · ' + x.descricao))}</td><td>${escapeHtml(r.evento || '')}</td><td>${r.ativo ? 'Sim' : 'Não'}</td>
+      ${concEstado.regras.length ? `<div class="ext-tabela-wrap"><table class="ext-tabela"><thead><tr><th>Ordem</th><th>Palavra</th><th>Tipo</th><th>Ação</th><th>Fornecedor</th><th>Empresa</th><th>Setor</th><th>Plano de contas</th><th>Evento</th><th>Ativa</th><th></th></tr></thead><tbody>
+        ${concEstado.regras.map(r => `<tr><td>${r.ordem}</td><td><strong>${escapeHtml(r.palavra)}</strong></td><td>${r.tipo_movimento === 'D' ? 'Débito' : r.tipo_movimento === 'C' ? 'Crédito' : 'Ambos'}</td><td>${r.acao === 'transferencia' ? '⇄ Transferência ' + (r.tipo_movimento === 'D' ? 'para ' : 'de ') + escapeHtml(nomeDe(todasContas, r.conta_outra_id, x => x.nome) || '?') + (r.plano_outra_id ? '<br><span class="ext-nota">baixa: ' + escapeHtml(nomeDe(todosPlanosContas, r.plano_outra_id, x => x.codigo)) + '</span>' : '') : 'Lançamento'}</td><td>${escapeHtml(concEstado.pessoaNomes[r.pessoa_id] || '')}</td><td>${escapeHtml(r.empresa_id ? nomeDe(todasEmpresas, r.empresa_id, x => x.nome) : '(da conta)')}</td><td>${escapeHtml(nomeDe(todosSetores, r.setor_id, x => x.nome))}</td><td>${escapeHtml(nomeDe(todosPlanosContas, r.plano_de_contas_id, x => x.codigo + ' · ' + x.descricao))}</td><td>${escapeHtml(r.evento || '')}</td><td>${r.ativo ? 'Sim' : 'Não'}</td>
           <td style="white-space:nowrap;"><button class="ext-chip" data-conc-edit="${r.id}">Editar</button> <button class="ext-chip" data-conc-del="${r.id}" style="color:var(--danger);">Excluir</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="vazio">Nenhuma regra cadastrada. Exemplos: TARIFA, CESTA, JUROS, IOF, RENDIMENTO.</div>'}`;
     document.getElementById('concNovaRegra').addEventListener('click', () => concAbrirRegra(null));
     document.querySelectorAll('[data-conc-edit]').forEach(b => b.addEventListener('click', () => concAbrirRegra(Number(b.dataset.concEdit))));
@@ -2277,33 +2522,49 @@
     document.getElementById('concRegraForm').innerHTML = `
       <div class="field-group"><label>Palavra no histórico do extrato *</label><input type="text" id="cr_palavra" value="${escapeHtml(r.palavra || '')}" placeholder="Ex.: TARIFA"></div>
       <div class="field-group"><label>Vale para</label><select id="cr_tipo"><option value="">Crédito e débito</option><option value="D" ${r.tipo_movimento === 'D' ? 'selected' : ''}>Só débito (saída)</option><option value="C" ${r.tipo_movimento === 'C' ? 'selected' : ''}>Só crédito (entrada)</option></select></div>
+      <div class="field-group"><label>O que a regra faz</label><select id="cr_acao"><option value="lancamento">Gerar um lançamento (tarifa, juros, rendimento...)</option><option value="transferencia" ${r.acao === 'transferencia' ? 'selected' : ''}>Transferência de/para outra conta (PIX, cartões, outro banco)</option></select></div>
+      <div id="cr_transf_box" style="display:none; padding:8px 10px; background:var(--brand-soft); border-radius:8px; margin-bottom:10px;">
+        <div class="field-group"><label>Outra conta (de onde veio / para onde foi o dinheiro)</label><select id="cr_conta_outra"><option value="">— escolha —</option>${todasContas.filter(c => c.ativo !== false).map(c => `<option value="${c.id}" ${String(r.conta_outra_id) === String(c.id) ? 'selected' : ''}>${escapeHtml((c.codigo != null ? c.codigo + ' — ' : '') + c.nome)}</option>`).join('')}</select></div>
+        ${concCampoPlano('cr_po', 'Plano da BAIXA na outra conta')}
+        <div class="ext-nota">Na transferência, o <strong>Plano de contas</strong> abaixo é o do lado do <strong>banco</strong> (a receita/entrada) e o fornecedor é ignorado. Pagador com classificação diferente precisa de regra própria com <strong>ordem menor</strong> que a regra geral (a de menor ordem vence).</div>
+      </div>
       ${concBlocoClassificacao('cr', r)}
       <div class="field-group"><label>Histórico a gravar (opcional — vazio = o do extrato)</label><input type="text" id="cr_desc" value="${escapeHtml(r.descricao || '')}"></div>
       <div class="field-group"><label>Ordem (menor vence)</label><input type="number" id="cr_ordem" value="${r.ordem ?? 100}"></div>
       <label style="display:flex; align-items:center; gap:6px; font-size:.85rem;"><input type="checkbox" id="cr_ativo" ${r.ativo === false ? '' : 'checked'}> Regra ativa</label>`;
     concLigarClassificacao('cr', r);
+    concLigarPlano('cr_po', r.plano_outra_id || null);
+    const ac = document.getElementById('cr_acao'), bx = document.getElementById('cr_transf_box'); const verAc = () => { bx.style.display = ac.value === 'transferencia' ? '' : 'none'; }; ac.addEventListener('change', verAc); verAc();
     document.getElementById('modalConcRegra').classList.add('show');
   }
   async function concSalvarRegra(){
     const palavra = document.getElementById('cr_palavra').value.trim(); if(!palavra){ alert('Informe a palavra.'); return; }
     const c = concLerClassificacao('cr');
-    const reg = { unidade_negocio_id: agenciaId, palavra, tipo_movimento: document.getElementById('cr_tipo').value || null, empresa_id: c.empresa_id, setor_id: c.setor_id, plano_de_contas_id: c.plano_de_contas_id, evento: c.evento, pessoa_id: c.pessoa_id,
+    const acao = document.getElementById('cr_acao').value, contaOutra = Number(document.getElementById('cr_conta_outra').value) || null, planoOutra = Number(document.getElementById('cr_po').value) || null;
+    if(acao === 'transferencia'){
+      if(!contaOutra){ alert('Escolha a outra conta da transferência.'); return; }
+      if(!c.plano_de_contas_id || !planoOutra){ alert('Informe os dois planos: o do banco (campo "Plano de contas") e o da baixa na outra conta.'); return; }
+      if(!document.getElementById('cr_tipo').value){ alert('Escolha se a regra vale para crédito (entrada) ou débito (saída): o sentido da transferência depende disso.'); return; }
+    }
+    const reg = { unidade_negocio_id: agenciaId, acao, conta_outra_id: acao === 'transferencia' ? contaOutra : null, plano_outra_id: acao === 'transferencia' ? planoOutra : null, palavra, tipo_movimento: document.getElementById('cr_tipo').value || null, empresa_id: c.empresa_id, setor_id: c.setor_id, plano_de_contas_id: c.plano_de_contas_id, evento: c.evento, pessoa_id: c.pessoa_id,
                   descricao: document.getElementById('cr_desc').value.trim() || null, ordem: parseInt(document.getElementById('cr_ordem').value, 10) || 100, ativo: document.getElementById('cr_ativo').checked };
     const { error } = concRegraEditandoId ? await sb.from('financeiro_conciliacao_regras').update(reg).eq('id', concRegraEditandoId) : await sb.from('financeiro_conciliacao_regras').insert(reg);
-    if(error){ alert('Não consegui salvar: ' + error.message); return; }
+    if(error){ alert('Não consegui salvar: ' + (/acao|conta_outra_id|plano_outra_id/.test(error.message) ? 'rode de novo o financeiro-conciliacao.sql no Supabase (faltam as colunas da regra de transferência).' : error.message)); return; }
     document.getElementById('modalConcRegra').classList.remove('show'); concRenderRegras();
   }
 
-  document.getElementById('concConta').addEventListener('change', () => { concEstado.selE.clear(); concEstado.selM.clear(); concEstado.previa = null; concLerFiltros(); concRender(); });
+  document.getElementById('concConta').addEventListener('change', () => { concEstado.selE.clear(); concEstado.selM.clear(); concEstado.selT.clear(); concEstado.previa = null; concLerFiltros(); concRender(); });
   document.getElementById('concDe').addEventListener('change', () => { concLerFiltros(); concRender(); });
   document.getElementById('concAte').addEventListener('change', () => { concLerFiltros(); concRender(); });
   document.querySelectorAll('[data-conc-atalho]').forEach(b => b.addEventListener('click', () => concAtalho(b.dataset.concAtalho)));
-  document.querySelectorAll('[data-conc-aba]').forEach(b => b.addEventListener('click', () => { concEstado.aba = b.dataset.concAba; concEstado.selE.clear(); concEstado.selM.clear(); concRender(); }));
+  document.querySelectorAll('[data-conc-aba]').forEach(b => b.addEventListener('click', () => { concEstado.aba = b.dataset.concAba; concEstado.selE.clear(); concEstado.selM.clear(); concEstado.selT.clear(); concRender(); }));
   document.getElementById('btnConcSugAplicar').addEventListener('click', concAplicarSugestoes);
   document.getElementById('btnConcSugFechar').addEventListener('click', () => document.getElementById('modalConcSug').classList.remove('show'));
   document.getElementById('btnConcGerarOk').addEventListener('click', concConfirmarGerarManual);
   document.getElementById('btnConcGerarFechar').addEventListener('click', () => document.getElementById('modalConcGerar').classList.remove('show'));
   document.getElementById('btnConcRegraOk').addEventListener('click', concSalvarRegra);
+  document.getElementById('btnConcTransfOk').addEventListener('click', concConfirmarTransferencia);
+  document.getElementById('btnConcTransfFechar').addEventListener('click', () => document.getElementById('modalConcTransf').classList.remove('show'));
   document.getElementById('btnConcRegraFechar').addEventListener('click', () => document.getElementById('modalConcRegra').classList.remove('show'));
 
   // =================================================================
@@ -2318,7 +2579,7 @@
   // =================================================================
   const AJUDA_FINANCEIRO = {
     titulo: 'Financeiro — Títulos, Contas e Rateio',
-    ultimaRevisao: '17/11/2026',
+    ultimaRevisao: '18/11/2026',
     secoes: [
       { id: 'dashboard', titulo: 'Dashboard', corpo: `
         <p>Visão geral do contas a pagar e a receber da unidade, no mesmo estilo do painel do
@@ -2424,15 +2685,18 @@
         <ul>
           <li><strong>1 · Importar extrato</strong>: escolha o arquivo do banco — Bradesco (.csv), Itaú (.txt), Sicoob (.xlsx) ou OFX (o formato é detectado sozinho). Aparece uma prévia com o que é novo e o que já foi importado
           (linha igual — mesma data, histórico, documento e valor — não duplica; dá para importar de novo um período que se sobrepõe). Linhas de saldo e lançamentos futuros são ignorados.</li>
-          <li><strong>2 · Conciliar</strong>: à esquerda as linhas pendentes do banco, à direita os lançamentos da conta ainda sem conciliação (do período ± 7 dias). Marque dos dois lados — os valores precisam <strong>fechar</strong>
-          (crédito soma, débito subtrai; pode ser 1 linha do banco para vários lançamentos e o contrário) — e clique em <strong>Conciliar marcados</strong>: nasce um <strong>código de conciliação</strong>, gravado nas linhas do extrato e nos lançamentos.
+          <li><strong>2 · Conciliar</strong>: à esquerda as linhas pendentes do banco, à direita os lançamentos da conta ainda sem conciliação (do período ± 7 dias) <strong>e os títulos em aberto do contas a pagar/receber</strong>. Marque dos dois lados — os valores precisam <strong>fechar</strong>
+          (crédito soma, débito subtrai; pode ser 1 linha do banco para vários lançamentos e o contrário) — e clique em <strong>Conciliar marcados</strong>: nasce um <strong>código de conciliação</strong>, gravado nas linhas do extrato e nos lançamentos. Se o pagamento <strong>já está no caixa</strong>, marque o lançamento: só recebe o código. Se ainda <strong>não está</strong>, marque o <strong>título em aberto</strong> (um ou vários, que somem o valor do PIX/pagamento): ao conciliar, o título é <strong>quitado</strong> (data do extrato, conta do banco), o <strong>lançamento de caixa é criado</strong> com o rateio do próprio título e tudo fica conciliado. A lista de títulos mostra o sentido das linhas marcadas (débito = a pagar, crédito = a receber), por vencimento próximo do período; use a busca (fornecedor, título ou valor) ou «todos os vencimentos» para achar os outros. <strong>Desfazer</strong> reabre os títulos e apaga o lançamento de caixa que a conciliação criou.
           <strong>Sugestões automáticas</strong> procura pares de mesmo valor com data até 3 dias de diferença (as exatas já vêm marcadas; as prováveis e as em lote pedem conferência). <strong>Ignorar</strong> tira linhas da conciliação.</li>
           <li><strong>3 · Gerar lançamentos</strong>: tarifas, cesta, juros, IOF, rendimentos etc. que o banco lançou e <strong>não estão no contas a pagar</strong>. Marque as linhas e escolha <strong>Gerar com a regra de cada linha</strong> ou
           <strong>Gerar com a classificação que eu escolher</strong> (empresa, setor, plano de contas e evento são obrigatórios). Cada linha vira um lançamento na Movimentação, com rateio de 100%, já conciliado (um código por linha).
           Para uma linha só, use o botão <strong>Classificar…</strong> dela: escolha <strong>fornecedor, plano de contas</strong> e confira empresa/setor/evento (a <strong>empresa já vem da conta</strong> — veja "Empresa titular" em Cadastros → Contas correntes — e setor/evento/plano padrão vêm de Parâmetros → Padrões por empresa).
           Marcando <strong>Lembrar como regra</strong>, a palavra do histórico (sugerida, editável) vira uma regra com o fornecedor e a classificação escolhidos; em seguida o sistema avisa se a regra reconhece <strong>outras linhas pendentes</strong> e oferece gerar todas de uma vez.</li>
-          <li><strong>Regras</strong>: cadastre palavras do histórico (TARIFA, CESTA, JUROS, IOF, RENDIMENTO...) com fornecedor e classificação padrão; valem para todos os bancos da unidade e a de menor ordem vence. A regra pode ser <strong>parcial</strong>: o que faltar (empresa, setor, plano, evento) é completado pela conta e pelos padrões da empresa; se ainda faltar algo, a linha fica de fora do "gerar por regra".</li>
+          <li><strong>⇄ Transferência</strong>: use quando o dinheiro da linha <strong>veio de outra conta</strong> (PIX, cartões, outro banco) — ou foi para ela. É o botão «Transferência» do Sicon: em vez de um lançamento só, cria <strong>as duas pernas</strong>: no banco, já conciliada com a linha do extrato (entrada se o banco recebeu, saída se enviou), e na outra conta o lançamento contrário (a «baixa»). Você escolhe a <strong>outra conta</strong>, o <strong>plano do lado do banco</strong> (a receita, na entrada) e o <strong>plano da baixa</strong> na outra conta; a empresa vem da conta do banco; setor e evento são opcionais. A data é a do extrato nas duas contas (a da outra conta pode ser trocada numa linha só). Vale também para várias linhas marcadas (<strong>⇄ Transferência das marcadas…</strong>, todas entradas ou todas saídas) e <strong>sem loop</strong>: as 400 linhas «PIX RECEBIDO» viram transferências de uma vez pela regra. As duas pernas carregam o <strong>mesmo código de conciliação</strong>, então <strong>Desfazer</strong> apaga as duas juntas. O que é fixo (a outra conta e o plano da baixa) fica lembrado para a próxima; o plano da receita não, porque muda de recebimento para recebimento.</li>
+          <li><strong>Regras</strong>: cadastre palavras do histórico (TARIFA, CESTA, JUROS, IOF, RENDIMENTO...) com fornecedor e classificação padrão; valem para todos os bancos da unidade e a de menor ordem vence. A regra pode ser <strong>parcial</strong>: o que faltar (empresa, setor, plano, evento) é completado pela conta e pelos padrões da empresa; se ainda faltar algo, a linha fica de fora do "gerar por regra".
+          A regra tem uma <strong>ação</strong>: <em>Gerar um lançamento</em> (tarifa, juros, rendimento...) ou <em>Transferência de/para outra conta</em> (palavra como «PIX RECEBIDO» ou «RECEBIMENTO REDE» → a outra conta, o plano da baixa nela e, no campo «Plano de contas», o plano do lado do banco; o sentido crédito/débito é obrigatório). Um pagador com classificação diferente (por exemplo uma agência, cujo recebimento não é venda direta) ganha <strong>a sua própria regra com ordem menor</strong> que a regra geral — a de menor ordem vence.</li>
           <li><strong>Conciliações feitas</strong>: lista os códigos (com as linhas e lançamentos de cada um). <strong>Desfazer</strong> devolve as linhas ao pendente e solta os lançamentos; se a conciliação foi gerada a partir do extrato, o lançamento gerado também é apagado.</li>
+          <li><strong>Ordenar</strong>: clique no cabeçalho de uma coluna (Data, Histórico, Valor, Regra, Venc....) para ordenar — 1º clique crescente ▲, 2º decrescente ▼, 3º volta à ordem original. Vale para o extrato, os lançamentos, os títulos e as conciliações feitas; as linhas marcadas continuam marcadas.</li>
           <li>Precisa do arquivo <code>financeiro-conciliacao.sql</code> rodado no Supabase.</li>
         </ul>
       ` },
@@ -5113,18 +5377,23 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
         const itens = grupos[nome].slice().sort((a, b) => (a.data_vencimento || '').localeCompare(b.data_vencimento || '') || String(a.pessoa?.nome || '').localeCompare(String(b.pessoa?.nome || ''), 'pt-BR'));
         const subtotal = itens.reduce((acc, t) => acc + Number(t.valor_titulo), 0);
         totalGeral += subtotal; qtdGeral += itens.length;
+        const pagoPorLinha = new Map();
         doc.autoTable({
           startY: y,
           head: [
             [{ content: nome + '   (' + itens.length + ' ite' + (itens.length === 1 ? 'm' : 'ns') + ')', colSpan: 6, styles: { fillColor: [221, 225, 232], textColor: 0, halign: 'left', fontStyle: 'bold', fontSize: 9 } }],
             ['EMP', 'VENC.', 'FORNECEDOR', 'TÍTULO / OBS.', 'VALOR', 'PAGO']
           ],
-          body: itens.map(t => [
-            nomeEmpresa(t), formatarData(t.data_vencimento),
-            (t.pessoa?.nome || t.descricao_avulsa || '—'),
-            [t.titulo, t.observacao].filter(Boolean).join(' — ').slice(0, 70),
-            formatarMoedaMilhar(t.valor_titulo), ''
-          ]),
+          body: itens.map(t => {
+            const linha = [
+              nomeEmpresa(t), formatarData(t.data_vencimento),
+              (t.pessoa?.nome || t.descricao_avulsa || '—'),
+              [t.titulo, t.observacao].filter(Boolean).join(' — ').slice(0, 70),
+              formatarMoedaMilhar(t.valor_titulo), ''
+            ];
+            pagoPorLinha.set(linha, !!t.data_pagamento);   // liga a linha do PDF ao título (não depende do índice, que muda quando a tabela quebra de página)
+            return linha;
+          }),
           foot: [[{ content: 'ITENS ' + itens.length, colSpan: 4, styles: { halign: 'left' } }, { content: formatarMoedaMilhar(subtotal), styles: { halign: 'right' } }, '']],
           styles: { fontSize: 8, cellPadding: 1.6, valign: 'middle', minCellHeight: 7 },
           headStyles: { fillColor: [255, 255, 255], textColor: 0, lineColor: [150, 150, 150], lineWidth: 0.1 },
@@ -5138,7 +5407,7 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
             if(d.section === 'body' && d.column.index === 5){
               const cx = d.cell.x + d.cell.width / 2 - 2, cy = d.cell.y + d.cell.height / 2 - 2;
               doc.setDrawColor(60); doc.setLineWidth(0.25); doc.rect(cx, cy, 4, 4);
-              if(itens[d.row.index].data_pagamento){ doc.setLineWidth(0.5); doc.line(cx + 0.8, cy + 2.2, cx + 1.8, cy + 3.2); doc.line(cx + 1.8, cy + 3.2, cx + 3.4, cy + 0.9); }
+              if(pagoPorLinha.get(d.row.raw) === true){ doc.setLineWidth(0.5); doc.line(cx + 0.8, cy + 2.2, cx + 1.8, cy + 3.2); doc.line(cx + 1.8, cy + 3.2, cx + 3.4, cy + 0.9); }
               doc.setLineWidth(0.1);
             }
           }
