@@ -209,6 +209,8 @@
 
     <div class="abas" id="abas">
       <button class="ativa" data-aba="geral" type="button">Visão geral</button>
+      <button data-aba="vendasA" type="button">Vendas: clientes e vendedores</button>
+      <button data-aba="comprasA" type="button">Compras: fornecedores</button>
       <button data-aba="anos" type="button">Comparativo e projeção</button>
       <button data-aba="fluxo" type="button">Fluxo de caixa</button>
       <button data-aba="demo" type="button">Demonstrativo</button>
@@ -225,6 +227,30 @@
         <div class="bloco"><h2><span>Vendas por vendedor</span></h2><div class="graf"><canvas id="gVend"></canvas></div></div>
         <div class="bloco"><h2><span>Vendas por empresa</span><span class="tit-bloco-aux">clique para filtrar</span></h2><div class="emp-cards" id="cardsEmp"></div></div>
       </div>
+    </div>
+
+    <div class="aba" id="aba-vendasA" hidden>
+      <div class="filtros"><div class="linha-filtros">
+        <div class="campo"><label for="chkSemConsumidor">Clientes</label><label style="font-weight:400;display:flex;gap:6px;align-items:center"><input type="checkbox" id="chkSemConsumidor" checked> Ocultar «consumidor final» / sem cliente</label></div>
+        <div class="campo"><label for="buscaCli">Buscar cliente</label><input type="search" id="buscaCli" placeholder="parte do nome"></div>
+        <div class="nota" id="notaVendasA" style="padding:0;align-self:center;flex:1;min-width:240px"></div>
+      </div></div>
+      <div class="kpis" id="kpisVendasA"></div>
+      <div class="grade2">
+        <div class="bloco"><h2><span>Melhores clientes</span><span class="tit-bloco-aux">% sobre o total de vendas</span></h2><div class="graf"><canvas id="gCliTop"></canvas></div></div>
+        <div class="bloco"><h2><span>Melhores vendedores</span><span class="tit-bloco-aux">% sobre o total de vendas</span></h2><div class="graf"><canvas id="gVendTop"></canvas></div></div>
+      </div>
+      <div class="bloco"><h2><span>Ranking de clientes</span><span class="ac"><button class="btn sec mini" id="cliCsv" type="button">⬇ CSV</button></span></h2><div class="rolagem" id="tbClientes"></div></div>
+      <div class="bloco"><h2><span>Ranking de vendedores</span><span class="ac"><button class="btn sec mini" id="vendCsv" type="button">⬇ CSV</button></span></h2><div class="rolagem" id="tbVendedores"></div></div>
+    </div>
+
+    <div class="aba" id="aba-comprasA" hidden>
+      <div class="kpis" id="kpisComprasA"></div>
+      <div class="grade2">
+        <div class="bloco"><h2><span>Maiores fornecedores</span><span class="tit-bloco-aux">% sobre o total de compras</span></h2><div class="graf"><canvas id="gForTop"></canvas></div></div>
+        <div class="bloco"><h2><span>Compras por mês</span></h2><div class="graf"><canvas id="gComprasMes"></canvas></div></div>
+      </div>
+      <div class="bloco"><h2><span>Ranking de fornecedores</span><span class="ac"><button class="btn sec mini" id="fornCsv" type="button">⬇ CSV</button></span></h2><div class="rolagem" id="tbFornecedores"></div></div>
     </div>
 
     <div class="aba" id="aba-anos" hidden>
@@ -408,15 +434,15 @@
   const EMPR = ['empresa', 'empresa_nome', 'emp', 'filial'];
 
   function montarVendas(texto){
-    const { c, linhas, cols } = tabela(texto, { data: ['sai_data', 'data', 'dt_emissao', 'data_venda', 'emissao'], emp: EMPR, ven: ['ven_nome', 'vendedor', 'vendedor_nome'], val: ['total_notas_sai', 'sai_total', 'valor', 'total'], desc: ['descontos', 'desconto', 'sai_desc'], acre: ['acre', 'acrescimo', 'acrescimos'], ped: ['sai_ped', 'pedido', 'numero', 'nota'], canc: ['cancelado'] });
+    const { c, linhas, cols } = tabela(texto, { data: ['sai_data', 'data', 'dt_emissao', 'data_venda', 'emissao'], emp: EMPR, ven: ['ven_nome', 'vendedor', 'vendedor_nome'], cli: ['cli_nome', 'cliente', 'cliente_nome'], val: ['total_notas_sai', 'sai_total', 'valor', 'total'], desc: ['descontos', 'desconto', 'sai_desc'], acre: ['acre', 'acrescimo', 'acrescimos'], ped: ['sai_ped', 'pedido', 'numero', 'nota'], canc: ['cancelado'] });
     if(c.data < 0 || c.val < 0) throw new Error('O arquivo de vendas não tem as colunas de data (SAI_DATA) e de valor (TOTAL_NOTAS_SAI). Confira se é o ' + ARQ.vendas + '.' + listaCols(texto));
     const out = []; let semData = 0, canc = 0;
     for(const r of linhas){
       const d = isoData(at(r, c.data)); if(!d){ semData++; continue; }
       if(c.canc >= 0 && ehVerdade(at(r, c.canc))){ canc++; continue; }
-      out.push({ d, emp: nomeProprio(at(r, c.emp)) || EMP0, ven: nomeProprio(at(r, c.ven)) || SEM_VEND, v: num(at(r, c.val)), desc: num(at(r, c.desc)), acre: num(at(r, c.acre)), ped: String(at(r, c.ped)).trim() });
+      out.push({ d, emp: nomeProprio(at(r, c.emp)) || EMP0, ven: nomeProprio(at(r, c.ven)) || SEM_VEND, cli: nomeProprio(at(r, c.cli)), v: num(at(r, c.val)), desc: num(at(r, c.desc)), acre: num(at(r, c.acre)), ped: String(at(r, c.ped)).trim() });
     }
-    VEN = out; qual.vendas = { cols, total: linhas.length, semData, canc };
+    VEN = out; qual.vendas = { cols, total: linhas.length, semData, canc, cli: c.cli >= 0 };
   }
   function montarEntradas(texto){
     const { c, linhas, cols } = tabela(texto, { data: ['ent_data', 'ent_dt', 'data', 'dt_entrada', 'emissao'], emp: EMPR, val: ['ent_tot', 'valor', 'total'], desc: ['ent_descon', 'desconto', 'descontos'], forn: ['for_cod', 'fornecedor'] });
@@ -750,6 +776,103 @@
     grafico('gAnosAcum', { type: 'line', data: { labels: rot, datasets: dsA }, options: opcoes(false) });
   }
 
+  // ----- análise de VENDAS (clientes e vendedores) e de COMPRAS (fornecedores) -----
+  // Usam RS: o período e as empresas filtrados e, se houver, o mês clicado no gráfico da Visão geral.
+  const SEM_CLI = '(sem cliente)', SEM_FORN = '(sem fornecedor)';
+  let semConsumidor = true, buscaCli = '';
+  const ehConsumidor = (nome) => !nome || nome === SEM_CLI || /^(consumidor( final)?|cliente (avulso|balcao|a vista)|venda (a vista|balcao)|sem cliente|\(sem cliente\))$/.test(semAcento(nome));
+  function ranking(l, chave, extra, sub){
+    // sub(x) = segunda dimensão cujo MAIOR valor vira «principal» (cliente → vendedor, vendedor → melhor cliente, fornecedor → empresa)
+    const m = new Map();
+    l.forEach(x => {
+      const k = chave(x); let r = m.get(k);
+      if(!r){ r = { nome: k, v: 0, n: 0, ult: '', pri: '9999-99-99', desc: 0, maior: null, meses: new Set(), outros: new Set(), porSub: new Map(), porEmp: new Map() }; m.set(k, r); }
+      r.v += x.v; r.n++; if(x.d > r.ult) r.ult = x.d; if(x.d < r.pri) r.pri = x.d; r.desc += x.desc || 0; r.meses.add(x.d.slice(0, 7));
+      if(!r.maior || x.v > r.maior.v) r.maior = x;
+      if(extra) r.outros.add(extra(x));
+      if(sub){ const sk = sub(x); if(sk) r.porSub.set(sk, (r.porSub.get(sk) || 0) + x.v); }
+      if(x.emp) r.porEmp.set(x.emp, (r.porEmp.get(x.emp) || 0) + x.v);
+    });
+    return [...m.values()].sort((a, b) => b.v - a.v);
+  }
+  const maiorDe = (mapa) => { let b = null; mapa.forEach((v, k) => { if(!b || v > b[1]) b = [k, v]; }); return b; };
+  const diasAte = (a, b) => Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000);
+  const dataMax = (l) => l.reduce((m, x) => x.d > m ? x.d : m, '');
+  // linhas da dica de um cliente/vendedor/fornecedor (a mesma lista vale para o tooltip dos gráficos)
+  function linhasRank(r, tipo, tot, acum, ref){
+    const L = [], ticket = r.n ? r.v / r.n : 0, un = tipo === 'forn' ? 'notas' : 'pedidos', mesesN = r.meses.size, dias = ref && r.ult ? diasAte(r.ult, ref) : null;
+    L.push(tipo === 'forn' ? 'Compras: ' + fmtR(r.v) : 'Vendas: ' + fmtR(r.v));
+    L.push((tipo === 'forn' ? 'Notas: ' : 'Pedidos: ') + r.n.toLocaleString('pt-BR') + ' · ticket médio ' + fmtR(ticket));
+    L.push('Participação: ' + pctTxt(tot ? r.v / tot * 100 : 0) + (acum !== null && acum !== undefined ? ' (acumulado ' + pctTxt(tot ? acum / tot * 100 : 0) + ')' : ''));
+    if(r.pri !== '9999-99-99') L.push('No período, 1ª → última: ' + fmtDia(r.pri) + ' → ' + fmtDia(r.ult) + (dias !== null ? (dias === 0 ? ' (hoje)' : ' (há ' + dias + (dias === 1 ? ' dia)' : ' dias)')) : ''));
+    L.push('Frequência: ' + r.n.toLocaleString('pt-BR') + ' ' + un + ' em ' + mesesN + (mesesN === 1 ? ' mês' : ' meses') + ' (≈ ' + (mesesN ? (r.n / mesesN).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) : '0') + '/mês)');
+    if(r.maior) L.push('Maior ' + (tipo === 'forn' ? 'nota' : 'pedido') + ': ' + fmtR(r.maior.v) + ' (' + fmtDia(r.maior.d).slice(0, 5) + ')');
+    const sp = maiorDe(r.porSub);
+    if(sp && tipo === 'cli') L.push('Vendedor principal: ' + nomeCurto(sp[0], 24) + ' (' + pctTxt(r.v ? sp[1] / r.v * 100 : 0) + ')');
+    if(sp && tipo === 'vend') L.push('Melhor cliente: ' + nomeCurto(sp[0], 24) + ' (' + fmtCurto(sp[1]) + ')');
+    if(r.desc > 0) L.push('Descontos: ' + fmtR(r.desc) + ' (' + pctTxt(r.v + r.desc ? r.desc / (r.v + r.desc) * 100 : 0) + ')');
+    if(tipo === 'vend') L.push('Clientes atendidos: ' + r.outros.size.toLocaleString('pt-BR'));
+    if(r.porEmp.size > 1) L.push('Por empresa: ' + [...r.porEmp.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([nm, v]) => nomeCurto(nm, 14) + ' ' + pctTxt(r.v ? v / r.v * 100 : 0)).join(' · '));
+    return L;
+  }
+  function dicaRank(oo, lista, tipo, tot, ref){
+    let ac = 0; const acs = lista.map(x => (ac += x.v)); const tt = oo.plugins.tooltip;
+    tt.callbacks.title = (it) => lista[it[0].dataIndex] ? lista[it[0].dataIndex].nome : '';
+    tt.callbacks.label = () => '';
+    tt.callbacks.afterBody = (it) => { const i = it[0].dataIndex, r = lista[i]; return r ? linhasRank(r, tipo, tot, acs[i], ref) : []; };
+    tt.padding = 10; tt.bodySpacing = 3; tt.displayColors = false;
+  }
+  let AV = null, AC = null;       // dados calculados (para as tabelas, os gráficos e os CSV)
+  const notaMes = () => MES_SEL ? 'Mostrando só ' + MESES_LONGOS[+MES_SEL.slice(5, 7) - 1] + ' de ' + MES_SEL.slice(0, 4) + ' (mês escolhido no gráfico da Visão geral; clique lá de novo na barra para ver todos).' : 'Período e empresas dos filtros do topo.';
+  const kpiS = (rot, v, sub, cls) => { const d = el('div', 'kpi'); d.appendChild(el('span', '', rot)); d.appendChild(el('b', cls || '', v)); if(sub) d.appendChild(el('small', '', sub)); return d; };
+  const linhaRank = (i, cols) => '<tr><td class="txt">' + (i + 1) + '</td>' + cols.map((c, j) => '<td class="' + (j === 0 ? 'txt' : '') + '">' + c + '</td>').join('') + '</tr>';
+  function barrasRank(id, lista, total, cor, n, tipo, ref){
+    const l = lista.slice(0, n), oo = opcoes(true); oo.plugins.rotulosPct = { textos: l.map(x => total ? pctTxt(x.v / total * 100) : '') }; dicaRank(oo, l, tipo, total, ref);
+    grafico(id, { type: 'bar', data: { labels: l.map(x => nomeCurto(x.nome, 26)), datasets: [{ label: 'Vendas', data: l.map(x => x.v), backgroundColor: cor }] }, options: oo, plugins: [pluginPct] });
+  }
+  function desenharVendasA(){
+    if(!RS) return; const L = RS.v, temCli = !!(qual.vendas && qual.vendas.cli), totalV = RS.T.v;
+    let lc = L; if(semConsumidor) lc = lc.filter(x => !ehConsumidor(x.cli)); if(buscaCli) lc = lc.filter(x => semAcento(x.cli).includes(semAcento(buscaCli)));
+    const rCli = temCli ? ranking(lc, x => x.cli || SEM_CLI, null, x => x.ven) : [], rVen = ranking(L, x => x.ven, x => x.cli || SEM_CLI, x => temCli && !(semConsumidor && ehConsumidor(x.cli)) ? (x.cli || SEM_CLI) : null);
+    const consumidor = temCli ? L.filter(x => ehConsumidor(x.cli)).reduce((a, x) => a + x.v, 0) : 0, top10 = rCli.slice(0, 10).reduce((a, x) => a + x.v, 0);
+    AV = { rCli, rVen, totalV, temCli, ref: dataMax(VEN) };
+    $('notaVendasA').textContent = notaMes() + (temCli ? '' : ' Atenção: o arquivo de vendas não tem a coluna CLI_NOME (cliente); o ranking de clientes aparece quando ela existir.');
+    const k = $('kpisVendasA'); k.replaceChildren();
+    k.append(kpiS('Vendas', fmtR(totalV), RS.T.nv.toLocaleString('pt-BR') + ' pedidos · ticket médio ' + fmtR(RS.T.nv ? totalV / RS.T.nv : 0), ''),
+      kpiS('Clientes ativos', temCli ? rCli.length.toLocaleString('pt-BR') : '—', temCli ? (semConsumidor ? 'sem o consumidor final' : 'com o consumidor final') + (buscaCli ? ' · busca «' + buscaCli + '»' : '') : 'coluna CLI_NOME ausente', ''),
+      kpiS('Top 10 clientes', temCli && totalV ? pctTxt(top10 / totalV * 100) : '—', temCli ? fmtR(top10) + ' das vendas' : '', ''),
+      kpiS('Consumidor final / sem cliente', temCli && totalV ? pctTxt(consumidor / totalV * 100) : '—', temCli ? fmtR(consumidor) : '', ''),
+      kpiS('Vendedores ativos', rVen.length.toLocaleString('pt-BR'), rVen[0] ? 'melhor: ' + nomeCurto(rVen[0].nome, 22) + ' (' + pctTxt(totalV ? rVen[0].v / totalV * 100 : 0) + ')' : '', ''));
+    const cab = ['#', 'Cliente', 'Vendas', 'Pedidos', 'Ticket médio', 'Última compra', '% das vendas'], lim = 100;
+    $('tbClientes').innerHTML = temCli ? '<table class="t"><thead><tr>' + cab.map((c, i) => '<th class="' + (i < 2 ? 'txt' : '') + '">' + c + '</th>').join('') + '</tr></thead><tbody>' +
+      (rCli.length ? rCli.slice(0, lim).map((r, i) => linhaRank(i, [esc(r.nome), fmt(r.v), r.n.toLocaleString('pt-BR'), fmt(r.n ? r.v / r.n : 0), fmtDia(r.ult), pctTxt(totalV ? r.v / totalV * 100 : 0)])).join('') : '<tr><td class="txt" colspan="7">Nenhum cliente neste filtro.</td></tr>') + '</tbody></table>' + (rCli.length > lim ? '<div class="op-obs">Mostrando os ' + lim + ' maiores de ' + rCli.length.toLocaleString('pt-BR') + ' clientes (o CSV traz todos).</div>' : '') : '<div class="vazio">Sem a coluna CLI_NOME no arquivo de vendas.</div>';
+    const cabV = ['#', 'Vendedor', 'Vendas', 'Pedidos', 'Ticket médio', 'Clientes atendidos', '% das vendas'];
+    $('tbVendedores').innerHTML = '<table class="t"><thead><tr>' + cabV.map((c, i) => '<th class="' + (i < 2 ? 'txt' : '') + '">' + c + '</th>').join('') + '</tr></thead><tbody>' +
+      (rVen.length ? rVen.map((r, i) => linhaRank(i, [esc(r.nome), fmt(r.v), r.n.toLocaleString('pt-BR'), fmt(r.n ? r.v / r.n : 0), temCli ? r.outros.size.toLocaleString('pt-BR') : '—', pctTxt(totalV ? r.v / totalV * 100 : 0)])).join('') : '<tr><td class="txt" colspan="7">Sem vendas.</td></tr>') + '</tbody></table>';
+    if(Chart && aberta === 'vendasA') graficosVendasA();
+  }
+  function graficosVendasA(){ if(!Chart || !AV) return; barrasRank('gCliTop', AV.rCli, AV.totalV, COR.v, 15, 'cli', AV.ref); barrasRank('gVendTop', AV.rVen, AV.totalV, COR.r, 15, 'vend', AV.ref); }
+  function desenharComprasA(){
+    if(!RS) return; const E = RS.e, tot = RS.T.c, rF = ranking(E, x => x.forn || SEM_FORN), top5 = rF.slice(0, 5).reduce((a, x) => a + x.v, 0);
+    AC = { rF, tot, ref: dataMax(ENT) };
+    const k = $('kpisComprasA'); k.replaceChildren();
+    k.append(kpiS('Compras', ausente(qual.entradas) ? '—' : fmtR(tot), ausente(qual.entradas) ? 'arquivo não carregado' : E.length.toLocaleString('pt-BR') + ' notas · ticket médio ' + fmtR(E.length ? tot / E.length : 0), ''),
+      kpiS('Fornecedores', ausente(qual.entradas) ? '—' : rF.length.toLocaleString('pt-BR'), rF[0] ? 'maior: ' + nomeCurto(rF[0].nome, 22) + ' (' + pctTxt(tot ? rF[0].v / tot * 100 : 0) + ')' : '', ''),
+      kpiS('Top 5 fornecedores', tot ? pctTxt(top5 / tot * 100) : '—', fmtR(top5) + ' das compras', ''),
+      kpiS('Compras ÷ vendas', RS.T.v ? pctTxt(tot / RS.T.v * 100) : '—', 'no mesmo período', ''),
+      kpiS('Descontos obtidos', fmtR(E.reduce((a, x) => a + (x.desc || 0), 0)), 'informado nas notas de entrada', ''));
+    const cab = ['#', 'Fornecedor', 'Compras', 'Notas', 'Ticket médio', 'Descontos', 'Última compra', '% das compras', '% acumulado'];
+    let ac = 0;
+    $('tbFornecedores').innerHTML = '<table class="t"><thead><tr>' + cab.map((c, i) => '<th class="' + (i < 2 ? 'txt' : '') + '">' + c + '</th>').join('') + '</tr></thead><tbody>' +
+      (rF.length ? rF.slice(0, 100).map((r, i) => { ac += r.v; return linhaRank(i, [esc(r.nome), fmt(r.v), r.n.toLocaleString('pt-BR'), fmt(r.n ? r.v / r.n : 0), fmt(r.desc), fmtDia(r.ult), pctTxt(tot ? r.v / tot * 100 : 0), pctTxt(tot ? ac / tot * 100 : 0)]); }).join('') : '<tr><td class="txt" colspan="9">Sem compras neste filtro.</td></tr>') + '</tbody></table>' + (rF.length > 100 ? '<div class="op-obs">Mostrando os 100 maiores de ' + rF.length.toLocaleString('pt-BR') + ' fornecedores (o CSV traz todos).</div>' : '');
+    if(Chart && aberta === 'comprasA') graficosComprasA();
+  }
+  function graficosComprasA(){
+    if(!Chart || !AC || !R) return; const l = AC.rF.slice(0, 15), oo = opcoes(true); oo.plugins.rotulosPct = { textos: l.map(x => AC.tot ? pctTxt(x.v / AC.tot * 100) : '') }; dicaRank(oo, l, 'forn', AC.tot, AC.ref);
+    grafico('gForTop', { type: 'bar', data: { labels: l.map(x => nomeCurto(x.nome, 26)), datasets: [{ label: 'Compras', data: l.map(x => x.v), backgroundColor: COR.c }] }, options: oo, plugins: [pluginPct] });
+    const ks = R.ks; grafico('gComprasMes', { type: 'bar', data: { labels: ks.map(rotMes), datasets: [{ type: 'bar', label: 'Compras', data: ks.map(k => R.meses.get(k).c), backgroundColor: ks.map(k => !MES_SEL || k === MES_SEL ? COR.c : COR.c + '4d') }, { type: 'bar', label: 'Vendas', data: ks.map(k => R.meses.get(k).v), backgroundColor: COR.v + '99' }] }, options: opcoes(false) });
+  }
+
   // ----- popups (clique nos indicadores e nos dias do calendário) -----
   let pilha = [];
   function abrirPopup(titulo, kpis, nodes, voltar){
@@ -805,8 +928,8 @@
   }
   function render(){
     if(!R) return;
-    desenharFiltroMes(); desenharKpis(); desenharCalendario(); desenharEmpresas(); desenharFluxo(); desenharDemo(); desenharAnos(); desenharDados();
-    prepararGraficos().then(() => { desenharGraficos(); if(aberta === 'fluxo') desenharFluxo(); if(aberta === 'anos') desenharGraficosAnos(); }).catch(() => {});
+    desenharFiltroMes(); desenharKpis(); desenharCalendario(); desenharEmpresas(); desenharFluxo(); desenharDemo(); desenharAnos(); desenharDados(); desenharVendasA(); desenharComprasA();
+    prepararGraficos().then(() => { desenharGraficos(); if(aberta === 'fluxo') desenharFluxo(); if(aberta === 'anos') desenharGraficosAnos(); if(aberta === 'vendasA') graficosVendasA(); if(aberta === 'comprasA') graficosComprasA(); }).catch(() => {});
     const a = R.de, b = R.ate; $('subtitulo').textContent = (a || b ? 'de ' + (a ? fmtDia(a) : 'o início') + ' até ' + (b ? fmtDia(b) : 'hoje') : 'todo o período') + (EMPOFF.size ? ' · ' + (listaEmpresas().length - EMPOFF.size) + ' de ' + listaEmpresas().length + ' empresas' : '') + (MES_SEL ? ' · mês: ' + MESES_LONGOS[+MES_SEL.slice(5, 7) - 1] + ' de ' + MES_SEL.slice(0, 4) : '');
   }
   function lerCampos(){
@@ -826,9 +949,10 @@
     let sem = 20261030; const rnd = () => (sem = (sem * 1664525 + 1013904223) % 4294967296) / 4294967296, pick = (a) => a[Math.floor(rnd() * a.length)], r2 = (n) => Math.round(n * 100) / 100;
     const emps = ['LOJA MATRIZ', 'LOJA FILIAL'], vends = ['Carlos Mendes', 'Marina Lopes', 'Rafael Tavares', 'Juliana Prado', 'Diego Salles', 'Paula Nunes', 'Bruno Castro', 'Aline Freitas', 'Marcos Vieira', 'Sofia Ramos', 'BALCÃO'];
     const formas = ['CARTEIRA', 'PIX BANCO A', 'CARTÃO DÉBITO', 'CARTÃO CRÉDITO', 'DINHEIRO', 'PIX BANCO B'], pesoForma = [.3, .2, .16, .16, .1, .08];
+    const clientes = ['CONSUMIDOR FINAL', 'CONSUMIDOR FINAL', 'CONSUMIDOR FINAL', 'Construtora Alfa Ltda', 'Hotel Praia Azul', 'Restaurante Sabor do Mar', 'Eventos Beira Mar', 'Serralheria Costa', 'Pousada Brisa Leve', 'Mercado Bom Preço', 'Condomínio Mar Aberto', 'Marcenaria Silva', 'Oficina Rápida', 'Clínica Vida'], forns = ['Distribuidora Central', 'Indústria Norte S.A.', 'Atacado Sul Ltda', 'Importadora Leste', 'Fábrica Boa Vista', 'Comercial Oeste', 'Metalúrgica União', 'Ferragens Brasil'];
     const centros = ['Fornecedores de mercadoria', 'Folha de pagamento', 'Aluguel e condomínio', 'Energia e água', 'Impostos', 'Fretes', 'Marketing', 'Manutenção', 'Tarifas bancárias'];
     const formaDe = () => { let x = rnd(), i = 0; for(; i < pesoForma.length - 1; i++){ if((x -= pesoForma[i]) < 0) break; } return formas[i]; };
-    const V = ['SAI_DATA,EMPRESA,VEN_NOME,SAI_PED,TOTAL_NOTAS_SAI,DESCONTOS,ACRE,CANCELADO'], E = ['ENT_DATA,EMPRESA,FOR_COD,ENT_TOT,ENT_DESCON'], P = ['PAG_DPAG,EMPRESA,CEN_COD,CEN_DESC,PAG_PAG,PAG_HIST'], Rc = ['REC_DPAG,EMPRESA,FORMA,REC_VAL'], St = ['DATA,EVOLUCAO,ULT_VALOR'];
+    const V = ['SAI_DATA,EMPRESA,VEN_NOME,SAI_PED,TOTAL_NOTAS_SAI,DESCONTOS,ACRE,CANCELADO,CLI_NOME'], E = ['ENT_DATA,EMPRESA,FOR_COD,ENT_TOT,ENT_DESCON'], P = ['PAG_DPAG,EMPRESA,CEN_COD,CEN_DESC,PAG_PAG,PAG_HIST'], Rc = ['REC_DPAG,EMPRESA,FORMA,REC_VAL'], St = ['DATA,EVOLUCAO,ULT_VALOR'];
     let ped = 1000, estoque = 2400000; const fim = hoje();
     const anoIni = +fim.slice(0, 4) - 3;   // histórico desde 1º de janeiro de 3 anos atrás, para o comparativo entre anos
     for(let d = anoIni + '-01-01'; d < fim; d = somaDias(d, 1)){
@@ -837,11 +961,11 @@
       const cresc = 1 + .08 * (+d.slice(0, 4) - anoIni), base = (dow === 6 ? 9500 : 17500) * cresc, saz = 1 + .22 * Math.sin(mes / 12 * 6.28) + (mes === 12 ? .25 : 0), np = 7 + Math.floor(rnd() * 9);
       for(let i = 0; i < np; i++){
         const v = r2(base * saz / np * (.4 + rnd() * 1.4)), e = rnd() < .4 ? emps[0] : emps[1];
-        V.push([d, e, pick(vends), ped++, v, rnd() < .3 ? r2(v * .03) : 0, 0, 'N'].join(','));
+        V.push([d, e, pick(vends), ped++, v, rnd() < .3 ? r2(v * .03) : 0, 0, 'N', pick(clientes)].join(','));
         Rc.push([d, e, formaDe(), r2(v * (.9 + rnd() * .1))].join(','));
       }
       if(rnd() < .07) Rc.push([d, emps[1], 'DEV. A PRAZO', -r2(300 + rnd() * 1800)].join(','));
-      if(dow === 2 || dow === 4) E.push([d, pick(emps), 100 + Math.floor(rnd() * 40), r2(base * 3.5 * .55 * (.7 + rnd() * .6)), 0].join(','));
+      if(dow === 2 || dow === 4) E.push([d, pick(emps), pick(forns), r2(base * 3.5 * .55 * (.7 + rnd() * .6)), 0].join(','));
       if(rnd() < .5){ const c = pick(centros); P.push([d, pick(emps), centros.indexOf(c) + 1, c, r2(base * 1.5 * (.4 + rnd() * 1.2)), 'Pagamento ' + c.toLowerCase()].join(',')); }
       if(d.slice(8, 10) === '28'){ const ev = Math.round(rnd() * 90000 - 15000); estoque += ev; St.push([d, ev, estoque].join(',')); }
     }
@@ -947,8 +1071,8 @@
   $('btnAtualizar').addEventListener('click', carregar);
   $('abas').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-aba]'); if(!b) return; aberta = b.dataset.aba;
-    $('abas').querySelectorAll('button').forEach(x => x.classList.toggle('ativa', x === b)); ['geral', 'anos', 'fluxo', 'demo'].forEach(a => { $('aba-' + a).hidden = a !== aberta; });
-    if(R){ if(aberta === 'geral') desenharGraficos(); else if(aberta === 'fluxo') desenharFluxo(); else if(aberta === 'anos') desenharGraficosAnos(); }
+    $('abas').querySelectorAll('button').forEach(x => x.classList.toggle('ativa', x === b)); ['geral', 'vendasA', 'comprasA', 'anos', 'fluxo', 'demo'].forEach(a => { $('aba-' + a).hidden = a !== aberta; });
+    if(R){ if(aberta === 'geral') desenharGraficos(); else if(aberta === 'vendasA'){ prepararGraficos().then(graficosVendasA); } else if(aberta === 'comprasA'){ prepararGraficos().then(graficosComprasA); } else if(aberta === 'fluxo') desenharFluxo(); else if(aberta === 'anos') desenharGraficosAnos(); }
   });
   $('kpis').addEventListener('click', (e) => { const k = e.target.closest('.kpi[data-k]'); if(k && RS) abrirKpi(k.dataset.k); });
   $('cal').addEventListener('mousemove', (e) => { const d = e.target.closest('.dia[data-d]'); if(!d || !R){ esconderDica(); return; } if(d.dataset.d !== ($('dica').dataset.d || '')){ const I = infoDia(d.dataset.d); if(!I){ esconderDica(); return; } $('dica').dataset.d = d.dataset.d; mostrarDica(DOW_NOME[dowDe(d.dataset.d)].replace(/^./, (c) => c.toUpperCase()) + ', ' + fmtDia(d.dataset.d), linhasDia(I), e); } else posicionarDica(e); });
@@ -964,6 +1088,11 @@
   $('fluxoCsv').addEventListener('click', () => { const L = linhasFluxo(); baixarCsv(nomeArq('fluxo_de_caixa'), ['Mês', 'Recebimentos', 'Pagamentos', 'Saldo do mês', 'Saldo acumulado'], L.map(x => [x.ym, arred(x.r), arred(x.p), arred(x.s), arred(x.ac)])); });
   $('demoCsv').addEventListener('click', () => { const D = dadosDemo(); baixarCsv(nomeArq('demonstrativo'), ['Descrição', ...D.ks, 'Total'], D.linhas.map(l => [l[0], ...l[1].map(arred), arred(l[2])])); });
   $('centroCsv').addEventListener('click', () => { const C = centrosPorMes(), ks = R.ks; baixarCsv(nomeArq('pagamentos_por_centro'), ['Centro de custo', ...ks, 'Total'], C.map(c => [c.nome, ...ks.map(k => arred(c.m.get(k) || 0)), arred(c.tot)])); });
+  $('chkSemConsumidor').addEventListener('change', (e) => { semConsumidor = e.target.checked; if(RS) desenharVendasA(); });
+  $('buscaCli').addEventListener('input', (e) => { buscaCli = e.target.value.trim(); if(RS) desenharVendasA(); });
+  $('cliCsv').addEventListener('click', () => { if(AV) baixarCsv(nomeArq('ranking_clientes'), ['Posição', 'Cliente', 'Vendas', 'Pedidos', 'Ticket médio', 'Última compra', '% das vendas'], AV.rCli.map((r, i) => [i + 1, r.nome, arred(r.v), r.n, arred(r.n ? r.v / r.n : 0), r.ult, arred(AV.totalV ? r.v / AV.totalV * 100 : 0)])); });
+  $('vendCsv').addEventListener('click', () => { if(AV) baixarCsv(nomeArq('ranking_vendedores'), ['Posição', 'Vendedor', 'Vendas', 'Pedidos', 'Ticket médio', 'Clientes atendidos', '% das vendas'], AV.rVen.map((r, i) => [i + 1, r.nome, arred(r.v), r.n, arred(r.n ? r.v / r.n : 0), r.outros.size, arred(AV.totalV ? r.v / AV.totalV * 100 : 0)])); });
+  $('fornCsv').addEventListener('click', () => { if(AC) baixarCsv(nomeArq('ranking_fornecedores'), ['Posição', 'Fornecedor', 'Compras', 'Notas', 'Ticket médio', 'Descontos', 'Última compra', '% das compras'], AC.rF.map((r, i) => [i + 1, r.nome, arred(r.v), r.n, arred(r.n ? r.v / r.n : 0), arred(r.desc), r.ult, arred(AC.tot ? r.v / AC.tot * 100 : 0)])); });
   $('fRitmo').addEventListener('change', () => { ritmo = $('fRitmo').value; if(R) desenharAnos(); });
   $('anosCsv').addEventListener('click', () => { const D = dadosAnos(); if(!D) return; const cab = ['Mês', ...D.ant, D.anoAt + ' realizado', D.anoAt + ' projeção'];
     baixarCsv('comparativo_anos_' + D.anoAt, cab, MESES_LONGOS.map((n, m) => [n, ...D.ant.map(a => arred(D.mes.get(a)[m])), arred(D.real[m]), arred(D.proj[m] || 0)])); });
