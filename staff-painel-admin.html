@@ -315,6 +315,13 @@
   }
   .btn-link-convite:hover{ background:#DCEAE2; }
   .btn-link-convite svg{ width:15px; height:15px; }
+  .acoes-prof{ display:flex; gap:6px; margin-left:8px; flex-shrink:0; }
+  .btn-acao-prof{ border:1px solid var(--border); background:var(--surface); color:var(--ink); border-radius:8px; padding:5px 9px; cursor:pointer; font-size:.76rem; font-family:inherit; white-space:nowrap; }
+  .btn-acao-prof:hover:not([disabled]){ border-color:var(--brand-2); color:var(--brand-2); }
+  .btn-acao-prof.perigo{ color:var(--danger); }
+  .btn-acao-prof.perigo:hover:not([disabled]){ border-color:var(--danger); color:var(--danger); }
+  .btn-acao-prof[disabled]{ opacity:.4; cursor:not-allowed; }
+  @media (max-width:760px){ .acoes-prof .rot{ display:none; } }
   .status-tag.ord-rascunho{ background:#F1F2F4; color:var(--muted); }
   .status-tag.ord-rascunho::before{ background:var(--muted-2); }
   .status-tag.ord-enviada{ background:#FEF3E2; color:var(--accent-ink); }
@@ -938,6 +945,14 @@
         <nav class="modal-ajuda-nav" id="ajudaModuloNav"></nav>
         <div class="modal-ajuda-conteudo" id="ajudaModuloConteudo"></div>
       </div>
+    </div>
+  </div>
+
+  <div class="modal-lista-overlay" id="modalLancColab" style="z-index:75;">
+    <div class="modal-lista" style="max-width:900px; height:min(720px, 90vh);">
+      <div class="modal-lista-head"><h3 id="lcTitulo">Lançamentos do colaborador</h3><button class="drawer-close" id="btnFecharModalLancColabX">✕</button></div>
+      <div class="modal-lista-body" style="padding:16px 20px; overflow:auto; flex:1;" id="lcCorpo"></div>
+      <div style="padding:12px 20px; border-top:1px solid var(--border); display:flex; gap:10px; justify-content:flex-end; align-items:center; flex-wrap:wrap;" id="lcRodape"></div>
     </div>
   </div>
 
@@ -1637,6 +1652,7 @@
           e como referência de cargo nos recibos.</li>
         </ul>
         <ul>
+          <li><strong>Botões da lista</strong>: <em>✏️ Alterar</em> abre o cadastro; <em>➕ Lançamentos</em> mostra todos os lançamentos do colaborador nos recibos e deixa lançar num recibo aberto (ele já vem escolhido); <em>🗑 Excluir</em> só funciona para colaborador <strong>sem movimentação</strong> — com lançamento em recibo o botão fica desabilitado, e o sistema também confere escalas, ponto, verbas, uniformes/EPI e ordens de pagamento antes de apagar. Quem tem histórico deve ficar <strong>Inativo</strong>, não excluído. A pessoa criada para ele no Financeiro não é apagada. Excluir é só para o Administrador.</li>
           <li><strong>Nome completo</strong> é gravado no padrão <em>primeira letra maiúscula</em> (ex.: <em>Maria da Silva</em>): o sistema ajusta sozinho ao sair do campo e ao salvar; «da, de, do, das, dos, e» ficam em minúscula.</li>
           <li><strong>Nome simples / apelido</strong>: como a pessoa é chamada no dia a dia (ex.: <em>DRIKA</em>, <em>BINHA</em>). Aparece ao lado do nome na lista e <strong>entra na busca</strong> (da lista de profissionais e do campo de profissional nos recibos).</li>
           <li><strong>Vínculo com o Financeiro</strong> (selo <em>💰 #código</em> ou <em>sem vínculo</em> na lista): cada profissional precisa estar ligado a uma <strong>pessoa</strong> do Financeiro
@@ -1644,6 +1660,7 @@
           se já existe pessoa com aquele CPF ela é ligada; se não existe, é <strong>criada</strong> com o nome e o CPF do profissional. Quem está sem CPF, com CPF inválido ou repetido não é ligado em lote —
           corrija o CPF ou, no cadastro do profissional (seção <em>Financeiro</em>), escolha a pessoa à mão pela busca. O filtro <em>Vínculo</em> mostra só os ligados ou só os sem vínculo.</li>
         </ul>
+        <p><strong>Sentinela</strong>: exclusões e alterações importantes do Staff ficam gravadas na Sentinela (quem fez, o quê e, nas alterações, <em>antes → depois</em>): cadastro de colaborador, função, cliente, evento e equipe, ponto, recibos e lançamentos, dados de pagamento, tipos de recibo, verbas e comprovantes, documentos, permissões e personalização. Dados pessoais e bancários aparecem só como «(alterado)», sem o valor.</p>
         <p>Só quem tem papel <strong>Administrador</strong> (ou é Principal da unidade) edita esse cadastro —
         os outros papéis só visualizam.</p>
       ` },
@@ -2166,6 +2183,7 @@
     if(!aniversarioIdAtual || !confirm('Excluir esse lembrete de aniversário?')) return;
     const { error } = await sb.from('staff_lembretes_aniversario').update({ ativo: false }).eq('id', aniversarioIdAtual);
     if(error){ alert('Erro ao excluir: ' + error.message); return; }
+    await registrarSentinelaStaff('staff_lembrete_aniversario_excluido', `Excluiu o lembrete de aniversário de "${(document.getElementById('an_nome') || {}).value || aniversarioIdAtual}"`, aniversarioIdAtual);
     await carregarAniversarios();
     document.getElementById('drawerAniversarioOverlay').classList.remove('show');
   });
@@ -2781,13 +2799,31 @@
   const vinEsc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const vinAtivosCad = () => papelStaffAtual === 'administrador';
 
-  async function registrarSentinelaStaff(tipoAcao, descricao){
+  // SENTINELA do Staff: toda EXCLUSÃO e ALTERAÇÃO importante é gravada (quem, o quê e, nas alterações, «antes → depois»). idRegistro/idPai (opcionais) ajudam a localizar o registro depois.
+  async function registrarSentinelaStaff(tipoAcao, descricao, idRegistro, idPai){
     try{
       const { data: { session } } = await sb.auth.getSession();
-      await sb.from('servir_sentinela').insert({ unidade_negocio_id: agenciaId, modulo: 'staff', tipo_acao: tipoAcao, descricao,
-        operador: session?.user?.email || '', operador_user_id: session?.user?.id || null });
+      const base = { unidade_negocio_id: agenciaId, modulo: 'staff', tipo_acao: tipoAcao, descricao: String(descricao).slice(0, 1500), operador: session?.user?.email || '', operador_user_id: session?.user?.id || null };
+      let { error } = await sb.from('servir_sentinela').insert(idRegistro != null ? { ...base, id_registro_alterado: String(idRegistro), ...(idPai != null ? { id_item_pai: String(idPai) } : {}) } : base);
+      if(error && idRegistro != null) ({ error } = await sb.from('servir_sentinela').insert(base));   // colunas de id ainda não existem neste banco
+      if(error) console.warn('Não consegui registrar na sentinela:', error.message);
     } catch(e){ console.warn('Não consegui registrar na sentinela:', e && e.message); }
   }
+  const sentVal = (v) => (v === null || v === undefined || v === '') ? '(vazio)' : (typeof v === 'boolean' ? (v ? 'sim' : 'não') : String(v));
+  const sentIguais = (a, b) => { const x = a == null ? '' : a, y = b == null ? '' : b; if(x === '' || y === '') return x === y; if(typeof x === 'boolean' || typeof y === 'boolean') return String(x) === String(y); if(!isNaN(x) && !isNaN(y)) return Number(x) === Number(y); return String(x) === String(y); };
+  // campos: [chave, rótulo, formatador | 'oculto']  — 'oculto' = dado pessoal/bancário: só diz que mudou, sem o valor
+  function sentDiff(antes, depois, campos){
+    const mud = [];
+    campos.forEach(([k, rot, fmt]) => {
+      const a = antes ? antes[k] : null, d = depois[k];
+      if(sentIguais(a, d)) return;
+      if(fmt === 'oculto') mud.push(`${rot} (alterado)`);
+      else { const f = typeof fmt === 'function' ? fmt : sentVal; mud.push(`${rot}: ${f(a)} → ${f(d)}`); }
+    });
+    return mud;
+  }
+  const sentNome = (arr, id, f) => { const x = (arr || []).find(y => String(y.id) === String(id)); return x ? f(x) : sentVal(id); };
+  const sentProfNome = (id) => { const x = todosProfissionais.find(y => y.id === id); return x ? x.nome_completo : sentVal(id); };
 
   async function carregarPessoasVinculadas(){
     pessoasVinculo = new Map();
@@ -3041,7 +3077,12 @@
       observacao: document.getElementById('pg_obs').value.trim() || null, updated_at: new Date().toISOString() };
     const { data, error } = await sb.from('staff_recibos_pagamento').upsert(reg, { onConflict: 'unidade_negocio_id,numero_recibo' }).select('*, staff_ordens_pagamento(status, numero)').single();
     if(error){ alert(/relation|does not exist|schema cache/i.test(error.message) ? 'Os dados de pagamento do recibo ainda não estão instalados neste banco. Rode o arquivo staff-ordens-pagamento.sql no Supabase e atualize a página.' : 'Não consegui salvar: ' + error.message); return null; }
+    const antesPag = todosReciboPag.get(grupo.numero);
     todosReciboPag.set(grupo.numero, data);
+    const mudPag = sentDiff(antesPag, data, [['vencimento', 'Vencimento', (v) => v ? formatarDataSemFuso(v) : '(vazio)'], ['competencia', 'Competência', (v) => v ? String(v).slice(5, 7) + '/' + String(v).slice(0, 4) : '(vazio)'],
+      ['id_conta_pagamento', 'Conta', (v) => sentNome(pagCat.contas, v, c => c.nome)], ['empresa_id', 'Empresa', (v) => sentNome(pagCat.empresas, v, e => e.nome)], ['setor_id', 'Setor', (v) => sentNome(pagCat.setores, v, x => x.nome)],
+      ['plano_de_contas_id', 'Plano de contas', (v) => sentNome(pagCat.planos, v, x => x.descricao)], ['evento_codigo', 'Evento'], ['observacao', 'Observação']]);
+    if(mudPag.length) await registrarSentinelaStaff('staff_recibo_pagamento_alterado', `Recibo Nº ${grupo.numero} — dados de pagamento ${antesPag ? 'alterados' : 'preenchidos'}: ` + mudPag.join('; '), grupo.numero);
     if(!silencioso) alert('Dados de pagamento salvos.');
     return data;
   }
@@ -3259,13 +3300,15 @@
       const txt = document.getElementById('ordDet_evpad').value.trim(), cod = ordCodigoEvento(txt);
       if(txt && !cod){ alert('Evento não encontrado no cadastro do Financeiro. Escolha um da lista.'); return; }
       const { error } = await sb.from('staff_ordens_pagamento').update({ evento_padrao: cod || null }).eq('id', id);
-      if(error){ alert('Erro: ' + error.message); return; } await ordAbrirDetalhe(id);
+      if(error){ alert('Erro: ' + error.message); return; }
+      await registrarSentinelaStaff('staff_ordem_evento_alterado', `Ordem de pagamento Nº ${o.numero} — evento padrão: ${sentVal(o.evento_padrao)} → ${sentVal(cod)}`, id); await ordAbrirDetalhe(id);
     });
     corpo.querySelectorAll('[data-ord-mapsalvar]').forEach(b => b.addEventListener('click', async () => {
       const eid = b.dataset.ordMapsalvar, cod = ordCodigoEvento(corpo.querySelector(`[data-ord-mapev="${eid}"]`).value);
       if(!cod){ alert('Escolha um evento existente do Financeiro (da lista).'); return; }
       const r1 = await sb.from('staff_eventos').update({ evento_financeiro: cod }).eq('id', eid);
       if(r1.error){ alert('Erro: ' + r1.error.message); return; }
+      await registrarSentinelaStaff('staff_evento_associado', `Associou o evento do Staff "${sentNome(todosEventos, eid, e => e.nome)}" ao evento ${cod} do Financeiro (ordem Nº ${o.numero})`, eid);
       await sb.from('staff_ordens_pagamento_itens').update({ evento_codigo: cod }).eq('ordem_id', id).eq('evento_id', eid);
       await ordAbrirDetalhe(id);
     }));
@@ -3293,6 +3336,66 @@
   document.getElementById('btnFecharModalOrdemDetX').addEventListener('click', () => document.getElementById('modalOrdemDet').classList.remove('show'));
   document.querySelector('[data-app-tab="pagamentos"]').addEventListener('click', () => { carregarRecibos().then(carregarOrdens); });
 
+  // =================================================================
+  // COLABORADOR: botões da lista — Alterar, Lançamentos e Excluir (só sem movimentação)
+  // =================================================================
+  let profLancarPara = null;   // profissional a pré-selecionar no popup de lançamentos do recibo
+  // tabelas que usam o profissional: se houver QUALQUER linha, a exclusão é recusada (lançamentos em recibos é a principal)
+  const PROF_MOVIMENTOS = [['staff_rpas', 'lançamento(s) em recibos'], ['staff_equipe_evento', 'escala(s) em eventos'], ['staff_ponto', 'registro(s) de ponto'], ['staff_verbas_operacao', 'verba(s) de operação'],
+    ['staff_lancamentos_financeiros', 'lançamento(s) financeiro(s)'], ['staff_extras', 'extra(s)'], ['staff_uniformes_epi_entregas', 'entrega(s) de uniforme/EPI'], ['prontuario_visitas', 'visita(s) do prontuário'], ['staff_ordens_pagamento_itens', 'item(ns) de ordem de pagamento']];
+  async function profContarMovimentos(id){
+    const res = await Promise.all(PROF_MOVIMENTOS.map(([t]) => sb.from(t).select('id', { count: 'exact', head: true }).eq('profissional_id', id)));
+    return res.map((r, i) => ({ n: r.error ? 0 : (r.count || 0), rotulo: PROF_MOVIMENTOS[i][1] })).filter(x => x.n > 0);
+  }
+  async function profExcluir(p){
+    if(!vinAtivosCad()){ alert('Só o Administrador exclui colaboradores.'); return; }
+    const mov = await profContarMovimentos(p.id);
+    if(mov.length){ alert(`Não dá para excluir ${p.nome_completo}: ele tem movimentação.\n\n` + mov.map(m => `• ${m.n} ${m.rotulo}`).join('\n') + '\n\nPara tirá-lo das listas sem perder o histórico, deixe o cadastro como Inativo.'); return; }
+    const pv = p.pessoa_id ? pessoasVinculo.get(p.pessoa_id) : null;
+    if(!confirm(`Excluir o colaborador ${p.nome_completo}?\n\nEle não tem nenhuma movimentação. A exclusão não pode ser desfeita.` + (pv ? `\n(A pessoa #${pv.codigo ?? pv.id} no Financeiro NÃO é apagada.)` : ''))) return;
+    const { data, error } = await sb.from('staff_profissionais').delete().eq('id', p.id).eq('unidade_negocio_id', agenciaId).select('id');
+    if(error){ alert('Não consegui excluir: ' + error.message); return; }
+    if(!data || !data.length){ alert('Nada foi excluído (sem permissão ou o cadastro já não existe).'); return; }
+    await registrarSentinelaStaff('staff_profissional_excluido', `Excluiu o colaborador "${p.nome_completo}"${p.cpf ? ' (CPF ' + vinMascara(p.cpf) + ')' : ''}${p.pessoa_id ? ' — pessoa do Financeiro #' + p.pessoa_id + ' mantida' : ''}`);
+    await carregarProfissionais();
+  }
+
+  const LC_STATUS = { aberto: 'Aberto', fechado: 'Fechado' };
+  function lcStatusRecibo(num, statusLinha){
+    const h = todosReciboPag.get(num), o = h && h.staff_ordens_pagamento;
+    if(h && h.ordem_id && o) return o.status === 'aceita' ? 'Aceito pelo Financeiro' : 'Enviado ao Financeiro';
+    return LC_STATUS[statusLinha] || statusLinha;
+  }
+  async function profAbrirLancamentos(p){
+    await carregarRecibos();
+    const modal = document.getElementById('modalLancColab'), corpo = document.getElementById('lcCorpo'), rodape = document.getElementById('lcRodape');
+    document.getElementById('lcTitulo').textContent = 'Lançamentos — ' + p.nome_completo + (p.apelido ? ' (' + p.apelido + ')' : '');
+    const minhas = todosLancamentosRpa.filter(l => l.profissional_id === p.id && l.numero_recibo != null).sort((a, b) => (b.numero_recibo - a.numero_recibo) || String(b.data || '').localeCompare(String(a.data || '')));
+    const total = minhas.reduce((a, l) => a + (Number(l.valor_liquido) || 0), 0), recibos = new Set(minhas.map(l => l.numero_recibo)).size;
+    const abertos = agruparRecibos().filter(g => g.status === 'aberto' && !(todosReciboPag.get(g.numero) && todosReciboPag.get(g.numero).ordem_id)).sort((a, b) => b.numero - a.numero);
+    const pode = podeGerenciarPagamentosAgora();
+    corpo.innerHTML = `
+      <p style="font-size:.84rem; margin:0 0 10px;">${minhas.length ? `<strong>${minhas.length}</strong> lançamento(s) em <strong>${recibos}</strong> recibo(s) · total <strong>${formatarMoeda(total)}</strong>` : 'Este colaborador ainda não tem lançamentos em recibos.'}</p>
+      ${minhas.length ? `<div style="max-height:34vh; overflow:auto; margin-bottom:14px;"><table class="vin-tabela"><thead><tr><th>Recibo</th><th>Tipo</th><th>Data / período</th><th style="text-align:right;">Líquido</th><th>Situação</th><th></th></tr></thead><tbody>
+        ${minhas.map(l => `<tr><td>Nº ${l.numero_recibo}</td><td>${vinEsc(l.staff_tipos_recibo?.descricao || '—')}</td><td>${ritTextoData(l)}</td><td style="text-align:right; font-variant-numeric:tabular-nums;">${formatarMoeda(l.valor_liquido)}</td><td>${vinEsc(lcStatusRecibo(l.numero_recibo, l.status))}</td><td><button type="button" class="btn-acao-prof" data-lc-recibo="${l.numero_recibo}">Abrir recibo</button></td></tr>`).join('')}</tbody></table></div>` : ''}
+      ${pode ? `<div class="drawer-section-title" style="margin-top:6px;">Novo lançamento para ${vinEsc(p.nome_completo)}</div>
+        <div class="field-group"><label>Em qual recibo?</label><select id="lcRecibo">
+          ${abertos.map(g => `<option value="${g.numero}">Recibo Nº ${g.numero}${g.tipo_nome ? ' · ' + vinEsc(g.tipo_nome) : ''}${g.evento_nome ? ' · ' + vinEsc(g.evento_nome) : ''} · ${g.itens.length} lançamento(s) · ${formatarMoeda(g.total)}</option>`).join('')}
+          <option value="novo">➕ Criar um recibo novo…</option></select></div>
+        <p style="font-size:.76rem; color:var(--muted); margin:0;">Só aparecem recibos <strong>abertos</strong> e ainda não enviados ao Financeiro. O colaborador já vem escolhido na tela de lançamentos.</p>` : '<p style="font-size:.78rem; color:var(--muted);">Só os papéis Administrador e Financeiro do Staff fazem lançamentos.</p>'}`;
+    rodape.innerHTML = pode ? '<button class="btn-novo" id="lcLancar">➕ Lançar</button>' : '';
+    modal.classList.add('show');
+    corpo.querySelectorAll('[data-lc-recibo]').forEach(b => b.addEventListener('click', () => { modal.classList.remove('show'); document.querySelector('[data-app-tab="recibos"]').click(); abrirDrawerRecibo(Number(b.dataset.lcRecibo)); }));
+    const bl = document.getElementById('lcLancar');
+    if(bl) bl.addEventListener('click', () => {
+      const v = document.getElementById('lcRecibo').value; profLancarPara = p.id; modal.classList.remove('show');
+      document.querySelector('[data-app-tab="recibos"]').click();
+      if(v === 'novo'){ abrirDrawerRecibo(null); alert('Escolha o tipo do recibo e clique em «Continuar»; depois, em «Lançar pagamentos», o colaborador ' + p.nome_completo + ' já vem escolhido.'); }
+      else { abrirDrawerRecibo(Number(v)); abrirModalItensRecibo(); }
+    });
+  }
+  document.getElementById('btnFecharModalLancColabX').addEventListener('click', () => document.getElementById('modalLancColab').classList.remove('show'));
+
   function renderListaProfissionais(){
     const lista = document.getElementById('listaProfissionais');
     const termoNome = (document.getElementById('filtroProfissionalNome').value || '').trim().toLowerCase();
@@ -3315,6 +3418,7 @@
     if(filtrados.length === 0){ lista.innerHTML = '<div class="vazio">Nenhum profissional encontrado com esse filtro.</div>'; return; }
 
     lista.innerHTML = '';
+    const nLancPorProf = new Map(); todosLancamentosRpa.forEach(l => { if(l.numero_recibo != null) nLancPorProf.set(l.profissional_id, (nLancPorProf.get(l.profissional_id) || 0) + 1); });
     filtrados.forEach(p => {
       const iniciais = (p.nome_completo || '').split(' ').filter(Boolean).slice(0, 2).map(s => s[0].toUpperCase()).join('') || '?';
       const avatarConteudo = p.foto_url ? `<img src="${p.foto_url}" alt="">` : iniciais;
@@ -3329,8 +3433,20 @@
         ${vinTagProfissional(p)}
         <span class="status-tag ${p.ativo ? 'ativo' : 'inativo'}">${p.ativo ? 'ativo' : 'inativo'}</span>
         ${p.pcd ? '<span class="tag-pcd">PCD</span>' : ''}
+        <div class="acoes-prof">
+          <button type="button" class="btn-acao-prof" data-prof-acao="alterar" title="Alterar o cadastro">✏️<span class="rot"> Alterar</span></button>
+          ${podeGerenciarPagamentosAgora() ? '<button type="button" class="btn-acao-prof" data-prof-acao="lancar" title="Ver e fazer lançamentos em recibos">➕<span class="rot"> Lançamentos</span></button>' : ''}
+          ${vinAtivosCad() ? `<button type="button" class="btn-acao-prof perigo" data-prof-acao="excluir" ${nLancPorProf.get(p.id) ? 'disabled' : ''} title="${nLancPorProf.get(p.id) ? 'Não pode excluir: tem ' + nLancPorProf.get(p.id) + ' lançamento(s) em recibos' : 'Excluir (só vale para quem não tem movimentação)'}">🗑</button>` : ''}
+        </div>
       `;
       row.addEventListener('click', () => abrirDrawerCadastro('profissional', p.id));
+      row.querySelectorAll('[data-prof-acao]').forEach(btn => btn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const a = btn.dataset.profAcao;
+        if(a === 'alterar') abrirDrawerCadastro('profissional', p.id);
+        else if(a === 'lancar') profAbrirLancamentos(p);
+        else if(a === 'excluir') profExcluir(p);
+      }));
       lista.appendChild(row);
     });
   }
@@ -3517,13 +3633,17 @@
       };
 
       if(eventoIdAtual){
+        const antesEv = todosEventos.find(x => x.id === eventoIdAtual);
         const { error } = await sb.from('staff_eventos').update(payload).eq('id', eventoIdAtual);
         if(error) throw new Error(error.message);
+        const mudEv = sentDiff(antesEv, payload, [['nome', 'Nome'], ['data', 'Data'], ['status', 'Status'], ['local', 'Local'], ['cidade', 'Cidade'], ['cliente_id', 'Cliente', (v) => sentNome(todosClientesStaff, v, c => c.nome)]]);
+        if(mudEv.length) await registrarSentinelaStaff('staff_evento_alterado', `Alterou o evento "${payload.nome}": ` + mudEv.join('; '), eventoIdAtual);
         await carregarEventos();
         document.getElementById('drawerEventoOverlay').classList.remove('show');
       } else {
         const { data, error } = await sb.from('staff_eventos').insert(payload).select().single();
         if(error) throw new Error(error.message);
+        await registrarSentinelaStaff('staff_evento_criado', `Criou o evento "${payload.nome}"${payload.data ? ' (' + formatarDataSemFuso(payload.data) + ')' : ''}`, data.id);
         await carregarEventos();
         abrirDrawerEvento(data.id); // reabre já em edição, liberando a equipe
       }
@@ -3538,9 +3658,12 @@
   document.getElementById('btnExcluirEvento').addEventListener('click', async () => {
     if(!eventoIdAtual) return;
     if(!confirm('Excluir este evento? Isso também apaga a equipe vinculada a ele.')) return;
+    const evEx = todosEventos.find(x => x.id === eventoIdAtual);
+    const { count: nEquipeEx } = await sb.from('staff_equipe_evento').select('id', { count: 'exact', head: true }).eq('evento_id', eventoIdAtual);
     await sb.from('staff_equipe_evento').delete().eq('evento_id', eventoIdAtual);
     const { error } = await sb.from('staff_eventos').delete().eq('id', eventoIdAtual);
     if(error){ alert('Erro ao excluir: ' + error.message); return; }
+    await registrarSentinelaStaff('staff_evento_excluido', `Excluiu o evento "${evEx ? evEx.nome : eventoIdAtual}"${evEx && evEx.data ? ' (' + formatarDataSemFuso(evEx.data) + ')' : ''} e a equipe vinculada (${nEquipeEx || 0} profissional(is))`, eventoIdAtual);
     document.getElementById('drawerEventoOverlay').classList.remove('show');
     await carregarEventos();
   });
@@ -3651,8 +3774,10 @@
         btn.addEventListener('click', async () => {
           const linha = btn.closest('[data-membro-id]');
           if(!confirm('Remover esse profissional da equipe do evento?')) return;
+          const { data: mmEx } = await sb.from('staff_equipe_evento').select('profissional_id, valor_combinado').eq('id', linha.dataset.membroId).maybeSingle();
           const { error } = await sb.from('staff_equipe_evento').delete().eq('id', linha.dataset.membroId);
           if(error){ alert('Erro ao remover: ' + error.message); return; }
+          await registrarSentinelaStaff('staff_equipe_removida', `Removeu ${mmEx ? sentProfNome(mmEx.profissional_id) : 'um profissional'} da equipe do evento "${sentNome(todosEventos, eventoIdAtual, e => e.nome)}"${mmEx && mmEx.valor_combinado != null ? ' (valor combinado ' + formatarMoeda(mmEx.valor_combinado) + ')' : ''}`, linha.dataset.membroId, eventoIdAtual);
           await carregarEquipeEvento(eventoIdAtual);
         });
       });
@@ -4005,6 +4130,7 @@
       });
       const { error } = await sb.from('staff_equipe_evento').insert(payload);
       if(error) throw new Error(error.message);
+      await registrarSentinelaStaff('staff_equipe_importada', `Importou ${payload.length} profissional(is) para a equipe do evento "${sentNome(todosEventos, eventoIdAtual, e => e.nome)}": ${payload.slice(0, 12).map(m => sentProfNome(m.profissional_id)).join(', ')}${payload.length > 12 ? '…' : ''}`, null, eventoIdAtual);
 
       document.getElementById('modalImportarEquipeOverlay').classList.remove('show');
       await carregarEquipeEvento(eventoIdAtual);
@@ -4080,6 +4206,7 @@
       };
       const { error } = await sb.from('staff_equipe_evento').insert(payload);
       if(error){ alert('Erro ao adicionar: ' + error.message); return; }
+      await registrarSentinelaStaff('staff_equipe_adicionada', `Adicionou ${sentProfNome(payload.profissional_id)} à equipe do evento "${sentNome(todosEventos, eventoIdAtual, e => e.nome)}" (valor combinado ${formatarMoeda(payload.valor_combinado)}, ${payload.status})`, null, eventoIdAtual);
       await carregarEquipeEvento(eventoIdAtual);
     });
   }
@@ -4160,6 +4287,7 @@
           if(!confirm('Excluir este registro de ponto? Isso não pode ser desfeito.')) return;
           const { error } = await sb.from('staff_ponto').delete().eq('id', r.id);
           if(error){ alert('Erro ao excluir: ' + error.message); return; }
+          await registrarSentinelaStaff('staff_ponto_excluido', `Excluiu o registro de ponto (${r.tipo || 'ponto'}) de ${sentProfNome(r.profissional_id)} em ${r.horario ? new Date(r.horario).toLocaleString('pt-BR') : '—'}${r.evento_id ? ' — evento "' + sentNome(todosEventos, r.evento_id, e => e.nome) + '"' : ''}`, r.id);
           await carregarPonto();
         });
       }
@@ -4374,6 +4502,7 @@
     }
     const { error } = await sb.from('staff_rpas').update({ status: 'fechado' }).eq('unidade_negocio_id', agenciaId).eq('numero_recibo', numeroReciboAtual);
     if(error){ alert('Erro ao fechar: ' + error.message); return; }
+    await registrarSentinelaStaff('staff_recibo_fechado', `Fechou o recibo Nº ${numeroReciboAtual}${grupo && grupo.tipo_nome ? ' (' + grupo.tipo_nome + ')' : ''}: ${grupo ? grupo.itens.length : 0} lançamento(s), ${formatarMoeda(grupo ? grupo.total : 0)}`, numeroReciboAtual);
     await carregarRecibos();
     document.getElementById('drawerReciboOverlay').classList.remove('show');
   });
@@ -4381,8 +4510,11 @@
   document.getElementById('btnExcluirRecibo').addEventListener('click', async () => {
     if(!numeroReciboAtual) return;
     if(!confirm('Excluir este recibo? Isso apaga todos os lançamentos dele.')) return;
+    const gEx = agruparRecibos().find(g => g.numero === numeroReciboAtual);
     const { error } = await sb.from('staff_rpas').delete().eq('unidade_negocio_id', agenciaId).eq('numero_recibo', numeroReciboAtual);
     if(error){ alert('Erro ao excluir: ' + error.message); return; }
+    try{ await sb.from('staff_recibos_pagamento').delete().eq('unidade_negocio_id', agenciaId).eq('numero_recibo', numeroReciboAtual).is('ordem_id', null); } catch(e){ /* sem a tabela de dados de pagamento */ }
+    await registrarSentinelaStaff('staff_recibo_excluido', `Excluiu o recibo Nº ${numeroReciboAtual}${gEx && gEx.tipo_nome ? ' (' + gEx.tipo_nome + ')' : ''} com ${gEx ? gEx.itens.length : 0} lançamento(s), total ${formatarMoeda(gEx ? gEx.total : 0)}${gEx ? ' — ' + [...new Set(gEx.itens.map(i => i.staff_profissionais?.nome_completo || sentProfNome(i.profissional_id)))].slice(0, 12).join(', ') : ''}`, numeroReciboAtual);
     document.getElementById('drawerReciboOverlay').classList.remove('show');
     await carregarRecibos();
   });
@@ -4423,6 +4555,7 @@
       }));
       const { error } = await sb.from('staff_rpas').insert(novasLinhas);
       if(error) throw new Error(error.message);
+      await registrarSentinelaStaff('staff_recibo_duplicado', `Duplicou o recibo Nº ${grupo.numero} no recibo Nº ${novoNumero} (${novasLinhas.length} lançamento(s), ${formatarMoeda(grupo.total)}${avancarMes ? ', datas avançadas 1 mês' : ''})`, novoNumero);
       // dados de pagamento (conta, empresa, setor, plano, evento) vão junto; vencimento e competência avançam 1 mês e a observação vira «COMPETENCIA mm/aa»
       const hOrig = todosReciboPag.get(grupo.numero);
       if(hOrig){
@@ -4480,8 +4613,11 @@
 
     btn.disabled = true;
     btn.textContent = 'Salvando...';
+    const antesTr = todosTiposRecibo.find(t => t.id === id);
     const { error } = await sb.from('staff_tipos_recibo').update(payload).eq('id', id);
     if(error){ alert('Erro ao salvar: ' + error.message); btn.disabled = false; btn.textContent = 'Salvar'; return; }
+    const mudTr = sentDiff(antesTr, payload, [['descricao', 'Descrição'], ['ativo', 'Ativo']]);
+    if(mudTr.length) await registrarSentinelaStaff('staff_tipo_recibo_alterado', `Alterou o tipo de recibo "${antesTr ? antesTr.descricao : payload.descricao}": ` + mudTr.join('; '), id);
 
     await carregarRecibos();
     renderModalTiposReciboBody();
@@ -4495,6 +4631,7 @@
 
     const { error } = await sb.from('staff_tipos_recibo').insert({ descricao, unidade_negocio_id: agenciaId });
     if(error){ alert('Erro ao adicionar: ' + error.message); return; }
+    await registrarSentinelaStaff('staff_tipo_recibo_criado', `Criou o tipo de recibo "${descricao}"`);
 
     input.value = '';
     await carregarRecibos();
@@ -4634,8 +4771,10 @@
         btn.addEventListener('click', async () => {
           const linha = btn.closest('[data-item-id]');
           if(!confirm('Remover esse lançamento do recibo?')) return;
+          const itRem = todosLancamentosRpa.find(l => l.id === linha.dataset.itemId);
           const { error } = await sb.from('staff_rpas').delete().eq('id', linha.dataset.itemId);
           if(error){ alert('Erro ao remover: ' + error.message); return; }
+          await registrarSentinelaStaff('staff_lancamento_removido', `Removeu do recibo Nº ${numeroReciboAtual} o lançamento de ${itRem ? sentProfNome(itRem.profissional_id) : '—'}${itRem ? ' (' + ritTextoData(itRem).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() + ', líquido ' + formatarMoeda(itRem.valor_liquido) + ')' : ''}`, linha.dataset.itemId, numeroReciboAtual);
           await carregarRecibos();
           renderModalItensReciboBody();
         });
@@ -4654,8 +4793,11 @@
         const { error } = await sb.from('staff_rpas').update({ ...novo, valor_liquido: liquido }).eq('id', item.id);
         inp.disabled = false;
         if(error){ alert('Erro ao salvar: ' + error.message); inp.value = ritNum(item[campo]); return; }
+        const rotLanc = { valor_bruto: 'Valor', valor_alimentacao: 'Alimentação', valor_transporte: 'Transporte', valor_descontos: 'Descontos' };
+        const txtAntesLanc = `${rotLanc[campo]} ${formatarMoeda(item[campo])} → ${formatarMoeda(v)}; líquido ${formatarMoeda(item.valor_liquido)} → ${formatarMoeda(liquido)}`;
         Object.assign(item, novo, { valor_liquido: liquido });
         ritAtualizarCelulas(item);
+        registrarSentinelaStaff('staff_lancamento_alterado', `Recibo Nº ${numeroReciboAtual} — ${sentProfNome(item.profissional_id)}: ${txtAntesLanc}`, item.id, numeroReciboAtual);
       });
 
       configurarAutocompleteProfissional();
@@ -4670,7 +4812,13 @@
       document.getElementById('ri_valor_unit').addEventListener('input', () => ritSincronizar('unit'));
       document.getElementById('ri_valor_bruto').addEventListener('input', () => ritSincronizar('total'));
       ['ri_valor_alimentacao', 'ri_valor_transporte', 'ri_valor_descontos'].forEach(id => document.getElementById(id).addEventListener('input', ritAtualizarInfo));
-      document.getElementById('ri_profissional_busca').focus();
+      const pre = profLancarPara ? todosProfissionais.find(x => x.id === profLancarPara) : null;   // veio do botão «Lançamentos» do colaborador
+      if(pre){
+        profLancarPara = null;   // vale só para a 1ª abertura
+        document.getElementById('ri_profissional_id').value = pre.id; document.getElementById('ri_profissional_busca').value = pre.nome_completo;
+        const sf = document.getElementById('ri_funcao_id'); if(pre.funcao_principal_id && sf) sf.value = pre.funcao_principal_id;
+        document.getElementById('ri_tipo_diaria').focus();
+      } else document.getElementById('ri_profissional_busca').focus();
     }
   }
 
@@ -4693,13 +4841,13 @@
       indiceDestacado = -1;
 
       listaSugestoes.innerHTML = resultados.length
-        ? resultados.map(p => `<div class="sugestao-autocomplete" data-id="${p.id}">${p.nome_completo}${p.apelido ? ` <small style="color:var(--muted);">(${vinEsc(p.apelido)})</small>` : ''}</div>`).join('')
+        ? resultados.map(p => `<div class="sugestao-autocomplete" data-id="${p.id}" data-nome="${vinEsc(p.nome_completo)}">${p.nome_completo}${p.apelido ? ` <small style="color:var(--muted);">(${vinEsc(p.apelido)})</small>` : ''}</div>`).join('')
         : '<div class="sugestao-autocomplete-vazia">Nenhum profissional encontrado.</div>';
 
       listaSugestoes.querySelectorAll('.sugestao-autocomplete').forEach(el => {
         el.addEventListener('mousedown', (e) => {
           e.preventDefault(); // evita o blur fechar a lista antes do clique registrar
-          selecionarProfissional(el.dataset.id, el.textContent);
+          selecionarProfissional(el.dataset.id, el.dataset.nome || el.textContent);
         });
       });
       listaSugestoes.classList.add('show');
@@ -4824,6 +4972,7 @@
         data_emissao: new Date().toISOString().slice(0, 10)
       };
       const { error } = await sb.from('staff_rpas').insert(payload);
+      if(!error) await registrarSentinelaStaff('staff_lancamento_criado', `Lançou no recibo Nº ${numeroReciboAtual}: ${sentProfNome(profissionalId)} — ${tipoDiaria}${qtd > 1 ? ', ' + qtd + ' diárias' : ''}${dataIni ? ', ' + formatarDataSemFuso(dataIni) + (dataFim && dataFim > dataIni ? ' a ' + formatarDataSemFuso(dataFim) : '') : ''}, líquido ${formatarMoeda(valorLiquido)}`, null, numeroReciboAtual);
       if(error) throw new Error(/quantidade|valor_unitario|periodo/i.test(error.message) ? 'As colunas de quantidade de diárias ainda não existem neste banco. Rode o arquivo staff-ordens-pagamento.sql no Supabase e atualize a página. (' + error.message + ')' : error.message);
 
       document.getElementById('ri_valor_unit').value = '0';
@@ -5197,12 +5346,16 @@
         observacoes: document.getElementById('vb_observacoes').value.trim() || null,
       };
       if(verbaIdAtual){
+        const antesVb = todasVerbas.find(x => x.id === verbaIdAtual);
         const { error } = await sb.from('staff_verbas_operacao').update(payload).eq('id', verbaIdAtual);
         if(error) throw new Error(error.message);
+        const mudVb = sentDiff(antesVb, payload, [['finalidade', 'Finalidade'], ['valor_solicitado', 'Valor solicitado', (v) => formatarMoeda(v)], ['profissional_id', 'Profissional', (v) => sentProfNome(v)]]);
+        if(mudVb.length) await registrarSentinelaStaff('staff_verba_alterada', `Alterou a verba de operação "${payload.finalidade}": ` + mudVb.join('; '), verbaIdAtual);
       } else {
         payload.status = 'solicitada';
         const { error } = await sb.from('staff_verbas_operacao').insert(payload);
         if(error) throw new Error(error.message);
+        await registrarSentinelaStaff('staff_verba_criada', `Solicitou verba de operação de ${formatarMoeda(payload.valor_solicitado)} para ${sentProfNome(payload.profissional_id)} — ${payload.finalidade}`);
       }
       await carregarVerbas();
       document.getElementById('drawerVerbaOverlay').classList.remove('show');
@@ -5222,6 +5375,8 @@
       status: 'aprovada', data_aprovacao: new Date().toISOString(), aprovado_por: userData?.user?.id || null
     }).eq('id', verbaIdAtual);
     if(error){ alert('Erro ao aprovar: ' + error.message); return; }
+    {   const vbTxt = () => { const v = todasVerbas.find(x => x.id === verbaIdAtual); return v ? `"${v.finalidade}" de ${sentProfNome(v.profissional_id)} (solicitado ${formatarMoeda(v.valor_solicitado)})` : verbaIdAtual; };
+      await registrarSentinelaStaff('staff_verba_aprovada', `Aprovou a verba de operação ${vbTxt()}`, verbaIdAtual); }
     await carregarVerbas();
     abrirDrawerVerba(verbaIdAtual);
   });
@@ -5231,6 +5386,8 @@
     if(!confirm('Rejeitar esta solicitação de verba?')) return;
     const { error } = await sb.from('staff_verbas_operacao').update({ status: 'rejeitada' }).eq('id', verbaIdAtual);
     if(error){ alert('Erro ao rejeitar: ' + error.message); return; }
+    {   const vbTxt = () => { const v = todasVerbas.find(x => x.id === verbaIdAtual); return v ? `"${v.finalidade}" de ${sentProfNome(v.profissional_id)} (solicitado ${formatarMoeda(v.valor_solicitado)})` : verbaIdAtual; };
+      await registrarSentinelaStaff('staff_verba_rejeitada', `Rejeitou a verba de operação ${vbTxt()}`, verbaIdAtual); }
     await carregarVerbas();
     document.getElementById('drawerVerbaOverlay').classList.remove('show');
   });
@@ -5243,6 +5400,8 @@
       status: 'liberada', valor_liberado: valorLiberado, data_liberacao: new Date().toISOString()
     }).eq('id', verbaIdAtual);
     if(error){ alert('Erro ao liberar: ' + error.message); return; }
+    {   const vbTxt = () => { const v = todasVerbas.find(x => x.id === verbaIdAtual); return v ? `"${v.finalidade}" de ${sentProfNome(v.profissional_id)} (solicitado ${formatarMoeda(v.valor_solicitado)})` : verbaIdAtual; };
+      await registrarSentinelaStaff('staff_verba_liberada', `Liberou ${formatarMoeda(valorLiberado)} da verba de operação ${vbTxt()}`, verbaIdAtual); }
     await carregarVerbas();
     abrirDrawerVerba(verbaIdAtual);
   });
@@ -5258,6 +5417,8 @@
       status: 'prestada', valor_prestado: totalPrestado, valor_devolvido: valorDevolvido, data_prestacao: new Date().toISOString()
     }).eq('id', verbaIdAtual);
     if(error){ alert('Erro ao fechar prestação de contas: ' + error.message); return; }
+    {   const vbTxt = () => { const v = todasVerbas.find(x => x.id === verbaIdAtual); return v ? `"${v.finalidade}" de ${sentProfNome(v.profissional_id)} (solicitado ${formatarMoeda(v.valor_solicitado)})` : verbaIdAtual; };
+      await registrarSentinelaStaff('staff_verba_prestada', `Fechou a prestação de contas da verba ${vbTxt()}: prestado ${formatarMoeda(totalPrestado)}, devolvido ${formatarMoeda(valorDevolvido)}`, verbaIdAtual); }
     await carregarVerbas();
     abrirDrawerVerba(verbaIdAtual);
   });
@@ -5265,8 +5426,10 @@
   document.getElementById('btnExcluirVerba').addEventListener('click', async () => {
     if(!verbaIdAtual) return;
     if(!confirm('Excluir esta solicitação de verba?')) return;
+    const vbEx = todasVerbas.find(x => x.id === verbaIdAtual);
     const { error } = await sb.from('staff_verbas_operacao').delete().eq('id', verbaIdAtual);
     if(error){ alert('Erro ao excluir: ' + error.message); return; }
+    await registrarSentinelaStaff('staff_verba_excluida', `Excluiu a verba de operação "${vbEx ? vbEx.finalidade : verbaIdAtual}" de ${vbEx ? sentProfNome(vbEx.profissional_id) : '—'} (solicitado ${formatarMoeda(vbEx ? vbEx.valor_solicitado : 0)}, status ${vbEx ? vbEx.status : '—'})`, verbaIdAtual);
     document.getElementById('drawerVerbaOverlay').classList.remove('show');
     await carregarVerbas();
   });
@@ -5314,8 +5477,10 @@
         btn.addEventListener('click', async () => {
           const linha = btn.closest('[data-comprovante-id]');
           if(!confirm('Remover esse comprovante?')) return;
+          const cpEx = (comprovantesDaVerbaAtual || []).find(c => c.id === linha.dataset.comprovanteId);
           const { error } = await sb.from('staff_verba_comprovantes').delete().eq('id', linha.dataset.comprovanteId);
           if(error){ alert('Erro ao remover: ' + error.message); return; }
+          await registrarSentinelaStaff('staff_comprovante_removido', `Removeu um comprovante da prestação de contas de verba${cpEx ? ': ' + (cpEx.descricao || cpEx.nome_arquivo || 'sem descrição') + ' (' + formatarMoeda(cpEx.valor) + ')' : ''}`, linha.dataset.comprovanteId, verbaIdAtual);
           await carregarComprovantesVerba(verbaIdAtual);
         });
       });
@@ -5565,8 +5730,10 @@
     lista.querySelectorAll('.documento-row').forEach(row => {
       row.querySelector('.btn-remover-documento').addEventListener('click', async () => {
         if(!confirm('Remover este documento?')) return;
+        const nomeDoc = (row.querySelector('a') || {}).textContent || 'documento';
         const { error } = await sb.from('staff_documentos_profissional').delete().eq('id', row.dataset.docId);
         if(error){ alert('Erro ao remover: ' + error.message); return; }
+        await registrarSentinelaStaff('staff_documento_removido', `Removeu o documento "${nomeDoc.trim()}" do colaborador ${sentProfNome(cadastroIdAtual)}`, row.dataset.docId, cadastroIdAtual);
         await carregarDocumentosProfissional(cadastroIdAtual);
       });
     });
@@ -5768,6 +5935,7 @@ Contratada: _______________________________`;
       };
       const { error } = await sb.from('servir_unidades_negocio').update(payload).eq('id', agenciaId);
       if(error) throw new Error(error.message);
+      await registrarSentinelaStaff('staff_personalizacao_alterada', `Alterou a personalização visual da unidade (cor: ${sentVal(payload.cor_principal)}, imagem de fundo: ${payload.imagem_fundo_url ? 'definida' : '(vazio)'})`);
       personalizacaoAtual = { ...personalizacaoAtual, ...payload }; // mescla -- não perde logo_url/nome que já estavam carregados
       aplicarPersonalizacao(payload.cor_principal, payload.imagem_fundo_url);
       alert('Personalização salva!');
@@ -5786,6 +5954,7 @@ Contratada: _______________________________`;
     try{
       const { error } = await sb.from('servir_unidades_negocio').update({ cor_principal: null, imagem_fundo_url: null }).eq('id', agenciaId);
       if(error) throw new Error(error.message);
+      await registrarSentinelaStaff('staff_personalizacao_restaurada', 'Restaurou a personalização visual padrão da Servir para a unidade');
       location.reload();
     } catch(erro){
       alert('Erro ao restaurar: ' + erro.message);
@@ -6033,9 +6202,12 @@ Contratada: _______________________________`;
           ativo: document.getElementById('c_ativo').value === 'true'
         };
         if(!payload.nome){ throw new Error('Nome é obrigatório.'); }
+        const antesFn = cadastroIdAtual ? todasFuncoes.find(f => f.id === cadastroIdAtual) : null;
         const query = cadastroIdAtual ? sb.from('staff_funcoes').update(payload).eq('id', cadastroIdAtual) : sb.from('staff_funcoes').insert(payload);
         const { error } = await query;
         if(error) throw new Error(error.message);
+        if(cadastroIdAtual){ const mudFn = sentDiff(antesFn, payload, [['nome', 'Nome'], ['valor_sugerido', 'Valor sugerido', (v) => v == null ? '(vazio)' : formatarMoeda(v)], ['ativo', 'Ativo']]); if(mudFn.length) await registrarSentinelaStaff('staff_funcao_alterada', `Alterou a função "${payload.nome}": ` + mudFn.join('; '), cadastroIdAtual); }
+        else await registrarSentinelaStaff('staff_funcao_criada', `Criou a função "${payload.nome}"${payload.valor_sugerido != null ? ' (valor sugerido ' + formatarMoeda(payload.valor_sugerido) + ')' : ''}`);
         await carregarFuncoes();
       } else if(cadastroTipoAtual === 'cliente'){
         const payload = {
@@ -6044,9 +6216,12 @@ Contratada: _______________________________`;
           ativo: document.getElementById('c_ativo').value === 'true'
         };
         if(!payload.nome){ throw new Error('Nome é obrigatório.'); }
+        const antesCl = cadastroIdAtual ? todosClientesStaff.find(c => c.id === cadastroIdAtual) : null;
         const query = cadastroIdAtual ? sb.from('staff_clientes').update(payload).eq('id', cadastroIdAtual) : sb.from('staff_clientes').insert(payload);
         const { error } = await query;
         if(error) throw new Error(error.message);
+        if(cadastroIdAtual){ const mudCl = sentDiff(antesCl, payload, [['nome', 'Nome'], ['ativo', 'Ativo']]); if(mudCl.length) await registrarSentinelaStaff('staff_cliente_alterado', `Alterou o cliente "${payload.nome}": ` + mudCl.join('; '), cadastroIdAtual); }
+        else await registrarSentinelaStaff('staff_cliente_criado', `Criou o cliente "${payload.nome}"`);
         await carregarClientesStaff();
       } else if(cadastroTipoAtual === 'profissional'){
         const payload = {
@@ -6078,16 +6253,26 @@ Contratada: _______________________________`;
         if(payload.cpf && !validarCPF(payload.cpf)){ throw new Error('CPF inválido. Confira os números digitados.'); }
 
         let profissionalId = cadastroIdAtual;
+        const antesProf = profissionalId ? todosProfissionais.find(x => x.id === profissionalId) : null;
+        const funcoesSelecionadas = [...document.querySelectorAll('.check-funcao-secundaria:checked')].map(el => el.value);
         if(profissionalId){
           const { error } = await sb.from('staff_profissionais').update(payload).eq('id', profissionalId);
           if(error) throw new Error(error.message);
+          // dados pessoais/bancários: só diz que mudou (sem o valor); o resto mostra «antes → depois»
+          const mudPf = sentDiff(antesProf, payload, [['nome_completo', 'Nome'], ['apelido', 'Apelido'], ['ativo', 'Ativo'], ['funcao_principal_id', 'Função principal', (v) => sentNome(todasFuncoes, v, f => f.nome)],
+            ['valor_diaria_padrao', 'Valor da diária', (v) => v == null ? '(vazio)' : formatarMoeda(v)], ['valor_hora_extra_padrao', 'Valor da hora extra', (v) => v == null ? '(vazio)' : formatarMoeda(v)], ['pcd', 'PCD'],
+            ['consentimento_biometria', 'Consentimento de biometria'], ['cpf', 'CPF', 'oculto'], ['rg', 'RG', 'oculto'], ['data_nascimento', 'Data de nascimento', 'oculto'], ['telefone', 'Telefone', 'oculto'], ['whatsapp', 'WhatsApp', 'oculto'],
+            ['email', 'E-mail', 'oculto'], ['endereco', 'Endereço', 'oculto'], ['banco', 'Banco', 'oculto'], ['agencia', 'Agência', 'oculto'], ['conta', 'Conta', 'oculto'], ['pix', 'PIX', 'oculto'], ['foto_url', 'Foto', 'oculto'], ['observacoes', 'Observações', 'oculto']]);
+          const fnAntes = (antesProf && antesProf.staff_profissional_funcoes || []).map(x => x.funcao_id).sort().join(','), fnDepois = funcoesSelecionadas.slice().sort().join(',');
+          if(fnAntes !== fnDepois) mudPf.push('Funções secundárias (alteradas)');
+          if(mudPf.length) await registrarSentinelaStaff('staff_profissional_alterado', `Alterou o cadastro do colaborador "${payload.nome_completo}": ` + mudPf.join('; '), profissionalId);
         } else {
           const { data, error } = await sb.from('staff_profissionais').insert(payload).select().single();
           if(error) throw new Error(error.message);
           profissionalId = data.id;
+          await registrarSentinelaStaff('staff_profissional_criado', `Cadastrou o colaborador "${payload.nome_completo}"${payload.funcao_principal_id ? ' (função ' + sentNome(todasFuncoes, payload.funcao_principal_id, f => f.nome) + ')' : ''}`, profissionalId);
         }
 
-        const funcoesSelecionadas = [...document.querySelectorAll('.check-funcao-secundaria:checked')].map(el => el.value);
         await sb.from('staff_profissional_funcoes').delete().eq('profissional_id', profissionalId);
         if(funcoesSelecionadas.length > 0){
           await sb.from('staff_profissional_funcoes').insert(
@@ -6150,6 +6335,7 @@ Contratada: _______________________________`;
       row.querySelector('.select-papel-usuario').addEventListener('change', async (e) => {
         const userId = row.dataset.userId;
         const papel = e.target.value;
+        const uPerm = todosUsuariosUnidade.find(x => x.user_id === userId);
         if(!papel){
           const { error } = await sb.from('servir_papeis_usuario').delete().eq('unidade_negocio_id', agenciaId).eq('user_id', userId).eq('modulo', 'staff');
           if(error){ alert('Erro ao remover papel: ' + error.message); return; }
@@ -6159,6 +6345,7 @@ Contratada: _______________________________`;
           }, { onConflict: 'unidade_negocio_id,user_id,modulo' });
           if(error){ alert('Erro ao salvar papel: ' + error.message); return; }
         }
+        await registrarSentinelaStaff('staff_permissao_alterada', `Alterou o papel de ${uPerm ? uPerm.email : userId} no Staff: ${sentVal(uPerm && uPerm.papel) === '(vazio)' ? 'sem papel' : uPerm.papel} → ${papel || 'sem papel'}`, userId);
         await carregarUsuariosPapeis();
       });
     });
