@@ -309,6 +309,12 @@
   }
   .btn-link-convite:hover{ background:#DCEAE2; }
   .btn-link-convite svg{ width:15px; height:15px; }
+  .tag-vinc{ font-size:.68rem; font-weight:600; padding:3px 8px; border-radius:20px; flex-shrink:0; background:#F3E9D2; color:#8A5E12; }
+  .tag-vinc.ok{ background:var(--brand-soft); color:var(--brand-2); }
+  .vin-tabela{ width:100%; border-collapse:collapse; font-size:.8rem; }
+  .vin-tabela th, .vin-tabela td{ padding:6px 8px; border-bottom:1px solid var(--border); text-align:left; vertical-align:top; }
+  .vin-tabela th{ font-size:.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; position:sticky; top:0; background:var(--bg); }
+  .vin-chip{ display:inline-block; font-size:.72rem; padding:3px 9px; border-radius:20px; background:var(--surface); border:1px solid var(--border); margin:0 6px 6px 0; }
   .tag-pcd{ font-size:.7rem; font-weight:700; color:var(--brand-2); background:var(--brand-soft); padding:4px 9px; border-radius:20px; flex-shrink:0; }
 
   .barra-filtro-profissionais{ display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
@@ -638,6 +644,8 @@
             <div class="barra-filtro-profissionais">
               <input type="text" id="filtroProfissionalNome" placeholder="Buscar por nome...">
               <select id="filtroProfissionalFuncao"><option value="">Todas as funções</option></select>
+              <select id="filtroProfissionalVinculo" title="Vínculo com a pessoa do Financeiro"><option value="">Vínculo: todos</option><option value="sim">Ligados ao Financeiro</option><option value="nao">Sem vínculo</option></select>
+              <button class="btn-link-convite" id="btnVincularFinanceiro" style="display:none;" title="Liga cada profissional a uma pessoa do Financeiro pelo CPF (necessário para gerar pagamentos)">🔗 Vincular ao Financeiro</button>
             </div>
             <div class="lista-cadastro" id="listaProfissionais"></div>
           </div>
@@ -892,6 +900,24 @@
       <div class="modal-ajuda-body">
         <nav class="modal-ajuda-nav" id="ajudaModuloNav"></nav>
         <div class="modal-ajuda-conteudo" id="ajudaModuloConteudo"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-lista-overlay" id="modalVincularFin" style="z-index:75;">
+    <div class="modal-lista" style="max-width:900px; height:min(720px, 90vh);">
+      <div class="modal-lista-head">
+        <h3>🔗 Vincular profissionais ao Financeiro</h3>
+        <button class="drawer-close" id="btnFecharModalVincX">✕</button>
+      </div>
+      <div class="modal-lista-body" style="padding:16px 20px; overflow:auto; flex:1;">
+        <p style="font-size:.8rem; color:var(--muted); margin:0 0 10px;">Cada profissional ativo é ligado a uma <strong>pessoa</strong> do Financeiro pelo <strong>CPF</strong> (a mesma tabela de fornecedores). Se a pessoa não existir, ela é <strong>criada</strong> com o nome e o CPF do profissional. Confira a lista e aplique só o que estiver marcado.</p>
+        <div id="vinResumo"></div>
+        <div id="vinCorpo"><div class="vazio">Carregando…</div></div>
+      </div>
+      <div style="padding:12px 20px; border-top:1px solid var(--border); display:flex; gap:10px; justify-content:flex-end; align-items:center;">
+        <span id="vinMsg" style="font-size:.8rem; color:var(--muted); margin-right:auto;"></span>
+        <button class="btn-novo" id="btnAplicarVinculo" style="display:none;">Aplicar marcados</button>
       </div>
     </div>
   </div>
@@ -1510,7 +1536,7 @@
   // =================================================================
   const AJUDA_STAFF = {
     titulo: 'Staff — Equipe, Escalas, Ponto e Pagamentos',
-    ultimaRevisao: '10/09/2026',
+    ultimaRevisao: '23/11/2026',
     secoes: [
       { id: 'geral', titulo: 'Visão geral', corpo: `
         <p>O Staff é onde a unidade organiza <strong>quem trabalha</strong> pra ela (equipe fixa ou freelancer),
@@ -1539,6 +1565,12 @@
           — ele continua podendo ser escalado normalmente, só não bate ponto automático.</li>
           <li><strong>Função principal / funções secundárias</strong>: usadas pra escalar o profissional em eventos
           e como referência de cargo nos recibos.</li>
+        </ul>
+        <ul>
+          <li><strong>Vínculo com o Financeiro</strong> (selo <em>💰 #código</em> ou <em>sem vínculo</em> na lista): cada profissional precisa estar ligado a uma <strong>pessoa</strong> do Financeiro
+          (a mesma tabela de fornecedores) para que o Staff possa gerar pagamentos para ele. O botão <strong>🔗 Vincular ao Financeiro</strong> liga todos pelo <strong>CPF</strong>, com prévia:
+          se já existe pessoa com aquele CPF ela é ligada; se não existe, é <strong>criada</strong> com o nome e o CPF do profissional. Quem está sem CPF, com CPF inválido ou repetido não é ligado em lote —
+          corrija o CPF ou, no cadastro do profissional (seção <em>Financeiro</em>), escolha a pessoa à mão pela busca. O filtro <em>Vínculo</em> mostra só os ligados ou só os sem vínculo.</li>
         </ul>
         <p>Só quem tem papel <strong>Administrador</strong> (ou é Principal da unidade) edita esse cadastro —
         os outros papéis só visualizam.</p>
@@ -1821,6 +1853,7 @@
 
     const podeEscreverCadastro = papelStaffAtual === 'administrador';
     document.getElementById('btnNovoProfissional').style.display = podeEscreverCadastro ? '' : 'none';
+    document.getElementById('btnVincularFinanceiro').style.display = podeEscreverCadastro ? '' : 'none';
     document.getElementById('btnNovaFuncao').style.display = podeEscreverCadastro ? '' : 'none';
     document.getElementById('btnNovoClienteStaff').style.display = podeEscreverCadastro ? '' : 'none';
 
@@ -2534,6 +2567,7 @@
       .order('nome_completo', { ascending: true });
     if(error){ alert('Erro ao carregar profissionais: ' + error.message); return; }
     todosProfissionais = data || [];
+    await carregarPessoasVinculadas();
     renderListaProfissionais();
   }
 
@@ -2629,13 +2663,216 @@
     select.value = valorAtual;
   }
 
+  // =================================================================
+  // VÍNCULO PROFISSIONAL <-> PESSOA DO FINANCEIRO (staff-profissional-pessoa.sql)
+  // Todo título a pagar do Financeiro aponta para uma `pessoa` (mesma tabela de fornecedores/clientes). O profissional do Staff ganha a coluna
+  // pessoa_id: ligada pelo CPF (em lote, com prévia) ou escolhida à mão no cadastro. Pessoa que não existe é CRIADA (documento com máscara, como no Financeiro).
+  // =================================================================
+  let pessoasVinculo = new Map();   // pessoa.id -> { id, codigo, nome, documento }
+  const vinDig = (x) => String(x || '').replace(/\D/g, '');
+  const vinMascara = (d) => vinDig(d).replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+  const vinColunaOk = () => !todosProfissionais.length || ('pessoa_id' in todosProfissionais[0]);
+  const vinEsc = (t) => String(t == null ? '' : t).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const vinAtivosCad = () => papelStaffAtual === 'administrador';
+
+  async function registrarSentinelaStaff(tipoAcao, descricao){
+    try{
+      const { data: { session } } = await sb.auth.getSession();
+      await sb.from('servir_sentinela').insert({ unidade_negocio_id: agenciaId, modulo: 'staff', tipo_acao: tipoAcao, descricao,
+        operador: session?.user?.email || '', operador_user_id: session?.user?.id || null });
+    } catch(e){ console.warn('Não consegui registrar na sentinela:', e && e.message); }
+  }
+
+  async function carregarPessoasVinculadas(){
+    pessoasVinculo = new Map();
+    const ids = [...new Set(todosProfissionais.map(p => p.pessoa_id).filter(Boolean))];
+    for(let i = 0; i < ids.length; i += 200){
+      const { data } = await sb.from('pessoa').select('id, codigo, nome, documento').in('id', ids.slice(i, i + 200));
+      (data || []).forEach(x => pessoasVinculo.set(x.id, x));
+    }
+  }
+  function vinTagProfissional(p){
+    if(!vinColunaOk()) return '';
+    const pv = p.pessoa_id ? pessoasVinculo.get(p.pessoa_id) : null;
+    return pv ? `<span class="tag-vinc ok" title="Pessoa no Financeiro: ${vinEsc(pv.nome)}">💰 #${vinEsc(pv.codigo ?? pv.id)}</span>` : '<span class="tag-vinc" title="Sem pessoa no Financeiro">sem vínculo</span>';
+  }
+
+  // todas as pessoas da unidade (páginas de 1000), indexadas pelo CPF só com dígitos
+  async function vinCarregarPessoasUnidade(){
+    let tudo = [];
+    for(let i = 0; ; i += 1000){
+      const { data, error } = await sb.from('pessoa').select('id, codigo, nome, documento, ativo').eq('unidade_negocio_id', agenciaId).order('id').range(i, i + 999);
+      if(error) throw new Error(error.message);
+      tudo = tudo.concat(data || []);
+      if(!data || data.length < 1000) break;
+    }
+    const porDoc = new Map();
+    tudo.forEach(x => { const d = vinDig(x.documento); if(d.length === 11) { if(!porDoc.has(d)) porDoc.set(d, []); porDoc.get(d).push(x); } });
+    return { tudo, porDoc };
+  }
+
+  // classifica um profissional: vinculado | sem_cpf | cpf_invalido | cpf_repetido | ligar | ambiguo | criar
+  function vinClassificar(p, porDoc, contaCpf){
+    if(p.pessoa_id && pessoasVinculo.get(p.pessoa_id)) return { st: 'vinculado', pessoa: pessoasVinculo.get(p.pessoa_id) };
+    const c = vinDig(p.cpf);
+    if(!c) return { st: 'sem_cpf' };
+    if(!validarCPF(c)) return { st: 'cpf_invalido' };
+    if((contaCpf.get(c) || 0) > 1) return { st: 'cpf_repetido' };
+    const ach = porDoc.get(c) || [];
+    if(ach.length === 1) return { st: 'ligar', pessoa: ach[0] };
+    if(ach.length > 1) return { st: 'ambiguo', achadas: ach };
+    return { st: 'criar' };
+  }
+
+  async function vinCriarPessoa(p, estado){
+    const { data: proximoId, error: eId } = await sb.rpc('fn_proximo_id_manual', { p_tabela: 'pessoa' });
+    if(eId) throw new Error(eId.message);
+    if(estado.proxCodigo == null){
+      const { data: ult } = await sb.from('pessoa').select('codigo').eq('unidade_negocio_id', agenciaId).not('codigo', 'is', null).order('codigo', { ascending: false }).limit(1);
+      estado.proxCodigo = (ult && ult.length && Number(ult[0].codigo) > 0) ? Number(ult[0].codigo) + 1 : 1;
+    }
+    const nome = String(p.nome_completo || '').trim().replace(/\s+/g, ' ').toUpperCase();
+    const { data: nova, error } = await sb.from('pessoa').insert({ id: proximoId, unidade_negocio_id: agenciaId, nome, tipo_pessoa: 'FISICA', documento: vinMascara(p.cpf),
+      codigo: estado.proxCodigo, telefone: p.telefone || null, endereco: p.endereco || null, ativo: true }).select('id, codigo, nome, documento').single();
+    if(error) throw new Error(error.message);
+    estado.proxCodigo++;
+    return nova;
+  }
+
+  const vinRotulo = { vinculado: 'Já ligado', ligar: 'Ligar a pessoa existente', criar: 'Criar pessoa nova', sem_cpf: 'Sem CPF', cpf_invalido: 'CPF inválido', cpf_repetido: 'CPF repetido entre profissionais', ambiguo: 'Mais de uma pessoa com esse CPF' };
+  let vinLinhas = [];
+
+  async function vinAbrir(){
+    const modal = document.getElementById('modalVincularFin'), corpo = document.getElementById('vinCorpo'), resumo = document.getElementById('vinResumo'), btn = document.getElementById('btnAplicarVinculo');
+    modal.classList.add('show'); btn.style.display = 'none'; resumo.innerHTML = ''; document.getElementById('vinMsg').textContent = '';
+    if(!vinColunaOk()){ corpo.innerHTML = '<div class="vazio">A coluna de vínculo ainda não existe neste banco. Rode o arquivo <strong>staff-profissional-pessoa.sql</strong> no Supabase e atualize a página.</div>'; return; }
+    corpo.innerHTML = '<div class="vazio">Carregando pessoas do Financeiro…</div>';
+    try{
+      const { porDoc } = await vinCarregarPessoasUnidade();
+      const ativos = todosProfissionais.filter(p => p.ativo);
+      const contaCpf = new Map(); ativos.forEach(p => { const c = vinDig(p.cpf); if(c) contaCpf.set(c, (contaCpf.get(c) || 0) + 1); });
+      vinLinhas = ativos.map(p => ({ p, ...vinClassificar(p, porDoc, contaCpf) }));
+      const cont = {}; vinLinhas.forEach(l => { cont[l.st] = (cont[l.st] || 0) + 1; });
+      resumo.innerHTML = ['vinculado', 'ligar', 'criar', 'sem_cpf', 'cpf_invalido', 'cpf_repetido', 'ambiguo'].filter(k => cont[k]).map(k => `<span class="vin-chip"><strong>${cont[k]}</strong> ${vinRotulo[k]}</span>`).join('');
+      const ordem = { criar: 0, ligar: 1, ambiguo: 2, cpf_repetido: 3, cpf_invalido: 4, sem_cpf: 5, vinculado: 6 };
+      vinLinhas.sort((a, b) => ordem[a.st] - ordem[b.st] || String(a.p.nome_completo).localeCompare(String(b.p.nome_completo), 'pt-BR'));
+      corpo.innerHTML = `<table class="vin-tabela"><thead><tr><th></th><th>Profissional</th><th>CPF</th><th>Situação</th><th>Pessoa no Financeiro</th></tr></thead><tbody>${vinLinhas.map((l, i) => {
+        const acionavel = l.st === 'ligar' || l.st === 'criar';
+        const alvo = l.st === 'ligar' || l.st === 'vinculado' ? `#${vinEsc(l.pessoa.codigo ?? l.pessoa.id)} — ${vinEsc(l.pessoa.nome)}` : l.st === 'criar' ? `Nova: ${vinEsc(String(l.p.nome_completo).toUpperCase())}` : l.st === 'ambiguo' ? l.achadas.map(a => '#' + (a.codigo ?? a.id) + ' ' + vinEsc(a.nome)).join('<br>') : '—';
+        return `<tr><td>${acionavel ? `<input type="checkbox" data-vin="${i}" checked>` : ''}</td><td>${vinEsc(l.p.nome_completo)}</td><td>${l.p.cpf ? vinEsc(formatarCpfInput(l.p.cpf)) : '—'}</td><td>${vinRotulo[l.st]}</td><td>${alvo}</td></tr>`;
+      }).join('')}</tbody></table>
+      <p style="font-size:.76rem; color:var(--muted); margin-top:10px;">Quem está <strong>sem CPF, com CPF inválido, repetido ou com mais de uma pessoa</strong> não é ligado aqui: corrija o CPF no cadastro do profissional ou escolha a pessoa à mão (Profissionais → abrir o cadastro → Financeiro).</p>`;
+      const n = vinLinhas.filter(l => l.st === 'ligar' || l.st === 'criar').length;
+      btn.style.display = n ? '' : 'none'; btn.textContent = 'Aplicar marcados';
+    } catch(erro){ corpo.innerHTML = '<div class="vazio">Não consegui montar a prévia: ' + vinEsc(erro.message) + '</div>'; }
+  }
+
+  async function vinAplicar(){
+    const marcados = [...document.querySelectorAll('[data-vin]:checked')].map(c => vinLinhas[Number(c.dataset.vin)]);
+    if(!marcados.length){ alert('Nada marcado.'); return; }
+    const criar = marcados.filter(l => l.st === 'criar').length, ligar = marcados.length - criar;
+    if(!confirm(`Aplicar o vínculo em ${marcados.length} profissional(is)?\n• ${ligar} ligado(s) a pessoa já existente\n• ${criar} pessoa(s) NOVA(S) criada(s) no Financeiro`)) return;
+    const btn = document.getElementById('btnAplicarVinculo'), msg = document.getElementById('vinMsg'); btn.disabled = true;
+    const estado = { proxCodigo: null }; let ok = 0, novas = 0; const erros = [];
+    for(const l of marcados){
+      msg.textContent = `Gravando ${ok + erros.length + 1} de ${marcados.length}…`;
+      try{
+        let pessoa = l.pessoa;
+        if(l.st === 'criar'){ pessoa = await vinCriarPessoa(l.p, estado); novas++; }
+        const { error } = await sb.from('staff_profissionais').update({ pessoa_id: pessoa.id }).eq('id', l.p.id).eq('unidade_negocio_id', agenciaId);
+        if(error) throw new Error(error.message);
+        ok++;
+      } catch(e){ erros.push(l.p.nome_completo + ': ' + e.message); }
+    }
+    btn.disabled = false;
+    await registrarSentinelaStaff('staff_vinculo_pessoa_lote', `Vinculou ${ok} profissional(is) a pessoas do Financeiro (${novas} pessoa(s) criada(s), ${ok - novas} já existente(s))` + (erros.length ? ` -- ${erros.length} com erro` : ''));
+    await carregarProfissionais();
+    msg.textContent = '';
+    if(erros.length) alert(`${ok} vinculado(s). ${erros.length} com erro:\n` + erros.slice(0, 8).join('\n'));
+    await vinAbrir();
+  }
+
+  // ---- no cadastro do profissional: situação do vínculo + ligar pelo CPF + escolher pessoa à mão (para quem não tem CPF)
+  function vinHtmlDrawer(p){
+    if(!p || !p.id || !vinColunaOk()) return '';
+    const pv = p.pessoa_id ? pessoasVinculo.get(p.pessoa_id) : null, edita = vinAtivosCad();
+    return `<div class="drawer-section" id="vinSecao" data-prof="${p.id}">
+      <div class="drawer-section-title">Financeiro (pessoa para pagamentos)</div>
+      <p id="vinSituacao" style="font-size:.84rem; margin:0 0 8px;">${pv ? `✅ Ligado à pessoa <strong>#${vinEsc(pv.codigo ?? pv.id)} — ${vinEsc(pv.nome)}</strong>${pv.documento ? ' · ' + vinEsc(pv.documento) : ''}` : '⚠️ Sem pessoa no Financeiro — não dá para gerar pagamentos para este profissional.'}</p>
+      ${edita ? `<div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+        ${pv ? '<button type="button" class="btn-upload-imagem" id="btnVinDesligar">Desfazer vínculo</button>' : '<button type="button" class="btn-upload-imagem" id="btnVinCpf">Ligar / criar pelo CPF</button>'}
+      </div>
+      <div class="field-group"><label>Escolher outra pessoa (busca por nome ou código)</label><input type="text" id="vinBusca" placeholder="Digite pelo menos 2 letras…" autocomplete="off"><div id="vinResultados" style="margin-top:4px;"></div></div>` : ''}
+    </div>`;
+  }
+  function vinAtualizarSecao(p){
+    const sec = document.getElementById('vinSecao'); if(!sec) return;
+    sec.outerHTML = vinHtmlDrawer(p);
+    renderListaProfissionais();
+  }
+  async function vinGravarLink(p, pessoa, origem){
+    const { error } = await sb.from('staff_profissionais').update({ pessoa_id: pessoa ? pessoa.id : null }).eq('id', p.id).eq('unidade_negocio_id', agenciaId);
+    if(error){ alert('Não consegui gravar o vínculo: ' + error.message); return false; }
+    p.pessoa_id = pessoa ? pessoa.id : null;
+    if(pessoa) pessoasVinculo.set(pessoa.id, pessoa);
+    await registrarSentinelaStaff(pessoa ? 'staff_vinculo_pessoa' : 'staff_vinculo_pessoa_desfeito', `${pessoa ? 'Vinculou' : 'Desfez o vínculo de'} o profissional "${p.nome_completo}"${pessoa ? ' à pessoa #' + (pessoa.codigo ?? pessoa.id) + ' "' + pessoa.nome + '"' : ''}${origem ? ' (' + origem + ')' : ''}`);
+    return true;
+  }
+  document.addEventListener('click', async (ev) => {
+    const alvo = ev.target.closest('#btnVinCpf, #btnVinDesligar, [data-vin-pessoa]'); if(!alvo) return;
+    const sec = document.getElementById('vinSecao'); const p = sec && todosProfissionais.find(x => x.id === sec.dataset.prof); if(!p) return;
+    if(alvo.id === 'btnVinDesligar'){
+      if(!confirm('Desfazer o vínculo deste profissional com a pessoa do Financeiro? (a pessoa não é apagada)')) return;
+      if(await vinGravarLink(p, null, 'manual')) vinAtualizarSecao(p);
+    } else if(alvo.id === 'btnVinCpf'){
+      const c = vinDig(p.cpf);
+      if(!c || !validarCPF(c)){ alert('Este profissional não tem um CPF válido cadastrado. Salve o CPF no cadastro ou escolha a pessoa à mão na busca abaixo.'); return; }
+      alvo.disabled = true;
+      try{
+        const { porDoc } = await vinCarregarPessoasUnidade(); const ach = porDoc.get(c) || [];
+        let pessoa = null;
+        if(ach.length > 1){ alert('Há mais de uma pessoa no Financeiro com esse CPF (' + ach.map(a => '#' + (a.codigo ?? a.id)).join(', ') + '). Escolha uma delas na busca abaixo.'); return; }
+        if(ach.length === 1){ pessoa = ach[0]; if(!confirm(`Ligar este profissional à pessoa existente #${pessoa.codigo ?? pessoa.id} — ${pessoa.nome}?`)) return; }
+        else { if(!confirm('Não há pessoa com esse CPF no Financeiro. Criar uma nova com o nome e o CPF deste profissional?')) return; pessoa = await vinCriarPessoa(p, { proxCodigo: null }); }
+        if(await vinGravarLink(p, pessoa, ach.length ? 'pelo CPF' : 'pessoa criada')) vinAtualizarSecao(p);
+      } catch(e){ alert('Erro: ' + e.message); } finally { alvo.disabled = false; }
+    } else if(alvo.dataset.vinPessoa){
+      const pessoa = JSON.parse(alvo.dataset.vinPessoa);
+      if(!confirm(`Ligar este profissional à pessoa #${pessoa.codigo ?? pessoa.id} — ${pessoa.nome}?`)) return;
+      if(await vinGravarLink(p, pessoa, 'escolhida à mão')) vinAtualizarSecao(p);
+    }
+  });
+  let vinTimer = null;
+  document.addEventListener('input', (ev) => {
+    if(!ev.target || ev.target.id !== 'vinBusca') return;
+    clearTimeout(vinTimer);
+    const termo = ev.target.value.trim(), box = document.getElementById('vinResultados');
+    if(termo.length < 2){ box.innerHTML = ''; return; }
+    vinTimer = setTimeout(async () => {
+      const num = /^\d+$/.test(termo);
+      let q = sb.from('pessoa').select('id, codigo, nome, documento').eq('unidade_negocio_id', agenciaId).limit(10);
+      q = num ? q.eq('codigo', Number(termo)) : q.ilike('nome', '%' + termo.replace(/[%_,]/g, ' ') + '%');
+      const { data, error } = await q.order('nome');
+      if(error){ box.innerHTML = '<div style="font-size:.78rem; color:var(--danger);">' + vinEsc(error.message) + '</div>'; return; }
+      box.innerHTML = (data || []).length ? data.map(x => `<button type="button" class="vin-chip" style="cursor:pointer; text-align:left;" data-vin-pessoa="${vinEsc(JSON.stringify(x))}">#${vinEsc(x.codigo ?? x.id)} — ${vinEsc(x.nome)}${x.documento ? ' · ' + vinEsc(x.documento) : ''}</button>`).join('') : '<div style="font-size:.78rem; color:var(--muted);">Nenhuma pessoa encontrada.</div>';
+    }, 250);
+  });
+
+  document.getElementById('btnVincularFinanceiro').addEventListener('click', vinAbrir);
+  document.getElementById('btnAplicarVinculo').addEventListener('click', vinAplicar);
+  document.getElementById('btnFecharModalVincX').addEventListener('click', () => document.getElementById('modalVincularFin').classList.remove('show'));
+  document.getElementById('filtroProfissionalVinculo').addEventListener('change', renderListaProfissionais);
+
   function renderListaProfissionais(){
     const lista = document.getElementById('listaProfissionais');
     const termoNome = (document.getElementById('filtroProfissionalNome').value || '').trim().toLowerCase();
     const funcaoFiltro = document.getElementById('filtroProfissionalFuncao').value;
+    const vincFiltro = document.getElementById('filtroProfissionalVinculo').value;
 
     const filtrados = todosProfissionais.filter(p => {
       if(termoNome && !(p.nome_completo || '').toLowerCase().includes(termoNome)) return false;
+      if(vincFiltro === 'sim' && !p.pessoa_id) return false;
+      if(vincFiltro === 'nao' && p.pessoa_id) return false;
       if(funcaoFiltro){
         const funcoesSecundariasIds = (p.staff_profissional_funcoes || []).map(x => x.funcao_id);
         const temFuncao = p.funcao_principal_id === funcaoFiltro || funcoesSecundariasIds.includes(funcaoFiltro);
@@ -2659,6 +2896,7 @@
           <span class="nome">${p.nome_completo}</span>
           <span class="meta">${p.staff_funcoes?.nome || 'Sem função principal'}${p.telefone ? ' · ' + p.telefone : ''}</span>
         </div>
+        ${vinTagProfissional(p)}
         <span class="status-tag ${p.ativo ? 'ativo' : 'inativo'}">${p.ativo ? 'ativo' : 'inativo'}</span>
         ${p.pcd ? '<span class="tag-pcd">PCD</span>' : ''}
       `;
@@ -4693,6 +4931,7 @@
             <div class="field-group"><label>PIX</label><input type="text" id="c_pix" value="${p.pix || ''}" ${somenteLeitura ? 'disabled' : ''}></div>
           </div>
         </div>
+        ${vinHtmlDrawer(id ? p : null)}
 
         <div class="drawer-section">
           <div class="drawer-section-title">Dados operacionais</div>
