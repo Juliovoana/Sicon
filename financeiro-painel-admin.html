@@ -543,7 +543,8 @@
               <span id="topoMarcadosWrap" style="display:none;">Marcados (<strong class="mono" id="topoQtdMarcados" style="color:var(--ink);">0</strong>): <strong class="mono" id="topoValorMarcados" style="color:var(--brand-2);">R$ 0,00</strong></span>
               <label title="Marca (ou desmarca) todos os títulos em aberto que estão na lista, já com os filtros aplicados" style="display:flex; align-items:center; gap:6px; font-size:.78rem; cursor:pointer; color:var(--ink);"><input type="checkbox" id="chkMarcarTodosTitulos" style="width:16px; height:16px;"> Marcar todos os filtrados</label>
               <span style="flex:1;"></span>
-              <button id="btnListaPagamentos" type="button" title="Gera a lista (por conta, com caixa de PAGO) seguindo exatamente os filtros atuais" style="background:var(--brand); color:#fff; border:none; border-radius:8px; padding:7px 14px; font-size:.78rem; font-weight:600; cursor:pointer; font-family:inherit;">📋 Lista de pagamentos (PDF)</button>
+              <button id="btnListaPagamentos" type="button" title="Lista DETALHADA (por conta, com empresa, título/observação e caixa de PAGO), seguindo exatamente os filtros atuais" style="background:var(--brand); color:#fff; border:none; border-radius:8px; padding:7px 14px; font-size:.78rem; font-weight:600; cursor:pointer; font-family:inherit;">📋 Lista de pagamentos (PDF)</button>
+              <button id="btnListaPagamentosCompacta" type="button" title="Lista COMPACTA: fonte reduzida, um bloco por conta + empresa, só vencimento, fornecedor, valor e caixa de PAGO (sem observação)" style="background:none; color:var(--brand); border:1.5px solid var(--brand); border-radius:8px; padding:6px 12px; font-size:.78rem; font-weight:600; cursor:pointer; font-family:inherit;">📄 Lista compacta (PDF)</button>
             </div>
             <div class="lista-cadastro" id="listaTitulos"></div>
             <div style="display:flex; gap:16px; flex-wrap:wrap; align-items:center; margin-top:18px; padding-top:14px; border-top:1px solid var(--border); font-size:.8rem; color:var(--muted);">
@@ -955,9 +956,10 @@
         <button class="drawer-close" id="btnFecharModalBaixaLote">✕</button>
       </div>
       <div class="modal-lista-body">
-        <p style="font-size:.85rem; color:var(--muted); margin-bottom:14px;"><span id="qtdBaixaLoteResumo"></span> título(s) selecionado(s) vão ser marcados como pagos, com a mesma conta e data. Isso fica marcado como um lote, pra poder desfazer tudo de uma vez se precisar.</p>
+        <p style="font-size:.85rem; color:var(--muted); margin-bottom:14px;"><span id="qtdBaixaLoteResumo"></span> título(s) selecionado(s) vão ser marcados como pagos, na data informada. <strong>Cada título usa a conta de pagamento cadastrada nele</strong>; para pagar todos por uma única conta, escolha-a abaixo. Fica marcado como um lote, pra poder desfazer tudo de uma vez se precisar.</p>
+        <div id="loteResumoContas" style="font-size:.8rem; border:1px solid var(--border); background:var(--brand-soft); border-radius:8px; padding:8px 10px; margin-bottom:12px;"></div>
         <div class="field-group">
-          <label>Conta de pagamento</label>
+          <label>Usar uma única conta para todos <span style="font-weight:400; color:var(--muted);">(opcional — deixe vazio para usar a conta de cada título)</span></label>
           <div class="campo-autocomplete">
             <input type="text" id="lote_conta_busca" placeholder="Buscar conta...">
             <input type="hidden" id="lote_conta_id">
@@ -2825,7 +2827,7 @@
   // =================================================================
   const AJUDA_FINANCEIRO = {
     titulo: 'Financeiro — Títulos, Contas e Rateio',
-    ultimaRevisao: '19/11/2026',
+    ultimaRevisao: '23/11/2026',
     secoes: [
       { id: 'dashboard', titulo: 'Dashboard', corpo: `
         <p>Visão geral do contas a pagar e a receber da unidade, no mesmo estilo do painel do
@@ -2874,7 +2876,8 @@
           proposital (lançamento retroativo de verdade).</li>
           <li><strong>Dar baixa</strong> (pagar/receber): dá pra quitar um título por vez ("Pagamento
           rápido", inclusive parcial — pagando menos que o valor líquido) ou vários de uma vez
-          ("Baixar selecionados", baixa em lote). Toda baixa gera automaticamente um lançamento em
+          ("Baixar selecionados", baixa em lote — <strong>cada título é baixado na conta de pagamento cadastrada nele</strong>; a janela mostra quantos vão em cada conta e,
+          se quiser pagar tudo por <strong>uma única conta</strong>, escolha-a no campo opcional; título sem conta bloqueia a baixa até você definir a conta ou escolher a única). Toda baixa gera automaticamente um lançamento em
           <strong>Movimentação de Contas</strong>. Uma baixa em lote pode ser desfeita — isso reabre os
           títulos e apaga o(s) lançamento(s) de movimentação criados por ela.</li>
           <li><strong>Código da operação</strong>: ao preencher esse filtro, ele ignora todos os outros e
@@ -2892,7 +2895,9 @@
           <li><strong>📋 Lista de pagamentos (PDF)</strong>: no estilo da lista do Access — um bloco por <strong>conta pagadora</strong>, com Empresa,
           vencimento, fornecedor, título, valor e uma <strong>caixa PAGO</strong> para marcar à mão (título já pago sai com ✓), "ITENS n" e subtotal
           por conta e total geral. Segue exatamente os filtros da tela (tipo, em aberto/pagos, datas, busca, operação, filtro avançado) e abre o popup
-          Visualizar/Baixar/Compartilhar, para enviar o PDF.</li>
+          Visualizar/Baixar/Compartilhar, para enviar o PDF.
+          O botão <strong>📄 Lista compacta (PDF)</strong> gera a versão enxuta para imprimir: <strong>fonte reduzida</strong>, um bloco por <strong>conta + empresa</strong> no mesmo cabeçalho,
+          cabeçalho <strong>sem logotipo, em 2 linhas</strong> (unidade/título/data e filtros), só <strong>vencimento, fornecedor, valor e a caixa PAGO</strong> (sem título/observação), com subtotal por bloco e total por conta — cabem muito mais linhas por folha.</li>
           <li><strong>🏦 Conta de pagamento no card</strong>: cada título em aberto mostra, discreta ao lado da empresa, a <strong>conta de pagamento</strong> («sem conta» em vermelho tracejado quando falta).
           <strong>Clique nela</strong> para escolher outra conta — a mudança é gravada na hora e é a conta pela qual a <strong>Lista de pagamentos</strong> agrupa os títulos do dia. Título já pago mostra só a conta em que foi pago (não muda).
           <strong>Operação</strong>: cada título mostra o chip <strong>🔗 Op. N</strong>; clicar nele preenche o filtro <strong>Código da operação</strong> e lista <strong>todos os títulos gerados naquela operação</strong> (parcelas, pagos e em aberto), ignorando os outros filtros — ótimo para baixar, conferir ou desfazer o conjunto. Limpe o campo para voltar à lista normal.</li>
@@ -3834,19 +3839,35 @@
     document.getElementById('lote_conta_busca').value = '';
     document.getElementById('lote_conta_id').value = '';
     document.getElementById('lote_data_pagamento').value = new Date().toISOString().slice(0, 10);
+    atualizarResumoContasLote();
     document.getElementById('modalBaixaLote').classList.add('show');
   }
+  // mostra em que conta cada título marcado vai ser baixado (a do próprio título ou a conta única escolhida)
+  function titulosMarcadosLote(){ const ids = new Set(Array.from(document.querySelectorAll('[data-checkbox-titulo]:checked')).map(c => Number(c.dataset.checkboxTitulo))); return todosTitulos.filter(t => ids.has(t.id) && !t.data_pagamento); }
+  function atualizarResumoContasLote(){
+    const box = document.getElementById('loteResumoContas'); if(!box) return;
+    const forcada = document.getElementById('lote_conta_id').value, marcados = titulosMarcadosLote(), cont = new Map();
+    marcados.forEach(t => { const k = forcada ? 'u' : (t.id_conta_pagamento ? String(t.id_conta_pagamento) : 'sem'); cont.set(k, (cont.get(k) || 0) + 1); });
+    if(forcada){ const c = todasContas.find(x => String(x.id) === String(forcada)); box.innerHTML = `Todos os <strong>${marcados.length}</strong> título(s) serão baixados na conta <strong>${escapeHtml(c ? c.nome : '#' + forcada)}</strong>.`; return; }
+    const linhas = [...cont.entries()].sort((a, b) => b[1] - a[1]).map(([k, n]) => { const c = k === 'sem' ? null : todasContas.find(x => String(x.id) === k); return k === 'sem' ? `<span style="color:var(--danger);"><strong>${n}</strong> sem conta definida</span>` : `<strong>${n}</strong> em ${escapeHtml(c ? c.nome : 'conta #' + k)}`; });
+    box.innerHTML = 'Baixa por conta do título: ' + (linhas.join(' · ') || 'nenhum título em aberto marcado.') + (cont.has('sem') ? '<br><span style="color:var(--danger);">Defina a conta desses títulos (clique em «sem conta» no card) ou escolha uma conta única abaixo.</span>' : '');
+  }
+  document.getElementById('lote_conta_id').addEventListener('change', atualizarResumoContasLote);
+  document.getElementById('lote_conta_busca').addEventListener('input', () => setTimeout(atualizarResumoContasLote, 0));
   document.getElementById('btnBaixarLote').addEventListener('click', abrirModalBaixaLote);
   document.getElementById('btnFecharModalBaixaLote').addEventListener('click', () => document.getElementById('modalBaixaLote').classList.remove('show'));
 
   document.getElementById('btnConfirmarBaixaLote').addEventListener('click', async () => {
-    const idConta = document.getElementById('lote_conta_id').value;
+    const idContaUnica = document.getElementById('lote_conta_id').value;      // vazio = cada título usa a sua conta de pagamento
     const dataPagamentoLote = document.getElementById('lote_data_pagamento').value;
-    if(!idConta){ alert('Escolha a conta de pagamento.'); return; }
     if(!dataPagamentoLote){ alert('Informe a data de pagamento.'); return; }
 
     const idsSelecionados = Array.from(document.querySelectorAll('[data-checkbox-titulo]:checked')).map(chk => Number(chk.dataset.checkboxTitulo));
     if(!idsSelecionados.length){ alert('Nenhum título selecionado.'); return; }
+    if(!idContaUnica){
+      const semConta = todosTitulos.filter(t => idsSelecionados.includes(t.id) && !t.data_pagamento && !t.id_conta_pagamento);
+      if(semConta.length){ alert(`${semConta.length} título(s) marcado(s) estão sem conta de pagamento (ex.: ${semConta.slice(0, 3).map(t => '#' + (t.codigo ?? t.id)).join(', ')}). Defina a conta neles (clique em «sem conta» no card) ou escolha uma conta única no campo da janela. Nada foi baixado.`); return; }
+    }
 
     const btn = document.getElementById('btnConfirmarBaixaLote');
     btn.disabled = true; btn.textContent = 'Baixando...';
@@ -3856,6 +3877,7 @@
         const titulo = todosTitulos.find(t => t.id === idTitulo);
         if(!titulo || titulo.data_pagamento) continue; // já foi pago entretanto, pula
 
+        const idConta = idContaUnica || titulo.id_conta_pagamento;         // conta única escolhida OU a conta já cadastrada no título
         await sb.from('financeiro_titulos').update({
           data_pagamento: dataPagamentoLote, id_conta_pagamento: idConta, lote_baixa_id: loteBaixaId
         }).eq('id', idTitulo);
@@ -3871,7 +3893,7 @@
         });
         const { data: opInfoLote } = await sb.from('unidade_operacao').select('codigo').eq('id', titulo.operacao_id).single();
         const clienteFornecedorLote = titulo.pessoa?.nome || (titulo.descricao_avulsa ? '0 — ' + titulo.descricao_avulsa : 'sem cliente/fornecedor');
-        await registrarSentinela('financeiro_titulo_baixado', `Baixou título #${titulo.codigo}${titulo.titulo ? ' "' + titulo.titulo + '"' : ''} em lote (conta id ${idConta}, pago em ${formatarData(dataPagamentoLote)}) -- cliente/fornecedor: ${clienteFornecedorLote} -- operação #${opInfoLote?.codigo ?? titulo.operacao_id}`);
+        await registrarSentinela('financeiro_titulo_baixado', `Baixou título #${titulo.codigo}${titulo.titulo ? ' "' + titulo.titulo + '"' : ''} em lote (conta "${(todasContas.find(c => String(c.id) === String(idConta)) || {}).nome || idConta}"${idContaUnica ? ', conta única escolhida' : ', conta do título'}, pago em ${formatarData(dataPagamentoLote)}) -- cliente/fornecedor: ${clienteFornecedorLote} -- operação #${opInfoLote?.codigo ?? titulo.operacao_id}`);
       }
       await carregarTitulos();
       await carregarMovimentacoes();
@@ -5699,8 +5721,8 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
   // com EMP, vencimento, fornecedor, título, valor e uma caixa PAGO para marcar à mão; "ITENS n" + subtotal por
   // conta e total geral. Segue EXATAMENTE os filtros da tela de Títulos (obterTitulosFiltrados).
   // -----------------------------------------------------------------
-  document.getElementById('btnListaPagamentos').addEventListener('click', async () => {
-    const btn = document.getElementById('btnListaPagamentos');
+  // compacta = true: fonte reduzida, um bloco por CONTA + EMPRESA (no mesmo cabeçalho), só vencimento, fornecedor, valor e a caixa de PAGO (sem título/observação)
+  async function gerarListaPagamentos(btn, compacta){
     const filtrados = obterTitulosFiltrados();
     if(!filtrados.length){ alert('Nenhum título encontrado com os filtros atuais.'); return; }
     btn.disabled = true; const rotulo = btn.textContent; btn.textContent = 'Gerando...';
@@ -5710,7 +5732,7 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
       const filtroTipo = document.getElementById('filtroTipoTitulo').value;
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
-      let y = await montarCabecalhoPdf(doc, 'Lista de pagamentos');
+      let y = compacta ? 14 : await montarCabecalhoPdf(doc, 'Lista de pagamentos');   // compacta: cabeçalho próprio (sem logo, 2 linhas)
       // resumo dos filtros usados
       const sel = id => { const el = document.getElementById(id); return el.options[el.selectedIndex].text; };
       const partes = [sel('filtroTipoTitulo'), sel('filtroStatusPagamento')];
@@ -5720,9 +5742,66 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
       const busca = document.getElementById('filtroBuscaTitulo').value.trim(); if(busca) partes.push('busca "' + busca + '"');
       const op = document.getElementById('filtroCodigoOperacao').value.trim(); if(op) partes.push('operação ' + op);
       if(operacaoIdsFiltroAvancado) partes.push('filtro avançado por rateio');
-      doc.setFontSize(8); doc.setTextColor(90); doc.text('Filtros: ' + partes.join(' · '), 14, y - 2); doc.setTextColor(0);
-      y += 3;
+      if(compacta){
+        // linha 1: unidade · título · data/hora; linha 2: filtros (cortados numa linha só)
+        doc.setFontSize(10); doc.setFont(undefined, 'bold');
+        const cab1 = (agenciaNome || 'Unidade') + '  ·  Lista de pagamentos (compacta)';
+        doc.text(cab1, 14, y);
+        doc.setFont(undefined, 'normal'); doc.setFontSize(7.5); doc.setTextColor(110);
+        doc.text('Gerado em ' + new Date().toLocaleString('pt-BR'), 196, y, { align: 'right' });
+        doc.setTextColor(60);
+        let txtF = 'Filtros: ' + partes.join(' · ');
+        if(doc.getTextWidth(txtF) > 182){ while(txtF.length > 10 && doc.getTextWidth(txtF + '…') > 182) txtF = txtF.slice(0, -1); txtF += '…'; }
+        doc.text(txtF, 14, y + 4.5); doc.setTextColor(0);
+        y += 8;
+      } else {
+        doc.setFontSize(8); doc.setTextColor(90); doc.text('Filtros: ' + partes.join(' · '), 14, y - 2); doc.setTextColor(0);
+        y += 3;
+      }
 
+      let totalGeral = 0, qtdGeral = 0;
+      if(compacta){
+        const contaDe = (t) => { const c = todasContas.find(x => x.id === t.id_conta_pagamento); return (filtroTipo ? '' : (t.tipo_movimento === 'PAGAR' ? 'A PAGAR — ' : 'A RECEBER — ')) + (c ? c.nome : 'SEM CONTA DEFINIDA'); };
+        const porConta = new Map();
+        filtrados.forEach(t => { const kc = contaDe(t), ke = nomeEmpresa(t) || 'SEM EMPRESA'; if(!porConta.has(kc)) porConta.set(kc, new Map()); const me = porConta.get(kc); if(!me.has(ke)) me.set(ke, []); me.get(ke).push(t); });
+        const ord = (a, c) => a.localeCompare(c, 'pt-BR');
+        [...porConta.keys()].sort(ord).forEach(kc => {
+          const me = porConta.get(kc); let qtdConta = 0, somaConta = 0;
+          [...me.keys()].sort(ord).forEach(ke => {
+            const itens = me.get(ke).slice().sort((a, c) => (a.data_vencimento || '').localeCompare(c.data_vencimento || '') || String(a.pessoa?.nome || a.descricao_avulsa || '').localeCompare(String(c.pessoa?.nome || c.descricao_avulsa || ''), 'pt-BR'));
+            const sub = itens.reduce((acc, t) => acc + Number(t.valor_titulo), 0); qtdConta += itens.length; somaConta += sub; qtdGeral += itens.length; totalGeral += sub;
+            const pagoPorLinha = new Map();
+            doc.autoTable({
+              startY: y,
+              head: [
+                [{ content: kc + '  ·  ' + ke + '   (' + itens.length + ' ite' + (itens.length === 1 ? 'm' : 'ns') + ')', colSpan: 4, styles: { fillColor: [221, 225, 232], textColor: 0, halign: 'left', fontStyle: 'bold', fontSize: 7.5 } }],
+                ['VENC.', 'FORNECEDOR', 'VALOR', 'PAGO']
+              ],
+              body: itens.map(t => { const linha = [formatarData(t.data_vencimento), (t.pessoa?.nome || t.descricao_avulsa || '—'), formatarMoedaMilhar(t.valor_titulo), '']; pagoPorLinha.set(linha, !!t.data_pagamento); return linha; }),
+              foot: [[{ content: 'ITENS ' + itens.length, colSpan: 2, styles: { halign: 'left' } }, { content: formatarMoedaMilhar(sub), styles: { halign: 'right' } }, '']],
+              styles: { fontSize: 7, cellPadding: { top: 0.7, bottom: 0.7, left: 1.4, right: 1.4 }, valign: 'middle', minCellHeight: 4.6 },
+              headStyles: { fillColor: [255, 255, 255], textColor: 0, lineColor: [150, 150, 150], lineWidth: 0.1, fontSize: 6.5 },
+              footStyles: { fillColor: [244, 245, 247], textColor: 0, fontStyle: 'bold', fontSize: 7 },
+              alternateRowStyles: { fillColor: [248, 249, 251] },
+              columnStyles: { 0: { cellWidth: 17 }, 1: { cellWidth: 'auto' }, 2: { cellWidth: 25, halign: 'right' }, 3: { cellWidth: 11, halign: 'center' } },
+              margin: { left: 14, right: 14 },
+              didParseCell: (d) => { if(d.section === 'head' && d.row.index === 1 && d.column.index >= 2) d.cell.styles.halign = d.column.index === 2 ? 'right' : 'center'; },
+              didDrawCell: (d) => {
+                if(d.section === 'body' && d.column.index === 3){
+                  const cx = d.cell.x + d.cell.width / 2 - 1.5, cy = d.cell.y + d.cell.height / 2 - 1.5;
+                  doc.setDrawColor(60); doc.setLineWidth(0.2); doc.rect(cx, cy, 3, 3);
+                  if(pagoPorLinha.get(d.row.raw) === true){ doc.setLineWidth(0.4); doc.line(cx + 0.6, cy + 1.6, cx + 1.3, cy + 2.3); doc.line(cx + 1.3, cy + 2.3, cx + 2.5, cy + 0.7); }
+                  doc.setLineWidth(0.1);
+                }
+              }
+            });
+            y = doc.lastAutoTable.finalY + 2.5;
+          });
+          if(y > 284){ doc.addPage(); y = 20; }
+          if(me.size > 1){ doc.setFontSize(7.5); doc.setFont(undefined, 'bold'); doc.text(`Total ${kc}: ${qtdConta} ite${qtdConta === 1 ? 'm' : 'ns'} — ${formatarMoedaMilhar(somaConta)}`, 14, y + 1); doc.setFont(undefined, 'normal'); y += 6; }
+          else y += 2;
+        });
+      } else {
       // grupos: (tipo se Pagar e Receber juntos) + conta pagadora
       const grupos = {};
       filtrados.forEach(t => {
@@ -5733,7 +5812,6 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
         (grupos[chave] = grupos[chave] || []).push(t);
       });
       const nomesOrdenados = Object.keys(grupos).sort((a, b) => a.localeCompare(b, 'pt-BR'));
-      let totalGeral = 0, qtdGeral = 0;
       nomesOrdenados.forEach(nome => {
         const itens = grupos[nome].slice().sort((a, b) => (a.data_vencimento || '').localeCompare(b.data_vencimento || '') || String(a.pessoa?.nome || '').localeCompare(String(b.pessoa?.nome || ''), 'pt-BR'));
         const subtotal = itens.reduce((acc, t) => acc + Number(t.valor_titulo), 0);
@@ -5775,19 +5853,22 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
         });
         y = doc.lastAutoTable.finalY + 7;
       });
+      }
       if(y > 275){ doc.addPage(); y = 20; }
       doc.setFontSize(10); doc.setFont(undefined, 'bold');
       doc.text(`TOTAL GERAL — ${qtdGeral} título${qtdGeral === 1 ? '' : 's'}: ${formatarMoedaMilhar(totalGeral)}`, 14, y);
       doc.setFont(undefined, 'normal');
       const totalPaginas = doc.getNumberOfPages();
       for(let i = 1; i <= totalPaginas; i++){ doc.setPage(i); doc.setFontSize(8); doc.setTextColor(120); doc.text(`Página ${i} de ${totalPaginas}`, 196, 290, { align: 'right' }); }
-      mostrarPopupAcoesPdf('Lista de pagamentos', doc.output('blob'), 'lista-de-pagamentos.pdf');
+      mostrarPopupAcoesPdf(compacta ? 'Lista de pagamentos (compacta)' : 'Lista de pagamentos', doc.output('blob'), compacta ? 'lista-de-pagamentos-compacta.pdf' : 'lista-de-pagamentos.pdf');
     } catch(erro){
       alert('Erro ao gerar a lista de pagamentos: ' + erro.message);
     } finally{
       btn.disabled = false; btn.textContent = rotulo;
     }
-  });
+  }
+  document.getElementById('btnListaPagamentos').addEventListener('click', () => gerarListaPagamentos(document.getElementById('btnListaPagamentos'), false));
+  document.getElementById('btnListaPagamentosCompacta').addEventListener('click', () => gerarListaPagamentos(document.getElementById('btnListaPagamentosCompacta'), true));
 
   // -----------------------------------------------------------------
   // RELATÓRIO PDF -- LIVRO CAIXA (só quando uma conta específica está
