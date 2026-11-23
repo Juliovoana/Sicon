@@ -113,6 +113,11 @@
 
   .filtros{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:18px; }
   .filtros input, .filtros select{ padding:9px 12px; border:1.5px solid var(--border); border-radius:9px; font-family:inherit; font-size:.85rem; background:var(--surface); }
+  /* período «De … Até …»: os dois campos ficam SEMPRE juntos na mesma linha (em tela estreita dividem a largura, nunca quebram) */
+  .filtro-periodo{ display:flex; flex-wrap:nowrap; align-items:center; gap:10px; max-width:100%; }
+  .filtro-periodo label{ display:flex; align-items:center; gap:4px; font-size:.8rem; color:var(--muted); white-space:nowrap; min-width:0; }
+  .filtro-periodo input[type=date]{ padding:8px; min-width:0; }
+  @media (max-width:560px){ .filtro-periodo{ width:100%; } .filtro-periodo label{ flex:1 1 0; } .filtro-periodo input[type=date]{ flex:1 1 0; width:100%; } }
 
   .lista-cadastro{ display:flex; flex-direction:column; gap:10px; }
   .cadastro-row{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 18px; display:flex; align-items:center; gap:16px; cursor:pointer; transition:box-shadow .15s, border-color .15s; }
@@ -476,7 +481,7 @@
           <!-- ================= TÍTULOS ================= -->
           <div class="panel-app" id="app-panel-titulos">
             <div class="filtros">
-              <input type="text" id="filtroBuscaTitulo" placeholder="Buscar por título ou pessoa...">
+              <input type="text" id="filtroBuscaTitulo" placeholder="Buscar por título, pessoa ou valor..." title="Digite parte do título, o nome da pessoa ou um valor (ex.: 4.993,23 · 4993,23 · R$ 446,5)">
               <select id="filtroTipoTitulo">
                 <option value="">Pagar e Receber</option>
                 <option value="PAGAR" selected>Só a Pagar</option>
@@ -488,9 +493,11 @@
                 <option value="aberto" selected>Só em aberto</option>
               </select>
               <select id="filtroContaTitulo" title="Mostra só os títulos da conta de pagamento escolhida (ou os que ainda estão sem conta)"><option value="">Todas as contas</option></select>
-              <label style="font-size:.8rem; color:var(--muted); display:flex; align-items:center; gap:4px;">De <input type="date" id="filtroTituloDataInicio" style="padding:8px;"></label>
-              <label style="font-size:.8rem; color:var(--muted); display:flex; align-items:center; gap:4px;">Até <input type="date" id="filtroTituloDataFim" style="padding:8px;"></label>
-              <input type="text" id="filtroCodigoOperacao" placeholder="Código da operação..." style="max-width:170px;" title="Ao preencher, mostra todos os títulos dessa operação e ignora os outros filtros.">
+              <div class="filtro-periodo">
+                <label>De <input type="date" id="filtroTituloDataInicio"></label>
+                <label>Até <input type="date" id="filtroTituloDataFim"></label>
+              </div>
+              <input type="text" id="filtroCodigoOperacao" placeholder="Código da operação..." style="max-width:170px;" title="Ao preencher, mostra TODOS os títulos gerados nessa operação (pagos e em aberto, pagar e receber) e ignora os outros filtros. Dica: clique no «🔗 Op. N» de um título.">
               <button type="button" class="btn-novo" id="btnToggleFiltroAvancado" style="background:none; border:1px solid var(--border); color:var(--muted);">⚙ Filtro avançado <span id="badgeFiltroAvancado" style="display:none; background:var(--brand-2); color:#fff; border-radius:10px; padding:1px 7px; font-size:.72rem; margin-left:4px;">0</span></button>
               <span style="flex:1;"></span>
               <button class="btn-novo" id="btnBaixarLote" style="display:none; background:var(--brand-2);">Baixar selecionados (<span id="qtdSelecionadosLote">0</span>)</button>
@@ -544,7 +551,11 @@
               <span>Total a Pagar (filtrado): <strong class="mono" id="resumoTotalPagar" style="color:var(--ink);">R$ 0,00</strong></span>
               <span>Total a Receber (filtrado): <strong class="mono" id="resumoTotalReceber" style="color:var(--ink);">R$ 0,00</strong></span>
               <span style="flex:1;"></span>
-              <button id="btnGerarPdfTitulos" style="background:none; border:1px solid var(--border); color:var(--muted); border-radius:8px; padding:6px 12px; font-size:.78rem; cursor:pointer; font-family:inherit;">📄 Gerar relatório PDF</button>
+              <label style="display:flex; align-items:center; gap:6px; font-size:.8rem; color:var(--ink);" title="Como o relatório PDF organiza os títulos (sempre separando A pagar e A receber)">Agrupar por
+                <select id="selAgruparPdfTitulos" style="padding:7px 10px; border:1.5px solid var(--border); border-radius:8px; font-family:inherit; font-size:.8rem; background:var(--surface);">
+                  <option value="conta">Conta de pagamento</option><option value="fornecedor">Fornecedor / cliente</option><option value="vencimento">Vencimento</option>
+                </select></label>
+              <button id="btnGerarPdfTitulos" type="button" style="background:var(--brand); color:#fff; border:none; border-radius:8px; padding:9px 16px; font-size:.85rem; font-weight:600; cursor:pointer; font-family:inherit; box-shadow:0 1px 3px rgba(0,0,0,.15);">📄 Gerar relatório PDF</button>
             </div>
           </div>
 
@@ -1089,7 +1100,10 @@
   }
 
   function escapeHtml(texto){ const div = document.createElement('div'); div.textContent = texto == null ? '' : String(texto); return div.innerHTML; }
-  function formatarMoeda(v){ return v == null ? '—' : 'R$ ' + Number(v).toFixed(2).replace('.', ','); }
+  // PADRÃO DE MOEDA da plataforma: «R$ 4.774.767,81» (milhar com ponto, decimais com vírgula, negativo «-R$ 1.234,56») — sempre via Intl pt-BR, nunca toFixed().replace().
+  // Mesma função nos apps (Estoque já usava); valor nulo mostra «—».
+  const FMT_MOEDA_BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
+  function formatarMoeda(v){ return v == null ? '—' : FMT_MOEDA_BRL.format(Number(v) || 0); }
   function formatarData(d){ if(!d) return '—'; const [ano,mes,dia] = d.slice(0,10).split('-'); return `${dia}/${mes}/${ano}`; }
 
   // =================================================================
@@ -2868,7 +2882,7 @@
           de uma mesma origem).</li>
           <li><strong>Filtro avançado</strong> busca pelo conteúdo do rateio (Setor/Plano/Empresa/Pessoa/
           Evento) e <strong>se combina</strong> com os outros filtros — diferente do Código da Operação.</li>
-          <li><strong>Relatório PDF</strong> sai com Pagar e Receber em <strong>seções separadas</strong>,
+          <li><strong>Relatório PDF</strong> (botão azul no rodapé, com o seletor <strong>Agrupar por</strong>: <strong>conta de pagamento</strong>, <strong>fornecedor/cliente</strong> ou <strong>vencimento</strong> — a escolha fica lembrada) sai com Pagar e Receber em <strong>seções separadas</strong>,
           cada uma agrupada por conta → status, com subtotal e contagem em cada nível.</li>
           <li><strong>Empresa</strong>: aparece em cada linha da lista (🏢) e no topo do título, onde dá para trocá-la — a escolha vale para <strong>todas as linhas
           do rateio</strong> (completa só os campos vazios com o padrão da empresa). Para dividir um título entre empresas, use as linhas do rateio; nesse caso a lista
@@ -2881,6 +2895,9 @@
           Visualizar/Baixar/Compartilhar, para enviar o PDF.</li>
           <li><strong>🏦 Conta de pagamento no card</strong>: cada título em aberto mostra, discreta ao lado da empresa, a <strong>conta de pagamento</strong> («sem conta» em vermelho tracejado quando falta).
           <strong>Clique nela</strong> para escolher outra conta — a mudança é gravada na hora e é a conta pela qual a <strong>Lista de pagamentos</strong> agrupa os títulos do dia. Título já pago mostra só a conta em que foi pago (não muda).
+          <strong>Operação</strong>: cada título mostra o chip <strong>🔗 Op. N</strong>; clicar nele preenche o filtro <strong>Código da operação</strong> e lista <strong>todos os títulos gerados naquela operação</strong> (parcelas, pagos e em aberto), ignorando os outros filtros — ótimo para baixar, conferir ou desfazer o conjunto. Limpe o campo para voltar à lista normal.</li>
+          <li>
+          A <strong>busca</strong> do topo encontra por <strong>título, nome da pessoa ou valor</strong>: digite o valor como preferir («4.993,23», «4993,23», «R$ 4.993,23») ou só um pedaço («4.993», «446,5») — compara com o valor do título e com o valor líquido (com juros/desconto).
           O filtro <strong>conta de pagamento</strong> (ao lado de «Só em aberto») mostra só os títulos de uma conta — ou os <strong>«Sem conta definida»</strong> — com a quantidade de títulos de cada uma dentro dos filtros atuais (só aparecem as contas que têm título); e o <strong>☑ Marcar todos os filtrados</strong> (na barra acima da lista) marca de uma vez tudo o que está na tela, já com os filtros aplicados (clique de novo para desmarcar). Assim: filtre uma conta, marque todos e baixe em lote ou gere a <strong>Lista de pagamentos</strong> só dela (o cabeçalho do PDF informa a conta filtrada).</li>
         </ul>
       ` },
@@ -3415,9 +3432,19 @@
       (!filtroStatus || (filtroStatus === 'pago' ? !!t.data_pagamento : !t.data_pagamento)) &&
       (!dataInicio || t.data_vencimento >= dataInicio) &&
       (!dataFim || t.data_vencimento <= dataFim) &&
-      (!busca || (t.titulo || '').toLowerCase().includes(busca) || (t.pessoa?.nome || '').toLowerCase().includes(busca)) &&
+      (!busca || (t.titulo || '').toLowerCase().includes(busca) || (t.pessoa?.nome || '').toLowerCase().includes(busca) || tituloCasaValorBusca(t, busca)) &&
       (!operacaoIdsFiltroAvancado || operacaoIdsFiltroAvancado.has(t.operacao_id))
     );
+  }
+  // BUSCA POR VALOR (campo «Buscar por título, pessoa ou valor»): se o que foi digitado parece um número (aceita «R$», milhar com ponto, vírgula ou ponto nos centavos,
+  // e trecho parcial como «4.993» ou «446,5»), compara com o valor do título e com o valor líquido (− desconto + acréscimo), escritos de cada forma possível.
+  function tituloCasaValorBusca(t, busca){
+    let b = String(busca || '').replace(/r\$/gi, '').replace(/\s+/g, '');
+    if(!b || !/^[\d.,]+$/.test(b) || !/\d/.test(b)) return false;
+    const termos = new Set([b, b.replace(/\./g, ''), b.replace(/\./g, '').replace(',', '.')]);   // «1.234,5» → «1.234,5», «1234,5», «1234.5»
+    const formas = v => { const n = Number(v); if(!isFinite(n)) return []; const f = Math.abs(n).toFixed(2); return [f, f.replace('.', ','), Math.abs(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })]; };
+    const valores = [...formas(t.valor_titulo), ...formas(valorLiquidoTitulo(t))];
+    return valores.some(v => [...termos].some(x => x && v.includes(x)));
   }
   function atualizarEstadoFiltrosPorOperacao(){
     const ativo = !!document.getElementById('filtroCodigoOperacao').value.trim();
@@ -3505,7 +3532,7 @@
         <div class="cadastro-thumb">${t.codigo ?? '—'}</div>
         <div class="cadastro-info" data-abrir-titulo="${t.id}" style="cursor:pointer;">
           <div class="principal">${escapeHtml(t.titulo || t.pessoa?.nome || 'Sem título')} <span class="pill pill-${t.tipo_movimento.toLowerCase()}">${t.tipo_movimento === 'PAGAR' ? 'Pagar' : 'Receber'}</span>${t.data_pagamento ? `<span class="pill pill-pago">${t.tipo_movimento === 'PAGAR' ? 'Paga' : 'Recebida'}</span>` : ''}</div>
-          <div class="meta">${escapeHtml(t.pessoa?.nome || (t.descricao_avulsa ? '0 — ' + t.descricao_avulsa : '—'))} · Vence ${formatarData(t.data_vencimento)}${t.data_pagamento ? ' · Pago em ' + formatarData(t.data_pagamento) : ''}${rotuloEmpresaTitulo(t) ? ` <span class="pill" style="background:var(--brand-soft); color:var(--brand-2); margin-left:6px;" title="Empresa do rateio">🏢 ${escapeHtml(rotuloEmpresaTitulo(t))}</span>` : ''}${chipContaTitulo(t)}</div>
+          <div class="meta">${escapeHtml(t.pessoa?.nome || (t.descricao_avulsa ? '0 — ' + t.descricao_avulsa : '—'))} · Vence ${formatarData(t.data_vencimento)}${t.data_pagamento ? ' · Pago em ' + formatarData(t.data_pagamento) : ''}${rotuloEmpresaTitulo(t) ? ` <span class="pill" style="background:var(--brand-soft); color:var(--brand-2); margin-left:6px;" title="Empresa do rateio">🏢 ${escapeHtml(rotuloEmpresaTitulo(t))}</span>` : ''}${chipContaTitulo(t)}${t.unidade_operacao?.codigo != null ? ` <span class="pill" data-op-titulo="${t.unidade_operacao.codigo}" title="Operação ${t.unidade_operacao.codigo} — clique para ver TODOS os títulos gerados nesta operação (pagos e em aberto)" style="background:none; border:1px solid var(--border); color:var(--muted); margin-left:6px; cursor:pointer;">🔗 Op. ${t.unidade_operacao.codigo}</span>` : ''}</div>
           ${(t.documento_fiscal || t.observacao) ? `<div class="meta" style="font-size:.72rem; opacity:.85;">${t.documento_fiscal ? 'Doc. fiscal: ' + escapeHtml(t.documento_fiscal) : ''}${t.documento_fiscal && t.observacao ? ' · ' : ''}${t.observacao ? escapeHtml(t.observacao) : ''}</div>` : ''}
         </div>
         <div class="cadastro-valor" data-abrir-titulo="${t.id}" style="cursor:pointer;"><div class="valor mono">${formatarMoeda(t.valor_titulo)}</div></div>
@@ -3521,7 +3548,13 @@
     lista.querySelectorAll('[data-abrir-titulo]').forEach(el => el.addEventListener('click', () => abrirModalTitulo(Number(el.dataset.abrirTitulo))));
     lista.querySelectorAll('[data-checkbox-titulo]').forEach(chk => chk.addEventListener('change', atualizarBotaoBaixaLote));
     lista.querySelectorAll('[data-conta-titulo]').forEach(ligarChipContaTitulo);
+    lista.querySelectorAll('[data-op-titulo]').forEach(el => el.addEventListener('click', ev => { ev.stopPropagation(); filtrarPorOperacao(el.dataset.opTitulo); }));
     atualizarBotaoBaixaLote();
+  }
+  // clicar no chip «Op. N» do card preenche o filtro «Código da operação» (que mostra todos os títulos da operação e ignora os demais filtros)
+  function filtrarPorOperacao(codigo){
+    const campo = document.getElementById('filtroCodigoOperacao'); campo.value = String(codigo);
+    campo.dispatchEvent(new Event('input')); campo.scrollIntoView({ block: 'nearest' });
   }
   function atualizarBotaoBaixaLote(){
     const qtd = document.querySelectorAll('[data-checkbox-titulo]:checked').length;
@@ -3537,7 +3570,7 @@
     if(mestre){ mestre.disabled = !caixas.length; mestre.checked = caixas.length > 0 && qtd === caixas.length; mestre.indeterminate = qtd > 0 && qtd < caixas.length; }
   }
   // R$ com separador de milhar (os totais ficam grandes); o formatarMoeda antigo é mantido nas listas por compatibilidade
-  function formatarMoedaMilhar(v){ return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }); }
+  function formatarMoedaMilhar(v){ return FMT_MOEDA_BRL.format(Number(v) || 0); }   // igual a formatarMoeda, mas nulo vira R$ 0,00
   function atualizarBarraTopoTitulos(qtd, totalPagar, totalReceber){
     document.getElementById('topoQtdTitulos').textContent = Number(qtd).toLocaleString('pt-BR');
     const tipo = document.getElementById('filtroTipoTitulo').value;
@@ -5545,6 +5578,7 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
   // -----------------------------------------------------------------
   // RELATÓRIO PDF -- TÍTULOS (agrupado por conta pagadora e status)
   // -----------------------------------------------------------------
+  try{ const g = localStorage.getItem('fin_pdf_titulos_agrup'); if(g && ['conta', 'fornecedor', 'vencimento'].includes(g)) document.getElementById('selAgruparPdfTitulos').value = g; } catch(e){ /* sem localStorage */ }
   document.getElementById('btnGerarPdfTitulos').addEventListener('click', async () => {
     const btn = document.getElementById('btnGerarPdfTitulos');
     btn.disabled = true; btn.textContent = 'Gerando...';
@@ -5552,23 +5586,43 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
       await carregarJsPdf();
       const { jsPDF } = window.jspdf;
       const doc = new jsPDF();
-      let y = await montarCabecalhoPdf(doc, 'Relatório de Títulos');
+      const modo = document.getElementById('selAgruparPdfTitulos').value || 'conta';
+      try{ localStorage.setItem('fin_pdf_titulos_agrup', modo); } catch(e){ /* sem localStorage */ }
+      const ROT_MODO = { conta: 'por conta de pagamento', fornecedor: 'por fornecedor/cliente', vencimento: 'por vencimento' };
+      let y = await montarCabecalhoPdf(doc, 'Relatório de Títulos — ' + ROT_MODO[modo]);
 
       const filtrados = obterTitulosFiltrados();
       if(!filtrados.length){ alert('Nenhum título encontrado com os filtros atuais.'); return; }
 
-      // agrupa primeiro por tipo (Pagar/Receber), depois por conta pagadora,
-      // depois por status dentro de cada conta
+      // agrupa primeiro por tipo (Pagar/Receber) e depois pelo modo escolhido: conta de pagamento (→ status), fornecedor/cliente (→ status) ou
+      // vencimento (um bloco por dia, com a situação em coluna).
+      const nomeContaDe = t => { const c = todasContas.find(x => x.id === t.id_conta_pagamento); return c ? c.nome : 'Sem conta definida'; };
+      const nomePessoaDe = t => t.pessoa?.nome || (t.descricao_avulsa ? '0 — ' + t.descricao_avulsa : 'Sem fornecedor/cliente');
+      const statusDe = t => t.data_pagamento ? 'Pagos/Recebidos' : 'Em aberto';
+      const porVenc = (a, b) => String(a.data_vencimento || '').localeCompare(String(b.data_vencimento || '')) || (Number(a.codigo) || 0) - (Number(b.codigo) || 0);
+      const porNome = (a, b) => nomePessoaDe(a).localeCompare(nomePessoaDe(b), 'pt-BR') || porVenc(a, b);
       const gruposPorTipo = { PAGAR: {}, RECEBER: {} };
       filtrados.forEach(t => {
-        const conta = todasContas.find(c => c.id === t.id_conta_pagamento);
-        const nomeConta = conta ? conta.nome : 'Sem conta definida';
-        const status = t.data_pagamento ? 'Pagos/Recebidos' : 'Em aberto';
+        const chave = modo === 'fornecedor' ? nomePessoaDe(t) : modo === 'vencimento' ? (t.data_vencimento || '') : nomeContaDe(t);
+        const interno = modo === 'vencimento' ? 'Títulos' : statusDe(t);
         const grupos = gruposPorTipo[t.tipo_movimento];
-        grupos[nomeConta] = grupos[nomeConta] || {};
-        grupos[nomeConta][status] = grupos[nomeConta][status] || [];
-        grupos[nomeConta][status].push(t);
+        grupos[chave] = grupos[chave] || {};
+        grupos[chave][interno] = grupos[chave][interno] || [];
+        grupos[chave][interno].push(t);
       });
+      const rotuloGrupo = (tipo, chave) => modo === 'fornecedor' ? (tipo === 'PAGAR' ? 'Fornecedor: ' : 'Cliente: ') + chave
+        : modo === 'vencimento' ? 'Vencimento: ' + (chave ? formatarData(chave) : 'sem data') : 'Conta: ' + chave;
+      const totalGrupo = (tipo, chave) => modo === 'fornecedor' ? `Total de "${chave}"` : modo === 'vencimento' ? `Total do vencimento ${chave ? formatarData(chave) : 'sem data'}` : `Total da conta "${chave}"`;
+      const colunas = modo === 'conta' ? ['Código', 'Cliente/Fornecedor', 'Título', 'Vencimento', 'Valor']
+        : modo === 'fornecedor' ? ['Código', 'Conta', 'Título', 'Vencimento', 'Valor']
+        : ['Código (op.)', 'Cliente/Fornecedor', 'Título', 'Conta', 'Situação', 'Valor'];
+      const linhaTabela = t => modo === 'conta' ? [
+          String(t.codigo ?? '—'), nomePessoaDe(t), t.titulo || '—',
+          formatarData(t.data_vencimento) + (t.unidade_operacao?.codigo != null ? ` (${t.unidade_operacao.codigo})` : ''), formatarMoeda(t.valor_titulo)]
+        : modo === 'fornecedor' ? [
+          String(t.codigo ?? '—'), nomeContaDe(t), t.titulo || '—',
+          formatarData(t.data_vencimento) + (t.unidade_operacao?.codigo != null ? ` (${t.unidade_operacao.codigo})` : ''), formatarMoeda(t.valor_titulo)]
+        : [String(t.codigo ?? '—') + (t.unidade_operacao?.codigo != null ? ` (${t.unidade_operacao.codigo})` : ''), nomePessoaDe(t), t.titulo || '—', nomeContaDe(t), statusDe(t), formatarMoeda(t.valor_titulo)];
 
       [['PAGAR', 'TÍTULOS A PAGAR', [192, 57, 43]], ['RECEBER', 'TÍTULOS A RECEBER', [27, 67, 50]]].forEach(([tipo, tituloSecao, corSecao]) => {
         const grupos = gruposPorTipo[tipo];
@@ -5579,28 +5633,25 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
         doc.setTextColor(0, 0, 0);
         y += 8;
 
-        Object.entries(grupos).forEach(([nomeConta, statusMap]) => {
+        let entradas = Object.entries(grupos);
+        if(modo === 'fornecedor') entradas.sort((a, b) => (a[0] === 'Sem fornecedor/cliente') - (b[0] === 'Sem fornecedor/cliente') || a[0].localeCompare(b[0], 'pt-BR'));
+        else if(modo === 'vencimento') entradas.sort((a, b) => (a[0] || '9999').localeCompare(b[0] || '9999'));
+        entradas.forEach(([chaveGrupo, statusMap]) => {
+          if(y > 265){ doc.addPage(); y = 20; }
           doc.setFontSize(11); doc.setFont(undefined, 'bold');
-          doc.text('Conta: ' + nomeConta, 14, y);
+          doc.text(rotuloGrupo(tipo, chaveGrupo), 14, y);
           y += 2;
           let qtdConta = 0, somaConta = 0;
           Object.entries(statusMap).forEach(([status, lista]) => {
-            const corpo = lista.map(t => [
-              String(t.codigo ?? '—'),
-              t.pessoa?.nome || (t.descricao_avulsa ? '0 — ' + t.descricao_avulsa : '—'),
-              t.titulo || '—',
-              formatarData(t.data_vencimento) + (t.unidade_operacao?.codigo != null ? ` (${t.unidade_operacao.codigo})` : ''),
-              formatarMoeda(t.valor_titulo),
-            ]);
+            if(modo === 'fornecedor') lista.sort(porVenc); else if(modo === 'vencimento') lista.sort(porNome);
+            const corpo = lista.map(linhaTabela);
             const subtotal = lista.reduce((acc, t) => acc + Number(t.valor_titulo), 0);
+            const cab = colunas.map(() => ''); cab[0] = status; cab[cab.length - 1] = formatarMoeda(subtotal);
             doc.autoTable({
               startY: y,
-              head: [[status, '', '', '', formatarMoeda(subtotal)]],
+              head: [cab],
               body: corpo,
-              columns: [
-                { header: 'Código' }, { header: 'Cliente/Fornecedor' },
-                { header: 'Título' }, { header: 'Vencimento' }, { header: 'Valor' },
-              ],
+              columns: colunas.map(h => ({ header: h })),
               theme: 'grid',
               headStyles: { fillColor: corSecao },
               styles: { fontSize: 8 },
@@ -5616,7 +5667,7 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
             somaConta += subtotal;
           });
           doc.setFontSize(9); doc.setFont(undefined, 'bold');
-          doc.text(`Total da conta "${nomeConta}": ${qtdConta} título${qtdConta === 1 ? '' : 's'} — ${formatarMoeda(somaConta)}`, 14, y);
+          doc.text(`${totalGrupo(tipo, chaveGrupo)}: ${qtdConta} título${qtdConta === 1 ? '' : 's'} — ${formatarMoeda(somaConta)}`, 14, y);
           doc.setFont(undefined, 'normal');
           y += 8;
         });
