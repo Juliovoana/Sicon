@@ -315,6 +315,10 @@
   }
   .btn-link-convite:hover{ background:#DCEAE2; }
   .btn-link-convite svg{ width:15px; height:15px; }
+  .dup-num{ width:100%; min-width:0; padding:5px 6px; font-size:.8rem; text-align:right; border:1px solid var(--border); border-radius:6px; background:var(--bg); font-family:inherit; }
+  .dup-num:focus{ outline:2px solid var(--brand-2); background:#fff; }
+  .dup-num:disabled{ opacity:.45; }
+  .dup-off td{ opacity:.5; }
   .acoes-prof{ display:flex; gap:6px; margin-left:8px; flex-shrink:0; }
   .btn-acao-prof{ border:1px solid var(--border); background:var(--surface); color:var(--ink); border-radius:8px; padding:5px 9px; cursor:pointer; font-size:.76rem; font-family:inherit; white-space:nowrap; }
   .btn-acao-prof:hover:not([disabled]){ border-color:var(--brand-2); color:var(--brand-2); }
@@ -944,6 +948,18 @@
       <div class="modal-ajuda-body">
         <nav class="modal-ajuda-nav" id="ajudaModuloNav"></nav>
         <div class="modal-ajuda-conteudo" id="ajudaModuloConteudo"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-lista-overlay" id="modalDuplicarRecibo" style="z-index:85;">
+    <div class="modal-lista" style="max-width:1180px; width:96vw; max-height:92vh;">
+      <div class="modal-lista-head"><h3 id="dupTitulo">Duplicar recibo</h3><button class="drawer-close" id="btnFecharModalDuplicarX">✕</button></div>
+      <div class="modal-lista-body" style="padding:16px 20px; overflow:auto; flex:1;" id="dupCorpo"></div>
+      <div style="padding:12px 20px; border-top:1px solid var(--border); display:flex; gap:10px; justify-content:flex-end; align-items:center; flex-wrap:wrap;">
+        <span id="dupResumo" style="font-size:.84rem; font-weight:600; margin-right:auto;"></span>
+        <button class="btn-upload-imagem" id="btnCancelarDuplicar">Cancelar</button>
+        <button class="btn-novo" id="btnConfirmarDuplicar">Criar recibo duplicado</button>
       </div>
     </div>
   </div>
@@ -1720,7 +1736,7 @@
           (valor + alimentação + transporte − descontos). Se algum profissional ainda não estiver ligado ao Financeiro, o sistema oferece ligar pelo CPF na hora; sem CPF válido, ele pede para corrigir.</li>
           <li>O Financeiro <strong>só confere e aceita</strong>: sem escolher nada, saem os títulos a pagar (um por profissional), com o rateio 100% e a conta de pagamento do recibo.</li>
           <li><strong>Cancelar envio</strong> (dentro do recibo) vale enquanto o Financeiro não aceitou: o protocolo é excluído e o <strong>recibo volta a ficar aberto</strong> para ajustar e reenviar. Depois do aceite, só o Financeiro desfaz (se nenhum título tiver sido pago).</li>
-          <li><strong>Folha mensal</strong>: use <strong>Duplicar</strong> no recibo do mês anterior — copia profissionais, valores e os dados de pagamento, e avança as datas, o vencimento e a competência em 1 mês — troque os valores provisionados pelos reais e envie.
+          <li><strong>Folha mensal</strong>: use <strong>Duplicar</strong> no recibo do mês anterior — abre uma <strong>janela</strong> onde você define a <strong>competência</strong> (o período, o vencimento e a observação «COMPETENCIA mm/aa» acompanham), escolhe <strong>quais colaboradores</strong> entram e informa o <strong>valor de cada um</strong> para o novo período (os valores vêm do recibo anterior como provisionados). Os dados de pagamento são copiados — depois é só conferir e enviar.
           Vale e transporte/alimentação que se pagam separados devem ser lançados em um recibo próprio (tipo próprio), como no Sicom.</li>
           <li>Quem envia: papéis <strong>Administrador</strong> e <strong>Financeiro</strong> do Staff (e o Principal).</li>
         </ul>
@@ -1728,7 +1744,7 @@
       { id: 'recibos', titulo: 'Recibos (RPA)', corpo: `
         <p>Um recibo agrupa vários lançamentos de pagamento avulso por número sequencial, gerado
         automaticamente pela unidade (não precisa digitar número).</p>
-        <p><strong>Folha mensal:</strong> use <strong>Duplicar</strong> no recibo da folha do mês anterior — ele copia todos os profissionais e valores (e pode avançar as datas em 1 mês) — ajuste para os valores reais, feche o recibo e gere a ordem de pagamento na aba <em>Pagamentos</em>.</p>
+        <p><strong>Folha mensal:</strong> use <strong>Duplicar</strong> no recibo da folha do mês anterior. Abre uma janela para escolher a <strong>competência/período</strong>, <strong>quais colaboradores</strong> serão duplicados e o <strong>valor de cada um</strong> no novo período (valor da diária e total se calculam entre si). O recibo novo nasce aberto, com os dados de pagamento copiados; confira e envie ao Financeiro pelo botão <em>Enviar ao Financeiro</em>.</p>
         <ul>
           <li>Cada lançamento = profissional + tipo (Diária completa, Meia diária, Hora extra, Adicional
           noturno, Outro) + <strong>valor bruto + alimentação + transporte − descontos = valor líquido</strong> (o líquido é calculado,
@@ -4519,59 +4535,145 @@
     await carregarRecibos();
   });
 
-  document.getElementById('btnDuplicarRecibo').addEventListener('click', async () => {
-    if(!numeroReciboAtual) return;
-    const grupo = agruparRecibos().find(g => g.numero === numeroReciboAtual);
-    if(!grupo) return;
-    if(!confirm(`Duplicar o Recibo Nº ${grupo.numero}? Isso cria um recibo novo (com número próprio) com os mesmos profissionais e valores — você só ajusta o evento depois, se precisar.`)) return;
-    // folha mensal: copia o mês anterior e avança as datas dos lançamentos em 1 mês (dia limitado ao fim do mês); depois é só trocar os valores provisionados pelos reais
-    const avancarMes = confirm('Avançar as datas dos lançamentos em 1 mês?\n\nOK = sim (use para a folha do mês seguinte)\nCancelar = manter as mesmas datas');
-    const somaUmMes = (d) => { if(!d) return d; const [y, m, dia] = String(d).slice(0, 10).split('-').map(Number); const ult = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(); const nd = new Date(Date.UTC(y, m, Math.min(dia, ult))); return nd.toISOString().slice(0, 10); };
+  // =================================================================
+  // DUPLICAR RECIBO — janela: competência/período, vencimento, evento, observação e QUAIS colaboradores vão, com o VALOR de cada um para o novo período
+  // (folha mensal: duplica o mês anterior, troca os valores provisionados pelos reais e cria o recibo novo já com os dados de pagamento)
+  // =================================================================
+  let dupEstado = null;
+  const dupMes = (iso) => String(iso || '').slice(0, 7);
+  const dupMesesEntre = (a, b) => (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 + (Number(b.slice(5, 7)) - Number(a.slice(5, 7)));
+  function dupSomaMeses(iso, n){   // mesmo dia (limitado ao fim do mês) n meses depois
+    if(!iso) return iso;
+    const [y, m, d] = String(iso).slice(0, 10).split('-').map(Number); const t = (m - 1) + n, ano = y + Math.floor(t / 12), mes = ((t % 12) + 12) % 12;
+    const ult = new Date(Date.UTC(ano, mes + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(ano, mes, Math.min(d, ult))).toISOString().slice(0, 10);
+  }
+  const dupPrimeiroDia = (ym) => ym + '-01';
+  const dupUltimoDia = (ym) => new Date(Date.UTC(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0)).toISOString().slice(0, 10);
 
-    const btn = document.getElementById('btnDuplicarRecibo');
-    btn.disabled = true;
-    btn.textContent = 'Duplicando...';
+  function dupAbrir(grupo){
+    const hOrig = todosReciboPag.get(grupo.numero);
+    const compAntiga = hOrig && hOrig.competencia ? dupMes(hOrig.competencia) : dupMes((grupo.itens.find(i => i.data) || {}).data) || dupMes(new Date().toISOString());
+    const compNova = dupSomaMeses(dupPrimeiroDia(compAntiga), 1).slice(0, 7);
+    const linhas = grupo.itens.slice().sort((a, b) => String(a.staff_profissionais?.nome_completo || '').localeCompare(String(b.staff_profissionais?.nome_completo || ''), 'pt-BR') || String(a.data || '').localeCompare(String(b.data || '')))
+      .map(item => { const q = ritNum(item.quantidade) || 1, bruto = ritNum(item.valor_bruto); return { item, sel: true, qtd: q, unit: ritArred(bruto / q), bruto, alim: ritNum(item.valor_alimentacao), transp: ritNum(item.valor_transporte), desc: ritNum(item.valor_descontos), ult: 'unit' }; });
+    dupEstado = { grupo, hOrig, compAntiga, linhas, obsEditada: false };
+    document.getElementById('dupTitulo').textContent = `Duplicar o recibo Nº ${grupo.numero}${grupo.tipo_nome ? ' — ' + grupo.tipo_nome : ''}`;
+    const optEv = '<option value="">(sem evento)</option>' + todosEventos.map(e => `<option value="${e.id}" ${grupo.evento_id === e.id ? 'selected' : ''}>${vinEsc(e.nome)}</option>`).join('');
+    document.getElementById('dupCorpo').innerHTML = `
+      <div class="lancamento-rapido-item">
+        <div class="field-group campo-data" style="width:150px;"><label>Competência (mês)</label><input type="month" id="dup_comp" value="${compNova}"></div>
+        <div class="field-group campo-data" style="width:150px;"><label>Vencimento (pagamento)</label><input type="date" id="dup_venc" value="${hOrig && hOrig.vencimento ? dupSomaMeses(hOrig.vencimento, dupMesesEntre(compAntiga, compNova)) : ''}"></div>
+        <div class="field-group campo-data"><label>Período — de</label><input type="date" id="dup_de" value="${dupPrimeiroDia(compNova)}"></div>
+        <div class="field-group campo-data"><label>até</label><input type="date" id="dup_ate" value="${dupUltimoDia(compNova)}"></div>
+        <div class="field-group" style="flex:1; min-width:170px;"><label>Evento</label><select id="dup_evento">${optEv}</select></div>
+        <div class="field-group" style="flex:1.3; min-width:200px;"><label>Observação (vai nos títulos)</label><input type="text" id="dup_obs" value="COMPETENCIA ${compNova.slice(5, 7)}/${compNova.slice(2, 4)}"></div>
+      </div>
+      <label style="display:flex; align-items:center; gap:6px; font-size:.8rem; margin:2px 0 8px; cursor:pointer;"><input type="checkbox" id="dup_manter_dia" checked> Manter o dia de cada lançamento (só muda o mês). Desmarcado, todos os lançamentos sem período recebem a data inicial do período; os lançamentos com várias diárias sempre recebem o período acima.</label>
+      <div style="display:flex; gap:8px; margin:8px 0; align-items:center; flex-wrap:wrap;">
+        <button type="button" class="btn-upload-imagem" id="dupTodos">Marcar todos</button><button type="button" class="btn-upload-imagem" id="dupNenhum">Desmarcar todos</button>
+        <span style="font-size:.76rem; color:var(--muted);">Desmarque quem não entra neste período e ajuste o <strong>valor</strong> de cada um (valor da diária ↔ total se calculam sozinhos).</span>
+      </div>
+      <div style="max-height:46vh; overflow:auto;"><table class="vin-tabela"><thead><tr><th style="width:30px;"></th><th>Colaborador</th><th>Tipo</th><th style="width:70px; text-align:right;">Qtd</th><th style="width:105px; text-align:right;">Valor da diária</th><th style="width:105px; text-align:right;">Total</th><th style="width:90px; text-align:right;">Alim.</th><th style="width:90px; text-align:right;">Transp.</th><th style="width:90px; text-align:right;">Desc.</th><th style="width:105px; text-align:right;">Líquido</th></tr></thead>
+      <tbody>${linhas.map((l, i) => `<tr data-dup-i="${i}"><td><input type="checkbox" data-dup="sel" checked></td>
+        <td>${vinEsc(l.item.staff_profissionais?.nome_completo || sentProfNome(l.item.profissional_id))}${l.item.staff_funcoes?.nome ? `<br><small style="color:var(--muted);">${vinEsc(l.item.staff_funcoes.nome)}</small>` : ''}</td>
+        <td>${vinEsc(l.item.tipo_diaria || '—')}</td>
+        <td><input type="number" class="dup-num" data-dup="qtd" step="0.5" min="0.5" value="${l.qtd}"></td>
+        <td><input type="number" class="dup-num" data-dup="unit" step="0.01" min="0" value="${l.unit}"></td>
+        <td><input type="number" class="dup-num" data-dup="bruto" step="0.01" min="0" value="${l.bruto}"></td>
+        <td><input type="number" class="dup-num" data-dup="alim" step="0.01" min="0" value="${l.alim}"></td>
+        <td><input type="number" class="dup-num" data-dup="transp" step="0.01" min="0" value="${l.transp}"></td>
+        <td><input type="number" class="dup-num" data-dup="desc" step="0.01" min="0" value="${l.desc}"></td>
+        <td class="mono" style="text-align:right; font-weight:700;" data-dup="liq">${formatarMoeda(l.bruto + l.alim + l.transp - l.desc)}</td></tr>`).join('')}</tbody></table></div>
+      <p style="font-size:.76rem; color:var(--muted); margin:8px 0 0;">Valores iniciais = os do recibo original (provisionados). O recibo novo nasce <strong>aberto</strong>, com os dados de pagamento (conta, empresa, setor, plano e evento do Financeiro) copiados e o vencimento/competência novos.</p>`;
+    document.getElementById('modalDuplicarRecibo').classList.add('show'); dupResumo();
+  }
+  function dupEntrada(ev){
+    const el = ev.target, tr = el.closest('tr[data-dup-i]');
+    if(el.id === 'dup_comp'){
+      const ym = el.value; if(!ym || !dupEstado) return;
+      document.getElementById('dup_de').value = dupPrimeiroDia(ym); document.getElementById('dup_ate').value = dupUltimoDia(ym);
+      const h = dupEstado.hOrig; if(h && h.vencimento) document.getElementById('dup_venc').value = dupSomaMeses(h.vencimento, dupMesesEntre(dupEstado.compAntiga, ym));
+      if(!dupEstado.obsEditada) document.getElementById('dup_obs').value = `COMPETENCIA ${ym.slice(5, 7)}/${ym.slice(2, 4)}`;
+      return;
+    }
+    if(el.id === 'dup_obs'){ dupEstado.obsEditada = true; return; }
+    if(!tr || !el.dataset.dup) return;
+    const l = dupEstado.linhas[Number(tr.dataset.dupI)], campo = el.dataset.dup;
+    if(campo === 'sel'){ l.sel = el.checked; tr.classList.toggle('dup-off', !el.checked); tr.querySelectorAll('input.dup-num').forEach(i => { i.disabled = !el.checked; }); dupResumo(); return; }
+    const v = Math.max(Number(el.value) || 0, 0);
+    if(campo === 'qtd'){ l.qtd = v || 1; if(l.ult === 'total') l.unit = ritArred(l.bruto / l.qtd); else l.bruto = ritArred(l.unit * l.qtd); }
+    else if(campo === 'unit'){ l.unit = v; l.ult = 'unit'; l.bruto = ritArred(l.unit * l.qtd); }
+    else if(campo === 'bruto'){ l.bruto = v; l.ult = 'total'; l.unit = ritArred(l.bruto / l.qtd); }
+    else l[campo] = v;
+    const set = (c, val) => { const i = tr.querySelector(`[data-dup="${c}"]`); if(i && i !== el) i.value = val; };
+    set('unit', l.unit); set('bruto', l.bruto);
+    tr.querySelector('[data-dup="liq"]').textContent = formatarMoeda(l.bruto + l.alim + l.transp - l.desc);
+    dupResumo();
+  }
+  function dupResumo(){
+    if(!dupEstado) return;
+    const sel = dupEstado.linhas.filter(l => l.sel), tot = sel.reduce((a, l) => a + l.bruto + l.alim + l.transp - l.desc, 0);
+    document.getElementById('dupResumo').textContent = `${sel.length} de ${dupEstado.linhas.length} lançamento(s) · ${formatarMoeda(tot)}`;
+  }
+  async function dupConfirmar(){
+    const E = dupEstado; if(!E) return;
+    const sel = E.linhas.filter(l => l.sel);
+    const comp = document.getElementById('dup_comp').value, de = document.getElementById('dup_de').value, ate = document.getElementById('dup_ate').value, venc = document.getElementById('dup_venc').value;
+    if(!sel.length){ alert('Marque pelo menos um lançamento para duplicar.'); return; }
+    if(!comp){ alert('Informe a competência do novo recibo.'); return; }
+    if(!de){ alert('Informe o início do período.'); return; }
+    if(ate && ate < de){ alert('O fim do período não pode ser antes do início.'); return; }
+    const eventoId = document.getElementById('dup_evento').value || null, obs = document.getElementById('dup_obs').value.trim() || null, manterDia = document.getElementById('dup_manter_dia').checked;
+    const delta = dupMesesEntre(E.compAntiga, comp), total = sel.reduce((a, l) => a + l.bruto + l.alim + l.transp - l.desc, 0);
+    if(!confirm(`Criar o recibo duplicado com ${sel.length} lançamento(s), total ${formatarMoeda(total)}, competência ${comp.slice(5, 7)}/${comp.slice(0, 4)}?`)) return;
+    const btn = document.getElementById('btnConfirmarDuplicar'); btn.disabled = true; btn.textContent = 'Duplicando…';
     try{
       const { data: novoNumero, error: erroNumero } = await sb.rpc('fn_proximo_numero_recibo', { p_unidade_negocio_id: agenciaId });
       if(erroNumero) throw new Error(erroNumero.message);
-
-      const novasLinhas = grupo.itens.map(item => ({
-        unidade_negocio_id: agenciaId,
-        profissional_id: item.profissional_id,
-        funcao_id: item.funcao_id,
-        evento_id: item.evento_id,
-        tipo_recibo_id: item.tipo_recibo_id,
-        numero_recibo: novoNumero,
-        status: 'aberto',
-        tipo_diaria: item.tipo_diaria,
-        data: avancarMes ? somaUmMes(item.data) : item.data,
-        ...(ritNum(item.quantidade) > 1 ? { quantidade: item.quantidade, valor_unitario: item.valor_unitario, periodo_inicio: avancarMes ? somaUmMes(item.periodo_inicio) : item.periodo_inicio, periodo_fim: avancarMes ? somaUmMes(item.periodo_fim) : item.periodo_fim } : {}),
-        valor_bruto: item.valor_bruto,
-        valor_descontos: item.valor_descontos,
-        valor_alimentacao: item.valor_alimentacao,
-        valor_transporte: item.valor_transporte,
-        valor_liquido: item.valor_liquido,
-        data_emissao: new Date().toISOString().slice(0, 10)
-      }));
-      const { error } = await sb.from('staff_rpas').insert(novasLinhas);
-      if(error) throw new Error(error.message);
-      await registrarSentinelaStaff('staff_recibo_duplicado', `Duplicou o recibo Nº ${grupo.numero} no recibo Nº ${novoNumero} (${novasLinhas.length} lançamento(s), ${formatarMoeda(grupo.total)}${avancarMes ? ', datas avançadas 1 mês' : ''})`, novoNumero);
-      // dados de pagamento (conta, empresa, setor, plano, evento) vão junto; vencimento e competência avançam 1 mês e a observação vira «COMPETENCIA mm/aa»
-      const hOrig = todosReciboPag.get(grupo.numero);
-      if(hOrig){
-        const comp = hOrig.competencia ? (avancarMes ? somaUmMes(hOrig.competencia) : hOrig.competencia) : null;
-        await sb.from('staff_recibos_pagamento').insert({ unidade_negocio_id: agenciaId, numero_recibo: novoNumero,
-          vencimento: hOrig.vencimento ? (avancarMes ? somaUmMes(hOrig.vencimento) : hOrig.vencimento) : null, competencia: comp,
-          id_conta_pagamento: hOrig.id_conta_pagamento, empresa_id: hOrig.empresa_id, setor_id: hOrig.setor_id, plano_de_contas_id: hOrig.plano_de_contas_id, evento_codigo: hOrig.evento_codigo,
-          observacao: avancarMes && comp ? 'COMPETENCIA ' + comp.slice(5, 7) + '/' + comp.slice(2, 4) : hOrig.observacao });
+      const novas = sel.map(l => {
+        const it = l.item, comPeriodo = l.qtd > 1 || it.periodo_inicio;
+        const q = l.qtd || 1, liquido = ritArred(l.bruto + l.alim + l.transp - l.desc);
+        return {
+          unidade_negocio_id: agenciaId, profissional_id: it.profissional_id, funcao_id: it.funcao_id, evento_id: eventoId, tipo_recibo_id: it.tipo_recibo_id, numero_recibo: novoNumero, status: 'aberto',
+          tipo_diaria: it.tipo_diaria, data: comPeriodo || !manterDia || !it.data ? de : dupSomaMeses(it.data, delta),
+          ...(q !== 1 || comPeriodo ? { quantidade: q, valor_unitario: ritArred(l.bruto / q), periodo_inicio: comPeriodo ? de : null, periodo_fim: comPeriodo ? (ate || null) : null } : {}),
+          valor_bruto: l.bruto, valor_descontos: l.desc, valor_alimentacao: l.alim, valor_transporte: l.transp, valor_liquido: liquido, data_emissao: new Date().toISOString().slice(0, 10)
+        };
+      });
+      const { error } = await sb.from('staff_rpas').insert(novas);
+      if(error) throw new Error(/quantidade|valor_unitario|periodo/i.test(error.message) ? 'As colunas de quantidade de diárias ainda não existem neste banco. Rode o arquivo staff-ordens-pagamento.sql no Supabase e atualize a página. (' + error.message + ')' : error.message);
+      const h = E.hOrig;
+      if(h){
+        const rp = await sb.from('staff_recibos_pagamento').insert({ unidade_negocio_id: agenciaId, numero_recibo: novoNumero, vencimento: venc || null, competencia: comp + '-01', id_conta_pagamento: h.id_conta_pagamento, empresa_id: h.empresa_id,
+          setor_id: h.setor_id, plano_de_contas_id: h.plano_de_contas_id, evento_codigo: h.evento_codigo, observacao: obs });
+        if(rp && rp.error) console.warn('Dados de pagamento do recibo novo não gravados:', rp.error.message);
       }
+      await registrarSentinelaStaff('staff_recibo_duplicado', `Duplicou o recibo Nº ${E.grupo.numero} no recibo Nº ${novoNumero} — competência ${comp.slice(5, 7)}/${comp.slice(0, 4)}, período ${formatarDataSemFuso(de)}${ate ? ' a ' + formatarDataSemFuso(ate) : ''}: ${sel.length} de ${E.linhas.length} lançamento(s), ${formatarMoeda(total)} (original ${formatarMoeda(E.grupo.total)})`, novoNumero);
+      document.getElementById('modalDuplicarRecibo').classList.remove('show');
       await carregarRecibos();
       abrirDrawerRecibo(novoNumero);
     } catch(erro){
       alert('Erro ao duplicar: ' + erro.message);
     } finally{
-      btn.disabled = false;
-      btn.textContent = 'Duplicar';
+      btn.disabled = false; btn.textContent = 'Criar recibo duplicado';
+    }
+  }
+  document.getElementById('btnDuplicarRecibo').addEventListener('click', () => {
+    if(!numeroReciboAtual) return;
+    const grupo = agruparRecibos().find(g => g.numero === numeroReciboAtual);
+    if(!grupo || !grupo.itens.length){ alert('Este recibo não tem lançamentos para duplicar.'); return; }
+    dupAbrir(grupo);
+  });
+  document.getElementById('dupCorpo').addEventListener('input', dupEntrada);
+  document.getElementById('dupCorpo').addEventListener('change', dupEntrada);
+  document.getElementById('btnConfirmarDuplicar').addEventListener('click', dupConfirmar);
+  document.getElementById('btnCancelarDuplicar').addEventListener('click', () => document.getElementById('modalDuplicarRecibo').classList.remove('show'));
+  document.getElementById('btnFecharModalDuplicarX').addEventListener('click', () => document.getElementById('modalDuplicarRecibo').classList.remove('show'));
+  document.getElementById('dupCorpo').addEventListener('click', (ev) => {
+    if(ev.target.id === 'dupTodos' || ev.target.id === 'dupNenhum'){
+      const marcar = ev.target.id === 'dupTodos';
+      document.querySelectorAll('#dupCorpo input[data-dup="sel"]').forEach(c => { if(c.checked !== marcar){ c.checked = marcar; c.dispatchEvent(new Event('change', { bubbles: true })); } });
     }
   });
 

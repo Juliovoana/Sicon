@@ -489,7 +489,7 @@
           <!-- ================= TÍTULOS ================= -->
           <div class="panel-app" id="app-panel-titulos">
             <div class="filtros">
-              <input type="text" id="filtroBuscaTitulo" placeholder="Buscar por título, pessoa ou valor..." title="Digite parte do título, o nome da pessoa ou um valor (ex.: 4.993,23 · 4993,23 · R$ 446,5)">
+              <input type="text" id="filtroBuscaTitulo" placeholder="Título, pessoa, observação ou valor... (Enter)" title="Digite uma ou mais palavras (ex.: «arnaldo férias»): todas precisam aparecer no título, no nome da pessoa ou na observação, em qualquer ordem e sem acento. Também aceita valor (ex.: 4.993,23 · R$ 446,5). Aperte Enter. A busca só roda ao apertar Enter ou sair do campo.">
               <select id="filtroTipoTitulo">
                 <option value="">Pagar e Receber</option>
                 <option value="PAGAR" selected>Só a Pagar</option>
@@ -505,7 +505,7 @@
                 <label>De <input type="date" id="filtroTituloDataInicio"></label>
                 <label>Até <input type="date" id="filtroTituloDataFim"></label>
               </div>
-              <input type="text" id="filtroCodigoOperacao" placeholder="Código da operação..." style="max-width:170px;" title="Ao preencher, mostra TODOS os títulos gerados nessa operação (pagos e em aberto, pagar e receber) e ignora os outros filtros. Dica: clique no «🔗 Op. N» de um título.">
+              <input type="text" id="filtroCodigoOperacao" placeholder="Código da operação (Enter)" style="max-width:170px;" title="Ao preencher, mostra TODOS os títulos gerados nessa operação (pagos e em aberto, pagar e receber) e ignora os outros filtros. Dica: clique no «🔗 Op. N» de um título.">
               <button type="button" class="btn-novo" id="btnToggleFiltroAvancado" style="background:none; border:1px solid var(--border); color:var(--muted);">⚙ Filtro avançado <span id="badgeFiltroAvancado" style="display:none; background:var(--brand-2); color:#fff; border-radius:10px; padding:1px 7px; font-size:.72rem; margin-left:4px;">0</span></button>
               <span style="flex:1;"></span>
               <button class="btn-novo" id="btnBaixarLote" style="display:none; background:var(--brand-2);">Baixar selecionados (<span id="qtdSelecionadosLote">0</span>)</button>
@@ -2200,7 +2200,7 @@
   // Movimentação de Contas por um CÓDIGO DE CONCILIAÇÃO sequencial e gera (com regras por palavra-chave) o que o banco cobrou e não está
   // no contas a pagar (tarifa, cesta, juros, IOF, rendimento...). Tabelas/funções: financeiro-conciliacao.sql.
   // =================================================================
-  const concEstado = { aba: 'importar', contaId: '', de: '', ate: '', extratos: [], movs: [], selE: new Set(), selM: new Set(), selT: new Set(), titBusca: '', titTodos: false, ord: {}, feitas: null, regras: [], previa: null, iniciado: false, pessoaNomes: {} };
+  const concEstado = { aba: 'importar', contaId: '', de: '', ate: '', extratos: [], movs: [], selE: new Set(), selM: new Set(), selT: new Set(), titBusca: '', titTodos: false, jan: { modo: 'periodo', dia: '', de: '', ate: '', tol: 0 }, ord: {}, feitas: null, regras: [], previa: null, iniciado: false, pessoaNomes: {} };
   const concNum = v => extFmt.format(Number(v) || 0);
   const concNorm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
   const concValorBR = s => { const t = String(s == null ? '' : s).trim(); if(!t) return 0; const n = parseFloat(t.replace(/\./g, '').replace(',', '.')); return isNaN(n) ? 0 : n; };
@@ -2209,6 +2209,22 @@
   const concLiquidoMov = m => (m.tipo_movimento === 'C' ? 1 : -1) * Number(m.valor);
   function concMsg(html){ document.getElementById('concCorpo').innerHTML = '<div class="vazio">' + html + '</div>'; }
   function concDiasEntre(a, b){ return Math.abs((new Date(a + 'T00:00:00') - new Date(b + 'T00:00:00')) / 86400000); }
+  // JANELA DE DATAS dos lançamentos sem conciliação e dos títulos em aberto (data do lançamento / vencimento do título):
+  // 'periodo' = o De/Até do topo; 'dia' = um dia exato; 'livre' = outro período. «tol» = tolerância em dias (padrão 0 = exato).
+  function concJanela(){
+    const j = concEstado.jan; const tol = Math.max(0, parseInt(j.tol, 10) || 0);
+    let de = '', ate = '';
+    if(j.modo === 'dia'){ de = ate = j.dia; }
+    else if(j.modo === 'livre'){ de = j.de; ate = j.ate; }
+    else { de = concEstado.de; ate = concEstado.ate; }
+    return { ini: de ? (tol ? concSomaDias(de, -tol) : de) : '', fim: ate ? (tol ? concSomaDias(ate, tol) : ate) : '', de, ate, tol };
+  }
+  function concTextoJanela(){
+    const w = concJanela(); const t = w.tol ? ` (± ${w.tol} dia${w.tol > 1 ? 's' : ''})` : '';
+    if(!w.ini && !w.fim) return 'sem limite de data';
+    if(w.ini && w.ini === w.fim) return 'em ' + formatarData(w.ini);
+    return `de ${w.ini ? formatarData(w.ini) : '…'} a ${w.fim ? formatarData(w.fim) : '…'}${t}`;
+  }
   function concSomaDias(iso, d){ const x = new Date(iso + 'T00:00:00'); x.setDate(x.getDate() + d); return extDataISO(x); }
 
   // ---------------- leitores de extrato ----------------
@@ -2459,10 +2475,10 @@
     const busca = concNorm(concEstado.titBusca);
     if(busca){
       base = base.filter(t => concNorm(`${t.titulo || ''} ${t.pessoa && t.pessoa.nome || ''} ${t.descricao_avulsa || ''} ${t.codigo} ${valorLiquidoTitulo(t).toFixed(2).replace('.', ',')} ${concNum(valorLiquidoTitulo(t))}`).includes(busca));
-    } else if(!concEstado.titTodos){
-      const datas = concEstado.extratos.map(e => e.data).sort();
-      const de = concEstado.de || datas[0], ate = concEstado.ate || datas[datas.length - 1];
-      if(de && ate){ const ini = concSomaDias(de, -45), fim = concSomaDias(ate, 30); base = base.filter(t => t.data_vencimento && t.data_vencimento >= ini && t.data_vencimento <= fim); }
+    }
+    if(!concEstado.titTodos){
+      const w = concJanela();
+      if(w.ini || w.fim) base = base.filter(t => t.data_vencimento && (!w.ini || t.data_vencimento >= w.ini) && (!w.fim || t.data_vencimento <= w.fim));
     }
     // mantém visíveis os já marcados, mesmo que a busca/janela os esconda
     const ids = new Set(base.map(t => t.id)); concTitulosSelecionados().forEach(t => { if(!ids.has(t.id)) base.push(t); });
@@ -2477,7 +2493,7 @@
       const aj = (Number(t.acrescimos) > 0 ? ` · inclui juros/multa ${concNum(t.acrescimos)}` : '') + (Number(t.descontos) > 0 ? ` · desconto ${concNum(t.descontos)}` : '');
       const dj = `data-conc-juros="${t.id}" style="cursor:pointer;" title="Clique para ajustar o valor deste título (juros, multa, desconto, acordo alterado) e fechar com o valor cobrado"`;
       return `<tr><td><input type="checkbox" data-conc-t="${t.id}" ${concEstado.selT.has(t.id) ? 'checked' : ''}></td><td ${dj.replace('style="cursor:pointer;"', 'style="cursor:pointer; white-space:nowrap;"')}>${formatarData(t.data_vencimento)}</td><td ${dj}>${escapeHtml(t.titulo || 'Título #' + t.codigo)}<div class="ext-cod" style="margin:0;">${escapeHtml(nome)} · ${t.tipo_movimento === 'PAGAR' ? 'a pagar' : 'a receber'}${escapeHtml(aj)}</div></td><td class="num ${v < 0 ? 'ext-neg' : ''}" ${dj}>${concNum(v)}</td></tr>`; }).join('')
-      || '<tr><td colspan="4" class="vazio">Nenhum título em aberto neste filtro. Use a busca ou marque «todos os vencimentos».</td></tr>';
+      || `<tr><td colspan="4" class="vazio">Nenhum título em aberto com vencimento ${escapeHtml(concTextoJanela())}. Mude o dia/período acima ou marque «ignorar o período».</td></tr>`;
     tb.querySelectorAll('[data-conc-t]').forEach(c => c.addEventListener('change', () => { const id = Number(c.dataset.concT); c.checked ? concEstado.selT.add(id) : concEstado.selT.delete(id); concAtualizarTotais(); }));
     tb.querySelectorAll('[data-conc-juros]').forEach(el => el.addEventListener('click', () => concAbrirJuros(Number(el.dataset.concJuros))));
   }
@@ -2559,7 +2575,7 @@
     const re = await qe.order('data').order('id').limit(3000);
     if(re.error) throw new Error(/relation|does not exist|schema cache/i.test(re.error.message) ? 'A conciliação ainda não está instalada neste banco. Rode o arquivo financeiro-conciliacao.sql no Supabase.' : re.error.message);
     let qm = sb.from('financeiro_movimentacao_contas').select('id, data, historico, valor, tipo_movimento, descricao_avulsa, pessoa(nome)').eq('unidade_negocio_id', agenciaId).eq('id_conta', contaId).is('cod_conciliacao', null);
-    if(de) qm = qm.gte('data', concSomaDias(de, -7)); if(ate) qm = qm.lte('data', concSomaDias(ate, 7));
+    const wj = concJanela(); if(wj.ini) qm = qm.gte('data', wj.ini); if(wj.fim) qm = qm.lte('data', wj.fim);
     const rm = await qm.order('data').order('id').limit(3000);
     if(rm.error) throw new Error(rm.error.message);
     concEstado.extratos = re.data || []; concEstado.movs = rm.data || [];
@@ -2576,11 +2592,20 @@
         <span style="flex:1;"></span><span id="concTotais" class="ext-nota"></span>
         <button class="btn-novo" id="concConciliar" style="background:var(--brand-2);">✔ Conciliar marcados</button>
       </div>
+      <div class="filtros" id="concJanBarra" style="margin:6px 0 10px; padding:8px 10px; background:var(--brand-soft); border-radius:8px; align-items:center;">
+        <strong style="font-size:.8rem;">Lançamentos e títulos (coluna da direita):</strong>
+        <select id="concJanModo" style="padding:6px;"><option value="periodo">período do filtro (De/Até do topo)</option><option value="dia">dia exato</option><option value="livre">outro período</option></select>
+        <input type="date" id="concJanDia" style="padding:6px; ${concEstado.jan.modo === 'dia' ? '' : 'display:none;'}" value="${escapeHtml(concEstado.jan.dia)}">
+        <span id="concJanLivre" style="${concEstado.jan.modo === 'livre' ? '' : 'display:none;'} font-size:.8rem;">de <input type="date" id="concJanDe" style="padding:6px;" value="${escapeHtml(concEstado.jan.de)}"> até <input type="date" id="concJanAte" style="padding:6px;" value="${escapeHtml(concEstado.jan.ate)}"></span>
+        <label style="font-size:.8rem; display:flex; align-items:center; gap:4px;" title="0 = data exata. Aumente se o pagamento costuma sair em dia diferente do lançamento/vencimento.">± <input type="number" id="concJanTol" min="0" max="60" step="1" style="width:56px; padding:6px;" value="${concEstado.jan.tol}"> dia(s)</label>
+        <button class="ext-chip" id="concJanLinha" type="button" title="Usa a data da(s) linha(s) do extrato marcada(s)">📅 Data da linha marcada</button>
+        <span class="ext-nota" id="concJanTexto" style="margin:0;">Mostrando ${escapeHtml(concTextoJanela())}</span>
+      </div>
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(420px, 1fr)); gap:14px;">
         <div><h3 style="font-size:.9rem; margin-bottom:6px;">Extrato do banco — pendentes (${concEstado.extratos.length})</h3><div class="ext-tabela-wrap" style="max-height:60vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th>${concThOrd('ext', 'data', 'Data')}${concThOrd('ext', 'historico', 'Histórico')}${concThOrd('ext', 'valor', 'Valor', 'num')}</tr></thead><tbody id="concTbE"></tbody></table></div></div>
         <div><h3 style="font-size:.9rem; margin-bottom:6px;">Lançamentos sem conciliação (${concEstado.movs.length})</h3><div class="ext-tabela-wrap" style="max-height:30vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th>${concThOrd('mov', 'data', 'Data')}${concThOrd('mov', 'historico', 'Histórico')}${concThOrd('mov', 'valor', 'Valor', 'num')}</tr></thead><tbody id="concTbM"></tbody></table></div>
           <h3 style="font-size:.9rem; margin:14px 0 6px;">Títulos em aberto — contas a pagar/receber <span id="concTitContagem" class="ext-nota"></span></h3>
-          <div class="filtros" style="margin-bottom:6px;"><input type="text" id="concTitBusca" placeholder="Buscar fornecedor, título ou valor..." value="${escapeHtml(concEstado.titBusca)}" style="flex:1; min-width:180px;"><label style="display:flex; align-items:center; gap:5px; font-size:.8rem;"><input type="checkbox" id="concTitTodos" ${concEstado.titTodos ? 'checked' : ''}> todos os vencimentos</label></div>
+          <div class="filtros" style="margin-bottom:6px;"><input type="text" id="concTitBusca" placeholder="Buscar fornecedor, título ou valor..." value="${escapeHtml(concEstado.titBusca)}" style="flex:1; min-width:180px;"><label style="display:flex; align-items:center; gap:5px; font-size:.8rem;"><input type="checkbox" id="concTitTodos" ${concEstado.titTodos ? 'checked' : ''}> ignorar o período</label></div>
           <div class="ext-tabela-wrap" style="max-height:30vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th>${concThOrd('tit', 'data', 'Venc.')}${concThOrd('tit', 'historico', 'Título / fornecedor')}${concThOrd('tit', 'valor', 'Valor líquido', 'num')}</tr></thead><tbody id="concTbT"></tbody></table></div>
           <p class="ext-nota" style="margin-top:6px;">Marcar um <strong>título em aberto</strong> e conciliar <strong>quita o título</strong> (data do extrato, conta do banco) e cria o lançamento de caixa. Se o pagamento já está no caixa, marque o lançamento acima: aí só concilia. O valor cobrado é diferente do título (juros, multa, desconto, <strong>acordo de pagamento alterado</strong>, lançamento errado)? <strong>Clique no título</strong> para ajustar o valor e fechar com o extrato.</p></div>
       </div>`;
@@ -2590,6 +2615,22 @@
     document.querySelectorAll('[data-conc-e]').forEach(c => c.addEventListener('change', () => { const id = Number(c.dataset.concE); c.checked ? concEstado.selE.add(id) : concEstado.selE.delete(id); concDesenharTitulos(); concAtualizarTotais(); }));
     document.getElementById('concTitBusca').addEventListener('input', (ev) => { concEstado.titBusca = ev.target.value; concDesenharTitulos(); });
     document.getElementById('concTitTodos').addEventListener('change', (ev) => { concEstado.titTodos = ev.target.checked; concDesenharTitulos(); });
+    // janela de datas dos lançamentos/títulos: ao mudar, recarrega as listas da direita
+    const concJanMudou = () => {
+      const j = concEstado.jan;
+      j.modo = document.getElementById('concJanModo').value; j.dia = document.getElementById('concJanDia').value;
+      j.de = document.getElementById('concJanDe').value; j.ate = document.getElementById('concJanAte').value; j.tol = Math.max(0, parseInt(document.getElementById('concJanTol').value, 10) || 0);
+      concRenderConciliar();
+    };
+    document.getElementById('concJanModo').value = concEstado.jan.modo;
+    ['concJanModo', 'concJanDia', 'concJanDe', 'concJanAte', 'concJanTol'].forEach(i => document.getElementById(i).addEventListener('change', concJanMudou));
+    document.getElementById('concJanLinha').addEventListener('click', () => {
+      const ds = concEstado.extratos.filter(e => concEstado.selE.has(e.id)).map(e => e.data).sort();
+      if(!ds.length){ alert('Marque antes uma ou mais linhas do extrato.'); return; }
+      const j = concEstado.jan; j.tol = 0;
+      if(ds[0] === ds[ds.length - 1]){ j.modo = 'dia'; j.dia = ds[0]; } else { j.modo = 'livre'; j.de = ds[0]; j.ate = ds[ds.length - 1]; }
+      concRenderConciliar();
+    });
     concDesenharTitulos();
     document.querySelectorAll('[data-conc-m]').forEach(c => c.addEventListener('change', () => { const id = Number(c.dataset.concM); c.checked ? concEstado.selM.add(id) : concEstado.selM.delete(id); concAtualizarTotais(); }));
     concLigarOrd(() => concRenderConciliar(true));
@@ -3166,7 +3207,7 @@
   // =================================================================
   const AJUDA_FINANCEIRO = {
     titulo: 'Financeiro — Títulos, Contas e Rateio',
-    ultimaRevisao: '23/11/2026',
+    ultimaRevisao: '24/11/2026',
     secoes: [
       { id: 'dashboard', titulo: 'Dashboard', corpo: `
         <p>Visão geral do contas a pagar e a receber da unidade, no mesmo estilo do painel do
@@ -3203,6 +3244,7 @@
         nesse caso o campo "Módulo de origem" mostra de onde veio, em vez de "Lançamento Manual".</p>
       ` },
       { id: 'titulos', titulo: 'Títulos', corpo: `
+        <p><strong>Listas grandes:</strong> a tela desenha no máximo <strong>500 títulos de cada vez</strong> (com milhares de linhas o navegador travava). A contagem e os totais do topo somam <strong>todos</strong> os títulos filtrados; use <strong>Mostrar mais</strong> ou <strong>Mostrar todos</strong> no fim da lista. «Marcar todos» vale só para as linhas mostradas. A busca por texto (e o código da operação) <strong>só roda quando você aperta Enter</strong> ou sai do campo — não filtra a cada letra; as datas esperam cerca de 0,7 s depois da última alteração.</p>
         <p>Cada título é uma conta a <strong>Pagar</strong> ou a <strong>Receber</strong>, com um
         <strong>rateio obrigatório</strong>: toda linha do rateio precisa ter Empresa, Evento, Setor e
         Plano de Contas preenchidos, e a <strong>soma dos percentuais das linhas precisa fechar
@@ -3241,7 +3283,7 @@
           <strong>Clique nela</strong> para escolher outra conta — a mudança é gravada na hora e é a conta pela qual a <strong>Lista de pagamentos</strong> agrupa os títulos do dia. Título já pago mostra só a conta em que foi pago (não muda).
           <strong>Operação</strong>: cada título mostra o chip <strong>🔗 Op. N</strong>; clicar nele preenche o filtro <strong>Código da operação</strong> e lista <strong>todos os títulos gerados naquela operação</strong> (parcelas, pagos e em aberto), ignorando os outros filtros — ótimo para baixar, conferir ou desfazer o conjunto. Limpe o campo para voltar à lista normal.</li>
           <li>
-          A <strong>busca</strong> do topo encontra por <strong>título, nome da pessoa ou valor</strong>: digite o valor como preferir («4.993,23», «4993,23», «R$ 4.993,23») ou só um pedaço («4.993», «446,5») — compara com o valor do título e com o valor líquido (com juros/desconto).
+          A <strong>busca</strong> do topo encontra por <strong>título, nome da pessoa, observação ou valor</strong>. Pode digitar <strong>várias palavras</strong> (ex.: «arnaldo férias»): <strong>todas</strong> precisam aparecer, em qualquer ordem, em parte da palavra e sem diferenciar acento — acha os títulos do Arnaldo cuja observação tem «férias». Para valor: digite o valor como preferir («4.993,23», «4993,23», «R$ 4.993,23») ou só um pedaço («4.993», «446,5») — compara com o valor do título e com o valor líquido (com juros/desconto).
           O filtro <strong>conta de pagamento</strong> (ao lado de «Só em aberto») mostra só os títulos de uma conta — ou os <strong>«Sem conta definida»</strong> — com a quantidade de títulos de cada uma dentro dos filtros atuais (só aparecem as contas que têm título); e o <strong>☑ Marcar todos os filtrados</strong> (na barra acima da lista) marca de uma vez tudo o que está na tela, já com os filtros aplicados (clique de novo para desmarcar). Assim: filtre uma conta, marque todos e baixe em lote ou gere a <strong>Lista de pagamentos</strong> só dela (o cabeçalho do PDF informa a conta filtrada).</li>
         </ul>
       ` },
@@ -3311,8 +3353,8 @@
         <ul>
           <li><strong>1 · Importar extrato</strong> (o mesmo período em <strong>outro formato</strong> — por exemplo o Itaú em .txt já importado e agora o .ofx — é reconhecido por <strong>mesmo dia e mesmo valor</strong> e não duplica; dá para desligar essa opção na tela): escolha o arquivo do banco — Bradesco (.csv), Itaú (.txt), Sicoob (.xlsx) ou OFX (o formato é detectado sozinho). Aparece uma prévia com o que é novo e o que já foi importado
           (linha igual — mesma data, histórico, documento e valor — não duplica; dá para importar de novo um período que se sobrepõe). Linhas de saldo e lançamentos futuros são ignorados.</li>
-          <li><strong>2 · Conciliar</strong>: à esquerda as linhas pendentes do banco, à direita os lançamentos da conta ainda sem conciliação (do período ± 7 dias) <strong>e os títulos em aberto do contas a pagar/receber</strong>. Marque dos dois lados — os valores precisam <strong>fechar</strong>
-          (crédito soma, débito subtrai; pode ser 1 linha do banco para vários lançamentos e o contrário) — e clique em <strong>Conciliar marcados</strong>: nasce um <strong>código de conciliação</strong>, gravado nas linhas do extrato e nos lançamentos. Se o pagamento <strong>já está no caixa</strong>, marque o lançamento: só recebe o código. Se ainda <strong>não está</strong>, marque o <strong>título em aberto</strong> (um ou vários, que somem o valor do PIX/pagamento): ao conciliar, o título é <strong>quitado</strong> (data do extrato, conta do banco), o <strong>lançamento de caixa é criado</strong> com o rateio do próprio título e tudo fica conciliado. Se o valor do banco não bate com o do título — <strong>juros ou multa, desconto, alteração do acordo de pagamento ou lançamento a maior/menor</strong> — <strong>clique no título</strong> da lista: abre a janela «Ajustar o valor do título», onde você lança o acréscimo ou o desconto (o valor original do título é preservado), escolhe o <strong>motivo</strong> (fica gravado na observação do título e na auditoria) e usa <strong>Preencher para fechar</strong>, que calcula o valor para igualar o extrato; ao salvar, o título fica marcado e os valores fecham. A lista de títulos mostra o sentido das linhas marcadas (débito = a pagar, crédito = a receber), por vencimento próximo do período; use a busca (fornecedor, título ou valor) ou «todos os vencimentos» para achar os outros. <strong>Desfazer</strong> reabre os títulos e apaga o lançamento de caixa que a conciliação criou.
+          <li><strong>2 · Conciliar</strong>: à esquerda as linhas pendentes do banco, à direita os lançamentos da conta ainda sem conciliação <strong>e os títulos em aberto do contas a pagar/receber</strong> — esses dois quadros obedecem à barra «Lançamentos e títulos»: <strong>período do filtro</strong> (De/Até do topo), <strong>dia exato</strong> ou <strong>outro período</strong>, com tolerância opcional de ± dias (padrão 0 = exato) e o botão <strong>Data da linha marcada</strong>, que usa a data das linhas do extrato selecionadas (lançamento pela data, título pelo vencimento). Marque dos dois lados — os valores precisam <strong>fechar</strong>
+          (crédito soma, débito subtrai; pode ser 1 linha do banco para vários lançamentos e o contrário) — e clique em <strong>Conciliar marcados</strong>: nasce um <strong>código de conciliação</strong>, gravado nas linhas do extrato e nos lançamentos. Se o pagamento <strong>já está no caixa</strong>, marque o lançamento: só recebe o código. Se ainda <strong>não está</strong>, marque o <strong>título em aberto</strong> (um ou vários, que somem o valor do PIX/pagamento): ao conciliar, o título é <strong>quitado</strong> (data do extrato, conta do banco), o <strong>lançamento de caixa é criado</strong> com o rateio do próprio título e tudo fica conciliado. Se o valor do banco não bate com o do título — <strong>juros ou multa, desconto, alteração do acordo de pagamento ou lançamento a maior/menor</strong> — <strong>clique no título</strong> da lista: abre a janela «Ajustar o valor do título», onde você lança o acréscimo ou o desconto (o valor original do título é preservado), escolhe o <strong>motivo</strong> (fica gravado na observação do título e na auditoria) e usa <strong>Preencher para fechar</strong>, que calcula o valor para igualar o extrato; ao salvar, o título fica marcado e os valores fecham. A lista de títulos mostra o sentido das linhas marcadas (débito = a pagar, crédito = a receber), pelo vencimento dentro da janela escolhida; a busca (fornecedor, título ou valor) também respeita a janela — marque «ignorar o período» para procurar em todos os vencimentos. <strong>Desfazer</strong> reabre os títulos e apaga o lançamento de caixa que a conciliação criou.
           <strong>Sugestões automáticas</strong> procura pares de mesmo valor com data até 3 dias de diferença (as exatas já vêm marcadas; as prováveis e as em lote pedem conferência). <strong>Ignorar</strong> tira linhas da conciliação.</li>
           <li><strong>3 · Gerar lançamentos</strong>: tarifas, cesta, juros, IOF, rendimentos etc. que o banco lançou e <strong>não estão no contas a pagar</strong>. Marque as linhas e escolha <strong>Gerar com a regra de cada linha</strong> ou
           <strong>Gerar com a classificação que eu escolher</strong> (empresa, setor, plano de contas e evento são obrigatórios). Cada linha vira um lançamento na Movimentação, com rateio de 100%, já conciliado (um código por linha).
@@ -3615,7 +3657,7 @@
     const ids = empresasDoTitulo(t);
     if(!ids.length) return '';
     if(ids.length > 1) return 'VÁRIAS EMPRESAS';
-    const e = todasEmpresas.find(x => x.id === ids[0]);
+    const e = mapaEmpresasTitulo ? mapaEmpresasTitulo.get(ids[0]) : todasEmpresas.find(x => x.id === ids[0]);
     return e ? e.nome : 'Empresa #' + ids[0];
   }
   // Abertura rápida: a tela carrega SÓ os títulos em aberto (poucos) e traz os já pagos em segundo plano (são milhares no legado);
@@ -3795,6 +3837,7 @@
       return todosTitulos.filter(t => String(t.unidade_operacao?.codigo ?? '') === codigoOperacao);
     }
     const busca = document.getElementById('filtroBuscaTitulo').value.trim().toLowerCase();
+    const palavrasBusca = busca ? busca.split(/\s+/).filter(Boolean).map(textoBuscaTitulo) : [];
     const filtroTipo = document.getElementById('filtroTipoTitulo').value;
     const filtroStatus = document.getElementById('filtroStatusPagamento').value;
     const dataInicio = document.getElementById('filtroTituloDataInicio').value;
@@ -3806,9 +3849,19 @@
       (!filtroStatus || (filtroStatus === 'pago' ? !!t.data_pagamento : !t.data_pagamento)) &&
       (!dataInicio || t.data_vencimento >= dataInicio) &&
       (!dataFim || t.data_vencimento <= dataFim) &&
-      (!busca || (t.titulo || '').toLowerCase().includes(busca) || (t.pessoa?.nome || '').toLowerCase().includes(busca) || tituloCasaValorBusca(t, busca)) &&
+      (!palavrasBusca.length || tituloCasaPalavras(t, palavrasBusca, busca)) &&
       (!operacaoIdsFiltroAvancado || operacaoIdsFiltroAvancado.has(t.operacao_id))
     );
+  }
+  // BUSCA GERAL: o texto digitado é separado em palavras e TODAS precisam aparecer em algum lugar do título — título, pessoa, observação, documento fiscal,
+  // descrição avulsa ou código —, em qualquer ordem, em parte da palavra e sem diferenciar acento/maiúscula («arnaldo ferias» acha «Arnaldo» + obs. «FÉRIAS 2025»).
+  // Palavra que parece valor (ex.: 4.993,23) também casa com o valor do título.
+  function textoBuscaTitulo(s){ return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''); }
+  function tituloCasaPalavras(t, palavras, buscaOriginal){
+    const fonte = `${t.titulo || ''} ${t.pessoa?.nome || ''} ${t.observacao || ''} ${t.documento_fiscal || ''} ${t.descricao_avulsa || ''} ${t.codigo ?? ''}`;
+    if(t._bk !== fonte){ t._bk = fonte; t._bt = textoBuscaTitulo(fonte); }       // texto normalizado guardado no título (refeito se algum desses campos mudar)
+    const originais = String(buscaOriginal || '').split(/\s+/).filter(Boolean);
+    return palavras.every((p, i) => t._bt.includes(p) || tituloCasaValorBusca(t, originais[i] || p));
   }
   // BUSCA POR VALOR (campo «Buscar por título, pessoa ou valor»): se o que foi digitado parece um número (aceita «R$», milhar com ponto, vírgula ou ponto nos centavos,
   // e trecho parcial como «4.993» ou «446,5»), compara com o valor do título e com o valor líquido (− desconto + acréscimo), escritos de cada forma possível.
@@ -3831,7 +3884,9 @@
   }
   // CONTA DE PAGAMENTO no card do título: chip discreto («sem conta» em vermelho tracejado) que, nos títulos EM ABERTO, vira um seletor ao clicar — a conta
   // escolhida é a que a «Lista de pagamentos» usa para agrupar. Título já pago mostra só a conta (não muda: o lançamento de caixa já está nela).
-  function nomeContaTitulo(t){ const c = todasContas.find(x => x.id === t.id_conta_pagamento); return c ? c.nome : (t.id_conta_pagamento ? 'Conta #' + t.id_conta_pagamento : ''); }
+  // mapas montados uma vez por desenho da lista (renderizarListaTitulos): com milhares de cards, `find` em cada um deixava a tela lenta
+  let mapaContasTitulo = null, mapaEmpresasTitulo = null;
+  function nomeContaTitulo(t){ const c = mapaContasTitulo ? mapaContasTitulo.get(t.id_conta_pagamento) : todasContas.find(x => x.id === t.id_conta_pagamento); return c ? c.nome : (t.id_conta_pagamento ? 'Conta #' + t.id_conta_pagamento : ''); }
   function chipContaTitulo(t){
     const nome = nomeContaTitulo(t);
     if(t.data_pagamento) return nome ? ` <span class="pill" style="background:none; border:1px solid var(--border); color:var(--muted); margin-left:6px;" title="Conta em que foi paga">🏦 ${escapeHtml(nome)}</span>` : '';
@@ -3884,12 +3939,22 @@
     document.querySelectorAll('#listaTitulos [data-checkbox-titulo]').forEach(c => { c.checked = ev.target.checked; });
     atualizarBotaoBaixaLote();
   });
+  // Lista grande (ex.: 2020 até hoje, pagos + em aberto) = dezenas de milhares de cards no DOM = tela travada. Mostra os primeiros 500
+  // e libera «Mostrar mais»; qualquer mudança de filtro volta para 500. Totais e contagem seguem sobre TODOS os títulos filtrados.
+  const TITULOS_LIMITE_INICIAL = 500;
+  let titulosLimiteTela = TITULOS_LIMITE_INICIAL, titulosAssinaturaFiltro = '';
+  function assinaturaFiltroTitulos(){
+    return ['filtroBuscaTitulo', 'filtroTipoTitulo', 'filtroStatusPagamento', 'filtroContaTitulo', 'filtroTituloDataInicio', 'filtroTituloDataFim', 'filtroCodigoOperacao'].map(i => document.getElementById(i).value).join('|')
+      + '|' + (operacaoIdsFiltroAvancado ? operacaoIdsFiltroAvancado.size : '-');
+  }
   function renderizarListaTitulos(){
     if(!titulosPagosCache && (document.getElementById('filtroStatusPagamento').value !== 'aberto' || document.getElementById('filtroCodigoOperacao').value.trim())){
       document.getElementById('listaTitulos').innerHTML = '<div class="vazio">Carregando os títulos já pagos...</div>';
       garantirTitulosPagos().then(() => renderizarListaTitulos());
       return;
     }
+    mapaContasTitulo = new Map(todasContas.map(c => [c.id, c])); mapaEmpresasTitulo = new Map(todasEmpresas.map(e => [e.id, e]));
+    const assin = assinaturaFiltroTitulos(); if(assin !== titulosAssinaturaFiltro){ titulosAssinaturaFiltro = assin; titulosLimiteTela = TITULOS_LIMITE_INICIAL; }
     atualizarFiltroContaTitulo();
     const filtrados = obterTitulosFiltrados();
     document.getElementById('resumoQtdTitulos').textContent = filtrados.length;
@@ -3900,7 +3965,8 @@
     atualizarBarraTopoTitulos(filtrados.length, totalPagar, totalReceber);
     const lista = document.getElementById('listaTitulos');
     if(!filtrados.length){ lista.innerHTML = '<div class="vazio">Nenhum título encontrado.</div>'; return; }
-    lista.innerHTML = filtrados.map(t => `
+    const mostrados = filtrados.length > titulosLimiteTela ? filtrados.slice(0, titulosLimiteTela) : filtrados;
+    lista.innerHTML = mostrados.map(t => `
       <div class="cadastro-row" data-titulo-linha="${t.id}">
         ${!t.data_pagamento ? `<input type="checkbox" data-checkbox-titulo="${t.id}" style="width:18px; height:18px; flex-shrink:0;" onclick="event.stopPropagation()">` : '<span style="width:18px; flex-shrink:0;"></span>'}
         <div class="cadastro-thumb">${t.codigo ?? '—'}</div>
@@ -3911,7 +3977,12 @@
         </div>
         <div class="cadastro-valor" data-abrir-titulo="${t.id}" style="cursor:pointer;"><div class="valor mono">${formatarMoeda(t.valor_titulo)}</div></div>
         ${!t.data_pagamento ? `<button type="button" class="btn-add-inline" data-pagar-rapido="${t.id}" title="Quitação rápida" style="background:var(--brand-2); flex-shrink:0;" onclick="event.stopPropagation()">💰</button>` : ''}
-      </div>`).join('');
+      </div>`).join('') + (mostrados.length < filtrados.length ? `
+      <div class="vazio" style="padding:14px;">Mostrando <strong>${mostrados.length.toLocaleString('pt-BR')}</strong> de <strong>${filtrados.length.toLocaleString('pt-BR')}</strong> títulos (os totais acima já somam todos). «Marcar todos» vale para os mostrados.
+        <button type="button" class="ext-chip" id="btnMaisTitulos">Mostrar mais ${TITULOS_LIMITE_INICIAL}</button>
+        <button type="button" class="ext-chip" id="btnTodosTitulos" title="Pode demorar com muitos títulos">Mostrar todos</button></div>` : '');
+    const bMais = document.getElementById('btnMaisTitulos'); if(bMais) bMais.addEventListener('click', () => { titulosLimiteTela += TITULOS_LIMITE_INICIAL; renderizarListaTitulosMantendoMarcas(); });
+    const bTodos = document.getElementById('btnTodosTitulos'); if(bTodos) bTodos.addEventListener('click', () => { titulosLimiteTela = Infinity; renderizarListaTitulosMantendoMarcas(); });
     lista.querySelectorAll('[data-pagar-rapido]').forEach(btn => {
       btn.addEventListener('click', () => {
         const qtdMarcados = document.querySelectorAll('[data-checkbox-titulo]:checked').length;
@@ -3928,7 +3999,7 @@
   // clicar no chip «Op. N» do card preenche o filtro «Código da operação» (que mostra todos os títulos da operação e ignora os demais filtros)
   function filtrarPorOperacao(codigo){
     const campo = document.getElementById('filtroCodigoOperacao'); campo.value = String(codigo);
-    campo.dispatchEvent(new Event('input')); campo.scrollIntoView({ block: 'nearest' });
+    campo.dispatchEvent(new Event('change')); campo.scrollIntoView({ block: 'nearest' });
   }
   function atualizarBotaoBaixaLote(){
     const qtd = document.querySelectorAll('[data-checkbox-titulo]:checked').length;
@@ -3936,7 +4007,7 @@
     document.getElementById('qtdSelecionadosLote').textContent = qtd;
     // soma dos títulos marcados (útil para conferir o que vai ser baixado em lote)
     const marcados = Array.from(document.querySelectorAll('[data-checkbox-titulo]:checked')).map(c => Number(c.dataset.checkboxTitulo));
-    const soma = todosTitulos.filter(t => marcados.includes(t.id)).reduce((acc, t) => acc + Number(t.valor_titulo), 0);
+    let soma = 0; if(marcados.length){ const setM = new Set(marcados); soma = todosTitulos.reduce((acc, t) => setM.has(t.id) ? acc + Number(t.valor_titulo) : acc, 0); }
     document.getElementById('topoMarcadosWrap').style.display = qtd > 0 ? 'inline' : 'none';
     document.getElementById('topoQtdMarcados').textContent = qtd;
     document.getElementById('topoValorMarcados').textContent = formatarMoedaMilhar(soma);
@@ -3954,13 +4025,24 @@
       tipo === 'RECEBER' ? caixa('Total a receber', totalReceber, 'var(--brand-2)') :
       caixa('A pagar', totalPagar, 'var(--danger)') + ' &nbsp;·&nbsp; ' + caixa('A receber', totalReceber, 'var(--brand-2)');
   }
-  document.getElementById('filtroBuscaTitulo').addEventListener('input', renderizarListaTitulos);
+  // Os filtros de TEXTO não rodam a cada letra: só ao apertar Enter, ao sair do campo ou ao esvaziá-lo (com dezenas de milhares de títulos, filtrar a cada tecla travava a tela).
+  function ligarFiltroTextoTitulos(id, aplicar){
+    const el = document.getElementById(id); let ultimo = el.value;
+    const executar = () => { if(el.value === ultimo) return; ultimo = el.value; aplicar(); };
+    el.addEventListener('keydown', ev => { if(ev.key === 'Enter'){ ev.preventDefault(); executar(); } });
+    el.addEventListener('change', executar);
+    el.addEventListener('input', () => { if(el.value === '') executar(); });
+  }
+  // datas: digitar o ano dispara «change» a cada dígito (0002, 0020, 0202, 2020…) — espera parar de mexer antes de refiltrar
+  function comAtrasoTitulos(fn, ms){ let t = null; return () => { clearTimeout(t); t = setTimeout(fn, ms); }; }
+  ligarFiltroTextoTitulos('filtroBuscaTitulo', renderizarListaTitulos);
   document.getElementById('filtroTipoTitulo').addEventListener('change', renderizarListaTitulos);
   document.getElementById('filtroStatusPagamento').addEventListener('change', renderizarListaTitulos);
   document.getElementById('filtroContaTitulo').addEventListener('change', renderizarListaTitulos);
-  document.getElementById('filtroTituloDataInicio').addEventListener('change', renderizarListaTitulos);
-  document.getElementById('filtroTituloDataFim').addEventListener('change', renderizarListaTitulos);
-  document.getElementById('filtroCodigoOperacao').addEventListener('input', () => {
+  const refiltrarPorDataTitulos = comAtrasoTitulos(renderizarListaTitulos, 700);
+  document.getElementById('filtroTituloDataInicio').addEventListener('change', refiltrarPorDataTitulos);
+  document.getElementById('filtroTituloDataFim').addEventListener('change', refiltrarPorDataTitulos);
+  ligarFiltroTextoTitulos('filtroCodigoOperacao', () => {
     atualizarEstadoFiltrosPorOperacao();
     renderizarListaTitulos();
   });
