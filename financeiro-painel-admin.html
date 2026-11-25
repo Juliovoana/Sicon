@@ -190,6 +190,16 @@
   .linha-rateio-l1{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-bottom:6px; }
   .linha-rateio-l2{ display:grid; grid-template-columns:1fr 1fr 90px 90px 32px; gap:6px; align-items:center; }
   @media (max-width:640px){ .linha-rateio-l1, .linha-rateio-l2{ grid-template-columns:1fr 1fr; } }
+  .linha-rateio input[data-campo="plano_de_contas_id_busca"]{ border-left:3px solid var(--danger, #c0392b); }
+  .linha-rateio input.campo-faltando{ border-color:var(--danger, #c0392b) !important; background:#fdecea; }
+  @media (min-width:900px){
+    #modalTitulo .modal-lista, #modalMovimentacao .modal-lista{ max-width:1320px; width:min(96vw, 1320px); }
+    #modalTitulo .linha-rateio-l1, #modalMovimentacao .linha-rateio-l1{ grid-template-columns:1.15fr .85fr 2fr; }   /* empresa | setor | plano de contas (o mais longo) */
+    #modalTitulo .linha-rateio select, #modalTitulo .linha-rateio input, #modalMovimentacao .linha-rateio select, #modalMovimentacao .linha-rateio input{ font-size:.86rem; }
+  }
+  /* sugestões do autocomplete do rateio: podem passar da largura do campo (texto longo não fica cortado) e quebram a linha se for preciso */
+  .linha-rateio .lista-sugestoes-autocomplete{ right:auto; min-width:100%; width:max-content; max-width:min(640px, 88vw); }
+  .linha-rateio .sugestao-autocomplete{ white-space:normal; overflow-wrap:anywhere; }
   .linha-rateio select, .linha-rateio input{ padding:7px 8px; font-size:.8rem; border:1.5px solid var(--border); border-radius:7px; font-family:inherit; width:100%; }
   .badge-soma{ font-size:.82rem; font-weight:700; padding:4px 10px; border-radius:6px; }
   .badge-soma.ok{ background:var(--success-soft); color:var(--brand-2); }
@@ -1709,7 +1719,13 @@
         sb.from('staff_ordens_pagamento_itens').select('*, pessoa(codigo, nome)').eq('ordem_id', id).order('created_at'),
         sb.from('staff_ordens_parametros').select('*').eq('unidade_negocio_id', agenciaId).eq('tipo', o.tipo).eq('tipo_recibo_id', o.tipo_recibo_id || '00000000-0000-0000-0000-000000000000').maybeSingle()]);
       if(ri.error) throw new Error(ri.error.message);
-      const itens = ri.data || [], par0 = (rp && rp.data) || {}, definida = o.empresa_id != null && o.setor_id != null && o.plano_de_contas_id != null && o.id_conta_pagamento != null;
+      const itens = ri.data || [], par0 = (rp && rp.data) || {};
+      // ENVIO PARCIAL (24/11/2026): o Staff define empresa e plano de contas em CADA lançamento (e a conta no envio): nesse caso só o setor e a conta vêm do protocolo
+      const itensClass = itens.length > 0 && itens.every(i => i.empresa_id != null && i.plano_de_contas_id != null), algumItemClass = itens.some(i => i.empresa_id != null || i.plano_de_contas_id != null);
+      ordsEstado.itensClass = itensClass;
+      const definida = o.setor_id != null && o.id_conta_pagamento != null && (itensClass || (o.empresa_id != null && o.plano_de_contas_id != null));
+      const nomeEmpItem = (id) => { const e = (todasEmpresas || []).find(x => String(x.id) === String(id)); return e ? e.nome : '—'; };
+      const nomePlItem = (id) => { const pl = (todosPlanosContas || []).find(x => String(x.id) === String(id)); return pl ? (pl.codigo ?? pl.id) + ' — ' + pl.descricao : '—'; };
       // a classificação definida no RECIBO do Staff tem prioridade sobre os padrões lembrados
       const par = definida ? { empresa_id: o.empresa_id, setor_id: o.setor_id, plano_de_contas_id: o.plano_de_contas_id, id_conta_pagamento: o.id_conta_pagamento } : par0;
       let titulos = new Map();
@@ -1723,17 +1739,17 @@
       document.getElementById('ordsDetalhe').innerHTML = `
         <p class="ext-nota" style="margin:0 0 10px;">Pagar em <strong>${formatarData(o.vencimento)}</strong>${o.competencia ? ' · competência ' + String(o.competencia).slice(5, 7) + '/' + String(o.competencia).slice(0, 4) : ''}${o.evento_padrao ? ' · evento padrão <strong>' + escapeHtml(o.evento_padrao) + '</strong>' : ''}${o.status === 'aceita' ? ` · <strong>${pagos}</strong> de ${itens.length} título(s) já pago(s)` : ''}</p>
         ${o.status === 'enviada' && semEvento ? `<div style="background:#FFF3E0; color:#8A5E12; border-radius:8px; padding:8px 12px; margin-bottom:10px; font-size:.8rem;">⚠️ ${semEvento} item(ns) sem evento do Financeiro. Devolva a ordem ao Staff (ou peça para informar o evento padrão) antes de aceitar.</div>` : ''}
-        <div class="ext-tabela-wrap" style="max-height:34vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th>Favorecido</th><th>Detalhe</th><th>Evento</th><th class="num">Valor</th>${o.status === 'aceita' ? '<th>Título</th>' : ''}</tr></thead><tbody>
-          ${itens.map(i => { const t = titulos.get(i.titulo_id); return `<tr><td>${escapeHtml(i.pessoa ? (i.pessoa.codigo != null ? i.pessoa.codigo + ' — ' : '') + i.pessoa.nome : '#' + i.pessoa_id)}</td><td>${escapeHtml(i.descricao || '')}</td><td>${escapeHtml(i.evento_codigo || o.evento_padrao || '—')}</td><td class="num">${formatarMoeda(i.valor)}</td>${o.status === 'aceita' ? `<td>${t ? '#' + escapeHtml(t.codigo ?? t.id) + (t.data_pagamento ? ' · pago ' + formatarData(t.data_pagamento) : ' · em aberto') : '—'}</td>` : ''}</tr>`; }).join('')}
+        <div class="ext-tabela-wrap" style="max-height:34vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th>Favorecido</th><th>Detalhe</th><th>Evento</th>${algumItemClass ? '<th>Empresa</th><th>Plano de contas</th>' : ''}<th class="num">Valor</th>${o.status === 'aceita' ? '<th>Título</th>' : ''}</tr></thead><tbody>
+          ${itens.map(i => { const t = titulos.get(i.titulo_id); return `<tr><td>${escapeHtml(i.pessoa ? (i.pessoa.codigo != null ? i.pessoa.codigo + ' — ' : '') + i.pessoa.nome : '#' + i.pessoa_id)}</td><td>${escapeHtml(i.descricao || '')}</td><td>${escapeHtml(i.evento_codigo || o.evento_padrao || '—')}</td>${algumItemClass ? `<td>${escapeHtml(i.empresa_id != null ? nomeEmpItem(i.empresa_id) : '—')}</td><td>${escapeHtml(i.plano_de_contas_id != null ? nomePlItem(i.plano_de_contas_id) : '—')}</td>` : ''}<td class="num">${formatarMoeda(i.valor)}</td>${o.status === 'aceita' ? `<td>${t ? '#' + escapeHtml(t.codigo ?? t.id) + (t.data_pagamento ? ' · pago ' + formatarData(t.data_pagamento) : ' · em aberto') : '—'}</td>` : ''}</tr>`; }).join('')}
         </tbody></table></div>
         ${o.status === 'enviada' ? `<h4 style="font-size:.88rem; margin:14px 0 6px;">Classificação dos títulos (rateio 100%)${definida ? ' <span style="font-weight:400; color:var(--muted);">— definida no recibo do Staff; é só conferir e aceitar</span>' : ''}</h4>
         <div class="filtros" style="align-items:flex-end;">
-          <label style="font-size:.78rem;">Empresa<br><select id="ords_empresa">${opt(todasEmpresas, par.empresa_id, e => e.nome)}</select></label>
+          ${itensClass ? '' : `<label style="font-size:.78rem;">Empresa<br><select id="ords_empresa">${opt(todasEmpresas, par.empresa_id, e => e.nome)}</select></label>`}
           <label style="font-size:.78rem;">Setor<br><select id="ords_setor">${opt(todosSetores, par.setor_id, s => (s.codigo != null ? s.codigo + ' — ' : '') + s.nome)}</select></label>
-          <label style="font-size:.78rem;">Plano de contas<br><select id="ords_plano">${opt(todosPlanosContas, par.plano_de_contas_id, pl => (pl.codigo ?? pl.id) + ' — ' + pl.descricao)}</select></label>
+          ${itensClass ? '' : `<label style="font-size:.78rem;">Plano de contas<br><select id="ords_plano">${opt(todosPlanosContas, par.plano_de_contas_id, pl => (pl.codigo ?? pl.id) + ' — ' + pl.descricao)}</select></label>`}
           <label style="font-size:.78rem;">Conta de pagamento<br><select id="ords_conta">${opt(todasContas, par.id_conta_pagamento, c => c.nome)}</select></label>
         </div>
-        <p class="ext-nota" style="margin-top:6px;">As escolhas ficam lembradas para as próximas ordens deste tipo.</p>` : ''}`;
+        ${itensClass ? '<p class="ext-nota" style="margin-top:6px;">A <strong>empresa</strong> e o <strong>plano de contas</strong> de cada título já vêm definidos pelo Staff em cada lançamento (veja a tabela acima); aqui só confira o setor e a conta de pagamento.</p>' : '<p class="ext-nota" style="margin-top:6px;">As escolhas ficam lembradas para as próximas ordens deste tipo.</p>'}` : ''}`;
       const acoes = document.getElementById('ordsAcoes');
       acoes.innerHTML = o.status === 'enviada' ? `<button class="btn-novo" id="ordsAceitar" ${semEvento ? 'disabled' : ''}>Aceitar e gerar ${itens.length} título(s)</button>`
         : o.status === 'aceita' ? '<button class="ext-chip" id="ordsDesfazer" style="color:var(--danger);">Desfazer aceite</button>' : '';
@@ -1743,12 +1759,13 @@
   }
 
   async function ordsAceitar(o, qtd){
-    const emp = document.getElementById('ords_empresa').value, set = document.getElementById('ords_setor').value, pla = document.getElementById('ords_plano').value, con = document.getElementById('ords_conta').value;
-    if(!emp || !set || !pla || !con){ alert('Escolha empresa, setor, plano de contas e a conta de pagamento.'); return; }
+    const ic = !!ordsEstado.itensClass, val = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+    const emp = val('ords_empresa'), set = val('ords_setor'), pla = val('ords_plano'), con = val('ords_conta');
+    if(!set || !con || (!ic && (!emp || !pla))){ alert(ic ? 'Escolha o setor e a conta de pagamento.' : 'Escolha empresa, setor, plano de contas e a conta de pagamento.'); return; }
     if(!confirm(`Aceitar a ordem #${o.numero} e gerar ${qtd} título(s) a pagar (${formatarMoeda(o.total)}), vencendo em ${formatarData(o.vencimento)}?`)) return;
     const btn = document.getElementById('ordsAceitar'); btn.disabled = true; btn.textContent = 'Gerando…';
     try{
-      const { data, error } = await sb.rpc('financeiro_aceitar_ordem_staff', { p_unidade: agenciaId, p_ordem: o.id, p_empresa: Number(emp), p_setor: Number(set), p_plano: Number(pla), p_conta: Number(con) });
+      const { data, error } = await sb.rpc('financeiro_aceitar_ordem_staff', { p_unidade: agenciaId, p_ordem: o.id, p_empresa: emp ? Number(emp) : null, p_setor: Number(set), p_plano: pla ? Number(pla) : null, p_conta: Number(con) });
       if(error) throw new Error(error.message);
       await registrarSentinela('financeiro_ordem_staff_aceita', `Aceitou a ordem de pagamento do Staff Nº ${o.numero} (${ORDS_TIPOS[o.tipo] || o.tipo}): ${data.titulos} título(s) a pagar, ${formatarMoeda(data.valor)}`);
       alert(`Ordem #${o.numero} aceita: ${data.titulos} título(s) a pagar criado(s) (${formatarMoeda(data.valor)}). Eles já estão na aba Títulos.`);
@@ -2200,7 +2217,7 @@
   // Movimentação de Contas por um CÓDIGO DE CONCILIAÇÃO sequencial e gera (com regras por palavra-chave) o que o banco cobrou e não está
   // no contas a pagar (tarifa, cesta, juros, IOF, rendimento...). Tabelas/funções: financeiro-conciliacao.sql.
   // =================================================================
-  const concEstado = { aba: 'importar', contaId: '', de: '', ate: '', extratos: [], movs: [], selE: new Set(), selM: new Set(), selT: new Set(), titBusca: '', titTodos: false, jan: { modo: 'periodo', dia: '', de: '', ate: '', tol: 0 }, ord: {}, feitas: null, regras: [], previa: null, iniciado: false, pessoaNomes: {} };
+  const concEstado = { aba: 'importar', contaId: '', de: '', ate: '', extratos: [], movs: [], selE: new Set(), selM: new Set(), selT: new Set(), titBusca: '', titTodos: false, contaMov: '', movBusca: '', jan: { modo: 'periodo', dia: '', de: '', ate: '', tol: 0 }, ord: {}, feitas: null, regras: [], previa: null, iniciado: false, pessoaNomes: {} };
   const concNum = v => extFmt.format(Number(v) || 0);
   const concNorm = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
   const concValorBR = s => { const t = String(s == null ? '' : s).trim(); if(!t) return 0; const n = parseFloat(t.replace(/\./g, '').replace(',', '.')); return isNaN(n) ? 0 : n; };
@@ -2574,7 +2591,11 @@
     if(de) qe = qe.gte('data', de); if(ate) qe = qe.lte('data', ate);
     const re = await qe.order('data').order('id').limit(3000);
     if(re.error) throw new Error(/relation|does not exist|schema cache/i.test(re.error.message) ? 'A conciliação ainda não está instalada neste banco. Rode o arquivo financeiro-conciliacao.sql no Supabase.' : re.error.message);
-    let qm = sb.from('financeiro_movimentacao_contas').select('id, data, historico, valor, tipo_movimento, descricao_avulsa, pessoa(nome)').eq('unidade_negocio_id', agenciaId).eq('id_conta', contaId).is('cod_conciliacao', null);
+    // conta dos lançamentos (coluna da direita): padrão = a conta do extrato; «todas» ou OUTRA conta servem para achar o que foi baixado na conta errada
+    let qm = sb.from('financeiro_movimentacao_contas').select('id, id_conta, data, historico, valor, tipo_movimento, descricao_avulsa, pessoa(nome)').eq('unidade_negocio_id', agenciaId).is('cod_conciliacao', null);
+    if(concEstado.contaMov === 'todas'){ /* sem filtro de conta */ }
+    else if(concEstado.contaMov) qm = qm.eq('id_conta', Number(concEstado.contaMov));
+    else qm = qm.eq('id_conta', contaId);
     const wj = concJanela(); if(wj.ini) qm = qm.gte('data', wj.ini); if(wj.fim) qm = qm.lte('data', wj.fim);
     const rm = await qm.order('data').order('id').limit(3000);
     if(rm.error) throw new Error(rm.error.message);
@@ -2601,9 +2622,19 @@
         <button class="ext-chip" id="concJanLinha" type="button" title="Usa a data da(s) linha(s) do extrato marcada(s)">📅 Data da linha marcada</button>
         <span class="ext-nota" id="concJanTexto" style="margin:0;">Mostrando ${escapeHtml(concTextoJanela())}</span>
       </div>
+      <div class="filtros" id="concContaMovBarra" style="margin:0 0 10px; padding:8px 10px; background:#fff7e6; border:1px solid #f0d9a8; border-radius:8px; align-items:center;">
+        <strong style="font-size:.8rem;" title="Baixou numa conta e o banco debitou/creditou em outra? Escolha aqui a conta onde o lançamento foi parar: ao conciliar, ele passa para a conta do extrato.">Conta dos lançamentos (direita):</strong>
+        <select id="concContaMov" style="padding:6px;">
+          <option value="">${escapeHtml(extNomeConta(Number(concEstado.contaId)))} — a conta da conciliação</option>
+          <option value="todas">Todas as contas</option>
+          ${todasContas.filter(c => c.id !== Number(concEstado.contaId) && (c.ativo !== false || String(c.id) === concEstado.contaMov)).map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('')}
+        </select>
+        <input type="text" id="concMovBusca" placeholder="Buscar lançamento: histórico, fornecedor ou valor..." value="${escapeHtml(concEstado.movBusca)}" style="flex:1; min-width:200px; padding:6px;">
+        <span class="ext-nota" id="concContaMovAviso" style="margin:0;">${concEstado.contaMov ? '⚠ Lançamento de OUTRA conta: ao conciliar, ele <strong>passa para a conta do extrato</strong> (' + escapeHtml(extNomeConta(Number(concEstado.contaId))) + ').' : ''}</span>
+      </div>
       <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(420px, 1fr)); gap:14px;">
         <div><h3 style="font-size:.9rem; margin-bottom:6px;">Extrato do banco — pendentes (${concEstado.extratos.length})</h3><div class="ext-tabela-wrap" style="max-height:60vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th>${concThOrd('ext', 'data', 'Data')}${concThOrd('ext', 'historico', 'Histórico')}${concThOrd('ext', 'valor', 'Valor', 'num')}</tr></thead><tbody id="concTbE"></tbody></table></div></div>
-        <div><h3 style="font-size:.9rem; margin-bottom:6px;">Lançamentos sem conciliação (${concEstado.movs.length})</h3><div class="ext-tabela-wrap" style="max-height:30vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th>${concThOrd('mov', 'data', 'Data')}${concThOrd('mov', 'historico', 'Histórico')}${concThOrd('mov', 'valor', 'Valor', 'num')}</tr></thead><tbody id="concTbM"></tbody></table></div>
+        <div><h3 style="font-size:.9rem; margin-bottom:6px;">Lançamentos sem conciliação <span id="concMovContagem">(${concEstado.movs.length})</span></h3><div class="ext-tabela-wrap" style="max-height:30vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th>${concThOrd('mov', 'data', 'Data')}${concThOrd('mov', 'historico', 'Histórico')}${concThOrd('mov', 'valor', 'Valor', 'num')}</tr></thead><tbody id="concTbM"></tbody></table></div>
           <h3 style="font-size:.9rem; margin:14px 0 6px;">Títulos em aberto — contas a pagar/receber <span id="concTitContagem" class="ext-nota"></span></h3>
           <div class="filtros" style="margin-bottom:6px;"><input type="text" id="concTitBusca" placeholder="Buscar fornecedor, título ou valor..." value="${escapeHtml(concEstado.titBusca)}" style="flex:1; min-width:180px;"><label style="display:flex; align-items:center; gap:5px; font-size:.8rem;"><input type="checkbox" id="concTitTodos" ${concEstado.titTodos ? 'checked' : ''}> ignorar o período</label></div>
           <div class="ext-tabela-wrap" style="max-height:30vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th>${concThOrd('tit', 'data', 'Venc.')}${concThOrd('tit', 'historico', 'Título / fornecedor')}${concThOrd('tit', 'valor', 'Valor líquido', 'num')}</tr></thead><tbody id="concTbT"></tbody></table></div>
@@ -2611,7 +2642,16 @@
       </div>`;
     const linha = (tipo, id, d, h, sub, v) => `<tr><td><input type="checkbox" data-conc-${tipo}="${id}" ${(tipo === 'e' ? concEstado.selE : concEstado.selM).has(id) ? 'checked' : ''}></td><td style="white-space:nowrap;">${formatarData(d)}</td><td>${escapeHtml(h || '')}${sub ? `<div class="ext-cod" style="margin:0;">${escapeHtml(sub)}</div>` : ''}</td><td class="num ${v < 0 ? 'ext-neg' : ''}">${concNum(v)}</td></tr>`;
     document.getElementById('concTbE').innerHTML = concOrdenar(concEstado.extratos, 'ext', CONC_ACC_E).map(e => linha('e', e.id, e.data, e.historico, e.documento, concLiquido(e))).join('') || '<tr><td colspan="4" class="vazio">Nenhuma linha pendente neste período.</td></tr>';
-    document.getElementById('concTbM').innerHTML = concOrdenar(concEstado.movs, 'mov', CONC_ACC_M).map(m => linha('m', m.id, m.data, m.historico, (m.pessoa && m.pessoa.nome) || (m.descricao_avulsa ? '0 — ' + m.descricao_avulsa : ''), concLiquidoMov(m))).join('') || '<tr><td colspan="4" class="vazio">Nenhum lançamento sem conciliação neste período.</td></tr>';
+    const concDesenharMovs = () => {
+      const contaExt = Number(concEstado.contaId);
+      const lista = concEstado.movs.filter(concMovCasaBusca);
+      document.getElementById('concTbM').innerHTML = concOrdenar(lista, 'mov', CONC_ACC_M).map(m => linha('m', m.id, m.data, m.historico,
+        [(m.pessoa && m.pessoa.nome) || (m.descricao_avulsa ? '0 — ' + m.descricao_avulsa : ''), m.id_conta !== contaExt ? '🏦 conta: ' + extNomeConta(m.id_conta) : ''].filter(Boolean).join(' · '), concLiquidoMov(m))).join('')
+        || `<tr><td colspan="4" class="vazio">${concEstado.movBusca ? 'Nenhum lançamento com essa busca.' : 'Nenhum lançamento sem conciliação neste período.'}</td></tr>`;
+      document.querySelectorAll('[data-conc-m]').forEach(c => c.addEventListener('change', () => { const id = Number(c.dataset.concM); c.checked ? concEstado.selM.add(id) : concEstado.selM.delete(id); concAtualizarTotais(); }));
+      const cont = document.getElementById('concMovContagem'); if(cont) cont.textContent = concEstado.movBusca ? `(${lista.length} de ${concEstado.movs.length})` : `(${concEstado.movs.length})`;
+    };
+    concDesenharMovs();
     document.querySelectorAll('[data-conc-e]').forEach(c => c.addEventListener('change', () => { const id = Number(c.dataset.concE); c.checked ? concEstado.selE.add(id) : concEstado.selE.delete(id); concDesenharTitulos(); concAtualizarTotais(); }));
     document.getElementById('concTitBusca').addEventListener('input', (ev) => { concEstado.titBusca = ev.target.value; concDesenharTitulos(); });
     document.getElementById('concTitTodos').addEventListener('change', (ev) => { concEstado.titTodos = ev.target.checked; concDesenharTitulos(); });
@@ -2632,12 +2672,20 @@
       concRenderConciliar();
     });
     concDesenharTitulos();
-    document.querySelectorAll('[data-conc-m]').forEach(c => c.addEventListener('change', () => { const id = Number(c.dataset.concM); c.checked ? concEstado.selM.add(id) : concEstado.selM.delete(id); concAtualizarTotais(); }));
+    document.getElementById('concContaMov').value = concEstado.contaMov;
+    document.getElementById('concContaMov').addEventListener('change', (ev) => { concEstado.contaMov = ev.target.value; concEstado.selM.clear(); concRenderConciliar(); });
+    document.getElementById('concMovBusca').addEventListener('input', (ev) => { concEstado.movBusca = ev.target.value; concDesenharMovs(); });
     concLigarOrd(() => concRenderConciliar(true));
     document.getElementById('concConciliar').addEventListener('click', () => concConciliarMarcados());
     document.getElementById('concSugerir').addEventListener('click', concMostrarSugestoes);
     document.getElementById('concIgnorar').addEventListener('click', concIgnorarMarcados);
     concAtualizarTotais();
+  }
+  // busca na lista de lançamentos da direita: todas as palavras (histórico, favorecido, conta, valor)
+  function concMovCasaBusca(m){
+    const q = concNorm(concEstado.movBusca); if(!q) return true;
+    const alvo = concNorm(`${m.historico || ''} ${m.pessoa && m.pessoa.nome || ''} ${m.descricao_avulsa || ''} ${extNomeConta(m.id_conta)} ${concNum(concLiquidoMov(m))} ${Math.abs(concLiquidoMov(m)).toFixed(2)}`);
+    return q.split(' ').every(w => alvo.includes(w));
   }
   function concAtualizarTotais(){
     const se = concEstado.extratos.filter(e => concEstado.selE.has(e.id)).reduce((a, e) => a + concLiquido(e), 0);
@@ -2647,11 +2695,13 @@
     document.getElementById('concTotais').innerHTML = `Extrato marcado: <strong>${concNum(se)}</strong> (${concEstado.selE.size}) · Lançamentos: <strong>${concNum(sm)}</strong> (${concEstado.selM.size}) · Títulos: <strong>${concNum(st)}</strong> (${tits.length}) · Diferença: <strong style="color:${ok ? 'var(--brand-2)' : 'var(--danger)'};">${concNum(dif)}</strong>`;
     document.getElementById('concConciliar').disabled = !ok;
   }
-  async function concChamarConciliar(extratos, movs, origem, obs, titulos){
+  async function concChamarConciliar(extratos, movs, origem, obs, titulos, trocarConta){
     const comTitulos = titulos && titulos.length;
+    const extra = trocarConta ? { p_trocar_conta: true } : {};   // só envia quando há lançamento de outra conta (banco ainda sem o parâmetro continua funcionando para o caso normal)
     const { data, error } = comTitulos
-      ? await sb.rpc('financeiro_conciliar_com_titulos', { p_unidade: agenciaId, p_extratos: extratos, p_movimentacoes: movs, p_titulos: titulos, p_observacao: obs || null, p_origem: origem || 'manual' })
-      : await sb.rpc('financeiro_conciliar', { p_unidade: agenciaId, p_extratos: extratos, p_movimentacoes: movs, p_observacao: obs || null, p_origem: origem || 'manual' });
+      ? await sb.rpc('financeiro_conciliar_com_titulos', { p_unidade: agenciaId, p_extratos: extratos, p_movimentacoes: movs, p_titulos: titulos, p_observacao: obs || null, p_origem: origem || 'manual', ...extra })
+      : await sb.rpc('financeiro_conciliar', { p_unidade: agenciaId, p_extratos: extratos, p_movimentacoes: movs, p_observacao: obs || null, p_origem: origem || 'manual', ...extra });
+    if(error && trocarConta && /p_trocar_conta|does not exist|schema cache/.test(error.message)) throw new Error('rode de novo o financeiro-conciliacao.sql no Supabase (falta a troca de conta na conciliação).');
     if(error) throw new Error(comTitulos && /does not exist|financeiro_conciliar_com_titulos/.test(error.message) ? 'rode de novo o financeiro-conciliacao.sql no Supabase (falta a conciliação com títulos).' : error.message);
     return data;
   }
@@ -2665,17 +2715,21 @@
     const tits = concTitulosSelecionados();
     const linhas = concEstado.extratos.filter(e => concEstado.selE.has(e.id)); const dataBaixa = linhas.map(e => e.data).sort().pop();
     const mudaData = concEstado.movs.filter(m => concEstado.selM.has(m.id) && m.data !== dataBaixa);     // a data do lançamento passa a ser a do extrato
+    const contaExtrato = Number(concEstado.contaId);
+    const trocam = concEstado.movs.filter(m => concEstado.selM.has(m.id) && m.id_conta !== contaExtrato);  // baixados em OUTRA conta: passam para a conta do extrato
     const avisos = [];
+    if(trocam.length) avisos.push(`TROCAR A CONTA de ${trocam.length} lançamento(s): saem de ${[...new Set(trocam.map(m => '"' + extNomeConta(m.id_conta) + '"'))].join(', ')} e passam para "${extNomeConta(contaExtrato)}" (a conta do extrato). O saldo das duas contas muda; o título pago por cada um (quando é um só) também passa para a conta do extrato. O «Desfazer» da conciliação devolve tudo`);
     if(tits.length) avisos.push(`QUITAR ${tits.length} título(s) no contas a pagar/receber, com data ${formatarData(dataBaixa)} e conta "${extNomeConta(Number(concEstado.contaId))}", e criar o lançamento de caixa de cada um`);
     if(mudaData.length) avisos.push(`ALTERAR a data de ${mudaData.length} lançamento(s) do caixa para ${formatarData(dataBaixa)} (a do extrato): ${mudaData.slice(0, 4).map(m => formatarData(m.data)).join(', ')}${mudaData.length > 4 ? '…' : ''} → ${formatarData(dataBaixa)}. Se o lançamento veio da baixa de um título, a data de pagamento do título acompanha. A data anterior fica registrada e volta se você desfizer`);
     if(avisos.length && !confirm('Conciliar vai:\n• ' + avisos.join('\n• ') + '\n\nConfirmar?')){ concAtualizarTotais(); return; }
     try{
-      const cod = await concChamarConciliar([...concEstado.selE], [...concEstado.selM], 'manual', null, tits.map(t => t.id));
+      const cod = await concChamarConciliar([...concEstado.selE], [...concEstado.selM], 'manual', null, tits.map(t => t.id), trocam.length > 0);
+      if(trocam.length) await registrarSentinela('financeiro_conciliacao_troca_conta', `Conciliação #${cod}: ${trocam.length} lançamento(s) trocado(s) de conta — ${trocam.slice(0, 6).map(m => `"${(m.historico || '').slice(0, 40)}" ${formatarMoeda(Math.abs(concLiquidoMov(m)))} (${extNomeConta(m.id_conta)} → ${extNomeConta(contaExtrato)})`).join('; ')}${trocam.length > 6 ? '…' : ''}`);
       await registrarSentinela('financeiro_conciliacao', `Conciliação #${cod}: ${concEstado.selE.size} linha(s) do extrato × ${concEstado.selM.size} lançamento(s)${tits.length ? ' e ' + tits.length + ' título(s) quitado(s)' : ''}${mudaData.length ? '; data de ' + mudaData.length + ' lançamento(s) alterada para ' + dataBaixa + ' (antes: ' + mudaData.map(m => m.data).join(', ') + ')' : ''} na conta "${extNomeConta(Number(concEstado.contaId))}"`);
       concEstado.selE.clear(); concEstado.selM.clear(); concEstado.selT.clear();
-      if(tits.length) await concAtualizarAposQuitar();
+      if(tits.length || trocam.length) await concAtualizarAposQuitar();
       await concRenderConciliar();
-      alert('Conciliação gravada com o código #' + cod + '.' + (tits.length ? `\n${tits.length} título(s) quitado(s).` : ''));
+      alert('Conciliação gravada com o código #' + cod + '.' + (tits.length ? `\n${tits.length} título(s) quitado(s).` : '') + (trocam.length ? `\n${trocam.length} lançamento(s) passaram para a conta "${extNomeConta(contaExtrato)}".` : ''));
     } catch(e){ alert('Não consegui conciliar: ' + e.message); concAtualizarTotais(); }
   }
   async function concIgnorarMarcados(){
@@ -2699,9 +2753,10 @@
     return qtd === 1 ? achada : null;
   }
   function concCalcularSugestoes(){
-    const livresM = new Map(concEstado.movs.map(m => [m.id, m])); const pares = [];
+    const movsDaConta = concEstado.movs.filter(m => m.id_conta === Number(concEstado.contaId));   // a troca de conta é sempre uma escolha manual
+    const livresM = new Map(movsDaConta.map(m => [m.id, m])); const pares = [];
     const porValor = new Map();
-    concEstado.movs.forEach(m => { const k = concLiquidoMov(m).toFixed(2); (porValor.get(k) || porValor.set(k, []).get(k)).push(m); });
+    movsDaConta.forEach(m => { const k = concLiquidoMov(m).toFixed(2); (porValor.get(k) || porValor.set(k, []).get(k)).push(m); });
     const cand = concEstado.extratos.map(e => ({ e, c: (porValor.get(concLiquido(e).toFixed(2)) || []).filter(m => concDiasEntre(m.data, e.data) <= 3) }));
     const uso = new Map(); cand.forEach(x => x.c.forEach(m => uso.set(m.id, (uso.get(m.id) || 0) + 1)));
     const jaE = new Set();
@@ -2780,7 +2835,7 @@
     r = r || {};
     const empresa = r.empresa_id || concEmpresaDaConta();
     const p = parametrosPorEmpresa.find(x => String(x.empresa_id) === String(empresa)) || {};
-    return { empresa_id: empresa || null, setor_id: r.setor_id || p.setor_padrao || null, plano_de_contas_id: r.plano_de_contas_id || p.plano_contas_padrao || null,
+    return { empresa_id: empresa || null, setor_id: r.setor_id || p.setor_padrao || null, plano_de_contas_id: r.plano_de_contas_id || null,   // sem plano padrão: vem da regra ou é escolhido na hora
              evento: r.evento || p.evento_padrao || null, pessoa_id: r.pessoa_id || null };
   }
   // palavra sugerida para a regra: o 1º trecho do histórico sem números/datas e sem termos genéricos (PIX, TED, COMPRA...); sempre contígua no histórico
@@ -3207,7 +3262,7 @@
   // =================================================================
   const AJUDA_FINANCEIRO = {
     titulo: 'Financeiro — Títulos, Contas e Rateio',
-    ultimaRevisao: '24/11/2026',
+    ultimaRevisao: '24/11/2026',   // aceite de ordem com empresa/plano por item (24/11/2026)
     secoes: [
       { id: 'dashboard', titulo: 'Dashboard', corpo: `
         <p>Visão geral do contas a pagar e a receber da unidade, no mesmo estilo do painel do
@@ -3320,7 +3375,7 @@
         <p>O módulo <strong>Staff</strong> monta <strong>ordens de pagamento</strong> (extras/RPA, vale transporte, vale alimentação e <strong>folha de pagamento</strong>) a partir de recibos fechados e as <strong>envia</strong> para cá. Cada ordem é de <strong>um tipo de recibo</strong> (= uma empresa: «Folha Porto Azul», «Folha CRM»...) e a classificação escolhida no aceite fica lembrada por tipo de recibo.
         Esta aba lista as ordens <em>pendentes de aceite</em> (ou todas, no filtro).</p>
         <ul>
-          <li><strong>Ver e aceitar</strong>: mostra os itens (favorecido, detalhe, evento e valor). Um protocolo vindo de <strong>recibo</strong> já traz a <strong>empresa, o setor, o plano de contas, a conta de pagamento e o evento</strong> definidos no Staff — é só conferir e confirmar (dá para trocar antes de aceitar).
+          <li><strong>Ver e aceitar</strong>: mostra os itens (favorecido, detalhe, evento e valor). Um protocolo vindo de <strong>recibo</strong> já traz o <strong>setor, a conta de pagamento e o evento</strong> e, <strong>em cada item, a empresa e o plano de contas do lançamento</strong> (o Staff envia só os lançamentos marcados, cada envio com a sua conta — um recibo pode gerar vários protocolos). Os itens aparecem com as colunas <em>Empresa</em> e <em>Plano de contas</em>; cada título sai com a empresa e o plano do próprio item. É só conferir e confirmar.
           Nas ordens montadas à mão, escolha esses dados (ficam lembrados para as próximas do mesmo tipo) e confirme. O sistema cria <strong>um título a pagar por profissional</strong> (origem «staff»), com o rateio 100% já preenchido, vencimento na data de pagamento da ordem e a <strong>conta de pagamento já definida</strong>
           — assim a baixa em lote usa a conta de cada título e a conciliação pode quitar vários títulos contra uma linha do extrato (ex.: CISPAG).</li>
           <li>O <strong>evento</strong> do rateio é o do item (associado pelo Staff) ou o <em>evento padrão</em> da ordem; se faltar, o aceite fica bloqueado e a ordem precisa voltar ao Staff.</li>
@@ -3356,9 +3411,10 @@
           <li><strong>2 · Conciliar</strong>: à esquerda as linhas pendentes do banco, à direita os lançamentos da conta ainda sem conciliação <strong>e os títulos em aberto do contas a pagar/receber</strong> — esses dois quadros obedecem à barra «Lançamentos e títulos»: <strong>período do filtro</strong> (De/Até do topo), <strong>dia exato</strong> ou <strong>outro período</strong>, com tolerância opcional de ± dias (padrão 0 = exato) e o botão <strong>Data da linha marcada</strong>, que usa a data das linhas do extrato selecionadas (lançamento pela data, título pelo vencimento). Marque dos dois lados — os valores precisam <strong>fechar</strong>
           (crédito soma, débito subtrai; pode ser 1 linha do banco para vários lançamentos e o contrário) — e clique em <strong>Conciliar marcados</strong>: nasce um <strong>código de conciliação</strong>, gravado nas linhas do extrato e nos lançamentos. Se o pagamento <strong>já está no caixa</strong>, marque o lançamento: só recebe o código. Se ainda <strong>não está</strong>, marque o <strong>título em aberto</strong> (um ou vários, que somem o valor do PIX/pagamento): ao conciliar, o título é <strong>quitado</strong> (data do extrato, conta do banco), o <strong>lançamento de caixa é criado</strong> com o rateio do próprio título e tudo fica conciliado. Se o valor do banco não bate com o do título — <strong>juros ou multa, desconto, alteração do acordo de pagamento ou lançamento a maior/menor</strong> — <strong>clique no título</strong> da lista: abre a janela «Ajustar o valor do título», onde você lança o acréscimo ou o desconto (o valor original do título é preservado), escolhe o <strong>motivo</strong> (fica gravado na observação do título e na auditoria) e usa <strong>Preencher para fechar</strong>, que calcula o valor para igualar o extrato; ao salvar, o título fica marcado e os valores fecham. A lista de títulos mostra o sentido das linhas marcadas (débito = a pagar, crédito = a receber), pelo vencimento dentro da janela escolhida; a busca (fornecedor, título ou valor) também respeita a janela — marque «ignorar o período» para procurar em todos os vencimentos. <strong>Desfazer</strong> reabre os títulos e apaga o lançamento de caixa que a conciliação criou.
           <strong>Sugestões automáticas</strong> procura pares de mesmo valor com data até 3 dias de diferença (as exatas já vêm marcadas; as prováveis e as em lote pedem conferência). <strong>Ignorar</strong> tira linhas da conciliação.</li>
+          <li><strong>Baixou na conta errada?</strong> Acima da lista da direita, em <strong>Conta dos lançamentos</strong>, troque a conta da conciliação por <strong>outra conta</strong> (ou «Todas as contas») e use a busca para achar o lançamento. Marque-o com a linha do extrato e concilie: o sistema pede confirmação e o lançamento <strong>passa para a conta do extrato</strong> — o título que ele pagou (quando é um só) também. O saldo das duas contas é corrigido, a data acompanha o extrato e o <strong>Desfazer</strong> da conciliação devolve a conta anterior. A conta que o lançamento tinha antes fica registrada na Sentinela. As <strong>sugestões automáticas</strong> usam só lançamentos da própria conta.</li>
           <li><strong>3 · Gerar lançamentos</strong>: tarifas, cesta, juros, IOF, rendimentos etc. que o banco lançou e <strong>não estão no contas a pagar</strong>. Marque as linhas e escolha <strong>Gerar com a regra de cada linha</strong> ou
           <strong>Gerar com a classificação que eu escolher</strong> (empresa, setor, plano de contas e evento são obrigatórios). Cada linha vira um lançamento na Movimentação, com rateio de 100%, já conciliado (um código por linha).
-          Para uma linha só, use o botão <strong>Classificar…</strong> dela: escolha <strong>fornecedor, plano de contas</strong> e confira empresa/setor/evento (a <strong>empresa já vem da conta</strong> — veja "Empresa titular" em Cadastros → Contas correntes — e setor/evento/plano padrão vêm de Parâmetros → Padrões por empresa).
+          Para uma linha só, use o botão <strong>Classificar…</strong> dela: escolha <strong>fornecedor, plano de contas</strong> e confira empresa/setor/evento (a <strong>empresa já vem da conta</strong> — veja "Empresa titular" em Cadastros → Contas correntes — e setor/evento padrão vêm de Parâmetros → Padrões por empresa; o plano de contas não tem padrão e é escolhido na hora).
           Marcando <strong>Lembrar como regra</strong>, a palavra do histórico (sugerida, editável) vira uma regra com o fornecedor e a classificação escolhidos; em seguida o sistema avisa se a regra reconhece <strong>outras linhas pendentes</strong> e oferece gerar todas de uma vez.</li>
           <li><strong>⇄ Transferência</strong>: use quando o dinheiro da linha <strong>veio de outra conta</strong> (PIX, cartões, outro banco) — ou foi para ela. É o botão «Transferência» do Sicon: em vez de um lançamento só, cria <strong>as duas pernas</strong>: no banco, já conciliada com a linha do extrato (entrada se o banco recebeu, saída se enviou), e na outra conta o lançamento contrário (a «baixa»). Você escolhe a <strong>outra conta</strong>, o <strong>plano do lado do banco</strong> (a receita, na entrada) e o <strong>plano da baixa</strong> na outra conta; a empresa vem da conta do banco; setor e evento são opcionais. A data é a do extrato nas duas contas (a da outra conta pode ser trocada numa linha só). Vale também para várias linhas marcadas (<strong>⇄ Transferência das marcadas…</strong>, todas entradas ou todas saídas) e <strong>sem loop</strong>: as 400 linhas «PIX RECEBIDO» viram transferências de uma vez pela regra. As duas pernas carregam o <strong>mesmo código de conciliação</strong>, então <strong>Desfazer</strong> apaga as duas juntas. O que é fixo (a outra conta e o plano da baixa) fica lembrado para a próxima; o plano da receita não, porque muda de recebimento para recebimento.</li>
           <li><strong>Regras</strong>: cadastre palavras do histórico (TARIFA, CESTA, JUROS, IOF, RENDIMENTO...) com fornecedor e classificação padrão; valem para todos os bancos da unidade e a de menor ordem vence. A regra pode ser <strong>parcial</strong>: o que faltar (empresa, setor, plano, evento) é completado pela conta e pelos padrões da empresa; se ainda faltar algo, a linha fica de fora do "gerar por regra".
@@ -3402,8 +3458,9 @@
         <ul>
           <li><strong>Padrões gerais da unidade</strong> — empresa e conta pagadora que já vêm marcadas
           ao abrir um título novo.</li>
-          <li><strong>Padrões por empresa</strong> — quando o rateio usar aquela empresa, o evento, setor
-          e plano de contas padrão dela já vêm preenchidos na linha.</li>
+          <li><strong>Padrões por empresa</strong> — quando o rateio usar aquela empresa, o evento e o setor
+          padrão dela já vêm preenchidos na linha. <strong>O plano de contas não tem valor padrão</strong>: é obrigatório em todo rateio
+          (campo marcado com *) e escolhido a cada vez; se faltar ao salvar, o cursor vai direto para ele.</li>
         </ul>
         <p>Isso só <strong>pré-preenche</strong> — continua editável, e não afeta títulos que já existem,
         só os novos a partir de quando o parâmetro foi salvo.</p>
@@ -4462,10 +4519,7 @@
       const setor = todosSetores.find(s => s.id === paramEmpresa.setor_padrao);
       if(setor){ linha.setor_id = setor.id; linha._setorTexto = `${setor.codigo ?? setor.id} — ${setor.nome}`; }
     }
-    if(paramEmpresa?.plano_contas_padrao){
-      const plano = todosPlanosContas.find(p => p.id === paramEmpresa.plano_contas_padrao);
-      if(plano){ linha.plano_de_contas_id = plano.id; linha._planoTexto = `${plano.codigo ?? plano.id} — ${plano.descricao}`; }
-    }
+    // plano de contas: SEM valor padrão (decisão de 24/11/2026) — é obrigatório e sempre escolhido pelo operador
     if(paramEmpresa?.evento_padrao){
       linha.evento = paramEmpresa.evento_padrao;
       const { data: evento } = await sb.from('eventos').select('numero_evento, nome').eq('unidade_negocio_id', agenciaId).eq('numero_evento', paramEmpresa.evento_padrao).maybeSingle();
@@ -4494,7 +4548,7 @@
     document.getElementById('t_acrescimo').value = 0;
     document.getElementById('t_vencimento').value = new Date().toISOString().slice(0, 10);
     document.getElementById('t_minimo_dias_vencimento').value = -30;
-    document.getElementById('t_competencia').value = '';
+    document.getElementById('t_competencia').value = mesAtualLocal();   // padrão: mês atual (editável)
     document.getElementById('t_pagamento').value = '';
     document.getElementById('t_origem').value = 'manual';
     document.getElementById('t_id_origem').value = '';
@@ -4644,7 +4698,7 @@
           </div>
           <div class="campo-com-add">
             <div class="campo-autocomplete">
-              <input type="text" data-campo="plano_de_contas_id_busca" placeholder="Buscar plano de contas..." value="${escapeHtml(linha._planoTexto || '')}">
+              <input type="text" data-campo="plano_de_contas_id_busca" placeholder="Plano de contas * (obrigatório)" required aria-required="true" value="${escapeHtml(linha._planoTexto || '')}">
               <input type="hidden" data-campo="plano_de_contas_id" value="${escapeHtml(linha.plano_de_contas_id || '')}">
               <div class="lista-sugestoes-autocomplete" data-tipo-busca="plano"></div>
             </div>
@@ -4724,6 +4778,14 @@
   });
   ['change', 'input', 'click', 'focusout'].forEach(ev => document.getElementById('t_caixa_rateio').addEventListener(ev, () => setTimeout(sincronizarEmpresaRapida, 80)));
 
+  // «AAAA-MM» do mês atual na hora LOCAL (toISOString usaria UTC e viraria o mês algumas horas antes da virada)
+  function mesAtualLocal(){ const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0'); }
+  document.addEventListener('mouseover', (ev) => {
+    const el = ev.target;
+    if(!el || !el.closest || !el.closest('.linha-rateio') || (el.tagName !== 'INPUT' && el.tagName !== 'SELECT')) return;
+    const txt = el.tagName === 'SELECT' ? (el.selectedOptions[0] && el.selectedOptions[0].textContent) : el.value;
+    el.title = (txt && txt.length > 18) ? txt : '';
+  });
   function renderizarCaixaRateio(containerId, linhasIniciais, valorTotalGetter){
     const box = document.getElementById(containerId);
     const linhas = (linhasIniciais && linhasIniciais.length) ? linhasIniciais : [{}];
@@ -4989,11 +5051,7 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
       const setor = todosSetores.find(s => s.id === paramEmpresa.setor_padrao);
       if(setor){ campoSetor.value = setor.id; linha.querySelector('[data-campo="setor_id_busca"]').value = `${setor.codigo ?? setor.id} — ${setor.nome}`; }
     }
-    const campoPlano = linha.querySelector('[data-campo="plano_de_contas_id"]');
-    if(!campoPlano.value && paramEmpresa.plano_contas_padrao){
-      const plano = todosPlanosContas.find(p => p.id === paramEmpresa.plano_contas_padrao);
-      if(plano){ campoPlano.value = plano.id; linha.querySelector('[data-campo="plano_de_contas_id_busca"]').value = `${plano.codigo ?? plano.id} — ${plano.descricao}`; }
-    }
+    // plano de contas: sem padrão (obrigatório, o operador escolhe)
     const campoEvento = linha.querySelector('[data-campo="evento"]');
     if(!campoEvento.value && paramEmpresa.evento_padrao){
       campoEvento.value = paramEmpresa.evento_padrao;
@@ -5112,6 +5170,11 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
       if(!l.evento) faltando.push('Evento');
       if(!l.setor_id) faltando.push('Setor');
       if(!l.plano_de_contas_id) faltando.push('Plano de Contas');
+      if(!l.plano_de_contas_id){   // leva o cursor ao plano de contas da linha que está faltando (só no formulário aberto)
+        const campos = Array.from(document.querySelectorAll('[data-linha-rateio] [data-campo="plano_de_contas_id_busca"]')).filter(el => el.offsetParent !== null);
+        const alvo = campos.find(el => !el.closest('[data-linha-rateio]').querySelector('[data-campo="plano_de_contas_id"]').value);
+        if(alvo){ alvo.classList.add('campo-faltando'); alvo.addEventListener('input', () => alvo.classList.remove('campo-faltando'), { once: true }); setTimeout(() => alvo.focus(), 50); }
+      }
       if(faltando.length) return `Linha ${i + 1} do rateio -- preencha: ${faltando.join(', ')}.`;
     }
     const soma = linhas.reduce((acc, l) => acc + l.percentual, 0);
@@ -5226,6 +5289,29 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
     }
   }
 
+  // lançamentos de caixa da operação (todas as parcelas de um parcelamento compartilham a MESMA operação)
+  async function movimentosDaOperacao(operacaoId){
+    const { data } = await sb.from('financeiro_movimentacao_contas').select('id, data, id_conta, valor, tipo_movimento, cod_conciliacao, historico').eq('operacao_id', operacaoId);
+    return data || [];
+  }
+  // qual lançamento de caixa é DESTE título? 1) o que bate com a baixa anterior (data, conta, sentido e valor líquido); 2) o que cita «#código do título» no
+  // histórico; 3) o único lançamento de uma operação que tem um único título. Não achou com segurança → ambiguo (a tela pergunta/avisa, não adivinha).
+  async function identificarMovimentoDoTitulo(movs, antes, operacaoId){
+    if(!movs.length) return { mov: null, ambiguo: false };
+    if(antes && antes.data_pagamento){
+      const liq = Number(antes.valor_titulo) - Number(antes.descontos || 0) + Number(antes.acrescimos || 0);
+      const sent = antes.tipo_movimento === 'PAGAR' ? 'D' : 'C';
+      const exatos = movs.filter(m => m.data === antes.data_pagamento && String(m.id_conta) === String(antes.id_conta_pagamento) && m.tipo_movimento === sent && Math.abs(Number(m.valor) - liq) < 0.005);
+      if(exatos.length === 1) return { mov: exatos[0], ambiguo: false };
+      const marca = '#' + antes.codigo;
+      const porCodigo = movs.filter(m => { const t = m.historico || ''; const k = t.indexOf(marca); return k >= 0 && !/[0-9]/.test(t.charAt(k + marca.length)); });
+      if(porCodigo.length === 1) return { mov: porCodigo[0], ambiguo: false };
+    }
+    const { count } = await sb.from('financeiro_titulos').select('id', { count: 'exact', head: true }).eq('operacao_id', operacaoId);
+    if(movs.length === 1 && (count || 0) <= 1) return { mov: movs[0], ambiguo: false };
+    return { mov: null, ambiguo: true };
+  }
+
   document.getElementById('btnSalvarTitulo').addEventListener('click', async () => {
     if(document.getElementById('t_eh_parcelado').checked){ await salvarTituloParcelado(); return; }
 
@@ -5322,34 +5408,63 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
         if(erroRateio) throw new Error(erroRateio.message);
       }
 
-      // baixa alimenta a movimentação de contas automaticamente -- só
-      // se ainda não existir um lançamento pra essa mesma operação
-      // (evita duplicar se salvar de novo um título já baixado)
+      // BAIXA x MOVIMENTAÇÃO DE CONTAS (24/11/2026): salvar o título mantém o lançamento de caixa em dia:
+      //  • data de pagamento + conta preenchidas e AINDA SEM lançamento deste título → cria (título novo já nasce quitado);
+      //  • já existe → ATUALIZA data, conta, valor, competência e pessoa (antes ignorava e a alteração "não fazia diferença");
+      //  • data de pagamento apagada → remove SÓ o lançamento deste título (antes apagava todos os da operação, inclusive de outras parcelas);
+      //  • lançamento já CONCILIADO com o extrato não é alterado nem removido (avisa: desfaça a conciliação antes).
       let baixaFoiRegistradaAgora = false;
       let baixaFoiDesfeitaAgora = false;
+      let baixaFoiAjustada = null;
+      const avisosBaixa = [];
+      const sentidoMov = tipoMovimento === 'PAGAR' ? 'D' : 'C';
+      const valorLiquido = valor - (payloadTitulo.descontos || 0) + (payloadTitulo.acrescimos || 0);
+      const precisaMovs = (dataPagamento && idContaPagamento) || (tituloExistente && tituloExistente.data_pagamento);
+      const movsOp = precisaMovs ? await movimentosDaOperacao(operacaoId) : [];
       if(dataPagamento && idContaPagamento){
-        const { data: movJaExiste } = await sb.from('financeiro_movimentacao_contas').select('id').eq('operacao_id', operacaoId).limit(1);
-        if(!movJaExiste || !movJaExiste.length){
-          const valorLiquido = valor - (payloadTitulo.descontos || 0) + (payloadTitulo.acrescimos || 0);
+        const ident = await identificarMovimentoDoTitulo(movsOp, tituloExistente, operacaoId);
+        const movNovo = {
+          id_conta: Number(idContaPagamento), data: dataPagamento, data_competencia: payloadTitulo.data_competencia, valor: valorLiquido, tipo_movimento: sentidoMov,
+          id_fornecedor_cliente: payloadTitulo.id_fornecedor_cliente, descricao_avulsa: payloadTitulo.descricao_avulsa,
+        };
+        if(ident.mov){
+          const m = ident.mov;
+          const mudou = m.data !== dataPagamento || String(m.id_conta) !== String(idContaPagamento) || Math.abs(Number(m.valor) - valorLiquido) > 0.004 || m.tipo_movimento !== sentidoMov;
+          if(mudou){
+            if(m.cod_conciliacao != null){
+              avisosBaixa.push(`O lançamento de caixa deste título já está CONCILIADO (código #${m.cod_conciliacao}) e NÃO foi alterado. Para mudar a data ou a conta dele, desfaça a conciliação (Conciliação bancária → Conciliações feitas → Desfazer) e salve o título de novo.`);
+            } else {
+              const { error: erroAtual } = await sb.from('financeiro_movimentacao_contas').update(movNovo).eq('id', m.id);
+              if(erroAtual) avisosBaixa.push('O título foi salvo, mas não consegui atualizar o lançamento de caixa dele: ' + erroAtual.message);
+              else baixaFoiAjustada = { de: m, para: movNovo };
+            }
+          }
+        } else if(!movsOp.length || (ident.ambiguo && confirm(`Esta operação já tem ${movsOp.length} lançamento(s) de caixa (outras parcelas, por exemplo) e nenhum foi identificado como deste título.\n\nCriar um NOVO lançamento de caixa para esta baixa?`))){
           await sb.from('financeiro_movimentacao_contas').insert({
             unidade_negocio_id: agenciaId, operacao_id: operacaoId,
             origem, id_registro_na_origem: idOrigem,
-            id_conta: idContaPagamento, data: dataPagamento, data_competencia: payloadTitulo.data_competencia,
+            ...movNovo,
             historico: 'Baixa do título #' + (tituloExistente?.codigo ?? tituloSalvo.codigo) + (textoHistoricoBaixa(payloadTitulo) ? ' - ' + textoHistoricoBaixa(payloadTitulo) : ''),
-            valor: valorLiquido,
-            tipo_movimento: tipoMovimento === 'PAGAR' ? 'D' : 'C',
-            id_fornecedor_cliente: payloadTitulo.id_fornecedor_cliente, descricao_avulsa: payloadTitulo.descricao_avulsa,
           });
           baixaFoiRegistradaAgora = true;
+        } else if(ident.ambiguo){
+          avisosBaixa.push('Esta operação já tem lançamentos de caixa, mas nenhum foi identificado como deste título: nada foi criado nem alterado. Confira na Movimentação de Contas.');
         }
       } else if(tituloExistente && tituloExistente.data_pagamento){
-        // a pessoa apagou a data de pagamento manualmente (sem usar o
-        // botão de desfazer) -- limpa a movimentação gerada pela baixa
-        // anterior, senão fica uma movimentação órfã de um título que
-        // voltou a estar "em aberto"
-        await sb.from('financeiro_movimentacao_contas').delete().eq('operacao_id', operacaoId);
+        // a pessoa apagou a data de pagamento manualmente (sem usar o botão de desfazer): remove o lançamento DESTE título, senão
+        // ficaria uma movimentação órfã de um título que voltou a estar "em aberto"
+        const ident = await identificarMovimentoDoTitulo(movsOp, tituloExistente, operacaoId);
+        if(ident.mov){
+          if(ident.mov.cod_conciliacao != null){
+            avisosBaixa.push(`O lançamento de caixa deste título está CONCILIADO (código #${ident.mov.cod_conciliacao}) e NÃO foi removido. Desfaça a conciliação para removê-lo.`);
+          } else {
+            await sb.from('financeiro_movimentacao_contas').delete().eq('id', ident.mov.id);
+            baixaFoiDesfeitaAgora = true;
+          }
+        } else if(movsOp.length){
+          avisosBaixa.push('A data de pagamento foi apagada, mas não consegui identificar qual lançamento de caixa era deste título: nenhum foi removido. Confira na Movimentação de Contas.');
+        }
         await sb.from('financeiro_titulos').update({ lote_baixa_id: null }).eq('id', tituloIdAtual);
-        baixaFoiDesfeitaAgora = true;
       }
 
       const codigoTitulo = tituloExistente?.codigo ?? tituloSalvo.codigo;
@@ -5366,9 +5481,17 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
         await registrarSentinela('financeiro_baixa_desfeita', `Removeu a data de pagamento do título #${codigoTitulo} manualmente (baixa desfeita) -- cliente/fornecedor: ${clienteFornecedorTexto} -- operação #${opInfoTitulo?.codigo ?? operacaoId}`);
       }
 
+      if(baixaFoiAjustada){
+        const d = baixaFoiAjustada.de, n = baixaFoiAjustada.para;
+        await registrarSentinela('financeiro_baixa_ajustada', `Ajustou o lançamento de caixa da baixa do título #${codigoTitulo} "${tituloDigitado}": data ${formatarData(d.data)} → ${formatarData(n.data)}; conta ${extNomeConta(Number(d.id_conta))} → ${extNomeConta(n.id_conta)}; valor ${formatarMoeda(d.valor)} → ${formatarMoeda(n.valor)} -- operação #${opInfoTitulo?.codigo ?? operacaoId}`);
+      }
       await carregarTitulos();
       await carregarMovimentacoes();
       document.getElementById('modalTitulo').classList.remove('show');
+      const msgsBaixa = [];
+      if(baixaFoiAjustada) msgsBaixa.push(`Lançamento de caixa atualizado: data ${formatarData(baixaFoiAjustada.de.data)} → ${formatarData(baixaFoiAjustada.para.data)}, conta "${extNomeConta(Number(baixaFoiAjustada.de.id_conta))}" → "${extNomeConta(baixaFoiAjustada.para.id_conta)}", valor ${formatarMoeda(baixaFoiAjustada.para.valor)}.`);
+      avisosBaixa.forEach(a => msgsBaixa.push('⚠ ' + a));
+      if(msgsBaixa.length) alert(msgsBaixa.join('\n\n'));
     } catch(erro){
       alert('Erro ao salvar: ' + erro.message);
     } finally{
@@ -5506,7 +5629,7 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
       document.getElementById('m_conta').value = '';
       document.getElementById('m_valor').value = '';
       document.getElementById('m_data').value = new Date().toISOString().slice(0, 10);
-      document.getElementById('m_competencia').value = '';
+      document.getElementById('m_competencia').value = mesAtualLocal();   // padrão: mês atual (editável)
       document.getElementById('m_origem').value = 'manual';
       document.getElementById('m_id_origem').value = '';
       renderizarCaixaRateio('m_caixa_rateio', [], () => parseFloat(document.getElementById('m_valor').value) || 0);
@@ -5776,7 +5899,6 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
     box.innerHTML = todasEmpresas.map((emp, i) => {
       const param = parametrosPorEmpresa.find(p => p.empresa_id === emp.id) || {};
       const setor = param.setor_padrao ? todosSetores.find(s => s.id === param.setor_padrao) : null;
-      const plano = param.plano_contas_padrao ? todosPlanosContas.find(p => p.id === param.plano_contas_padrao) : null;
       return `
         <div class="linha-parametro-empresa" data-empresa-id="${emp.id}" style="border:1px solid var(--border); border-radius:10px; padding:12px; margin-bottom:10px;">
           <strong style="font-size:.85rem;">${escapeHtml(emp.codigo ?? '')} — ${escapeHtml(emp.nome)}</strong>
@@ -5793,11 +5915,7 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
             </div>
           </div>
           <div class="field-row" style="margin-top:8px;">
-            <div class="campo-autocomplete">
-              <input type="text" data-campo="plano_busca" placeholder="Plano de contas padrão..." value="${plano ? escapeHtml((plano.codigo ?? plano.id) + ' — ' + plano.descricao) : ''}">
-              <input type="hidden" data-campo="plano" value="${escapeHtml(param.plano_contas_padrao || '')}">
-              <div class="lista-sugestoes-autocomplete" data-lista="plano"></div>
-            </div>
+            <span class="ext-nota" style="margin:0; align-self:center;">O plano de contas não tem valor padrão: é obrigatório e escolhido em cada rateio.</span>
             <button type="button" class="btn-novo" data-salvar-parametro-empresa="${emp.id}" style="justify-self:start;">Salvar</button>
           </div>
           <span class="status-msg" data-status-parametro-empresa></span>
@@ -5813,10 +5931,6 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
         linha.querySelector('[data-campo="setor_busca"]'), linha.querySelector('[data-campo="setor"]'),
         linha.querySelector('[data-lista="setor"]'), (termo) => buscarLocal(todosSetores, 'codigo', 'nome', termo), 'id'
       );
-      ligarBuscaAutocomplete(
-        linha.querySelector('[data-campo="plano_busca"]'), linha.querySelector('[data-campo="plano"]'),
-        linha.querySelector('[data-lista="plano"]'), (termo) => buscarLocal(todosPlanosContas, 'codigo', 'descricao', termo), 'id'
-      );
     });
     box.querySelectorAll('[data-salvar-parametro-empresa]').forEach(btn => {
       btn.addEventListener('click', async () => {
@@ -5829,7 +5943,6 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
             empresa_id: linha.dataset.empresaId,
             evento_padrao: linha.querySelector('[data-campo="evento"]').value.trim() || null,
             setor_padrao: linha.querySelector('[data-campo="setor"]').value || null,
-            plano_contas_padrao: linha.querySelector('[data-campo="plano"]').value || null,
           };
           const { error } = await sb.from('financeiro_parametros_empresas').upsert(payload, { onConflict: 'unidade_negocio_id,empresa_id' });
           if(error) throw new Error(error.message);

@@ -262,6 +262,26 @@
   .ri-info{ font-size:.78rem; color:var(--brand-2); font-weight:600; margin:2px 0 10px; min-height:1.1em; }
   @media (max-width:900px){ .linha-item-recibo{ grid-template-columns:repeat(4, 1fr); } .linha-item-recibo .li-nome{ grid-column:1 / -1; font-weight:600; } }
   .linha-item-recibo:last-child{ border-bottom:none; }
+  /* ENVIO PARCIAL (24/11/2026): marcar quem vai ao Financeiro + empresa e plano de contas de CADA lançamento */
+  .linha-item-recibo.com-class{ border-bottom:none; padding-bottom:3px; }
+  .linha-item-recibo .li-nome label{ display:flex; gap:8px; align-items:flex-start; cursor:pointer; }
+  .linha-item-recibo .li-nome input.li-sel{ margin-top:3px; width:16px; height:16px; flex:none; accent-color:var(--brand-2); }
+  .linha-item-class{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:2px 2px 8px 28px; border-bottom:1px solid var(--border); font-size:.76rem; color:var(--muted); }
+  .linha-item-class select{ flex:1; min-width:160px; max-width:340px; padding:4px 6px; font-size:.78rem; border:1px solid var(--border); border-radius:6px; background:var(--bg); font-family:inherit; color:var(--ink); }
+  .linha-item-class input.li-obs{ flex:2; min-width:240px; padding:4px 7px; font-size:.78rem; border:1px solid var(--border); border-radius:6px; background:var(--bg); font-family:inherit; color:var(--ink); }
+  .linha-item-class input.li-obs.preenchida{ border-color:var(--brand-2); background:var(--brand-soft); }
+  .linha-item-class .lic-obs{ flex:1 1 100%; color:var(--ink); font-style:italic; }
+  .linha-item-class input.pg-busca{ flex:1; min-width:170px; max-width:340px; padding:4px 7px; font-size:.78rem; border:1px solid var(--border); border-radius:6px; background:var(--bg); font-family:inherit; color:var(--ink); text-overflow:ellipsis; }
+  .barra-envio-recibo input.pg-busca{ min-width:170px; max-width:300px; padding:5px 7px; font-size:.8rem; border:1px solid var(--border); border-radius:6px; background:#fff; font-family:inherit; text-overflow:ellipsis; }
+  input.pg-busca.definido{ border-color:var(--brand-2) !important; background:var(--brand-soft) !important; }
+  .linha-item-class select.definido{ border-color:var(--brand-2); background:var(--brand-soft); }
+  .linha-item-class .lic-sep{ color:var(--muted); }
+  .linha-item-class .lic-trava{ margin-left:auto; }
+  .barra-envio-recibo{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; background:var(--brand-soft); border-radius:10px; padding:9px 12px; margin:10px 0 8px; font-size:.8rem; }
+  .barra-envio-recibo select{ min-width:150px; max-width:300px; padding:5px 7px; font-size:.8rem; border:1px solid var(--border); border-radius:6px; background:#fff; font-family:inherit; }
+  .barra-envio-recibo .bar-sep{ flex:1; }
+  .protocolo-recibo{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; font-size:.78rem; border-radius:8px; padding:7px 10px; margin-bottom:6px; background:#FEF3E2; }
+  .protocolo-recibo.aceita{ background:var(--success-soft); }
 
   .linha-membro-equipe{
     display:flex; align-items:center; justify-content:space-between; gap:10px;
@@ -820,7 +840,7 @@
 
           <!-- ================= PAGAMENTOS (ordens de pagamento para o Financeiro) ================= -->
           <div class="panel-app" id="app-panel-pagamentos">
-            <p style="font-size:.82rem; color:var(--muted); margin:0 0 12px;">Protocolos de pagamento <strong>enviados ao Financeiro</strong>. Cada recibo é um protocolo: abra o recibo (aba <em>Recibos</em>), preencha os <strong>dados de pagamento</strong> e clique em <strong>Enviar ao Financeiro</strong>. O Financeiro só confere e aceita — o sistema cria um título a pagar por profissional, já com fornecedor, valor e classificação.</p>
+            <p style="font-size:.82rem; color:var(--muted); margin:0 0 12px;">Protocolos de pagamento <strong>enviados ao Financeiro</strong>. Abra o recibo (aba <em>Recibos</em>), clique em <em>Lançar e revisar pagamentos</em>, <strong>marque quem vai</strong> e use <strong>Enviar marcados ao Financeiro</strong> (a conta e o vencimento são escolhidos no envio; cada envio é um protocolo). O Financeiro só confere e aceita — o sistema cria um título a pagar por profissional, já com fornecedor, valor, empresa e plano de contas de cada lançamento.</p>
             <div class="filtros" style="justify-content:space-between; display:flex; margin-bottom:18px; gap:10px; flex-wrap:wrap;">
               <select id="filtroOrdemStatus" style="padding:9px 14px; border-radius:9px; border:1.5px solid var(--border); font-size:.85rem; background:var(--surface); color:var(--ink); font-weight:500;">
                 <option value="">Todos os status</option>
@@ -1021,6 +1041,18 @@
         <span id="dupResumo" style="font-size:.84rem; font-weight:600; margin-right:auto;"></span>
         <button class="btn-upload-imagem" id="btnCancelarDuplicar">Cancelar</button>
         <button class="btn-novo" id="btnConfirmarDuplicar">Criar recibo duplicado</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= POPUP: ENVIAR OS LANÇAMENTOS MARCADOS AO FINANCEIRO (conta e vencimento escolhidos no envio) ================= -->
+  <div class="modal-lista-overlay" id="modalEnviarParcial" style="z-index:90;">
+    <div class="modal-lista" style="max-width:640px; max-height:90vh;">
+      <div class="modal-lista-head"><h3 id="envTitulo">Enviar ao Financeiro</h3><button class="drawer-close" id="btnFecharModalEnviarX">✕</button></div>
+      <div class="modal-lista-body" style="padding:16px 20px; overflow:auto; flex:1;" id="envCorpo"></div>
+      <div style="padding:12px 20px; border-top:1px solid var(--border); display:flex; gap:10px; justify-content:flex-end; align-items:center; flex-wrap:wrap;">
+        <button class="btn-upload-imagem" id="btnFecharEnviar">Fechar</button>
+        <button class="btn-novo" id="btnConfirmarEnviar">📤 Enviar ao Financeiro</button>
       </div>
     </div>
   </div>
@@ -1247,6 +1279,8 @@
       <div class="modal-lista-body" id="modalItensReciboBody"></div>
       <div class="modal-lista-add">
         <div style="flex:1; min-width:120px;"><span style="font-size:.72rem; color:var(--muted); text-transform:uppercase; letter-spacing:.03em;">Total do recibo</span><br><span class="mono" id="totalModalItensRecibo" style="font-weight:700; font-size:1.05rem;">R$ 0,00</span></div>
+        <span id="enviarMarcadosResumo" style="font-size:.8rem; color:var(--muted); margin-left:auto;"></span>
+        <button class="btn-novo" id="btnEnviarMarcados" style="display:none;" title="Envia ao Financeiro só os lançamentos marcados">📤 Enviar marcados ao Financeiro</button>
         <button class="btn-novo" id="btnConcluirLancamentoRecibo">Concluído</button>
       </div>
     </div>
@@ -1307,6 +1341,8 @@
   let papelStaffAtual = null; // 'administrador' | 'financeiro' | 'operacional' | 'consulta' | null (sem acesso)
 
   let todosProfissionais = [];
+  let todosProtocolosRecibo = new Map();   // numero do recibo -> protocolos (staff_ordens_pagamento) criados por «Enviar ao Financeiro» (um por envio parcial)
+  let protocoloPorId = new Map();
   let todosReciboPag = new Map();   // numero do recibo -> dados de pagamento (staff_recibos_pagamento) + status da ordem
   let todasFuncoes = [];
   let setoresAtuacao = [], subsetoresAtuacao = [];   // setores/subsetores da unidade: o subsetor de ATUAÇÃO fixo de cada profissional
@@ -1700,7 +1736,7 @@
   // =================================================================
   const AJUDA_STAFF = {
     titulo: 'Staff — Equipe, Escalas, Ponto e Pagamentos',
-    ultimaRevisao: '24/11/2026',
+    ultimaRevisao: '24/11/2026',   // envio parcial do recibo + empresa/plano por lançamento (24/11/2026)
     secoes: [
       { id: 'geral', titulo: 'Visão geral', corpo: `
         <p>O Staff é onde a unidade organiza <strong>quem trabalha</strong> pra ela (equipe fixa ou freelancer),
@@ -1815,14 +1851,15 @@
         </ul>
       ` },
       { id: 'pagamentos', titulo: 'Pagamentos (enviados ao Financeiro)', corpo: `
-        <p>Lista os <strong>protocolos de pagamento</strong> que o Staff enviou ao Financeiro. <strong>Cada recibo é um protocolo</strong>: o envio é feito dentro do recibo, na seção <em>Pagamento (envio ao Financeiro)</em>.</p>
+        <p>Lista os <strong>protocolos de pagamento</strong> que o Staff enviou ao Financeiro. <strong>Cada envio é um protocolo</strong> (um recibo pode ter vários, um por conta): o envio é feito na janela de <em>Lançamentos</em> do recibo, marcando quem vai; a seção <em>Pagamento</em> do recibo mostra os protocolos já enviados.</p>
         <ul>
-          <li><strong>Dados de pagamento do recibo</strong>: vencimento (data de pagamento), competência, <strong>conta de pagamento, empresa, setor, plano de contas e evento do Financeiro</strong>, e uma observação (ex.: <em>COMPETENCIA 10/26</em>, que vai nos títulos).
-          Um recibo novo já vem com a classificação do último recibo do mesmo tipo — é só informar o vencimento e salvar.</li>
-          <li><strong>Enviar ao Financeiro</strong>: fecha o recibo e cria o protocolo com <strong>um item por lançamento</strong> — o favorecido é a pessoa do profissional no Financeiro e o valor é o <strong>líquido</strong> do lançamento
-          (valor + alimentação + transporte − descontos). Se algum profissional ainda não estiver ligado ao Financeiro, o sistema oferece ligar pelo CPF na hora; sem CPF válido, ele pede para corrigir.</li>
-          <li>O Financeiro <strong>só confere e aceita</strong>: sem escolher nada, saem os títulos a pagar (um por profissional), com o rateio 100% e a conta de pagamento do recibo.</li>
-          <li><strong>Cancelar envio</strong> (dentro do recibo) vale enquanto o Financeiro não aceitou: o protocolo é excluído e o <strong>recibo volta a ficar aberto</strong> para ajustar e reenviar. Depois do aceite, só o Financeiro desfaz (se nenhum título tiver sido pago).</li>
+          <li><strong>Dados de pagamento do recibo</strong> (no recibo): vencimento, competência, <strong>setor e evento do Financeiro</strong>, uma observação (ex.: <em>COMPETENCIA 10/26</em>, que vai nos títulos) e os <strong>padrões</strong> de conta, empresa e plano de contas.
+          Um recibo novo já vem com a classificação do último recibo do mesmo tipo.</li>
+          <li><strong>Empresa e plano de contas são de CADA lançamento</strong>: na janela <em>Lançamentos</em>, cada linha tem os seus dois campos de <strong>busca</strong> (digite <strong>parte do nome ou do código</strong>, como em «02.05», «diaria semanal» ou «aeroporto»; com o campo vazio, ao clicar, aparecem os 10 primeiros; apagar o campo = vale o padrão do recibo). A <strong>conta de pagamento</strong> do envio e os padrões do recibo usam a mesma busca. Assim cada guia/profissional pode ir por uma empresa do grupo e por um plano diferente. Para vários de uma vez, marque as linhas e use <strong>Aplicar aos marcados</strong>.</li>
+          <li><strong>Enviar ao Financeiro é feito na janela de Lançamentos, marcando quem vai</strong> (checkbox em cada linha; «Marcar todos os pendentes» marca o resto). O botão <strong>📤 Enviar marcados ao Financeiro</strong> pede o <strong>vencimento</strong> e a <strong>conta de pagamento DAQUELE envio</strong> — assim dá para mandar uns lançamentos para uma conta e outros para outra, no mesmo recibo, em envios separados.
+          Cada envio vira um <strong>protocolo</strong> com <strong>um item por lançamento</strong> (favorecido = a pessoa do profissional no Financeiro; valor = o <strong>líquido</strong>). O recibo continua aberto com o que não foi enviado; os lançamentos enviados ficam travados, com o número do protocolo. Se algum profissional ainda não estiver ligado ao Financeiro, o sistema oferece ligar pelo CPF na hora; lançamento sem empresa ou sem plano de contas (nem no lançamento, nem como padrão do recibo) não é enviado.</li>
+          <li>O Financeiro <strong>só confere e aceita</strong>: saem os títulos a pagar (um por profissional), cada um com a <strong>empresa e o plano de contas do próprio lançamento</strong> (rateio 100%) e a conta escolhida no envio.</li>
+          <li><strong>Cancelar este envio</strong> (na seção <em>Pagamento</em> do recibo, um botão por protocolo) vale enquanto o Financeiro não aceitou: o protocolo é excluído e <strong>só os lançamentos dele voltam a ficar abertos</strong> para ajustar e reenviar. Depois do aceite, só o Financeiro desfaz (se nenhum título tiver sido pago). Recibo com lançamentos já enviados não pode ser excluído.</li>
           <li><strong>Folha mensal</strong>: use <strong>Duplicar</strong> no recibo do mês anterior — abre uma <strong>janela</strong> onde você define a <strong>competência</strong> (o período, o vencimento e a observação «COMPETENCIA mm/aa» acompanham), escolhe <strong>quais colaboradores</strong> entram e informa o <strong>valor de cada um</strong> para o novo período (os valores vêm do recibo anterior como provisionados). Os dados de pagamento são copiados — depois é só conferir e enviar.
           Vale e transporte/alimentação que se pagam separados devem ser lançados em um recibo próprio (tipo próprio), como no Sicom.</li>
           <li>Quem envia: papéis <strong>Administrador</strong> e <strong>Financeiro</strong> do Staff (e o Principal).</li>
@@ -1831,7 +1868,7 @@
       { id: 'recibos', titulo: 'Recibos (RPA)', corpo: `
         <p>Um recibo agrupa vários lançamentos de pagamento avulso por número sequencial, gerado
         automaticamente pela unidade (não precisa digitar número).</p>
-        <p><strong>Folha mensal:</strong> use <strong>Duplicar</strong> no recibo da folha do mês anterior. Abre uma janela para escolher a <strong>competência/período</strong>, <strong>quais colaboradores</strong> serão duplicados e o <strong>valor de cada um</strong> no novo período (valor da diária e total se calculam entre si). O recibo novo nasce aberto, com os dados de pagamento copiados; confira e envie ao Financeiro pelo botão <em>Enviar ao Financeiro</em>.</p>
+        <p><strong>Folha mensal:</strong> use <strong>Duplicar</strong> no recibo da folha do mês anterior. O recibo novo leva a <strong>empresa, o plano de contas e a observação de cada lançamento</strong>; no campo <strong>Observação de TODOS os lançamentos</strong> da janela dá para trocar a observação do lote inteiro de uma vez (ex.: «COMISSÃO 06/26», «SALÁRIO 07/26»), restaurar as do recibo anterior ou ajustar linha a linha. Abre uma janela para escolher a <strong>competência/período</strong>, <strong>quais colaboradores</strong> serão duplicados e o <strong>valor de cada um</strong> no novo período (valor da diária e total se calculam entre si). O recibo novo nasce aberto, com os dados de pagamento copiados; confira e envie ao Financeiro pelo botão <em>Enviar ao Financeiro</em>.</p>
         <ul>
           <li>Cada lançamento = profissional + tipo (Diária completa, Meia diária, Hora extra, Adicional
           noturno, Outro) + <strong>valor bruto + alimentação + transporte − descontos = valor líquido</strong> (o líquido é calculado,
@@ -1840,7 +1877,9 @@
           informe o <strong>valor da diária</strong> e o total é calculado, ou informe o <strong>total</strong> e o valor de cada diária é calculado. O lançamento fica <strong>numa linha só</strong> («22 × R$ 100,00»). A lista mostra
           valor, alimentação, transporte, descontos e líquido de cada lançamento, com <strong>subtotal por profissional</strong> e total; enquanto o recibo está aberto, os valores
           podem ser <strong>editados direto na linha</strong> (útil na folha mensal: troque o provisionado pelo real).</li>
-          <li>Enquanto o recibo está <strong>Aberto</strong>, os lançamentos podem ser editados livremente.</li>
+          <li>Enquanto o lançamento <strong>não foi enviado ao Financeiro</strong>, ele pode ser editado livremente (valores, empresa, plano de contas e observação). Depois de enviado, fica travado até o protocolo ser cancelado.</li>
+          <li><strong>Botão «✏️ Lançamentos» na lista de recibos</strong>: abre direto a janela de lançamentos do recibo (lançar, alterar, marcar quem vai e enviar ao Financeiro), sem precisar abrir o recibo antes.</li>
+          <li><strong>Observação do lançamento</strong> (campo «Observação» ao lançar, e editável na linha): use para registrar a peculiaridade daquele pagamento — diferença de diária, diferença de comissão, comissão antecipada etc. Ela aparece no PDF do recibo, no popup de envio, no detalhe do protocolo e na observação do título a pagar no Financeiro. A <em>observação do recibo</em> (seção Pagamento) é a geral, que vai em todos os títulos.</li>
           <li><strong>Fechar recibo</strong> é definitivo: depois de fechado, não dá mais pra editar os
           lançamentos dele. Só feche quando o recibo estiver pronto pra impressão/pagamento.</li>
           <li>Excluir o recibo remove todos os lançamentos dele de uma vez — não tem como excluir um recibo
@@ -3299,25 +3338,34 @@
     await ordCarregarEventosFin();
     pagCat.carregado = true;
   }
+  const ritTravado = (l) => l.status === 'fechado' || !!l.ordem_extras_id;
   function pagTagLista(g){
-    const h = todosReciboPag.get(g.numero), o = h && h.staff_ordens_pagamento;
-    if(!h || !h.ordem_id || !o) return '';
-    return `<span class="status-tag ord-${o.status}" title="Protocolo Nº ${o.numero}">${o.status === 'aceita' ? 'Aceito pelo Financeiro' : 'Enviado ao Financeiro'}</span>`;
+    const ps = todosProtocolosRecibo.get(g.numero) || [];
+    if(!ps.length) return '';
+    const enviados = g.itens.filter(l => l.ordem_extras_id).length, todosAceitos = ps.every(p => p.status === 'aceita') && enviados === g.itens.length;
+    const rot = todosAceitos ? 'Aceito pelo Financeiro' : (enviados < g.itens.length ? `Enviado em parte (${enviados}/${g.itens.length})` : (ps.every(p => p.status === 'aceita') ? 'Aceito pelo Financeiro' : 'Enviado ao Financeiro'));
+    return `<span class="status-tag ord-${ps.every(p => p.status === 'aceita') ? 'aceita' : 'enviada'}" title="Protocolos: ${ps.map(p => 'Nº ' + p.numero).join(', ')}">${rot}</span>`;
   }
   function pagHtmlSecao(grupo){
     if(!grupo) return '';
-    const h = todosReciboPag.get(grupo.numero), o = h && h.staff_ordens_pagamento, enviado = !!(h && h.ordem_id), pode = podeGerenciarPagamentosAgora() && !enviado, dis = pode ? '' : 'disabled';
-    const banner = enviado && o ? `<p style="font-size:.78rem; border-radius:8px; padding:8px 11px; margin-bottom:10px; background:${o.status === 'aceita' ? 'var(--success-soft)' : '#FEF3E2'};">${o.status === 'aceita' ? '✅ Aceito pelo Financeiro' : '⏳ Enviado ao Financeiro — aguardando o aceite'} (protocolo Nº ${o.numero}).</p>` : '<p id="pgSugestao" style="font-size:.76rem; color:var(--muted); margin:0 0 8px;"></p>';
+    const h = todosReciboPag.get(grupo.numero), ps = todosProtocolosRecibo.get(grupo.numero) || [];
+    const tudoEnviado = grupo.itens.length > 0 && grupo.itens.every(ritTravado), pode = podeGerenciarPagamentosAgora() && !tudoEnviado, dis = pode ? '' : 'disabled';
+    const podeCancelar = podeGerenciarPagamentosAgora();
+    const protos = ps.length ? ps.map(o => {
+      const n = grupo.itens.filter(l => l.ordem_extras_id === o.id).length, conta = (pagCat.contas.find(c => String(c.id) === String(o.id_conta_pagamento)) || {}).nome;
+      return `<div class="protocolo-recibo ${o.status === 'aceita' ? 'aceita' : ''}"><span>${o.status === 'aceita' ? '✅ Aceito pelo Financeiro' : '⏳ Enviado — aguardando o aceite'} · protocolo <strong>Nº ${o.numero}</strong> · ${n} lançamento(s) · ${formatarMoeda(o.total)} · pagar em ${formatarDataSemFuso(o.vencimento)}${conta ? ' · ' + vinEsc(conta) : ''}</span>${o.status === 'enviada' && podeCancelar ? `<button type="button" class="btn-upload-imagem" data-pag-cancelar="${o.id}" style="color:var(--danger); margin-left:auto;">Cancelar este envio</button>` : ''}</div>`;
+    }).join('') : '';
     return `<div class="drawer-section" id="pagSecao">
-      <div class="drawer-section-title">Pagamento (envio ao Financeiro)</div>${banner}
-      <div class="field-row"><div class="field-group"><label>Vencimento (data de pagamento)</label><input type="date" id="pg_venc" ${dis}></div><div class="field-group"><label>Competência</label><input type="month" id="pg_comp" ${dis}></div></div>
-      <div class="field-group"><label>Conta de pagamento</label><select id="pg_conta" ${dis}></select></div>
-      <div class="field-row"><div class="field-group"><label>Empresa</label><select id="pg_empresa" ${dis}></select></div><div class="field-group"><label>Setor / Departamento</label><select id="pg_setor" ${dis}></select></div></div>
-      <div class="field-group"><label>Plano de contas</label><select id="pg_plano" ${dis}></select></div>
+      <div class="drawer-section-title">Pagamento (envio ao Financeiro)</div>
+      ${protos}
+      <p style="font-size:.76rem; color:var(--muted); margin:0 0 8px;" id="pgSugestao">Estes são os <strong>padrões</strong> do recibo. A <strong>empresa</strong> e o <strong>plano de contas</strong> podem ser trocados em cada lançamento, e a <strong>conta</strong> e o <strong>vencimento</strong> são escolhidos no momento do envio. O envio é feito <strong>na janela de lançamentos</strong>, marcando quem vai.</p>
+      <div class="field-row"><div class="field-group"><label>Vencimento padrão (data de pagamento)</label><input type="date" id="pg_venc" ${dis}></div><div class="field-group"><label>Competência</label><input type="month" id="pg_comp" ${dis}></div></div>
+      <div class="field-group"><label>Conta de pagamento padrão</label><input type="text" id="pg_conta" class="pg-busca" data-busca="conta" data-valor="" placeholder="Buscar a conta…" autocomplete="off" ${dis}></div>
+      <div class="field-row"><div class="field-group"><label>Empresa padrão</label><input type="text" id="pg_empresa" class="pg-busca" data-busca="empresa" data-valor="" placeholder="Buscar a empresa…" autocomplete="off" ${dis}></div><div class="field-group"><label>Setor / Departamento</label><select id="pg_setor" ${dis}></select></div></div>
+      <div class="field-group"><label>Plano de contas padrão</label><input type="text" id="pg_plano" class="pg-busca" data-busca="plano" data-valor="" placeholder="Buscar por código ou nome…" autocomplete="off" ${dis}></div>
       <div class="field-group"><label>Evento do Financeiro</label><input type="text" id="pg_evento" list="ordListaEventos" placeholder="Código ou nome do evento" autocomplete="off" ${dis}></div>
       <div class="field-group"><label>Observação (vai nos títulos)</label><input type="text" id="pg_obs" placeholder="Ex.: COMPETENCIA 10/26" ${dis}></div>
-      ${pode ? '<div style="display:flex; gap:8px; flex-wrap:wrap;"><button type="button" class="btn-upload-imagem" id="btnPagSalvar">Salvar dados de pagamento</button><button type="button" class="btn-novo" id="btnPagEnviar" style="flex:1;">📤 Enviar ao Financeiro</button></div>' : ''}
-      ${enviado && o && o.status === 'enviada' && podeGerenciarPagamentosAgora() ? '<button type="button" class="btn-upload-imagem" id="btnPagCancelar" style="color:var(--danger);">Cancelar envio (reabre o recibo)</button>' : ''}
+      ${pode ? '<div style="display:flex; gap:8px; flex-wrap:wrap;"><button type="button" class="btn-upload-imagem" id="btnPagSalvar">Salvar dados de pagamento</button><button type="button" class="btn-novo" id="btnPagEnviar" style="flex:1;">📤 Escolher lançamentos e enviar</button></div>' : ''}
     </div>`;
   }
   // sugestão: classificação do último recibo do MESMO TIPO que já tem dados de pagamento
@@ -3334,23 +3382,23 @@
     let h = todosReciboPag.get(grupo.numero), sug = null;
     if(!h){ sug = pagSugestao(grupo); h = sug || {}; }
     const opt = (arr, cur, rot) => '<option value="">— escolha —</option>' + arr.map(x => `<option value="${x.id}" ${String(cur) === String(x.id) ? 'selected' : ''}>${vinEsc(rot(x))}</option>`).join('');
-    document.getElementById('pg_conta').innerHTML = opt(pagCat.contas, h.id_conta_pagamento, c => c.nome);
-    document.getElementById('pg_empresa').innerHTML = opt(pagCat.empresas, h.empresa_id, e => e.nome);
+    pgBuscaDefinir(document.getElementById('pg_conta'), h.id_conta_pagamento);
+    pgBuscaDefinir(document.getElementById('pg_empresa'), h.empresa_id);
     document.getElementById('pg_setor').innerHTML = opt(pagCat.setores, h.setor_id, s => (s.codigo != null ? s.codigo + ' — ' : '') + s.nome);
-    document.getElementById('pg_plano').innerHTML = opt(pagCat.planos, h.plano_de_contas_id, p => (p.codigo ?? p.id) + ' — ' + p.descricao);
+    pgBuscaDefinir(document.getElementById('pg_plano'), h.plano_de_contas_id);
     document.getElementById('pg_venc').value = h.vencimento || '';
     document.getElementById('pg_comp').value = h.competencia ? String(h.competencia).slice(0, 7) : (sug ? new Date().toISOString().slice(0, 7) : '');
     document.getElementById('pg_evento').value = h.evento_codigo ? ordNomeEventoFin(h.evento_codigo) : '';
     document.getElementById('pg_obs').value = h.observacao || '';
     const msg = document.getElementById('pgSugestao'); if(msg && sug) msg.textContent = `Sugestão copiada do último recibo deste tipo (Nº ${sug.origem}): confira, informe o vencimento e salve.`;
     const b1 = document.getElementById('btnPagSalvar'); if(b1) b1.addEventListener('click', () => pagSalvar(grupo));
-    const b2 = document.getElementById('btnPagEnviar'); if(b2) b2.addEventListener('click', () => pagEnviar(grupo));
-    const b3 = document.getElementById('btnPagCancelar'); if(b3) b3.addEventListener('click', () => pagCancelarEnvio(grupo));
+    const b2 = document.getElementById('btnPagEnviar'); if(b2) b2.addEventListener('click', () => abrirModalItensRecibo());   // o envio é feito na janela de lançamentos, marcando quem vai
+    document.querySelectorAll('[data-pag-cancelar]').forEach(b => b.addEventListener('click', () => pagCancelarProtocolo(b.dataset.pagCancelar, grupo)));
   }
   async function pagSalvar(grupo, silencioso){
     const txtEv = document.getElementById('pg_evento').value.trim(), ev = ordCodigoEvento(txtEv);
     if(txtEv && !ev){ alert('Evento não encontrado no cadastro do Financeiro. Escolha um da lista.'); return null; }
-    const num = (id) => document.getElementById(id).value ? Number(document.getElementById(id).value) : null, comp = document.getElementById('pg_comp').value;
+    const num = (id) => { const el = document.getElementById(id), v = el.classList.contains('pg-busca') ? el.dataset.valor : el.value; return v ? Number(v) : null; }, comp = document.getElementById('pg_comp').value;
     const reg = { unidade_negocio_id: agenciaId, numero_recibo: grupo.numero, vencimento: document.getElementById('pg_venc').value || null, competencia: comp ? comp + '-01' : null,
       id_conta_pagamento: num('pg_conta'), empresa_id: num('pg_empresa'), setor_id: num('pg_setor'), plano_de_contas_id: num('pg_plano'), evento_codigo: ev || null,
       observacao: document.getElementById('pg_obs').value.trim() || null, updated_at: new Date().toISOString() };
@@ -3378,35 +3426,167 @@
     for(const c of cls){ const pessoa = c.st === 'criar' ? await vinCriarPessoa(c.p, estado) : c.pessoa; if(!(await vinGravarLink(c.p, pessoa, 'ao enviar o recibo'))) return false; }
     return true;
   }
-  async function pagEnviar(grupo){
-    const h = await pagSalvar(grupo, true); if(!h) return;
-    const falta = [!h.vencimento && 'vencimento', !h.id_conta_pagamento && 'conta de pagamento', !h.empresa_id && 'empresa', !h.setor_id && 'setor', !h.plano_de_contas_id && 'plano de contas', !h.evento_codigo && 'evento'].filter(Boolean);
-    if(falta.length){ alert('Preencha os dados de pagamento: ' + falta.join(', ') + '.'); return; }
-    const comValor = grupo.itens.filter(l => (Number(l.valor_liquido) || 0) > 0);
-    if(!comValor.length){ alert('Este recibo não tem nenhum lançamento com valor a pagar.'); return; }
+  // ---------- ENVIO PARCIAL: marca na janela de LANÇAMENTOS quem vai; conta e vencimento são escolhidos no envio; cada envio vira um protocolo
+  function ritMarcados(){ return Array.from(document.querySelectorAll('#listaItensRecibo .li-sel:checked')).map(c => c.closest('[data-item-id]').dataset.itemId); }
+  function ritAtualizarSelecao(){
+    const grupo = numeroReciboAtual ? agruparRecibos().find(g => g.numero === numeroReciboAtual) : null;
+    const ids = new Set(ritMarcados()), sel = grupo ? grupo.itens.filter(l => ids.has(l.id)) : [];
+    const total = sel.reduce((a, l) => a + (Number(l.valor_liquido) || 0), 0);
+    const pend = grupo ? grupo.itens.filter(l => !ritTravado(l)).length : 0;
+    const res = document.getElementById('enviarMarcadosResumo'), btn = document.getElementById('btnEnviarMarcados');
+    if(res) res.textContent = pend ? (sel.length ? `${sel.length} marcado(s) · ${formatarMoeda(total)}` : `${pend} lançamento(s) ainda não enviado(s) — marque quem vai ao Financeiro`) : (grupo && grupo.itens.length ? 'Todos os lançamentos já foram enviados.' : '');
+    if(btn){ btn.style.display = (podeGerenciarPagamentosAgora() && pend) ? '' : 'none'; btn.disabled = !sel.length; }
+    const todos = document.getElementById('ri_marcar_todos'); if(todos){ const n = document.querySelectorAll('#listaItensRecibo .li-sel:not(:disabled)').length; todos.checked = n > 0 && sel.length >= n; }
+  }
+  const pagOpt = (arr, cur, rot, vazio) => `<option value="">${vazio}</option>` + arr.map(x => `<option value="${x.id}" ${String(cur) === String(x.id) ? 'selected' : ''}>${vinEsc(rot(x))}</option>`).join('');
+  const pagRotPlano = (p) => (p.codigo ?? p.id) + ' — ' + p.descricao;
+
+  // ---------- BUSCA POR PARTES DO NOME OU DO CÓDIGO (padrão da plataforma) para EMPRESA, PLANO DE CONTAS e CONTA CORRENTE (listas longas):
+  // campo vazio ao clicar/focar = 10 primeiros; digitando filtra por qualquer trecho (sem diferenciar maiúscula/acento; o código aceita com ou sem pontos);
+  // escolher com mousedown/Enter; o id escolhido fica em data-valor e a tela recebe o evento «busca-escolhida». Campo apagado = sem valor (vale o padrão do recibo).
+  const PG_LIMITE = 10;
+  const pgNorm = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const pgAlnum = (t) => pgNorm(t).replace(/[^a-z0-9]/g, '');
+  function pgItensBusca(tipo){
+    if(tipo === 'empresa') return pagCat.empresas.map(e => ({ id: e.id, rot: e.nome, hay: e.nome }));
+    if(tipo === 'plano') return pagCat.planos.map(p => ({ id: p.id, rot: pagRotPlano(p), hay: (p.codigo ?? p.id) + ' ' + p.descricao }));
+    if(tipo === 'conta') return pagCat.contas.map(c => ({ id: c.id, rot: c.nome, hay: c.nome }));
+    return [];
+  }
+  const pgRotulo = (tipo, id) => { const it = pgItensBusca(tipo).find(x => String(x.id) === String(id)); return it ? it.rot : ''; };
+  function pgBuscaHtml(tipo, id, o){
+    o = o || {};
+    const rot = (id !== null && id !== undefined && id !== '') ? pgRotulo(tipo, id) : '';
+    return `<input type="text" class="pg-busca ${o.cls || ''} ${rot ? 'definido' : ''}" data-busca="${tipo}" data-valor="${rot ? id : ''}" value="${vinEsc(rot)}" placeholder="${vinEsc(o.vazio || 'Buscar…')}" autocomplete="off" ${o.attrs || ''}>`;
+  }
+  const pgBuscaValor = (el) => (el && el.dataset && el.dataset.valor) ? Number(el.dataset.valor) : null;
+  function pgBuscaDefinir(el, id){ if(!el) return; const rot = (id !== null && id !== undefined && id !== '') ? pgRotulo(el.dataset.busca, id) : ''; el.dataset.valor = rot ? id : ''; el.value = rot; el.classList.toggle('definido', !!rot); }
+  let pgLista = null, pgAlvo = null, pgIdx = -1;
+  function pgListaEl(){
+    if(!pgLista){
+      pgLista = document.createElement('div'); pgLista.className = 'lista-sugestoes-autocomplete'; pgLista.id = 'pgBuscaLista';
+      pgLista.style.cssText = 'position:fixed; z-index:400; display:none; max-height:300px; overflow:auto; right:auto; margin:0; max-width:min(640px, 96vw);';
+      pgLista.addEventListener('mousedown', (ev) => { ev.preventDefault(); const it = ev.target.closest('[data-id]'); if(it) pgEscolher(it.dataset.id); });   // preventDefault: o campo não perde o foco antes do clique
+      document.body.appendChild(pgLista);
+    }
+    return pgLista;
+  }
+  function pgFechar(){ if(pgLista) pgLista.style.display = 'none'; pgAlvo = null; pgIdx = -1; }
+  function pgMostrar(el, termo){
+    const palavras = pgNorm(termo).trim().split(/\s+/).filter(Boolean), compacto = pgAlnum(termo);
+    const achados = pgItensBusca(el.dataset.busca).filter(it => { const hn = pgNorm(it.hay), ha = pgAlnum(it.hay); return !palavras.length || palavras.every(w => hn.includes(w)) || (compacto && ha.includes(compacto)); });
+    const L = pgListaEl(), r = el.getBoundingClientRect();
+    L.innerHTML = achados.length
+      ? achados.slice(0, PG_LIMITE).map(it => `<div class="sugestao-autocomplete" data-id="${it.id}">${vinEsc(it.rot)}</div>`).join('') + (achados.length > PG_LIMITE ? `<div class="sugestao-autocomplete-vazia">Mostrando ${PG_LIMITE} de ${achados.length} — digite mais letras para filtrar</div>` : '')
+      : '<div class="sugestao-autocomplete-vazia">Nenhum resultado encontrado.</div>';
+    L.style.display = 'block'; L.style.left = Math.max(4, Math.min(r.left, window.innerWidth - 300)) + 'px'; L.style.minWidth = Math.max(r.width, 280) + 'px';
+    const abaixo = window.innerHeight - r.bottom;
+    if(abaixo < 230 && r.top > abaixo){ L.style.top = 'auto'; L.style.bottom = (window.innerHeight - r.top) + 'px'; } else { L.style.bottom = 'auto'; L.style.top = r.bottom + 'px'; }
+    pgAlvo = el; pgIdx = -1;
+  }
+  function pgEscolher(id){
+    const el = pgAlvo; if(!el) return;
+    el.dataset.valor = id; el.value = pgRotulo(el.dataset.busca, id); el.classList.add('definido'); pgFechar();
+    el.dispatchEvent(new Event('busca-escolhida', { bubbles: true }));
+  }
+  function pgReverter(el){
+    const rotAtual = el.dataset.valor ? pgRotulo(el.dataset.busca, el.dataset.valor) : '';
+    if(!el.value.trim()){ if(el.dataset.valor){ el.dataset.valor = ''; el.classList.remove('definido'); el.dispatchEvent(new Event('busca-escolhida', { bubbles: true })); } }   // apagou: sem valor (vale o padrão)
+    else if(el.value !== rotAtual) el.value = rotAtual;   // digitou e não escolheu: volta ao que estava
+  }
+  const pgEhBusca = (el) => el && el.classList && el.classList.contains('pg-busca');
+  document.addEventListener('focusin', (ev) => { const el = ev.target; if(!pgEhBusca(el) || el.disabled) return; el.select(); if(!el.value.trim()) pgMostrar(el, ''); });
+  document.addEventListener('click', (ev) => { const el = ev.target; if(pgEhBusca(el) && !el.disabled && !el.value.trim() && pgAlvo !== el) pgMostrar(el, ''); });
+  document.addEventListener('input', (ev) => { if(pgEhBusca(ev.target)) pgMostrar(ev.target, ev.target.value); });
+  document.addEventListener('focusout', (ev) => { const el = ev.target; if(!pgEhBusca(el)) return; setTimeout(() => { if(pgAlvo === el) pgFechar(); pgReverter(el); }, 180); });
+  document.addEventListener('keydown', (ev) => {
+    const el = ev.target; if(!pgEhBusca(el)) return;
+    const itens = pgLista ? [...pgLista.querySelectorAll('.sugestao-autocomplete')] : [];
+    if(ev.key === 'ArrowDown' || ev.key === 'ArrowUp'){
+      ev.preventDefault(); if(pgAlvo !== el) pgMostrar(el, el.value.trim() === '' ? '' : el.value);
+      const its = [...pgLista.querySelectorAll('.sugestao-autocomplete')]; if(!its.length) return;
+      pgIdx = ev.key === 'ArrowDown' ? Math.min(pgIdx + 1, its.length - 1) : Math.max(pgIdx - 1, 0);
+      its.forEach((x, i) => x.classList.toggle('destacada', i === pgIdx)); its[pgIdx].scrollIntoView({ block: 'nearest' });
+    } else if(ev.key === 'Enter'){
+      if(pgAlvo === el && itens.length){ ev.preventDefault(); pgEscolher((itens[pgIdx >= 0 ? pgIdx : 0]).dataset.id); }
+    } else if(ev.key === 'Escape'){ pgFechar(); }
+  });
+  window.addEventListener('scroll', (ev) => { if(pgLista && pgLista.contains(ev.target)) return; pgFechar(); }, true);
+  let envEstado = null;
+  async function pagAbrirEnvio(){
+    const grupo = numeroReciboAtual ? agruparRecibos().find(g => g.numero === numeroReciboAtual) : null; if(!grupo) return;
+    const ids = new Set(ritMarcados());
+    if(!ids.size){ alert('Marque na lista os lançamentos que deseja enviar ao Financeiro.'); return; }
+    const h = todosReciboPag.get(grupo.numero) || {};
+    const sel = grupo.itens.filter(l => ids.has(l.id) && !ritTravado(l)), comValor = sel.filter(l => (Number(l.valor_liquido) || 0) > 0);
+    if(!comValor.length){ alert('Nenhum dos lançamentos marcados tem valor a pagar.'); return; }
+    const nomeLanc = (l) => l.staff_profissionais?.nome_completo || sentProfNome(l.profissional_id);
+    const semClass = comValor.filter(l => !(l.empresa_id || h.empresa_id) || !(l.plano_de_contas_id || h.plano_de_contas_id));
+    if(semClass.length){ alert('Estes lançamentos estão sem EMPRESA ou sem PLANO DE CONTAS:\n\n' + [...new Set(semClass.map(nomeLanc))].map(n => '• ' + n).join('\n') + '\n\nEscolha a empresa e o plano de contas na linha de cada um (ou use «Aplicar aos marcados»), ou defina um padrão nos dados de pagamento do recibo.'); return; }
     const semVinc = [...new Set(comValor.map(l => l.profissional_id))].map(id => todosProfissionais.find(p => p.id === id)).filter(p => p && !p.pessoa_id);
     if(semVinc.length && !(await pagLigarProfissionais(semVinc))) return;
+    await pagCarregarCatalogos();
     const total = comValor.reduce((a, l) => a + (Number(l.valor_liquido) || 0), 0);
-    if(!confirm(`Enviar o recibo Nº ${grupo.numero} ao Financeiro?\n\n${comValor.length} lançamento(s) · ${formatarMoeda(total)} · pagar em ${formatarDataSemFuso(h.vencimento)}\n\nO recibo será FECHADO. Você pode cancelar o envio enquanto o Financeiro não aceitar.`)) return;
-    const btn = document.getElementById('btnPagEnviar'); if(btn){ btn.disabled = true; btn.textContent = 'Enviando…'; }
+    const nomeEmp = (id) => (pagCat.empresas.find(e => String(e.id) === String(id)) || {}).nome || '—', nomePl = (id) => { const p = pagCat.planos.find(x => String(x.id) === String(id)); return p ? pagRotPlano(p) : '—'; };
+    const resumo = new Map(); comValor.forEach(l => { const e = l.empresa_id || h.empresa_id, pl = l.plano_de_contas_id || h.plano_de_contas_id, k = e + '|' + pl; const r = resumo.get(k) || { e, pl, n: 0, v: 0 }; r.n++; r.v += Number(l.valor_liquido) || 0; resumo.set(k, r); });
+    const precisaCab = !h.setor_id || !(h.evento_codigo && String(h.evento_codigo).trim());
+    envEstado = { numero: grupo.numero, ids: comValor.map(l => l.id), total, h, precisaCab, qtd: comValor.length, zerados: sel.length - comValor.length };
+    document.getElementById('envTitulo').textContent = `Enviar ao Financeiro — recibo Nº ${grupo.numero}`;
+    document.getElementById('envCorpo').innerHTML = `
+      <p style="font-size:.86rem; margin:0 0 10px;"><strong>${comValor.length}</strong> lançamento(s) · <strong>${formatarMoeda(total)}</strong>${envEstado.zerados ? ` <small style="color:var(--muted);">(+${envEstado.zerados} sem valor, que só serão fechados)</small>` : ''}</p>
+      <div class="ext-tabela-wrap" style="margin-bottom:12px;"><table class="vin-tabela"><thead><tr><th>Empresa</th><th>Plano de contas</th><th style="text-align:right;">Lanç.</th><th style="text-align:right;">Valor</th></tr></thead><tbody>
+        ${[...resumo.values()].map(r => `<tr><td>${vinEsc(nomeEmp(r.e))}</td><td>${vinEsc(nomePl(r.pl))}</td><td style="text-align:right;">${r.n}</td><td style="text-align:right; font-variant-numeric:tabular-nums;">${formatarMoeda(r.v)}</td></tr>`).join('')}</tbody></table></div>
+      ${comValor.some(l => l.observacao) ? `<div style="font-size:.78rem; background:var(--brand-soft); border-radius:8px; padding:8px 11px; margin-bottom:12px;"><strong>Observações que seguem no pagamento:</strong><ul style="margin:4px 0 0 16px; padding:0;">${comValor.filter(l => l.observacao).map(l => `<li><strong>${vinEsc(nomeLanc(l))}</strong> — ${vinEsc(l.observacao)}</li>`).join('')}</ul></div>` : ''}
+      <div class="field-row"><div class="field-group"><label>Vencimento (data de pagamento) *</label><input type="date" id="env_venc" value="${h.vencimento || ''}"></div>
+        <div class="field-group"><label>Conta de pagamento deste envio *</label>${pgBuscaHtml('conta', h.id_conta_pagamento, { vazio: 'Buscar a conta (parte do nome)…', attrs: 'id="env_conta"' })}</div></div>
+      ${precisaCab ? `<p style="font-size:.78rem; color:var(--muted); margin:6px 0;">O recibo ainda não tem <strong>setor</strong> e/ou <strong>evento</strong> do Financeiro (valem para todo o recibo). Informe agora:</p>
+        <div class="field-row"><div class="field-group"><label>Setor / Departamento *</label><select id="env_setor">${pagOpt(pagCat.setores, h.setor_id, s => (s.codigo != null ? s.codigo + ' — ' : '') + s.nome, '— escolha —')}</select></div>
+        <div class="field-group"><label>Evento do Financeiro *</label><input type="text" id="env_evento" list="ordListaEventos" placeholder="Código ou nome do evento" autocomplete="off" value="${h.evento_codigo ? vinEsc(ordNomeEventoFin(h.evento_codigo)) : ''}"></div></div>` : ''}
+      <p style="font-size:.76rem; color:var(--muted); margin:8px 0 0;">Cada envio vira um <strong>protocolo</strong> no Financeiro, com a conta escolhida aqui. Os lançamentos que não forem marcados continuam abertos no recibo, para enviar depois (inclusive para outra conta). Você pode cancelar o protocolo enquanto o Financeiro não aceitar.</p>`;
+    document.getElementById('modalEnviarParcial').classList.add('show');
+  }
+  async function pagConfirmarEnvio(){
+    const E = envEstado; if(!E) return;
+    const venc = document.getElementById('env_venc').value, conta = pgBuscaValor(document.getElementById('env_conta'));
+    if(!venc){ alert('Informe o vencimento (data de pagamento).'); return; }
+    if(!conta){ alert('Escolha a conta de pagamento deste envio.'); return; }
+    const btn = document.getElementById('btnConfirmarEnviar'); btn.disabled = true; btn.textContent = 'Enviando…';
     try{
-      const { data, error } = await sb.rpc('staff_recibo_enviar', { p_unidade: agenciaId, p_numero: grupo.numero });
-      if(error) throw new Error(error.message);
-      await registrarSentinelaStaff('staff_recibo_enviado', `Enviou o recibo Nº ${grupo.numero} ao Financeiro (protocolo Nº ${data.numero}): ${data.itens} lançamento(s), ${formatarMoeda(data.total)}, pagar em ${formatarDataSemFuso(h.vencimento)}`);
-      document.getElementById('drawerReciboOverlay').classList.remove('show');
+      if(E.precisaCab){
+        const setor = document.getElementById('env_setor').value, txtEv = document.getElementById('env_evento').value.trim(), ev = ordCodigoEvento(txtEv);
+        if(!setor){ alert('Escolha o setor / departamento.'); return; }
+        if(!ev){ alert(txtEv ? 'Evento não encontrado no cadastro do Financeiro. Escolha um da lista.' : 'Informe o evento do Financeiro.'); return; }
+        const h0 = E.h || {};
+        const reg = { unidade_negocio_id: agenciaId, numero_recibo: E.numero, vencimento: h0.vencimento || null, competencia: h0.competencia || (venc.slice(0, 7) + '-01'), id_conta_pagamento: h0.id_conta_pagamento || null,
+          empresa_id: h0.empresa_id || null, setor_id: Number(setor), plano_de_contas_id: h0.plano_de_contas_id || null, evento_codigo: ev, observacao: h0.observacao || null, updated_at: new Date().toISOString() };
+        const { data: hc, error: ec } = await sb.from('staff_recibos_pagamento').upsert(reg, { onConflict: 'unidade_negocio_id,numero_recibo' }).select('*').single();
+        if(ec) throw new Error(ec.message);
+        todosReciboPag.set(E.numero, hc);
+      }
+      const { data, error } = await sb.rpc('staff_recibo_enviar', { p_unidade: agenciaId, p_numero: E.numero, p_rpas: E.ids, p_conta: Number(conta), p_vencimento: venc });
+      if(error) throw new Error(/could not find the function|schema cache/i.test(error.message) ? 'A atualização do banco (staff-recibo-envio-parcial.sql) ainda não foi rodada no Supabase. (' + error.message + ')' : error.message);
+      const nomeConta = (pagCat.contas.find(c => String(c.id) === String(conta)) || {}).nome || conta;
+      await registrarSentinelaStaff('staff_recibo_enviado', `Enviou ao Financeiro parte do recibo Nº ${E.numero} (protocolo Nº ${data.numero}): ${data.itens} lançamento(s), ${formatarMoeda(data.total)}, pagar em ${formatarDataSemFuso(venc)}, conta ${nomeConta}${data.restam ? ` — restam ${data.restam} lançamento(s) a enviar` : ' — recibo totalmente enviado'}`, E.numero);
+      document.getElementById('modalEnviarParcial').classList.remove('show'); envEstado = null;
       await carregarProfissionais(); await carregarRecibos(); await carregarOrdens();
-      alert(`Recibo Nº ${grupo.numero} enviado ao Financeiro (protocolo Nº ${data.numero}, ${formatarMoeda(data.total)}).`);
-    } catch(e){ alert('Não consegui enviar: ' + e.message); if(btn){ btn.disabled = false; btn.textContent = '📤 Enviar ao Financeiro'; } }
+      renderModalItensReciboBody();
+      alert(`Enviado ao Financeiro: protocolo Nº ${data.numero} · ${data.itens} lançamento(s) · ${formatarMoeda(data.total)} · conta ${nomeConta}.` + (data.restam ? `\n\nRestam ${data.restam} lançamento(s) neste recibo para enviar (pode ser para outra conta).` : '\n\nTodos os lançamentos do recibo já foram enviados.'));
+    } catch(e){ alert('Não consegui enviar: ' + e.message); }
+    finally{ btn.disabled = false; btn.textContent = '📤 Enviar ao Financeiro'; }
   }
-  async function pagCancelarEnvio(grupo){
-    const h = todosReciboPag.get(grupo.numero); if(!h || !h.ordem_id) return;
-    if(!confirm(`Cancelar o envio do recibo Nº ${grupo.numero}? O protocolo é excluído e o recibo volta a ficar ABERTO para ajustar e reenviar.`)) return;
-    const { error } = await sb.rpc('staff_ordem_cancelar', { p_ordem: h.ordem_id });
+  async function pagCancelarProtocolo(ordemId, grupo){
+    const o = protocoloPorId.get(ordemId); if(!o) return;
+    const n = grupo.itens.filter(l => l.ordem_extras_id === ordemId).length;
+    if(!confirm(`Cancelar o envio do protocolo Nº ${o.numero} (${n} lançamento(s), ${formatarMoeda(o.total)})? O protocolo é excluído e SÓ esses lançamentos voltam a ficar abertos para ajustar e reenviar.`)) return;
+    const { error } = await sb.rpc('staff_ordem_cancelar', { p_ordem: ordemId });
     if(error){ alert('Não consegui cancelar: ' + error.message); return; }
-    await registrarSentinelaStaff('staff_recibo_envio_cancelado', `Cancelou o envio do recibo Nº ${grupo.numero} ao Financeiro (o recibo foi reaberto)`);
-    document.getElementById('drawerReciboOverlay').classList.remove('show');
+    await registrarSentinelaStaff('staff_recibo_envio_cancelado', `Cancelou o protocolo Nº ${o.numero} do recibo Nº ${grupo.numero} (${n} lançamento(s) reabertos)`, grupo.numero);
     await carregarRecibos(); await carregarOrdens();
+    await atualizarDrawerReciboAposLancamentos();
   }
+  document.getElementById('btnEnviarMarcados').addEventListener('click', pagAbrirEnvio);
+  document.getElementById('btnConfirmarEnviar').addEventListener('click', pagConfirmarEnvio);
+  ['btnFecharModalEnviarX', 'btnFecharEnviar'].forEach(id => document.getElementById(id).addEventListener('click', () => { document.getElementById('modalEnviarParcial').classList.remove('show'); envEstado = null; }));
 
   // =================================================================
   // PAGAMENTOS -- ORDENS DE PAGAMENTO (staff-ordens-pagamento.sql)
@@ -3640,9 +3820,9 @@
   }
 
   const LC_STATUS = { aberto: 'Aberto', fechado: 'Fechado' };
-  function lcStatusRecibo(num, statusLinha){
-    const h = todosReciboPag.get(num), o = h && h.staff_ordens_pagamento;
-    if(h && h.ordem_id && o) return o.status === 'aceita' ? 'Aceito pelo Financeiro' : 'Enviado ao Financeiro';
+  function lcStatusRecibo(num, statusLinha, ordemId){
+    const o = ordemId ? protocoloPorId.get(ordemId) : null;
+    if(o) return o.status === 'aceita' ? 'Aceito pelo Financeiro' : 'Enviado ao Financeiro';
     return LC_STATUS[statusLinha] || statusLinha;
   }
   async function profAbrirLancamentos(p){
@@ -3651,12 +3831,12 @@
     document.getElementById('lcTitulo').textContent = 'Lançamentos — ' + p.nome_completo + (p.apelido ? ' (' + p.apelido + ')' : '');
     const minhas = todosLancamentosRpa.filter(l => l.profissional_id === p.id && l.numero_recibo != null).sort((a, b) => (b.numero_recibo - a.numero_recibo) || String(b.data || '').localeCompare(String(a.data || '')));
     const total = minhas.reduce((a, l) => a + (Number(l.valor_liquido) || 0), 0), recibos = new Set(minhas.map(l => l.numero_recibo)).size;
-    const abertos = agruparRecibos().filter(g => g.status === 'aberto' && !(todosReciboPag.get(g.numero) && todosReciboPag.get(g.numero).ordem_id)).sort((a, b) => b.numero - a.numero);
+    const abertos = agruparRecibos().filter(g => g.status === 'aberto').sort((a, b) => b.numero - a.numero);
     const pode = podeGerenciarPagamentosAgora();
     corpo.innerHTML = `
       <p style="font-size:.84rem; margin:0 0 10px;">${minhas.length ? `<strong>${minhas.length}</strong> lançamento(s) em <strong>${recibos}</strong> recibo(s) · total <strong>${formatarMoeda(total)}</strong>` : 'Este colaborador ainda não tem lançamentos em recibos.'}</p>
       ${minhas.length ? `<div style="max-height:34vh; overflow:auto; margin-bottom:14px;"><table class="vin-tabela"><thead><tr><th>Recibo</th><th>Tipo</th><th>Data / período</th><th style="text-align:right;">Líquido</th><th>Situação</th><th></th></tr></thead><tbody>
-        ${minhas.map(l => `<tr><td>Nº ${l.numero_recibo}</td><td>${vinEsc(l.staff_tipos_recibo?.descricao || '—')}</td><td>${ritTextoData(l)}</td><td style="text-align:right; font-variant-numeric:tabular-nums;">${formatarMoeda(l.valor_liquido)}</td><td>${vinEsc(lcStatusRecibo(l.numero_recibo, l.status))}</td><td><button type="button" class="btn-acao-prof" data-lc-recibo="${l.numero_recibo}">Abrir recibo</button></td></tr>`).join('')}</tbody></table></div>` : ''}
+        ${minhas.map(l => `<tr><td>Nº ${l.numero_recibo}</td><td>${vinEsc(l.staff_tipos_recibo?.descricao || '—')}</td><td>${ritTextoData(l)}</td><td style="text-align:right; font-variant-numeric:tabular-nums;">${formatarMoeda(l.valor_liquido)}</td><td>${vinEsc(lcStatusRecibo(l.numero_recibo, l.status, l.ordem_extras_id))}</td><td><button type="button" class="btn-acao-prof" data-lc-recibo="${l.numero_recibo}">Abrir recibo</button></td></tr>`).join('')}</tbody></table></div>` : ''}
       ${pode ? `<div class="drawer-section-title" style="margin-top:6px;">Novo lançamento para ${vinEsc(p.nome_completo)}</div>
         <div class="field-group"><label>Em qual recibo?</label><select id="lcRecibo">
           ${abertos.map(g => `<option value="${g.numero}">Recibo Nº ${g.numero}${g.tipo_nome ? ' · ' + vinEsc(g.tipo_nome) : ''}${g.evento_nome ? ' · ' + vinEsc(g.evento_nome) : ''} · ${g.itens.length} lançamento(s) · ${formatarMoeda(g.total)}</option>`).join('')}
@@ -4624,6 +4804,7 @@
       grupos[chave].total += Number(l.valor_liquido) || 0;
       if(l.created_at < grupos[chave].criadoEm) grupos[chave].criadoEm = l.created_at;
     });
+    Object.values(grupos).forEach(g => { g.status = g.itens.every(l => l.status === 'fechado') ? 'fechado' : 'aberto'; g.enviados = g.itens.filter(l => l.ordem_extras_id).length; });
     return Object.values(grupos);
   }
 
@@ -4640,6 +4821,11 @@
     todosLancamentosRpa = resLancamentos.data || [];
     todosTiposRecibo = resTipos.data || [];
     try{ const { data: hp } = await sb.from('staff_recibos_pagamento').select('*, staff_ordens_pagamento(status, numero)').eq('unidade_negocio_id', agenciaId); todosReciboPag = new Map((hp || []).map(h => [h.numero_recibo, h])); } catch(e){ todosReciboPag = new Map(); }
+    try{
+      const { data: po } = await sb.from('staff_ordens_pagamento').select('id, numero, status, total, vencimento, id_conta_pagamento, recibo_numero, enviada_em').eq('unidade_negocio_id', agenciaId).not('recibo_numero', 'is', null).order('numero');
+      todosProtocolosRecibo = new Map(); protocoloPorId = new Map();
+      (po || []).forEach(o => { protocoloPorId.set(o.id, o); if(!todosProtocolosRecibo.has(o.recibo_numero)) todosProtocolosRecibo.set(o.recibo_numero, []); todosProtocolosRecibo.get(o.recibo_numero).push(o); });
+    } catch(e){ todosProtocolosRecibo = new Map(); protocoloPorId = new Map(); }
     renderListaRecibos();
   }
 
@@ -4662,10 +4848,12 @@
           <span class="nome">Recibo Nº ${g.numero} ${g.tipo_nome ? '· ' + g.tipo_nome : ''}</span>
           <span class="meta">${g.evento_nome ? g.evento_nome + ' · ' : ''}${g.itens.length} lançamento${g.itens.length === 1 ? '' : 's'}</span>
         </div>
+        <button type="button" class="btn-novo" data-rec-lanc="${g.numero}" style="padding:7px 12px; font-size:.78rem; white-space:nowrap; margin-right:14px;" title="Abre direto os lançamentos do recibo para lançar, alterar e enviar ao Financeiro">${g.status === 'fechado' ? '👁 Lançamentos' : '✏️ Lançamentos'}</button>
         <span class="nome mono" style="font-weight:700; margin-right:8px;">${formatarMoeda(g.total)}</span>
         <span class="status-tag ${g.status}">${mapaStatusReciboLabel[g.status] || g.status}</span>
         ${pagTagLista(g)}
       `;
+      row.querySelector('[data-rec-lanc]').addEventListener('click', (ev) => { ev.stopPropagation(); abrirLancamentosDireto(g.numero); });
       row.addEventListener('click', () => abrirDrawerRecibo(g.numero));
       lista.appendChild(row);
     });
@@ -4674,6 +4862,15 @@
   document.getElementById('filtroReciboStatus').addEventListener('change', renderListaRecibos);
   document.getElementById('btnNovoRecibo').addEventListener('click', () => abrirDrawerRecibo(null));
   document.getElementById('btnFecharDrawerRecibo').addEventListener('click', () => document.getElementById('drawerReciboOverlay').classList.remove('show'));
+
+  // abre direto a janela de lançamentos (lançar, alterar, marcar e enviar ao Financeiro) sem passar pelo recibo
+  function abrirLancamentosDireto(numero){
+    numeroReciboAtual = numero;
+    const grupo = agruparRecibos().find(g => g.numero === numero);
+    tipoReciboSelecionado = grupo?.tipo_recibo_id || null;
+    eventoReciboSelecionado = grupo?.evento_id || null;
+    abrirModalItensRecibo();
+  }
 
   function abrirDrawerRecibo(numero){
     numeroReciboAtual = numero;
@@ -4765,7 +4962,8 @@
         const { error } = await sb.from('staff_rpas')
           .update({ tipo_recibo_id: tipoId, evento_id: eventoId })
           .eq('unidade_negocio_id', agenciaId)
-          .eq('numero_recibo', numeroReciboAtual);
+          .eq('numero_recibo', numeroReciboAtual)
+          .is('ordem_extras_id', null);   // o que já foi enviado ao Financeiro não muda
         if(error) throw new Error(error.message);
         await carregarRecibos();
         document.getElementById('drawerReciboOverlay').classList.remove('show');
@@ -4803,8 +5001,9 @@
 
   document.getElementById('btnExcluirRecibo').addEventListener('click', async () => {
     if(!numeroReciboAtual) return;
-    if(!confirm('Excluir este recibo? Isso apaga todos os lançamentos dele.')) return;
     const gEx = agruparRecibos().find(g => g.numero === numeroReciboAtual);
+    if(gEx && gEx.itens.some(l => l.ordem_extras_id)){ alert('Este recibo já tem lançamentos enviados ao Financeiro. Cancele os envios (protocolos) antes de excluir o recibo.'); return; }
+    if(!confirm('Excluir este recibo? Isso apaga todos os lançamentos dele.')) return;
     const { error } = await sb.from('staff_rpas').delete().eq('unidade_negocio_id', agenciaId).eq('numero_recibo', numeroReciboAtual);
     if(error){ alert('Erro ao excluir: ' + error.message); return; }
     try{ await sb.from('staff_recibos_pagamento').delete().eq('unidade_negocio_id', agenciaId).eq('numero_recibo', numeroReciboAtual).is('ordem_id', null); } catch(e){ /* sem a tabela de dados de pagamento */ }
@@ -4834,7 +5033,7 @@
     const compAntiga = hOrig && hOrig.competencia ? dupMes(hOrig.competencia) : dupMes((grupo.itens.find(i => i.data) || {}).data) || dupMes(new Date().toISOString());
     const compNova = dupSomaMeses(dupPrimeiroDia(compAntiga), 1).slice(0, 7);
     const linhas = grupo.itens.slice().sort((a, b) => String(a.staff_profissionais?.nome_completo || '').localeCompare(String(b.staff_profissionais?.nome_completo || ''), 'pt-BR') || String(a.data || '').localeCompare(String(b.data || '')))
-      .map(item => { const q = ritNum(item.quantidade) || 1, bruto = ritNum(item.valor_bruto); return { item, sel: true, qtd: q, unit: ritArred(bruto / q), bruto, alim: ritNum(item.valor_alimentacao), transp: ritNum(item.valor_transporte), desc: ritNum(item.valor_descontos), ult: 'unit' }; });
+      .map(item => { const q = ritNum(item.quantidade) || 1, bruto = ritNum(item.valor_bruto); return { item, sel: true, qtd: q, unit: ritArred(bruto / q), bruto, alim: ritNum(item.valor_alimentacao), transp: ritNum(item.valor_transporte), desc: ritNum(item.valor_descontos), ult: 'unit', obs: item.observacao || '', obsOrig: item.observacao || '' }; });
     dupEstado = { grupo, hOrig, compAntiga, linhas, obsEditada: false };
     document.getElementById('dupTitulo').textContent = `Duplicar o recibo Nº ${grupo.numero}${grupo.tipo_nome ? ' — ' + grupo.tipo_nome : ''}`;
     const optEv = '<option value="">(sem evento)</option>' + todosEventos.map(e => `<option value="${e.id}" ${grupo.evento_id === e.id ? 'selected' : ''}>${vinEsc(e.nome)}</option>`).join('');
@@ -4845,14 +5044,20 @@
         <div class="field-group campo-data"><label>Período — de</label><input type="date" id="dup_de" value="${dupPrimeiroDia(compNova)}"></div>
         <div class="field-group campo-data"><label>até</label><input type="date" id="dup_ate" value="${dupUltimoDia(compNova)}"></div>
         <div class="field-group" style="flex:1; min-width:170px;"><label>Evento</label><select id="dup_evento">${optEv}</select></div>
-        <div class="field-group" style="flex:1.3; min-width:200px;"><label>Observação (vai nos títulos)</label><input type="text" id="dup_obs" value="COMPETENCIA ${compNova.slice(5, 7)}/${compNova.slice(2, 4)}"></div>
+        <div class="field-group" style="flex:1.3; min-width:200px;"><label>Observação do recibo (vai em todos os títulos)</label><input type="text" id="dup_obs" value="COMPETENCIA ${compNova.slice(5, 7)}/${compNova.slice(2, 4)}"></div>
       </div>
       <label style="display:flex; align-items:center; gap:6px; font-size:.8rem; margin:2px 0 8px; cursor:pointer;"><input type="checkbox" id="dup_manter_dia" checked> Manter o dia de cada lançamento (só muda o mês). Desmarcado, todos os lançamentos sem período recebem a data inicial do período; os lançamentos com várias diárias sempre recebem o período acima.</label>
       <div style="display:flex; gap:8px; margin:8px 0; align-items:center; flex-wrap:wrap;">
         <button type="button" class="btn-upload-imagem" id="dupTodos">Marcar todos</button><button type="button" class="btn-upload-imagem" id="dupNenhum">Desmarcar todos</button>
         <span style="font-size:.76rem; color:var(--muted);">Desmarque quem não entra neste período e ajuste o <strong>valor</strong> de cada um (valor da diária ↔ total se calculam sozinhos).</span>
       </div>
-      <div style="max-height:46vh; overflow:auto;"><table class="vin-tabela"><thead><tr><th style="width:30px;"></th><th>Colaborador</th><th>Tipo</th><th style="width:70px; text-align:right;">Qtd</th><th style="width:105px; text-align:right;">Valor da diária</th><th style="width:105px; text-align:right;">Total</th><th style="width:90px; text-align:right;">Alim.</th><th style="width:90px; text-align:right;">Transp.</th><th style="width:90px; text-align:right;">Desc.</th><th style="width:105px; text-align:right;">Líquido</th></tr></thead>
+      <div class="barra-envio-recibo" style="margin-top:4px;">
+        <div style="flex:1; min-width:260px;"><label style="font-weight:600; display:block; margin-bottom:3px;">Observação de TODOS os lançamentos <span style="font-weight:400; color:var(--muted);">(troca de uma vez — ex.: «COMISSÃO 06/26», «SALÁRIO 07/26»)</span></label>
+          <input type="text" id="dup_obs_todas" maxlength="300" style="width:100%; padding:6px 8px; border:1px solid var(--border); border-radius:6px; font-family:inherit;" placeholder="Em branco = cada lançamento mantém a observação do recibo anterior"></div>
+        <button type="button" class="btn-upload-imagem" id="dupObsAplicar" title="Troca a observação de todos os lançamentos marcados">Aplicar a todos</button>
+        <button type="button" class="btn-upload-imagem" id="dupObsRestaurar" title="Volta cada lançamento à observação que tinha no recibo anterior">Restaurar as do recibo anterior</button>
+      </div>
+      <div style="max-height:46vh; overflow:auto;"><table class="vin-tabela"><thead><tr><th style="width:30px;"></th><th>Colaborador</th><th>Tipo</th><th style="width:70px; text-align:right;">Qtd</th><th style="width:105px; text-align:right;">Valor da diária</th><th style="width:105px; text-align:right;">Total</th><th style="width:90px; text-align:right;">Alim.</th><th style="width:90px; text-align:right;">Transp.</th><th style="width:90px; text-align:right;">Desc.</th><th style="width:105px; text-align:right;">Líquido</th><th style="min-width:220px;">Observação do lançamento</th></tr></thead>
       <tbody>${linhas.map((l, i) => `<tr data-dup-i="${i}"><td><input type="checkbox" data-dup="sel" checked></td>
         <td>${vinEsc(l.item.staff_profissionais?.nome_completo || sentProfNome(l.item.profissional_id))}${l.item.staff_funcoes?.nome ? `<br><small style="color:var(--muted);">${vinEsc(l.item.staff_funcoes.nome)}</small>` : ''}</td>
         <td>${vinEsc(l.item.tipo_diaria || '—')}</td>
@@ -4862,8 +5067,19 @@
         <td><input type="number" class="dup-num" data-dup="alim" step="0.01" min="0" value="${l.alim}"></td>
         <td><input type="number" class="dup-num" data-dup="transp" step="0.01" min="0" value="${l.transp}"></td>
         <td><input type="number" class="dup-num" data-dup="desc" step="0.01" min="0" value="${l.desc}"></td>
-        <td class="mono" style="text-align:right; font-weight:700;" data-dup="liq">${formatarMoeda(l.bruto + l.alim + l.transp - l.desc)}</td></tr>`).join('')}</tbody></table></div>
-      <p style="font-size:.76rem; color:var(--muted); margin:8px 0 0;">Valores iniciais = os do recibo original (provisionados). O recibo novo nasce <strong>aberto</strong>, com os dados de pagamento (conta, empresa, setor, plano e evento do Financeiro) copiados e o vencimento/competência novos.</p>`;
+        <td class="mono" style="text-align:right; font-weight:700;" data-dup="liq">${formatarMoeda(l.bruto + l.alim + l.transp - l.desc)}</td>
+        <td><input type="text" class="dup-obs" data-dup="obs" maxlength="300" value="${vinEsc(l.obs)}" placeholder="—" style="width:100%; min-width:200px; padding:5px 6px; font-size:.8rem; border:1px solid var(--border); border-radius:6px; background:var(--bg); font-family:inherit;"></td></tr>`).join('')}</tbody></table></div>
+      <p style="font-size:.76rem; color:var(--muted); margin:8px 0 0;">Valores iniciais = os do recibo original (provisionados). O recibo novo nasce <strong>aberto</strong> e leva do original: dados de pagamento (conta, setor, empresa, plano e evento do Financeiro), a <strong>empresa e o plano de contas de cada lançamento</strong> e a <strong>observação de cada lançamento</strong> (que você pode trocar de uma vez no campo acima ou ajustar linha a linha). Vencimento e competência são os novos.</p>`;
+    document.getElementById('dupObsAplicar').addEventListener('click', () => {
+      const txt = document.getElementById('dup_obs_todas').value.trim(), marcadas = dupEstado.linhas.filter(l => l.sel);
+      if(!marcadas.length){ alert('Marque os lançamentos que vão receber a observação.'); return; }
+      if(!txt && !confirm('O campo está em branco: isso vai LIMPAR a observação de todos os ' + marcadas.length + ' lançamentos marcados. Continuar?')) return;
+      dupEstado.linhas.forEach((l, i) => { if(!l.sel) return; l.obs = txt; const inp = document.querySelector(`tr[data-dup-i="${i}"] [data-dup="obs"]`); if(inp) inp.value = txt; });
+    });
+    document.getElementById('dupObsRestaurar').addEventListener('click', () => {
+      dupEstado.linhas.forEach((l, i) => { l.obs = l.obsOrig; const inp = document.querySelector(`tr[data-dup-i="${i}"] [data-dup="obs"]`); if(inp) inp.value = l.obsOrig; });
+      document.getElementById('dup_obs_todas').value = '';
+    });
     document.getElementById('modalDuplicarRecibo').classList.add('show'); dupResumo();
   }
   function dupEntrada(ev){
@@ -4878,7 +5094,8 @@
     if(el.id === 'dup_obs'){ dupEstado.obsEditada = true; return; }
     if(!tr || !el.dataset.dup) return;
     const l = dupEstado.linhas[Number(tr.dataset.dupI)], campo = el.dataset.dup;
-    if(campo === 'sel'){ l.sel = el.checked; tr.classList.toggle('dup-off', !el.checked); tr.querySelectorAll('input.dup-num').forEach(i => { i.disabled = !el.checked; }); dupResumo(); return; }
+    if(campo === 'sel'){ l.sel = el.checked; tr.classList.toggle('dup-off', !el.checked); tr.querySelectorAll('input.dup-num, input.dup-obs').forEach(i => { i.disabled = !el.checked; }); dupResumo(); return; }
+    if(campo === 'obs'){ l.obs = el.value; return; }
     const v = Math.max(Number(el.value) || 0, 0);
     if(campo === 'qtd'){ l.qtd = v || 1; if(l.ult === 'total') l.unit = ritArred(l.bruto / l.qtd); else l.bruto = ritArred(l.unit * l.qtd); }
     else if(campo === 'unit'){ l.unit = v; l.ult = 'unit'; l.bruto = ritArred(l.unit * l.qtd); }
@@ -4916,7 +5133,9 @@
           unidade_negocio_id: agenciaId, profissional_id: it.profissional_id, funcao_id: it.funcao_id, evento_id: eventoId, tipo_recibo_id: it.tipo_recibo_id, numero_recibo: novoNumero, status: 'aberto',
           tipo_diaria: it.tipo_diaria, data: comPeriodo || !manterDia || !it.data ? de : dupSomaMeses(it.data, delta),
           ...(q !== 1 || comPeriodo ? { quantidade: q, valor_unitario: ritArred(l.bruto / q), periodo_inicio: comPeriodo ? de : null, periodo_fim: comPeriodo ? (ate || null) : null } : {}),
-          valor_bruto: l.bruto, valor_descontos: l.desc, valor_alimentacao: l.alim, valor_transporte: l.transp, valor_liquido: liquido, data_emissao: new Date().toISOString().slice(0, 10)
+          valor_bruto: l.bruto, valor_descontos: l.desc, valor_alimentacao: l.alim, valor_transporte: l.transp, valor_liquido: liquido, data_emissao: new Date().toISOString().slice(0, 10),
+          ...('empresa_id' in it ? { empresa_id: it.empresa_id || null, plano_de_contas_id: it.plano_de_contas_id || null } : {}),   // empresa e plano de cada lançamento acompanham a duplicação
+          ...('observacao' in it ? { observacao: (l.obs || '').trim() || null } : {})   // observação de cada lançamento (a do recibo anterior, ou a trocada nesta janela)
         };
       });
       const { error } = await sb.from('staff_rpas').insert(novas);
@@ -4927,7 +5146,7 @@
           setor_id: h.setor_id, plano_de_contas_id: h.plano_de_contas_id, evento_codigo: h.evento_codigo, observacao: obs });
         if(rp && rp.error) console.warn('Dados de pagamento do recibo novo não gravados:', rp.error.message);
       }
-      await registrarSentinelaStaff('staff_recibo_duplicado', `Duplicou o recibo Nº ${E.grupo.numero} no recibo Nº ${novoNumero} — competência ${comp.slice(5, 7)}/${comp.slice(0, 4)}, período ${formatarDataSemFuso(de)}${ate ? ' a ' + formatarDataSemFuso(ate) : ''}: ${sel.length} de ${E.linhas.length} lançamento(s), ${formatarMoeda(total)} (original ${formatarMoeda(E.grupo.total)})`, novoNumero);
+      await registrarSentinelaStaff('staff_recibo_duplicado', `Duplicou o recibo Nº ${E.grupo.numero} no recibo Nº ${novoNumero} — competência ${comp.slice(5, 7)}/${comp.slice(0, 4)}, período ${formatarDataSemFuso(de)}${ate ? ' a ' + formatarDataSemFuso(ate) : ''}: ${sel.length} de ${E.linhas.length} lançamento(s), ${formatarMoeda(total)} (original ${formatarMoeda(E.grupo.total)})${sel.some(l => (l.obs || '').trim() !== (l.obsOrig || '').trim()) ? ` — observação trocada em ${sel.filter(l => (l.obs || '').trim() !== (l.obsOrig || '').trim()).length} lançamento(s)` : ''}`, novoNumero);
       document.getElementById('modalDuplicarRecibo').classList.remove('show');
       await carregarRecibos();
       abrirDrawerRecibo(novoNumero);
@@ -5036,8 +5255,9 @@
   // + valor, num formato de tabela rápida — igual ao "Itens da nota"
   // da Lavanderia)
   // -----------------------------------------------------------------
-  function abrirModalItensRecibo(){
+  async function abrirModalItensRecibo(){
     document.getElementById('modalItensReciboTitulo').textContent = numeroReciboAtual ? `Lançamentos — Recibo Nº ${numeroReciboAtual}` : 'Lançamentos — novo recibo';
+    try{ await pagCarregarCatalogos(); } catch(e){ /* sem catálogos: as listas de empresa/plano ficam só com o padrão */ }
     renderModalItensReciboBody();
     document.getElementById('modalItensReciboOverlay').classList.add('show');
   }
@@ -5096,11 +5316,13 @@
   function renderModalItensReciboBody(){
     const grupo = numeroReciboAtual ? agruparRecibos().find(g => g.numero === numeroReciboAtual) : null;
     const itens = grupo ? grupo.itens.slice() : [];
-    const fechado = grupo?.status === 'fechado';
+    const fechado = grupo?.status === 'fechado';   // só quando TODOS os lançamentos estão fechados/enviados
     const somenteLeitura = !podeGerenciarPagamentosAgora() || fechado;
+    const hPag = grupo ? (todosReciboPag.get(grupo.numero) || {}) : {};
     itens.sort((a, b) => String(a.staff_profissionais?.nome_completo || '').localeCompare(String(b.staff_profissionais?.nome_completo || ''), 'pt-BR') || String(a.data || '').localeCompare(String(b.data || '')));
 
     document.getElementById('totalModalItensRecibo').textContent = formatarMoeda(ritTotais(itens).liq);
+    setTimeout(ritAtualizarSelecao, 0);
 
     // linhas agrupadas por profissional, com subtotal quando ele tem mais de um lançamento
     let linhasHtml = '';
@@ -5138,9 +5360,20 @@
           <div class="field-group campo-valor"><label>Descontos (R$)</label><input type="number" step="0.01" id="ri_valor_descontos" value="0"></div>
           <button type="button" class="btn-novo" id="btnAdicionarItemRecibo">OK</button>
         </div>
+        <div class="lancamento-rapido-item" style="margin-top:0;">
+          <div class="field-group" style="flex:1; min-width:260px;"><label>Observação <span style="font-weight:400;">(opcional — segue junto no pagamento)</span></label><input type="text" id="ri_obs" maxlength="300" placeholder="Ex.: diferença de diária, comissão antecipada, ajuste de valor…" autocomplete="off"></div>
+        </div>
         <div class="ri-info" id="ri_info"></div>
         <p class="dica-lancamento-rapido">Digite o nome do profissional, escolha na lista (a função principal dele já preenche sozinha) e pressione Enter no valor para lançar rápido. Para <strong>várias diárias na mesma linha</strong>, preencha o período (<strong>Até</strong>) ou a <strong>Qtd</strong>: informe o <strong>valor da diária</strong> (o total é calculado) ou o <strong>total</strong> (o valor de cada diária é calculado). Os valores da lista abaixo podem ser <strong>editados direto na linha</strong>.</p>
       ` : ''}
+      ${!somenteLeitura && itens.some(i => !ritTravado(i)) ? `<div class="barra-envio-recibo">
+        <label style="display:flex; gap:6px; align-items:center; cursor:pointer; font-weight:600;"><input type="checkbox" id="ri_marcar_todos" style="width:16px; height:16px; accent-color:var(--brand-2);"> Marcar todos os pendentes</label>
+        <span class="bar-sep"></span>
+        <span>Aplicar aos marcados:</span>
+        ${pgBuscaHtml('empresa', '', { vazio: 'Buscar a empresa…', attrs: 'id="ri_bulk_emp"' })}
+        ${pgBuscaHtml('plano', '', { vazio: 'Buscar o plano de contas (código ou nome)…', attrs: 'id="ri_bulk_plano"' })}
+        <button type="button" class="btn-upload-imagem" id="ri_bulk_aplicar">Aplicar</button>
+      </div>` : ''}
       <div class="item-recibo-head"><span>Profissional</span><span>Tipo</span><span>Data</span><span style="text-align:right;">Valor</span><span style="text-align:right;">Alim.</span><span style="text-align:right;">Transp.</span><span style="text-align:right;">Desc.</span><span style="text-align:right;">Líquido</span><span></span></div>
       <div id="listaItensRecibo">${linhasHtml}</div>
       <div id="rodapeItensRecibo">${itens.length ? ritHtmlTotais(itens) : ''}</div>
@@ -5160,7 +5393,32 @@
         });
       });
       // edição direta dos valores na linha (folha mensal: trocar o provisionado pelo real)
-      document.getElementById('listaItensRecibo').addEventListener('change', async (ev) => {
+      const tratarMudancaLista = async (ev) => {
+        if(ev.target.classList && ev.target.classList.contains('li-sel')){ ritAtualizarSelecao(); return; }
+        if(ev.target.classList && ev.target.classList.contains('li-obs')){
+          const campoObs = ev.target, itObs = todosLancamentosRpa.find(l => l.id === campoObs.closest('[data-class-item]').dataset.classItem); if(!itObs) return;
+          const novaObs = campoObs.value.trim() || null;
+          campoObs.disabled = true;
+          const { error: erroObs } = await sb.from('staff_rpas').update({ observacao: novaObs }).eq('id', itObs.id);
+          campoObs.disabled = false;
+          if(erroObs){ alert(/observacao|column|schema cache/i.test(erroObs.message) ? 'A atualização do banco (staff-recibo-envio-parcial.sql) ainda não foi rodada no Supabase: falta a coluna de observação. (' + erroObs.message + ')' : 'Erro ao salvar a observação: ' + erroObs.message); campoObs.value = itObs.observacao || ''; return; }
+          const antesObs = itObs.observacao; itObs.observacao = novaObs; campoObs.value = novaObs || ''; campoObs.classList.toggle('preenchida', !!novaObs);
+          registrarSentinelaStaff('staff_lancamento_alterado', `Recibo Nº ${numeroReciboAtual} — ${sentProfNome(itObs.profissional_id)}: observação «${antesObs || '(vazia)'}» → «${novaObs || '(vazia)'}»`, itObs.id, numeroReciboAtual);
+          return;
+        }
+        const selClass = ev.target.closest('.li-sel-emp, .li-sel-plano');
+        if(selClass){
+          if(ev.type !== 'busca-escolhida') return;
+          const alvo = selClass.closest('[data-class-item]'), it = todosLancamentosRpa.find(l => l.id === alvo.dataset.classItem); if(!it) return;
+          const emp = selClass.classList.contains('li-sel-emp'), campo = emp ? 'empresa_id' : 'plano_de_contas_id', novo = pgBuscaValor(selClass);
+          selClass.disabled = true;
+          const { error } = await sb.from('staff_rpas').update({ [campo]: novo }).eq('id', it.id);
+          selClass.disabled = false;
+          if(error){ alert(/empresa_id|plano_de_contas_id|column|schema cache/i.test(error.message) ? 'A atualização do banco (staff-recibo-envio-parcial.sql) ainda não foi rodada no Supabase. (' + error.message + ')' : 'Erro ao salvar: ' + error.message); pgBuscaDefinir(selClass, it[campo]); return; }
+          const antes = it[campo]; it[campo] = novo; selClass.classList.toggle('definido', !!novo);
+          registrarSentinelaStaff('staff_lancamento_alterado', `Recibo Nº ${numeroReciboAtual} — ${sentProfNome(it.profissional_id)}: ${emp ? 'empresa' : 'plano de contas'} ${antes ? (emp ? sentNome(pagCat.empresas, antes, e => e.nome) : sentNome(pagCat.planos, antes, x => x.descricao)) : '(padrão)'} → ${novo ? (emp ? sentNome(pagCat.empresas, novo, e => e.nome) : sentNome(pagCat.planos, novo, x => x.descricao)) : '(padrão)'}`, it.id, numeroReciboAtual);
+          return;
+        }
         const inp = ev.target.closest('.li-num'); if(!inp) return;
         const linha = inp.closest('[data-item-id]'), item = todosLancamentosRpa.find(l => l.id === linha.dataset.itemId); if(!item) return;
         const campo = inp.dataset.campo, v = Number(inp.value);
@@ -5178,11 +5436,30 @@
         Object.assign(item, novo, { valor_liquido: liquido });
         ritAtualizarCelulas(item);
         registrarSentinelaStaff('staff_lancamento_alterado', `Recibo Nº ${numeroReciboAtual} — ${sentProfNome(item.profissional_id)}: ${txtAntesLanc}`, item.id, numeroReciboAtual);
-      });
+      };
+      ['change', 'busca-escolhida'].forEach(nomeEv => document.getElementById('listaItensRecibo').addEventListener(nomeEv, tratarMudancaLista));
 
+      const marcarTodos = document.getElementById('ri_marcar_todos');
+      if(marcarTodos) marcarTodos.addEventListener('change', () => { document.querySelectorAll('#listaItensRecibo .li-sel:not(:disabled)').forEach(c => { c.checked = marcarTodos.checked; }); ritAtualizarSelecao(); });
+      const bulkAplicar = document.getElementById('ri_bulk_aplicar');
+      if(bulkAplicar) bulkAplicar.addEventListener('click', async () => {
+        const ids = ritMarcados(), emp = pgBuscaValor(document.getElementById('ri_bulk_emp')), pl = pgBuscaValor(document.getElementById('ri_bulk_plano'));
+        if(!ids.length){ alert('Marque os lançamentos que vão receber a empresa e/ou o plano de contas.'); return; }
+        if(!emp && !pl){ alert('Escolha a empresa e/ou o plano de contas a aplicar.'); return; }
+        const upd = {}; if(emp) upd.empresa_id = Number(emp); if(pl) upd.plano_de_contas_id = Number(pl);
+        bulkAplicar.disabled = true;
+        const { error } = await sb.from('staff_rpas').update(upd).in('id', ids);
+        bulkAplicar.disabled = false;
+        if(error){ alert(/empresa_id|plano_de_contas_id|column|schema cache/i.test(error.message) ? 'A atualização do banco (staff-recibo-envio-parcial.sql) ainda não foi rodada no Supabase. (' + error.message + ')' : 'Erro ao aplicar: ' + error.message); return; }
+        await registrarSentinelaStaff('staff_lancamento_alterado', `Recibo Nº ${numeroReciboAtual} — aplicou a ${ids.length} lançamento(s): ${emp ? 'empresa ' + sentNome(pagCat.empresas, emp, e => e.nome) : ''}${emp && pl ? '; ' : ''}${pl ? 'plano de contas ' + sentNome(pagCat.planos, pl, x => x.descricao) : ''}`, null, numeroReciboAtual);
+        await carregarRecibos();
+        const marcados = new Set(ids); renderModalItensReciboBody();
+        document.querySelectorAll('#listaItensRecibo .li-sel').forEach(c => { c.checked = marcados.has(c.closest('[data-item-id]').dataset.itemId); }); ritAtualizarSelecao();
+      });
       configurarAutocompleteProfissional();
       const inputValor = document.getElementById('ri_valor_bruto');
       document.getElementById('btnAdicionarItemRecibo').addEventListener('click', adicionarItemRecibo);
+      document.getElementById('ri_obs').addEventListener('keydown', (e) => { if(e.key === 'Enter'){ e.preventDefault(); adicionarItemRecibo(); } });
       inputValor.addEventListener('keydown', (e) => {
         if(e.key === 'Enter'){ e.preventDefault(); adicionarItemRecibo(); }
       });
@@ -5294,16 +5571,29 @@
     return q > 1 ? `${d}<br><small style="color:var(--muted); font-weight:400;">${q} × ${formatarMoeda(item.valor_unitario != null ? item.valor_unitario : ritNum(item.valor_bruto) / q)}</small>` : d;
   }
   function gerarLinhaItemRecibo(item, somenteLeitura){
-    const num = (campo) => somenteLeitura ? `<span class="mono" style="text-align:right;">${formatarMoeda(item[campo])}</span>` : `<input type="number" step="0.01" min="0" class="li-num" data-campo="${campo}" value="${Number(item[campo]) || 0}">`;
+    const travado = ritTravado(item), ro = somenteLeitura || travado;
+    const num = (campo) => ro ? `<span class="mono" style="text-align:right;">${formatarMoeda(item[campo])}</span>` : `<input type="number" step="0.01" min="0" class="li-num" data-campo="${campo}" value="${Number(item[campo]) || 0}">`;
+    const h = todosReciboPag.get(item.numero_recibo) || {}, proto = item.ordem_extras_id ? protocoloPorId.get(item.ordem_extras_id) : null;
+    const nomeEmp = (id) => (pagCat.empresas.find(e => String(e.id) === String(id)) || {}).nome, nomePl = (id) => { const p = pagCat.planos.find(x => String(x.id) === String(id)); return p ? pagRotPlano(p) : null; };
+    const emp = item.empresa_id || h.empresa_id, pla = item.plano_de_contas_id || h.plano_de_contas_id;
+    const podeMarcar = !ro && (Number(item.valor_liquido) || 0) > 0;
+    const classe = ro
+      ? `<div class="linha-item-class"><span>Empresa: <strong>${vinEsc((emp && nomeEmp(emp)) || 'não definida')}</strong></span><span class="lic-sep">·</span><span>Plano de contas: <strong>${vinEsc((pla && nomePl(pla)) || 'não definido')}</strong></span>
+          ${proto ? `<span class="status-tag ord-${proto.status} lic-trava" title="Enviado em ${formatarDataSemFuso(proto.vencimento)}">Protocolo Nº ${proto.numero} · ${proto.status === 'aceita' ? 'aceito pelo Financeiro' : 'aguardando aceite'}</span>` : (travado ? '<span class="lic-trava">Fechado</span>' : '')}
+          ${item.observacao ? `<span class="lic-obs">Obs.: ${vinEsc(item.observacao)}</span>` : ''}</div>`
+      : `<div class="linha-item-class" data-class-item="${item.id}">
+          <span>Empresa</span>${pgBuscaHtml('empresa', item.empresa_id, { cls: 'li-sel-emp', vazio: h.empresa_id ? 'Padrão do recibo (' + (nomeEmp(h.empresa_id) || '—') + ')' : 'Buscar a empresa…', attrs: 'title="Empresa do grupo deste lançamento — digite parte do nome"' })}
+          <span>Plano de contas</span>${pgBuscaHtml('plano', item.plano_de_contas_id, { cls: 'li-sel-plano', vazio: h.plano_de_contas_id ? 'Padrão do recibo (' + (nomePl(h.plano_de_contas_id) || '—') + ')' : 'Buscar por código ou nome…', attrs: 'title="Plano de contas deste lançamento — digite parte do código ou do nome"' })}
+          <span>Obs.</span><input type="text" class="li-obs ${item.observacao ? 'preenchida' : ''}" maxlength="300" value="${vinEsc(item.observacao || '')}" placeholder="Observação (diferença de diária, comissão antecipada…)" title="Observação deste lançamento: segue junto no pagamento"></div>`;
     return `
-      <div class="linha-item-recibo" data-item-id="${item.id}">
-        <span class="li-nome">${vinEsc(item.staff_profissionais?.nome_completo || '—')}${item.staff_funcoes?.nome ? `<br><small style="color:var(--muted); font-weight:400;">${vinEsc(item.staff_funcoes.nome)}</small>` : ''}</span>
+      <div class="linha-item-recibo com-class" data-item-id="${item.id}">
+        <span class="li-nome"><label>${podeMarcar ? '<input type="checkbox" class="li-sel" title="Marcar para enviar ao Financeiro">' : '<span style="width:16px; flex:none;"></span>'}<span>${vinEsc(item.staff_profissionais?.nome_completo || '—')}${item.staff_funcoes?.nome ? `<br><small style="color:var(--muted); font-weight:400;">${vinEsc(item.staff_funcoes.nome)}</small>` : ''}</span></label></span>
         <span>${vinEsc(item.tipo_diaria || '—')}</span>
         <span class="mono li-data">${ritTextoData(item)}</span>
         ${num('valor_bruto')}${num('valor_alimentacao')}${num('valor_transporte')}${num('valor_descontos')}
         <span class="li-liquido mono">${formatarMoeda(item.valor_liquido)}</span>
-        ${!somenteLeitura ? `<button type="button" class="btn-remover-pequeno" title="Remover">✕</button>` : '<span></span>'}
-      </div>
+        ${!ro ? `<button type="button" class="btn-remover-pequeno" title="Remover">✕</button>` : '<span></span>'}
+      </div>${classe}
     `;
   }
 
@@ -5321,6 +5611,7 @@
     const valorTransporte = Number(document.getElementById('ri_valor_transporte').value) || 0;
     const valorDescontos = Number(document.getElementById('ri_valor_descontos').value) || 0;
     const valorLiquido = valorBruto + valorAlimentacao + valorTransporte - valorDescontos;
+    const obsLanc = (document.getElementById('ri_obs').value || '').trim();
 
     const btn = document.getElementById('btnAdicionarItemRecibo');
     btn.disabled = true;
@@ -5349,10 +5640,12 @@
         valor_alimentacao: valorAlimentacao,
         valor_transporte: valorTransporte,
         valor_liquido: valorLiquido,
-        data_emissao: new Date().toISOString().slice(0, 10)
+        data_emissao: new Date().toISOString().slice(0, 10),
+        ...(obsLanc ? { observacao: obsLanc } : {})
       };
       const { error } = await sb.from('staff_rpas').insert(payload);
-      if(!error) await registrarSentinelaStaff('staff_lancamento_criado', `Lançou no recibo Nº ${numeroReciboAtual}: ${sentProfNome(profissionalId)} — ${tipoDiaria}${qtd > 1 ? ', ' + qtd + ' diárias' : ''}${dataIni ? ', ' + formatarDataSemFuso(dataIni) + (dataFim && dataFim > dataIni ? ' a ' + formatarDataSemFuso(dataFim) : '') : ''}, líquido ${formatarMoeda(valorLiquido)}`, null, numeroReciboAtual);
+      if(!error) await registrarSentinelaStaff('staff_lancamento_criado', `Lançou no recibo Nº ${numeroReciboAtual}: ${sentProfNome(profissionalId)} — ${tipoDiaria}${qtd > 1 ? ', ' + qtd + ' diárias' : ''}${dataIni ? ', ' + formatarDataSemFuso(dataIni) + (dataFim && dataFim > dataIni ? ' a ' + formatarDataSemFuso(dataFim) : '') : ''}, líquido ${formatarMoeda(valorLiquido)}${obsLanc ? ' — obs.: ' + obsLanc : ''}`, null, numeroReciboAtual);
+      if(error && /observacao/i.test(error.message)) throw new Error('A atualização do banco (staff-recibo-envio-parcial.sql) ainda não foi rodada no Supabase: falta a coluna de observação. (' + error.message + ')');
       if(error) throw new Error(/quantidade|valor_unitario|periodo/i.test(error.message) ? 'As colunas de quantidade de diárias ainda não existem neste banco. Rode o arquivo staff-ordens-pagamento.sql no Supabase e atualize a página. (' + error.message + ')' : error.message);
 
       document.getElementById('ri_valor_unit').value = '0';
@@ -5360,6 +5653,7 @@
       document.getElementById('ri_valor_alimentacao').value = '0';
       document.getElementById('ri_valor_transporte').value = '0';
       document.getElementById('ri_valor_descontos').value = '0';
+      document.getElementById('ri_obs').value = '';
 
       await carregarRecibos();
       document.getElementById('modalItensReciboTitulo').textContent = `Lançamentos — Recibo Nº ${numeroReciboAtual}`;
@@ -5388,6 +5682,7 @@
   async function atualizarDrawerReciboAposLancamentos(){
     // volta pro drawer principal já com o corpo atualizado (número,
     // contagem e total de lançamentos), e refaz a lista por trás
+    renderListaRecibos();
     if(!document.getElementById('drawerReciboOverlay').classList.contains('show')) return;
     const grupo = numeroReciboAtual ? agruparRecibos().find(g => g.numero === numeroReciboAtual) : null;
     const fechado = grupo?.status === 'fechado';
@@ -5523,6 +5818,12 @@
         doc.text(formatarMoeda(item.valor_descontos), margem + 150, y, { align: 'right' });
         doc.text(formatarMoeda(item.valor_liquido), margem + larguraUtil, y, { align: 'right' });
         y += 5;
+        if(item.observacao){
+          doc.setFont('helvetica', 'italic'); doc.setFontSize(8); doc.setTextColor(90);
+          doc.splitTextToSize('Obs.: ' + item.observacao, larguraUtil - 4).forEach(l => { quebrarPagina(5); doc.text(l, margem + 2, y); y += 4; });
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(0);
+          y += 1;
+        }
       });
 
       doc.setDrawColor(210);
