@@ -9,6 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <style>
     * { box-sizing: border-box; }
     body { font-family: Arial, sans-serif; margin: 20px; color: #222; background:#fff; }
@@ -552,6 +553,7 @@
         <button class="btn btn-verde" id="btnNovoProduto" style="margin-top:8px;">+ Novo produto</button>
         <button class="btn btn-azul" id="btnBaixaDireta" style="margin-top:8px;">⬇️ Baixa direta (sem projeto)</button>
         <button class="btn btn-cinza" id="btnImportarNFe" style="margin-top:8px;">📄 Importar NF-e (XML)</button>
+        <button class="btn btn-cinza" id="btnPreencherNcm" style="margin-top:8px;" title="Preenche o NCM dos produtos sem NCM a partir dos dados fiscais das notas já importadas">🏷️ Preencher NCM (das notas)</button>
         <button class="btn btn-cinza" id="btnAtalhoRateioAlmox" style="margin-top:8px;" title="Cruzada plano de contas × setor do consumo do almoxarifado, com os percentuais e o rateio do valor real pago">📊 Rateio do almoxarifado</button>
     </div>
 
@@ -563,6 +565,7 @@
             <div class="campo" style="grid-column: span 2;"><label>Nome do produto</label><input type="text" id="npNome"></div>
             <div class="campo"><label>Unidade</label><input type="text" id="npUn" value="UN"></div>
             <div class="campo"><label>Valor unitário (R$)</label><input type="number" step="0.01" id="npValor"></div>
+            <div class="campo"><label>NCM (opcional)</label><input type="text" id="npNcm" maxlength="10" inputmode="numeric" placeholder="8 dígitos"></div>
             <div class="campo"><label>Estoque inicial</label><input type="number" step="0.01" id="npEstoque" value="0"></div>
             <div class="campo" style="position:relative;">
                 <label>Grupo</label>
@@ -826,6 +829,7 @@
                 <button class="btn btn-cinza" id="btnImportarNFeNotas" type="button">📄 Importar NF-e (XML)</button>
                 <button class="btn btn-azul" id="btnAbrirProtocolo" type="button" title="Agrupar notas já lançadas num número de protocolo (Financeiro)">📮 Protocolo</button>
                 <button class="btn btn-cinza" id="btnClassificarNotas" type="button" title="Notas cujo rateio está sem Setor, Plano de contas ou Evento">🧭 Classificar notas</button>
+                <button class="btn btn-cinza" id="btnRecuperarFiscal" type="button" title="Lê o XML das notas já importadas e grava os dados fiscais por item (NCM, CFOP, CST, impostos)">🧾 Dados fiscais das notas antigas</button>
                 <button class="btn btn-verde" id="btnNovaRequisicaoCompleta">+ Nova requisição</button>
             </div>
         </div>
@@ -1265,6 +1269,27 @@
         </div>
     </div>
 
+    <div class="caixa" id="caixaFiscal">
+        <h4 style="margin-top:0;">📑 Fiscal — entradas por período e pacote do contador <span class="subtitulo" style="font-weight:normal;">(dados fiscais por item das NF-e importadas por XML: NCM, CFOP, CST/CSOSN e impostos)</span></h4>
+        <div class="grade col4" style="align-items:flex-end;">
+            <div class="campo"><label>De</label><input type="date" id="fiscDe"></div>
+            <div class="campo"><label>Até</label><input type="date" id="fiscAte"></div>
+            <div class="campo"><label>Período pela data de</label><select id="fiscBase"><option value="entrada">Entrada no estoque</option><option value="emissao">Emissão da NF</option></select></div>
+            <div class="campo"><label>Empresa (CNPJ do destinatário da NF)</label><select id="fiscEmpresa"><option value="">Todas as empresas</option></select></div>
+        </div>
+        <p class="subtitulo" style="margin:4px 0 8px; font-size:.8rem;">As notas de uma unidade podem ser de <strong>várias empresas</strong>. A contabilidade e o SPED são por CNPJ: escolha uma empresa ou deixe «Todas» — no <em>pacote</em> cada empresa sai numa pasta própria. Notas lançadas à mão não têm destinatário e ficam em «Sem destinatário».</p>
+        <div><button class="btn btn-verde" id="btnFiscalExcel" type="button" title="Planilha com resumo, itens fiscais, totais por CFOP/NCM/CST, por empresa e a lista das notas do período">📊 Excel das entradas fiscais</button></div>
+        <div style="margin-top:8px;"><button class="btn btn-azul" id="btnFiscalPacote" type="button" title="ZIP com os XMLs das notas do período + o Excel fiscal + o inventário (se a data de inventário estiver preenchida)">🗂️ Pacote do contador (ZIP)</button></div>
+        <h5 style="margin:16px 0 6px;">📦 Inventário fiscal <span class="subtitulo" style="font-weight:normal;">(quantidade, valor unitário e NCM de cada produto — base do bloco H do SPED)</span></h5>
+        <div class="grade col4" style="align-items:flex-end;">
+            <div class="campo"><label>Posição em (data do inventário)</label><input type="date" id="fiscInvData"></div>
+            <div class="campo"><label>Almoxarifado</label><select id="fiscInvAlmox"><option value="">Todos (soma)</option></select></div>
+            <div class="campo"><button class="btn btn-verde" id="btnFiscalInventario" type="button">📦 Excel do inventário fiscal</button></div>
+        </div>
+        <p class="subtitulo" style="margin:6px 0 0; font-size:.8rem;">O inventário é o estoque da <strong>unidade</strong> (almoxarifados), <strong>não separado por empresa/CNPJ</strong>. Em data passada, a quantidade é recalculada desfazendo as movimentações posteriores; o <strong>valor unitário é o preço médio ATUAL</strong> (o sistema não guarda o custo médio de cada dia). Para o inventário de fechamento, o ideal é gerar na própria data.</p>
+        <span class="status-msg" id="statusFiscal"></span>
+    </div>
+
     <div class="caixa">
         <h4 style="margin-top:0;">📊 Rateio do consumo do almoxarifado <span class="subtitulo" style="font-weight:normal;">(planilha cruzada plano de contas × setor, só saídas sem nota, com os percentuais e o rateio do valor real pago)</span></h4>
         <button class="btn btn-cinza" id="btnAbrirRateioAlmox" type="button">📊 Abrir o rateio do almoxarifado</button>
@@ -1437,6 +1462,30 @@
                 </div>
             </div>
 
+            <!-- TÍTULOS / VENCIMENTOS da nota (contas a pagar): vêm do XML quando há <dup>; senão são informados aqui mesmo, sem abrir a nota depois -->
+            <div id="nfeBlocoTitulos" style="background:#F1F8F1; border:1px solid #B7DDB7; border-radius:8px; padding:12px 14px; margin-top:14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <strong>💲 Títulos / vencimentos da nota (contas a pagar)</strong>
+                    <span class="subtitulo" id="nfeTitulosResumo" style="margin:0;"></span>
+                </div>
+                <p class="subtitulo" id="nfeTitulosOrigem" style="margin:4px 0 8px;"></p>
+                <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+                    <div class="campo" style="width:90px; margin:0;"><label>Parcelas</label><input type="number" min="1" step="1" id="nfeTitQtd" value="1"></div>
+                    <div class="campo" style="width:165px; margin:0;"><label>1º vencimento</label><input type="date" id="nfeTitPrimeiro"></div>
+                    <div class="campo" style="width:200px; margin:0;"><label>Próximos vencimentos</label>
+                        <select id="nfeTitRegra"><option value="30">A cada 30 dias</option><option value="28">A cada 28 dias</option><option value="21">A cada 21 dias</option><option value="15">A cada 15 dias</option><option value="14">A cada 14 dias</option><option value="10">A cada 10 dias</option><option value="7">A cada 7 dias</option><option value="mesmoDia">Mesmo dia do mês</option></select></div>
+                    <div class="campo" style="width:210px; margin:0;"><label>Forma de pagamento</label><select id="nfeTitForma"></select><span class="subtitulo" id="nfeTitFormaHint" style="font-size:.72rem; display:block; margin-top:2px;"></span></div>
+                    <button type="button" class="btn btn-verde btn-pequeno" id="btnNfeTitGerar" title="Divide o valor total da nota em parcelas iguais (a última absorve os centavos)">Gerar parcelas iguais</button>
+                    <button type="button" class="btn btn-cinza btn-pequeno" id="btnNfeTitAdd">+ Adicionar título</button>
+                </div>
+                <div style="max-height:30vh; overflow:auto; margin-top:8px;">
+                    <table class="tabela">
+                        <thead><tr><th>Nº do título</th><th>Vencimento</th><th class="num">Valor (R$)</th><th class="center"></th></tr></thead>
+                        <tbody id="corpoTitulosNFe"></tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- agregar nota(s) de pedido INTEIRA(S): os itens desta NF-e passam a ser ignorados -->
             <div id="nfeBlocoPedidoAgregado" style="background:#EFF6FF; border:1px solid #BFD7FF; border-radius:8px; padding:10px 14px; margin-top:14px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -1549,6 +1598,7 @@
             <div class="campo"><label>Unidade</label><input type="text" id="npnUn" value="UN"></div>
             <div class="campo"><label>Valor unitário (R$)</label><input type="number" step="0.01" min="0" id="npnValor"></div>
             <div class="campo" style="grid-column: span 2;"><label>Código externo (opcional)</label><input type="text" id="npnCodExt" placeholder="código no sistema externo"></div>
+            <div class="campo" style="grid-column: span 2;"><label>NCM (opcional)</label><input type="text" id="npnNcm" maxlength="10" inputmode="numeric" placeholder="8 dígitos"></div>
         </div>
         <div class="campo" style="position:relative;">
             <label>Grupo *</label>
@@ -1599,6 +1649,10 @@
         <div class="grade col2" style="margin-top:10px;">
             <div class="campo"><label>Código externo</label><input type="text" id="editProdutoCodigoExterno"></div>
             <div class="campo"><label>Unidade (Un)</label><input type="text" id="editProdutoUn"></div>
+        </div>
+        <div class="grade col2" style="margin-top:10px;">
+            <div class="campo"><label>NCM (8 dígitos — usado nos relatórios fiscais)</label><input type="text" id="editProdutoNcm" maxlength="10" inputmode="numeric" placeholder="ex.: 70060000"></div>
+            <div class="campo"><label>CEST (opcional)</label><input type="text" id="editProdutoCest" maxlength="9" inputmode="numeric"></div>
         </div>
 
         <div class="grade col2" style="margin-top:10px;">
@@ -1813,6 +1867,10 @@
             <div class="campo"><label>Data de entrada</label><input type="date" id="notaDataEntrada"></div>
         </div>
         <div class="grade col2" style="margin-top:10px;">
+            <div class="campo"><label>Empresa (destinatária da nota) *</label><select id="notaEmpresa"></select><span class="subtitulo" id="notaEmpresaDica" style="font-size:.72rem; display:block; margin-top:2px;"></span></div>
+            <div class="campo" style="align-self:end;"><span class="subtitulo" style="font-size:.78rem;">Define de qual empresa (CNPJ) é a nota — usado na contabilidade/SPED. Nota importada por XML já traz o CNPJ do destinatário.</span></div>
+        </div>
+        <div class="grade col2" style="margin-top:10px;">
             <div class="campo" style="position:relative;">
                 <label>Fornecedor</label>
                 <input type="text" id="notaFornecedorNome" placeholder="Digite parte do nome do fornecedor..." autocomplete="off">
@@ -1995,16 +2053,21 @@
 
             <h4 style="margin-top:20px; margin-bottom:8px;">Títulos / Vencimentos</h4>
             <div class="grade col4" style="align-items:flex-end;">
-                <div class="campo"><label>Nº do título</label><input type="text" id="tituloNumero" placeholder="Ex: 1/3"></div>
+                <div class="campo"><label>Nº do título</label><input type="text" id="tituloNumero" placeholder="Ex: 960/1"></div>
                 <div class="campo"><label>Vencimento</label><input type="date" id="tituloVencimento"></div>
                 <div class="campo"><label>Valor (R$)</label><input type="number" step="0.01" id="tituloValor"></div>
-                <div class="campo"><label>Forma de pagamento</label><input type="text" id="tituloFormaPagamento" placeholder="Boleto, Pix..."></div>
+                <div class="campo"><label>Forma de pagamento</label><select id="tituloFormaPagamento"></select><span class="subtitulo" id="tituloFormaPagamentoHint" style="font-size:.72rem; display:block; margin-top:2px;"></span></div>
             </div>
             <div style="margin-top:8px; text-align:right;">
                 <button class="btn btn-azul btn-pequeno" id="btnAdicionarTituloNota">+ Adicionar título</button>
                 <button class="btn btn-cinza btn-pequeno" id="btnGerarParcelasIguais">Dividir valor total em parcelas iguais</button>
+                <button class="btn btn-verde btn-pequeno" id="btnImprimirOP" title="Recibo de pagamento de cada título, para bobina térmica (80 mm) ou folha A4">🧾 Imprimir ordem de pagamento</button>
             </div>
 
+            <div style="margin-top:10px; display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+                <div class="campo" style="width:260px; margin:0;"><label>Definir a forma de pagamento de TODOS os títulos da nota</label><select id="tituloFormaTodos"></select></div>
+                <button type="button" class="btn btn-cinza btn-pequeno" id="btnAplicarFormaTodos">Aplicar a todos</button>
+            </div>
             <table class="tabela" style="margin-top:10px;">
                 <thead><tr><th>Título</th><th>Vencimento</th><th class="num">Valor</th><th>Forma</th><th>Origem</th><th>Status</th><th>Ações</th></tr></thead>
                 <tbody id="corpoTitulosNota"></tbody>
@@ -2019,6 +2082,41 @@
     </div>
 </div>
 
+<!-- ===================== MODAL / POPUP: Imprimir ordem de pagamento (recibo por título) ===================== -->
+<div class="modal-overlay" id="modalOrdemPagamento" style="z-index:1050;">
+    <div class="modal-caixa">
+        <h4 style="margin-top:0;">🧾 Imprimir ordem de pagamento</h4>
+        <p class="subtitulo" id="opSubtitulo" style="margin-bottom:12px;"></p>
+        <div class="grade col2">
+            <div class="campo"><label>Empresa emitente (quem paga)</label><select id="opEmpresa"></select></div>
+            <div class="campo"><label>Formato</label>
+                <select id="opFormato">
+                    <option value="bobina">Bobina térmica 80 mm — 1 título por página (corta a cada título)</option>
+                    <option value="a4">Folha A4 — 2 títulos por folha</option>
+                </select>
+            </div>
+        </div>
+        <div class="grade col2" id="opCampoMargem" style="margin-top:8px;">
+            <div class="campo"><label>Margem lateral da bobina (mm) — aumente se cortar letras na direita</label><input type="number" id="opMargem" min="2" max="14" step="0.5" value="6"></div>
+            <div class="campo" style="align-self:end;"><span class="subtitulo" style="font-size:.8rem;">A térmica de 80 mm imprime só ~72 mm no meio da bobina. Padrão: 6 mm de cada lado.</span></div>
+        </div>
+        <div class="status-msg erro" id="opAvisoEmpresa" style="display:none; margin-top:8px;"></div>
+        <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center;">
+            <strong>Títulos a imprimir</strong>
+            <button type="button" class="btn btn-cinza btn-pequeno" id="opMarcarTodos">Marcar / desmarcar todos</button>
+        </div>
+        <div id="opListaTitulos" style="margin-top:6px; max-height:240px; overflow:auto; border:1px solid var(--linha); border-radius:6px; padding:6px 10px;"></div>
+        <p class="subtitulo" id="opDicaCorte" style="margin-top:8px; font-size:.82rem;">✂️ <strong>Corte:</strong> o PDF não manda o comando de corte; quem corta é o driver. Se a impressora <em>não cortar entre os títulos</em>, use o botão <strong>🖨️</strong> de cada título: cada um sai como <strong>um trabalho de impressão separado</strong> e a impressora corta ao final de cada trabalho.</p>
+        <div style="margin-top:14px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <button class="btn btn-azul" id="opVer">👁️ Visualizar</button>
+            <button class="btn btn-cinza" id="opSalvar">💾 Baixar</button>
+            <button class="btn btn-cinza" id="opCompartilhar">📤 Compartilhar</button>
+            <button class="btn btn-cinza" id="opFechar" style="margin-left:auto;">Fechar</button>
+        </div>
+        <span class="status-msg" id="statusOP"></span>
+    </div>
+</div>
+
 <!-- ===================== MODAL / POPUP: Gerar parcelas iguais (com regra de vencimento) ===================== -->
 <div class="modal-overlay" id="modalParcelasIguais" style="z-index:1050;">
     <div class="modal-caixa">
@@ -2028,6 +2126,7 @@
         <div class="grade col2">
             <div class="campo"><label>Quantidade de parcelas</label><input type="number" step="1" min="1" id="parcelasIguaisQtd" value="1"></div>
             <div class="campo"><label>Data do 1º vencimento</label><input type="date" id="parcelasIguaisPrimeiroVencimento"></div>
+            <div class="campo"><label>Forma de pagamento (define a conta prevista)</label><select id="parcelasIguaisForma"></select><span class="subtitulo" id="parcelasIguaisFormaHint" style="font-size:.72rem; display:block; margin-top:2px;"></span></div>
         </div>
 
         <div class="campo" style="margin-top:14px;">
@@ -2076,7 +2175,7 @@
         </div>
         <div class="grade col2" style="margin-top:10px;">
             <div class="campo"><label>Valor (R$)</label><input type="number" step="0.01" id="editTituloValor"></div>
-            <div class="campo"><label>Forma de pagamento</label><input type="text" id="editTituloFormaPagamento"></div>
+            <div class="campo"><label>Forma de pagamento</label><select id="editTituloFormaPagamento"></select><span class="subtitulo" id="editTituloFormaPagamentoHint" style="font-size:.72rem; display:block; margin-top:2px;"></span></div>
         </div>
         <div class="campo" style="margin-top:10px;">
             <label>Status</label>
@@ -3063,7 +3162,12 @@ async function chamarPost(acao, d) {
             unidade_negocio_id: meuPerfil.unidadeId
         };
         if (p.id) registro.id = p.id; // se não informado, o banco gera automaticamente
-        const { data, error } = await sb.from('estoque_produtos').upsert(registro).select().single();
+        // NCM/CEST (dados fiscais): só vão quando informados pelo chamador (não apaga o que já existe em fluxos que não mexem nisso)
+        if (p.ncm !== undefined) registro.ncm = p.ncm || null;
+        if (p.cest !== undefined) registro.cest = p.cest || null;
+        let { data, error } = await sb.from('estoque_produtos').upsert(registro).select().single();
+        // SQL do NCM (estoque-produtos-ncm.sql) ainda não rodado: grava o produto sem esses campos, como antes
+        if (error && /\b(ncm|cest)\b/i.test(error.message || '')) { const { ncm: _n, cest: _c, ...semFiscal } = registro; ({ data, error } = await sb.from('estoque_produtos').upsert(semFiscal).select().single()); }
         if (error) throw error;
         // igual acontece ao editar uma movimentação: mudar estoque_inicial (ou
         // qualquer outro dado que afete o saldo) exige reprocessar, senão o
@@ -3471,13 +3575,23 @@ async function chamarPost(acao, d) {
             evento: n.evento || null,
             plano_contas_id: n.planoContasId || null
         };
+        // EMPRESA da nota (estoque-notas-empresa.sql): só vai quando o chamador informa
+        if (n.empresaId !== undefined) registro.empresa_id = n.empresaId || null;
+        // ATUALIZAÇÃO: campo que o chamador NÃO enviou fica como está (antes, salvar o cabeçalho pela tela da nota zerava XML original, destinatário,
+        // totais fiscais, natureza, setor/evento/plano e até o tipo, porque tudo era regravado com «|| null»)
+        if (n.id) {
+            const preservar = { tipo: 'tipo', xml_original: 'xmlOriginal', cnpj_tomador: 'cnpjTomador', nome_tomador: 'nomeTomador', natureza_operacao: 'naturezaOperacao',
+                valor_produtos: 'valorProdutos', valor_seguro: 'valorSeguro', valor_outras_despesas: 'valorOutrasDespesas', valor_icms: 'valorIcms', valor_ipi: 'valorIpi',
+                valor_pis: 'valorPis', valor_cofins: 'valorCofins', informacoes_fiscais: 'informacoesFiscais', setor_id: 'setorId', evento: 'evento', plano_contas_id: 'planoContasId' };
+            Object.entries(preservar).forEach(([coluna, prop]) => { if (n[prop] === undefined) delete registro[coluna]; });
+        }
         // "id" é generated always as identity — não pode aparecer num INSERT
         // (nem por baixo de um upsert), por isso aqui é insert OU update,
         // nunca upsert com id junto
-        const query = n.id
-            ? sb.from('estoque_notas').update(registro).eq('id', n.id)
-            : sb.from('estoque_notas').insert(registro);
-        const { data: notaCriada, error } = await query.select().single();
+        const gravarNota = (reg) => (n.id ? sb.from('estoque_notas').update(reg).eq('id', n.id) : sb.from('estoque_notas').insert(reg)).select().single();
+        let { data: notaCriada, error } = await gravarNota(registro);
+        // SQL da empresa ainda não rodado (coluna empresa_id inexistente): grava a nota sem ela, como antes
+        if (error && /empresa_id/i.test(error.message || '')) { const { empresa_id: _e, ...semEmpresa } = registro; ({ data: notaCriada, error } = await gravarNota(semEmpresa)); }
         if (error) throw error;
         if (n.id && registro.tipo !== 'saida') await sincronizarRateioNota(n.id);   // setor/evento/plano da nota são o padrão do rateio da compra
         if (registro.tipo !== 'saida' && registro.nome_fornecedor) await registrarFornecedor(registro.nome_fornecedor, registro.cnpj_fornecedor, notaCriada && notaCriada.id);   // lembra o fornecedor (e o CNPJ) para as próximas notas
@@ -3491,21 +3605,27 @@ async function chamarPost(acao, d) {
             data_vencimento: t.dataVencimento || null,
             valor: t.valor || 0,
             forma_pagamento: t.formaPagamento || null,
+            ...(t.formaPagamentoId ? { forma_pagamento_id: t.formaPagamentoId } : {}),
             origem: t.origem || 'manual'
         }));
         if (!linhas.length) return;
-        const { data, error } = await sb.from('estoque_titulos_notas').insert(linhas).select();
+        let { data, error } = await sb.from('estoque_titulos_notas').insert(linhas).select();
+        // SQL da forma de pagamento ainda não rodado (coluna forma_pagamento_id inexistente): grava só o nome da forma, como antes
+        if (error && /forma_pagamento_id/i.test(error.message || '')) { ({ data, error } = await sb.from('estoque_titulos_notas').insert(linhas.map(({ forma_pagamento_id, ...resto }) => resto)).select()); }
         if (error) throw error;
         return data;
     }
     if (acao === 'editarTitulo') {
-        const { error } = await sb.from('estoque_titulos_notas').update({
+        const campos = {
             numero_titulo: d.numeroTitulo || null,
             data_vencimento: d.dataVencimento || null,
             valor: d.valor || 0,
             forma_pagamento: d.formaPagamento || null,
+            forma_pagamento_id: d.formaPagamentoId || null,
             status: d.status || 'pendente'
-        }).eq('id', d.tituloId);
+        };
+        let { error } = await sb.from('estoque_titulos_notas').update(campos).eq('id', d.tituloId);
+        if (error && /forma_pagamento_id/i.test(error.message || '')) { const { forma_pagamento_id, ...resto } = campos; ({ error } = await sb.from('estoque_titulos_notas').update(resto).eq('id', d.tituloId)); }
         if (error) throw error;
         return;
     }
@@ -3692,6 +3812,7 @@ async function carregarProdutos() {
     produtos = (lista || []).map(p => ({
         id: Number(p.id),
         codigoExterno: p.codigo_externo || '',
+        ncm: p.ncm || '', cest: p.cest || '',
         nome: String(p.nome || ''),
         un: String(p.un || 'UN'),
         valor: Number(p.valor) || 0,
@@ -3844,7 +3965,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
    ============================================================ */
 const AJUDA_ESTOQUE = {
     titulo: 'Estoque — Controle de Estoque & Projetos',
-    ultimaRevisao: '19/11/2026',
+    ultimaRevisao: '25/11/2026',   // títulos/vencimentos no XML; nº dos títulos = nº da nota/parcela; aviso de fornecedor não cadastrado; ordem de pagamento em bobina/A4 (25/11/2026)
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>O Estoque controla o material físico da unidade (contêiner/esquadria): o que entra
@@ -3989,6 +4110,28 @@ const AJUDA_ESTOQUE = {
             <ul>
                 <li><strong>+ Nova entrada direta</strong>: lança manualmente uma compra (fornecedor,
                 itens, valores) — gera os títulos de pagamento correspondentes no Financeiro.</li>
+                <li><strong>🧾 Dados fiscais por item (NF-e)</strong>: ao importar um XML, o sistema grava, para cada item, <strong>NCM, CEST, CFOP, CST/CSOSN, bases, alíquotas e valores</strong> de ICMS (inclusive ST e crédito do Simples), IPI, PIS e COFINS —
+                a base para o SPED/contador (relatórios fiscais vêm nas próximas etapas). Para as notas <em>já importadas</em>, use o botão <strong>🧾 Dados fiscais das notas antigas</strong> (guia Notas): ele lê o XML guardado em cada nota e grava os itens
+                (pode rodar de novo: só trata as que faltam). Nota lançada <em>à mão</em> não tem esses dados — só quem vem de XML.</li>
+                <li><strong>Empresa da nota</strong>: a unidade recebe notas de <strong>várias empresas</strong>. Na <strong>entrada direta</strong> o cabeçalho tem o campo <strong>Empresa</strong> (obrigatório; já vem a última usada neste aparelho ou a empresa padrão do Financeiro) — a nota guarda a empresa e o CNPJ dela como destinatário.
+                Na <strong>importação de XML</strong> o destinatário vem do próprio XML e é ligado à empresa quando o CNPJ estiver cadastrado em Financeiro → Cadastros → Empresas. É o que separa as empresas no relatório fiscal e no pacote do contador. Salvar o cabeçalho de uma nota existente <strong>não apaga mais</strong> o XML original, o destinatário e os totais fiscais.</li>
+                <li><strong>📑 Fiscal — guia Relatórios</strong>: <strong>As notas de uma unidade podem ser de várias empresas</strong>: o seletor <strong>Empresa</strong> filtra pelo CNPJ do destinatário do XML (notas lançadas à mão ficam em «Sem destinatário»); com «Todas», o pacote traz uma pasta por empresa. (1) <strong>Excel das entradas fiscais</strong> do período (pela data de entrada ou de emissão): abas Resumo, Por empresa, Itens fiscais (NCM, CFOP, CST/CSOSN, bases, alíquotas e valores de ICMS/ST/IPI/PIS/COFINS), Por CFOP, Por NCM, Por CST-CSOSN e <em>Notas</em> (inclusive as <strong>sem</strong> dados fiscais — manuais ou XML ainda não processado);
+                (2) <strong>Pacote do contador (ZIP)</strong>: os XMLs das notas do período (nomeados pela chave de acesso) + a planilha fiscal + o inventário (se a data estiver preenchida) + um LEIA-ME; (3) <strong>Inventário fiscal</strong>: produto, NCM, CEST, unidade, quantidade e valor unitário numa data, com aba «Atenção» (saldo negativo e produto com saldo sem NCM).
+                <em>Em data passada</em> a quantidade é recalculada desfazendo as movimentações posteriores, mas o <strong>valor unitário é o preço médio atual</strong> — para o inventário de fechamento, gere na própria data. É material de apoio ao contador; não substitui a EFD.</li>
+                <li><strong>🏷️ NCM do produto</strong>: o cadastro do produto (novo e edição) tem os campos <strong>NCM</strong> (8 dígitos) e <strong>CEST</strong>, usados nos relatórios fiscais e no inventário do contador.
+                Ao <strong>importar um XML</strong>, o produto novo já nasce com o NCM da nota e o produto existente <em>sem NCM</em> recebe o da nota (um NCM já preenchido nunca é trocado).
+                O botão <strong>🏷️ Preencher NCM (das notas)</strong> (guia Estoque) preenche, de uma vez, os produtos sem NCM a partir dos dados fiscais das notas já importadas (usa o NCM mais recente de cada produto).
+                O NCM aparece sob o código externo na lista e entra na busca.</li>
+                <li><strong>Forma de pagamento e conta prevista</strong>: a <strong>forma de pagamento</strong> do título agora é uma <em>lista</em> (cadastro de Formas de Pagamento do Financeiro). Cada forma pode ter uma
+                <strong>conta corrente prevista</strong> (Financeiro → Cadastros → Formas de Pagamento): ao aceitar o protocolo, o título nasce no Financeiro já com essa conta e entra na <strong>previsão</strong> dela
+                (forma sem conta = título «sem conta», como antes). O botão <strong>Aplicar a todos</strong> (acima da tabela de títulos) define a forma de todos os títulos da nota de uma vez. O <strong>nº do título</strong> na inclusão manual já vem sugerido como <em>nº da NF/parcela</em> (ex.: NF 960 → <em>960/1</em>, <em>960/2</em>…).</li>
+                <li><strong>🧾 Imprimir ordem de pagamento</strong> (janela da nota de entrada, junto dos títulos): gera o <em>Recibo de pagamento</em> de <strong>cada título</strong> —
+                empresa emitente (razão social, CNPJ, endereço e telefone do cadastro de Empresas), fornecedor com documento e <strong>dados bancários</strong> (PIX/conta, a forma principal primeiro),
+                evento e setor da nota, vencimento, forma e data de pagamento, valor por extenso e a <strong>observação da nota</strong> («Referente a»). Dois formatos:
+                <strong>bobina térmica 80 mm</strong> (1 título por página, a impressora corta a cada título) ou <strong>folha A4</strong> (2 por folha). Dá para marcar só alguns títulos.
+                A empresa vem do CNPJ do destinatário da NF (XML), senão a última usada neste aparelho. <strong>OP</strong> = <strong>número da operação</strong> da compra (o mesmo que o Financeiro usa para juntar todos os títulos da nota) e <strong>REG</strong> = código do título no Financeiro (só existe depois que o protocolo é aceito lá; antes disso sai sem REG).
+                <strong>Bobina — corte e margens</strong>: o PDF sai com <em>uma página por título, do tamanho exato do conteúdo</em>, com margem superior/inferior curta e <strong>margem lateral ajustável</strong> (padrão 6 mm; a térmica de 80 mm só imprime ~72 mm no meio — se cortar letras na direita, aumente). O comando de corte quem manda é o <strong>driver da impressora</strong> (não o PDF). Se ela <strong>não cortar entre os títulos</strong>, use o botão <strong>🖨️</strong> de cada título: cada um sai como um <em>trabalho de impressão separado</em> e a impressora corta ao fim de cada trabalho. Na janela de impressão do navegador use <strong>Margens: Nenhuma</strong>, <strong>Escala: 100%</strong>, sem cabeçalhos e rodapés, e o papel de 80 mm.</li>
+                <li><strong>Aviso de fornecedor NÃO cadastrado</strong> (nota manual e importação de XML): antes de gravar uma nota de entrada, o sistema confere se o fornecedor já é uma <em>pessoa</em> cadastrada (mesmo CNPJ ou mesmo nome). Se não for, avisa que ele será <strong>cadastrado automaticamente</strong> ao salvar e mostra cadastros parecidos (mesma raiz de CNPJ ou mesma primeira palavra do nome). Se o fornecedor já existe com outro nome, cancele e ajuste o nome/CNPJ; se for novo, confirme. No XML, cancelar interrompe a importação antes de gravar qualquer coisa.</li>
                 <li><strong>Fornecedor lembrado e aviso de pedido repetido</strong> (nota manual): todo fornecedor usado numa nota fica gravado no
                 cadastro de pessoas (a mesma tabela do Financeiro, Obras e Armarinho: nome livre + CNPJ opcional); ao digitar o nome o CNPJ é preenchido sozinho (e, ao colar um CNPJ conhecido, o nome).
                 Ao salvar o cabeçalho, se já existir nota do <strong>mesmo fornecedor</strong> (mesmo CNPJ ou mesmo nome) com o <strong>mesmo número/pedido</strong> —
@@ -4022,11 +4165,12 @@ const AJUDA_ESTOQUE = {
                 que ainda não foram ligadas a outra nota.</li>
                 <li><strong>💲 Valor total da nota (conforme a NF)</strong>: na entrada manual, informe no cabeçalho o valor que está <strong>impresso na NF</strong>.
                 A soma dos itens (quantidade × valor unitário) pode diferir <strong>por centavos</strong>, porque o preço unitário é arredondado em 2 casas — por isso o
-                <strong>valor da nota é a referência</strong>: <em>Dividir valor total em parcelas iguais</em> parcela esse valor (a última parcela absorve o resto),
+                <strong>valor da nota é a referência</strong>: <em>Dividir valor total em parcelas iguais</em> parcela esse valor (a última parcela absorve o resto) e numera os títulos com o <strong>nº da nota seguido da parcela</strong> (ex.: NF 12345 → <em>12345/1</em>, <em>12345/2</em>, <em>12345/3</em>; sem nº de NF informado, usa <em>1/3</em>, <em>2/3</em>…),
                 a lista de Notas mostra esse valor e o protocolo o usa. Logo abaixo do cabeçalho há uma <strong>conferência</strong> (nota × itens × títulos): a diferença
                 dos itens é só informativa; se os <strong>títulos</strong> não fecharem com a nota, o botão <strong>⚖️ Ajustar a última parcela</strong> põe a diferença na última
                 parcela em aberto. Alterar o valor total com a nota já salva grava na hora (e fica na Sentinela). Na lista de Notas e no Protocolo, nota sem valor da NF ou com
                 títulos diferentes do valor da nota aparece com <strong>⚠</strong>, e gerar o protocolo com essas notas pede confirmação. Notas importadas por XML já trazem o valor da NF.</li>
+                <li><strong>💲 Títulos / vencimentos na importação do XML</strong>: ao importar um XML há o bloco <strong>Títulos / vencimentos da nota (contas a pagar)</strong>. Se o XML traz as duplicatas, as parcelas já vêm preenchidas (dá para ajustar número, vencimento e valor). Se <strong>não traz</strong>, informe ali mesmo — <strong>Gerar parcelas iguais</strong> (quantidade, 1º vencimento e a regra: a cada 7/10/14/15/21/28/30 dias ou mesmo dia do mês; a última parcela absorve os centavos) ou <strong>+ Adicionar título</strong> linha a linha — e os títulos são gravados <strong>junto com a nota</strong>, sem precisar abri-la depois só para lançar vencimentos. O bloco mostra o total da nota × a soma dos títulos; antes de registrar, o sistema pede confirmação se a nota estiver <strong>sem títulos</strong> ou se a soma <strong>não fechar</strong> com o valor total.</li>
                 <li><strong>💲 Filtro por valor da nota</strong> (guia Notas): os campos <strong>Valor da nota — de / até</strong> mostram só as notas cujo valor está na faixa
                 (por exemplo, de 150,25 até 160 — as duas pontas entram). Vale o valor mostrado na lista (o valor da NF; se a nota não tem valor informado, a soma dos itens).
                 Pode preencher só um lado (só "de" = a partir de; só "até" = até). Combina com Fornecedor e Nº da NF; clique em 🔍 Buscar ou tecle Enter.</li>
@@ -4302,7 +4446,7 @@ function buscarProdutos(termo, ignorarOrdemQtd) {
     } else {
         const palavras = termo.split(/\s+/).filter(Boolean);
         resultado = produtos.filter(p => {
-            const texto = (String(p.id) + ' ' + (p.codigoExterno || '') + ' ' + p.nome).toUpperCase();
+            const texto = (String(p.id) + ' ' + (p.codigoExterno || '') + ' ' + (p.ncm || '') + ' ' + p.nome).toUpperCase();
             return palavras.every(palavra => texto.includes(palavra));
         });
     }
@@ -4362,7 +4506,7 @@ function renderizarTabelaEstoque(lista) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>${p.id}</td>
-            <td>${escapeHtml(p.codigoExterno) || '-'}</td>
+            <td>${escapeHtml(p.codigoExterno) || '-'}${p.ncm ? `<br><small style="color:#6b7280;">NCM ${escapeHtml(p.ncm)}</small>` : ''}</td>
             <td>${escapeHtml(p.nome)}</td>
             <td>${escapeHtml(p.un)}</td>
             <td class="num">${formatarMoeda(p.valor)}</td>
@@ -4397,6 +4541,8 @@ async function editarProdutoPrompt(id) {
     document.getElementById('editProdutoNome').value = p.nome;
     document.getElementById('editProdutoCodigoExterno').value = p.codigoExterno || '';
     document.getElementById('editProdutoUn').value = p.un || '';
+    document.getElementById('editProdutoNcm').value = p.ncm || '';
+    document.getElementById('editProdutoCest').value = p.cest || '';
     document.getElementById('editProdutoValor').value = p.valor;
 
     if (!catalogosBaixa.grupos || !catalogosBaixa.grupos.length || !catalogosBaixa.almoxarifados || !catalogosBaixa.almoxarifados.length) {
@@ -4749,6 +4895,9 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
     const novoNome = document.getElementById('editProdutoNome').value.trim();
     const novoCodigoExterno = document.getElementById('editProdutoCodigoExterno').value.trim();
     const novaUn = document.getElementById('editProdutoUn').value.trim() || 'UN';
+    const novoNcm = normalizarNcm(document.getElementById('editProdutoNcm').value);
+    if (novoNcm === null) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'NCM inválido: informe os 8 dígitos (ex.: 7006.00.00) ou deixe em branco.'; document.getElementById('editProdutoNcm').focus(); return; }
+    const novoCest = document.getElementById('editProdutoCest').value.replace(/\D/g, '');
     const novoValor = parseFloat(document.getElementById('editProdutoValor').value);
     const novoEstoque = parseFloat(document.getElementById('editProdutoEstoque').value);
     const novoEstoqueInicial = parseFloat(document.getElementById('editProdutoEstoqueInicial').value);
@@ -4816,7 +4965,7 @@ document.getElementById('btnSalvarEditarProduto').addEventListener('click', asyn
         // separadamente logo abaixo
         await chamarPost('salvarProduto', {
             produto: {
-                ...p, nome: novoNome, codigoExterno: novoCodigoExterno || null, un: novaUn,
+                ...p, nome: novoNome, codigoExterno: novoCodigoExterno || null, un: novaUn, ncm: novoNcm, cest: novoCest,
                 valor: novoValor, estoque: delta !== 0 ? p.estoque : novoEstoque,
                 grupoId: novoGrupoId, almoxarifadoPadraoId: novoAlmoxarifadoPadraoId,
                 estoqueInicial: p.estoqueInicial, valorEstoqueInicial: p.valorEstoqueInicial,
@@ -5246,10 +5395,34 @@ function parsearXmlNFe(xmlText) {
         vDup: parseFloat(get(dup, 'vDup')) || 0
     }));
 
-    const itens = dets.map(det => {
+    const num = (v) => { const x = parseFloat(v); return isNaN(x) ? null : x; };
+    const txt = (v) => (v === '' || v == null) ? null : v;
+    const itens = dets.map((det, idxDet) => {
         const prod = det.getElementsByTagName('prod')[0];
         const cEan = get(prod, 'cEAN');
+        // DADOS FISCAIS DO ITEM (25/11/2026): NCM/CEST/CFOP e os grupos de imposto (ICMS qualquer variante, IPI, PIS, COFINS) — gravados em estoque_notas_itens_fiscais
+        const imp = det.getElementsByTagName('imposto')[0];
+        const grupoImp = (tag) => (imp ? imp.getElementsByTagName(tag)[0] : null);
+        const icmsGrupo = grupoImp('ICMS');
+        const icms = icmsGrupo ? Array.from(icmsGrupo.childNodes).find(x => x.nodeType === 1) : null;     // ICMS00, ICMS10, ICMS20, ..., ICMSSN101, ICMSSN900...
+        const ipi = grupoImp('IPI'), pis = grupoImp('PIS'), cofins = grupoImp('COFINS');
+        const fiscal = {
+            c_prod: txt(get(prod, 'cProd')), c_ean: txt(cEan), x_prod: txt(get(prod, 'xProd')), ncm: txt(get(prod, 'NCM')), cest: txt(get(prod, 'CEST')), cfop: txt(get(prod, 'CFOP')),
+            u_com: txt(get(prod, 'uCom')), q_com: num(get(prod, 'qCom')), v_un_com: num(get(prod, 'vUnCom')), v_prod: num(get(prod, 'vProd')),
+            v_frete: num(get(prod, 'vFrete')), v_seg: num(get(prod, 'vSeg')), v_desc: num(get(prod, 'vDesc')), v_outro: num(get(prod, 'vOutro')),
+            u_trib: txt(get(prod, 'uTrib')), q_trib: num(get(prod, 'qTrib')), v_un_trib: num(get(prod, 'vUnTrib')),
+            icms_orig: txt(get(icms, 'orig')), icms_cst: txt(get(icms, 'CST')), icms_csosn: txt(get(icms, 'CSOSN')), icms_mod_bc: txt(get(icms, 'modBC')),
+            icms_v_bc: num(get(icms, 'vBC')), icms_p_icms: num(get(icms, 'pICMS')), icms_v_icms: num(get(icms, 'vICMS')), icms_p_red_bc: num(get(icms, 'pRedBC')),
+            icms_v_bc_st: num(get(icms, 'vBCST')), icms_p_icms_st: num(get(icms, 'pICMSST')), icms_v_icms_st: num(get(icms, 'vICMSST')),
+            icms_p_cred_sn: num(get(icms, 'pCredSN')), icms_v_cred_sn: num(get(icms, 'vCredICMSSN')), icms_v_icms_deson: num(get(icms, 'vICMSDeson')),
+            ipi_cst: txt(get(ipi, 'CST')), ipi_v_bc: num(get(ipi, 'vBC')), ipi_p_ipi: num(get(ipi, 'pIPI')), ipi_v_ipi: num(get(ipi, 'vIPI')),
+            pis_cst: txt(get(pis, 'CST')), pis_v_bc: num(get(pis, 'vBC')), pis_p_pis: num(get(pis, 'pPIS')), pis_v_pis: num(get(pis, 'vPIS')),
+            cofins_cst: txt(get(cofins, 'CST')), cofins_v_bc: num(get(cofins, 'vBC')), cofins_p_cofins: num(get(cofins, 'pCOFINS')), cofins_v_cofins: num(get(cofins, 'vCOFINS')),
+            v_tot_trib: num(get(imp, 'vTotTrib'))
+        };
         return {
+            nItem: parseInt(det.getAttribute('nItem'), 10) || (idxDet + 1),
+            fiscal,
             cProd: get(prod, 'cProd'),
             xProd: get(prod, 'xProd'),
             uCom: get(prod, 'uCom') || 'UN',
@@ -5293,6 +5466,447 @@ function parsearXmlNFe(xmlText) {
     };
 }
 
+/* =========================================================================
+   DADOS FISCAIS POR ITEM (25/11/2026): grava os itens fiscais lidos do XML em estoque_notas_itens_fiscais (chave: nota + nº do item).
+   Na importação roda logo depois de gravar a nota; para notas antigas, o botão «🧾 Dados fiscais das notas antigas» (guia Notas) lê o xml_original.
+   ========================================================================= */
+// NCM: só dígitos; '' = em branco (vale); 8 dígitos = ok; qualquer outra coisa = inválido (null)
+function normalizarNcm(v) {
+    const bruto = String(v == null ? '' : v).trim();
+    if (!bruto) return '';
+    const d = bruto.replace(/\D/g, '');
+    return d.length === 8 ? d : null;     // texto sem 8 dígitos (inclusive só letras) = inválido
+}
+async function preencherNcmDosProdutos() {
+    if (!confirm('Preencher o NCM dos produtos que ainda estão sem NCM, usando os dados fiscais das notas já importadas?\n\n(Produtos que já têm NCM não são alterados.)')) return;
+    try {
+        const { data, error } = await sb.rpc('estoque_preencher_ncm_produtos', { p_unidade: meuPerfil.unidadeId });
+        if (error) throw error;
+        await carregarProdutos();
+        renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
+        alert(`NCM preenchido em ${data.atualizados} produto(s).\nAinda sem NCM: ${data.sem_ncm} produto(s).` + (data.sem_ncm ? '\n\nDica: importe/recupere os dados fiscais das notas (guia Notas → «Dados fiscais das notas antigas») e rode de novo; o restante dá para preencher no cadastro do produto.' : ''));
+    } catch (e) {
+        console.error(e);
+        alert('Não consegui preencher o NCM: ' + ((e && e.message) || e) + (/estoque_preencher_ncm_produtos|estoque_notas_itens_fiscais/i.test((e && e.message) || '') ? '\n\nRode antes os SQLs estoque-notas-itens-fiscais.sql e estoque-produtos-ncm.sql no Supabase.' : ''));
+    }
+}
+async function gravarFiscalNota(notaId, itensParse, produtoPorIndice) {
+    const linhas = (itensParse || []).map((it, i) => it.fiscal ? ({
+        unidade_negocio_id: meuPerfil.unidadeId, estoque_nota_id: notaId, n_item: it.nItem,
+        produto_id: produtoPorIndice ? (produtoPorIndice[i] || null) : null, ...it.fiscal
+    }) : null).filter(Boolean);
+    for (let i = 0; i < linhas.length; i += 200) {
+        const { error } = await sb.from('estoque_notas_itens_fiscais').upsert(linhas.slice(i, i + 200), { onConflict: 'estoque_nota_id,n_item' });
+        if (error) throw error;
+    }
+    return linhas.length;
+}
+async function lerIdsPaginado(montarConsulta) {
+    const ids = [];
+    for (let pagina = 0; ; pagina++) {
+        const { data, error } = await montarConsulta().range(pagina * 1000, pagina * 1000 + 999);
+        if (error) throw error;
+        (data || []).forEach(r => ids.push(r));
+        if (!data || data.length < 1000) break;
+    }
+    return ids;
+}
+let recuperandoFiscal = false;
+async function recuperarDadosFiscaisNotasAntigas() {
+    if (recuperandoFiscal) return;
+    let msg = document.getElementById('fiscalProgresso');
+    const mostrar = (t) => {
+        if (!msg) { msg = document.createElement('div'); msg.id = 'fiscalProgresso'; msg.style.cssText = 'position:fixed;left:50%;bottom:20px;transform:translateX(-50%);max-width:92vw;background:#E8F5E9;color:#1B5E20;border:1px solid #A5D6A7;border-radius:8px;padding:10px 16px;z-index:5000;box-shadow:0 4px 14px rgba(0,0,0,.2);font-size:.9rem;'; document.body.appendChild(msg); }
+        msg.textContent = t;
+    };
+    try {
+        const comXml = (await lerIdsPaginado(() => sb.from('estoque_notas').select('id').eq('unidade_negocio_id', meuPerfil.unidadeId).neq('tipo', 'saida').not('xml_original', 'is', null).order('id'))).map(r => r.id);
+        const jaTem = new Set((await lerIdsPaginado(() => sb.from('estoque_notas_itens_fiscais').select('estoque_nota_id').eq('unidade_negocio_id', meuPerfil.unidadeId).order('id'))).map(r => r.estoque_nota_id));
+        const pendentes = comXml.filter(id => !jaTem.has(id));
+        if (!pendentes.length) { alert(`Nada a fazer: as ${comXml.length} nota(s) com XML já têm os dados fiscais gravados.`); return; }
+        if (!confirm(`${pendentes.length} nota(s) com XML ainda sem dados fiscais (de ${comXml.length} com XML).\n\nO sistema vai ler o XML de cada uma e gravar NCM, CFOP, CST e impostos por item. Pode levar alguns minutos; não feche esta aba até terminar. Continuar?`)) return;
+        recuperandoFiscal = true;
+        let ok = 0, itens = 0; const falhas = [];
+        for (let i = 0; i < pendentes.length; i += 10) {
+            const lote = pendentes.slice(i, i + 10);
+            mostrar(`🧾 Lendo os XMLs... ${Math.min(i + lote.length, pendentes.length)} de ${pendentes.length}`);
+            const { data, error } = await sb.from('estoque_notas').select('id, numero_nf, xml_original').in('id', lote);
+            if (error) throw error;
+            for (const n of (data || [])) {
+                try { itens += await gravarFiscalNota(n.id, parsearXmlNFe(n.xml_original).itens, null); ok++; }
+                catch (e) { falhas.push(`NF ${n.numero_nf || '#' + n.id}: ${(e && e.message) || e}`); }
+            }
+        }
+        if (msg) msg.remove();
+        alert(`Dados fiscais gravados: ${ok} nota(s), ${itens} item(ns).` + (falhas.length ? `\n\n${falhas.length} nota(s) não puderam ser lidas:\n` + falhas.slice(0, 10).join('\n') + (falhas.length > 10 ? `\n… e mais ${falhas.length - 10}` : '') : ''));
+    } catch (e) {
+        if (msg) msg.remove();
+        console.error(e);
+        alert('Não consegui recuperar os dados fiscais: ' + ((e && e.message) || e) + (/estoque_notas_itens_fiscais/i.test((e && e.message) || '') ? '\n\nRode antes o SQL estoque-notas-itens-fiscais.sql no Supabase.' : ''));
+    } finally { recuperandoFiscal = false; }
+}
+
+/* =========================================================================
+   FISCAL — ENTRADAS POR PERÍODO, PACOTE DO CONTADOR E INVENTÁRIO FISCAL (25/11/2026, etapa 3 dos dados fiscais)
+   Fonte: estoque_notas + estoque_notas_itens_fiscais (preenchida na importação do XML e pelo botão «Dados fiscais das notas antigas»).
+   • Excel das entradas fiscais: Resumo, Itens fiscais, Por CFOP, Por NCM, Por CST-CSOSN e Notas (inclusive as SEM dados fiscais).
+   • Pacote do contador (ZIP): XMLs das notas do período + o Excel fiscal + o inventário (se a data estiver preenchida) + LEIA-ME.
+   • Inventário fiscal: produto, NCM, CEST, un, quantidade e valor unitário (preço médio) numa data.
+   ========================================================================= */
+const fiscNumero = (v) => (v == null || v === '' ? null : Number(v));
+const fiscSoma = (lista, k) => Math.round(lista.reduce((a, x) => a + (Number(x[k]) || 0), 0) * 100) / 100;
+function fiscIso(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+async function fiscPreparar() {
+    const de = document.getElementById('fiscDe'), ate = document.getElementById('fiscAte');
+    if (!de) return;
+    if (!de.value || !ate.value) {      // padrão: o mês anterior inteiro (como no rateio do almoxarifado)
+        const hoje = new Date();
+        de.value = fiscIso(new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1));
+        ate.value = fiscIso(new Date(hoje.getFullYear(), hoje.getMonth(), 0));
+        document.getElementById('fiscInvData').value = ate.value;
+    }
+    const sel = document.getElementById('fiscInvAlmox');
+    if (sel && sel.options.length <= 1) {
+        if (!catalogosBaixa || !(catalogosBaixa.almoxarifados || []).length) { try { catalogosBaixa = await chamarGet('listarCatalogosBaixa'); } catch (e) { /* segue só com «Todos» */ } }
+        ((catalogosBaixa && catalogosBaixa.almoxarifados) || []).forEach(a => sel.insertAdjacentHTML('beforeend', `<option value="${a.id}">${escapeHtml(a.nome)}</option>`));
+    }
+}
+function fiscStatus(msg, erro) { const el = document.getElementById('statusFiscal'); el.className = 'status-msg' + (erro ? ' erro' : ''); el.textContent = msg || ''; }
+// empresa (destinatário) de uma nota: CNPJ/CPF do <dest> do XML; nota manual = «Sem destinatário». Nome: cadastro de Empresas (se o CNPJ estiver lá) ou o do XML.
+let fiscEmpresasCadastro = [];
+const fiscCnpjFmt = (d) => d.length === 14 ? d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : (d.length === 11 ? d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') : d);
+function fiscEmpresaDaNota(n) {
+    const dig = soDigitosCnpj(n.cnpj_tomador);
+    if (dig) {
+        const cad = fiscEmpresasCadastro.find(e => e.cnpj === dig);
+        return { chave: dig, cnpj: dig, nome: (cad && cad.nome) || String(n.nome_tomador || '').trim() || ('CNPJ ' + fiscCnpjFmt(dig)) };
+    }
+    if (n.empresa_id != null) {     // nota lançada à mão com empresa (sem CNPJ no cadastro da empresa)
+        const cad = fiscEmpresasCadastro.find(e => e.id === n.empresa_id);
+        if (cad) return { chave: cad.cnpj || ('E' + cad.id), cnpj: cad.cnpj, nome: cad.nome };
+    }
+    return { chave: 'SEM', cnpj: '', nome: 'Sem destinatário (notas sem empresa)' };
+}
+async function fiscCarregarEmpresasCadastro() {
+    try {
+        const { data, error } = await sb.from('empresas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId);
+        if (error) throw error;
+        fiscEmpresasCadastro = (data || []).map(e => ({ id: e.id, cnpj: soDigitosCnpj(e.cnpj), nome: e.razao_social || e.nome }));
+    } catch (e) { fiscEmpresasCadastro = []; }
+}
+function fiscFiltroPeriodo(q, de, ate, base) {
+    q = q.eq('unidade_negocio_id', meuPerfil.unidadeId).neq('tipo', 'saida');
+    return base === 'emissao' ? q.gte('data_emissao', de + 'T00:00:00').lte('data_emissao', ate + 'T23:59:59') : q.gte('data_entrada', de).lte('data_entrada', ate);
+}
+async function fiscCarregarNotas(de, ate, base, empresaSel) {
+    const campos = 'id, numero_nf, serie, chave_acesso, natureza_operacao, data_emissao, data_entrada, cnpj_fornecedor, nome_fornecedor, cnpj_tomador, nome_tomador, empresa_id, valor_produtos, valor_desconto, valor_frete, valor_seguro, valor_outras_despesas, valor_icms, valor_ipi, valor_pis, valor_cofins, valor_total, tipo, nota_definitiva_id';
+    await fiscCarregarEmpresasCadastro();
+    let notas = await lerIdsPaginado(() => fiscFiltroPeriodo(sb.from('estoque_notas').select(campos), de, ate, base).order('id'));
+    if (empresaSel) notas = notas.filter(n => fiscEmpresaDaNota(n).chave === empresaSel);
+    const idsComXml = new Set((await lerIdsPaginado(() => fiscFiltroPeriodo(sb.from('estoque_notas').select('id'), de, ate, base).not('xml_original', 'is', null).order('id'))).map(r => r.id));
+    const itens = [];
+    for (let i = 0; i < notas.length; i += 100) {
+        const ids = notas.slice(i, i + 100).map(n => n.id);
+        (await lerIdsPaginado(() => sb.from('estoque_notas_itens_fiscais').select('*').in('estoque_nota_id', ids).order('id'))).forEach(r => itens.push(r));
+    }
+    return { notas, idsComXml, itens };
+}
+// lista de empresas do período (para o seletor): CNPJ + nome + quantas notas
+async function fiscAtualizarEmpresas() {
+    const sel = document.getElementById('fiscEmpresa'); if (!sel) return;
+    const de = document.getElementById('fiscDe').value, ate = document.getElementById('fiscAte').value, base = document.getElementById('fiscBase').value;
+    if (!de || !ate || de > ate) return;
+    const atual = sel.value;
+    try {
+        await fiscCarregarEmpresasCadastro();
+        const rows = await lerIdsPaginado(() => fiscFiltroPeriodo(sb.from('estoque_notas').select('cnpj_tomador, nome_tomador, empresa_id'), de, ate, base).order('id'));
+        const m = new Map();
+        rows.forEach(n => { const e = fiscEmpresaDaNota(n); if (!m.has(e.chave)) m.set(e.chave, { ...e, notas: 0 }); m.get(e.chave).notas++; });
+        const lista = [...m.values()].sort((a, b) => (a.chave === 'SEM') - (b.chave === 'SEM') || b.notas - a.notas);
+        sel.innerHTML = `<option value="">Todas as empresas (${lista.length}) — ${rows.length} nota(s)</option>` + lista.map(e => `<option value="${e.chave}">${escapeHtml(e.nome)}${e.cnpj ? ' — ' + fiscCnpjFmt(e.cnpj) : ''} (${e.notas})</option>`).join('');
+        if (atual && sel.querySelector(`option[value="${atual}"]`)) sel.value = atual;
+    } catch (e) { console.warn('Empresas do período indisponíveis:', e && e.message); }
+}
+let fiscTimerEmpresas = null;
+function fiscAgendarEmpresas() { clearTimeout(fiscTimerEmpresas); fiscTimerEmpresas = setTimeout(fiscAtualizarEmpresas, 500); }
+function fiscAgrupar(itens, chaveFn, rotulo) {
+    const m = new Map();
+    itens.forEach(it => {
+        const k = chaveFn(it) || '(sem informação)';
+        if (!m.has(k)) m.set(k, { [rotulo]: k, 'Itens': 0, 'Valor produtos': 0, 'ICMS base': 0, 'ICMS valor': 0, 'ICMS-ST valor': 0, 'Créd. SN valor': 0, 'IPI valor': 0, 'PIS valor': 0, 'COFINS valor': 0 });
+        const g = m.get(k);
+        g['Itens']++; g['Valor produtos'] += Number(it.v_prod) || 0; g['ICMS base'] += Number(it.icms_v_bc) || 0; g['ICMS valor'] += Number(it.icms_v_icms) || 0;
+        g['ICMS-ST valor'] += Number(it.icms_v_icms_st) || 0; g['Créd. SN valor'] += Number(it.icms_v_cred_sn) || 0; g['IPI valor'] += Number(it.ipi_v_ipi) || 0;
+        g['PIS valor'] += Number(it.pis_v_pis) || 0; g['COFINS valor'] += Number(it.cofins_v_cofins) || 0;
+    });
+    return [...m.values()].sort((a, b) => b['Valor produtos'] - a['Valor produtos']).map(g => { Object.keys(g).forEach(k => { if (typeof g[k] === 'number' && k !== 'Itens') g[k] = Math.round(g[k] * 100) / 100; }); return g; });
+}
+// totais por empresa (destinatário): notas, notas com dados fiscais, itens e impostos
+function fiscResumoPorEmpresa(notas, itens, idsComXml) {
+    const m = new Map();
+    notas.forEach(n => {
+        const e = fiscEmpresaDaNota(n);
+        if (!m.has(e.chave)) m.set(e.chave, { 'Empresa': e.nome, 'CNPJ': fiscCnpjFmt(e.cnpj), 'Notas': 0, 'Notas com XML': 0, 'Notas com dados fiscais': 0, 'Valor total das notas': 0, 'Itens fiscais': 0, 'ICMS valor': 0, 'ICMS-ST valor': 0, 'Créd. SN valor': 0, 'IPI valor': 0, 'PIS valor': 0, 'COFINS valor': 0 });
+        const g = m.get(e.chave); g['Notas']++; if (idsComXml.has(n.id)) g['Notas com XML']++; g['Valor total das notas'] += Number(n.valor_total) || 0;
+    });
+    const notaChave = new Map(notas.map(n => [n.id, fiscEmpresaDaNota(n).chave])), comDados = new Set();
+    itens.forEach(it => {
+        const g = m.get(notaChave.get(it.estoque_nota_id)); if (!g) return;
+        g['Itens fiscais']++; comDados.add(it.estoque_nota_id);
+        g['ICMS valor'] += Number(it.icms_v_icms) || 0; g['ICMS-ST valor'] += Number(it.icms_v_icms_st) || 0; g['Créd. SN valor'] += Number(it.icms_v_cred_sn) || 0;
+        g['IPI valor'] += Number(it.ipi_v_ipi) || 0; g['PIS valor'] += Number(it.pis_v_pis) || 0; g['COFINS valor'] += Number(it.cofins_v_cofins) || 0;
+    });
+    comDados.forEach(id => { const g = m.get(notaChave.get(id)); if (g) g['Notas com dados fiscais']++; });
+    return [...m.values()].sort((a, b) => b['Notas'] - a['Notas']).map(g => { Object.keys(g).forEach(k => { if (typeof g[k] === 'number' && !['Notas', 'Notas com XML', 'Notas com dados fiscais', 'Itens fiscais'].includes(k)) g[k] = Math.round(g[k] * 100) / 100; }); return g; });
+}
+function fiscMontarWorkbookEntradas(dados, de, ate, base, rotuloEmpresa) {
+    const { notas, idsComXml, itens } = dados;
+    const notaPorId = new Map(notas.map(n => [n.id, n]));
+    const dBase = (n) => base === 'emissao' ? String(n.data_emissao || '').slice(0, 10) : String(n.data_entrada || '');
+    const itensOrdenados = itens.slice().sort((a, b) => (dBase(notaPorId.get(a.estoque_nota_id)) || '').localeCompare(dBase(notaPorId.get(b.estoque_nota_id)) || '') || a.estoque_nota_id - b.estoque_nota_id || a.n_item - b.n_item);
+    const linhasItens = itensOrdenados.map(it => {
+        const n = notaPorId.get(it.estoque_nota_id) || {};
+        return {
+            'Empresa (destinatário)': fiscEmpresaDaNota(n).nome, 'CNPJ empresa': fiscCnpjFmt(fiscEmpresaDaNota(n).cnpj),
+            'Data entrada': n.data_entrada ? formatarDataBR(n.data_entrada) : '', 'Data emissão': n.data_emissao ? formatarDataBR(String(n.data_emissao).slice(0, 10)) : '',
+            'NF': n.numero_nf || '', 'Série': n.serie || '', 'Chave de acesso': n.chave_acesso || '', 'CNPJ fornecedor': n.cnpj_fornecedor || '', 'Fornecedor': n.nome_fornecedor || '',
+            'Item': it.n_item, 'Cód. fornecedor': it.c_prod || '', 'Descrição': it.x_prod || '', 'NCM': it.ncm || '', 'CEST': it.cest || '', 'CFOP': it.cfop || '', 'Un': it.u_com || '',
+            'Qtd': fiscNumero(it.q_com), 'Vl. unit.': fiscNumero(it.v_un_com), 'Vl. produto': fiscNumero(it.v_prod), 'Desconto': fiscNumero(it.v_desc), 'Frete': fiscNumero(it.v_frete), 'Seguro': fiscNumero(it.v_seg), 'Outras desp.': fiscNumero(it.v_outro),
+            'ICMS orig.': it.icms_orig || '', 'ICMS CST': it.icms_cst || '', 'ICMS CSOSN': it.icms_csosn || '', 'ICMS base': fiscNumero(it.icms_v_bc), 'ICMS alíq. %': fiscNumero(it.icms_p_icms), 'ICMS valor': fiscNumero(it.icms_v_icms), 'ICMS red. base %': fiscNumero(it.icms_p_red_bc),
+            'ICMS-ST base': fiscNumero(it.icms_v_bc_st), 'ICMS-ST valor': fiscNumero(it.icms_v_icms_st), 'Créd. SN alíq. %': fiscNumero(it.icms_p_cred_sn), 'Créd. SN valor': fiscNumero(it.icms_v_cred_sn),
+            'IPI CST': it.ipi_cst || '', 'IPI base': fiscNumero(it.ipi_v_bc), 'IPI alíq. %': fiscNumero(it.ipi_p_ipi), 'IPI valor': fiscNumero(it.ipi_v_ipi),
+            'PIS CST': it.pis_cst || '', 'PIS base': fiscNumero(it.pis_v_bc), 'PIS alíq. %': fiscNumero(it.pis_p_pis), 'PIS valor': fiscNumero(it.pis_v_pis),
+            'COFINS CST': it.cofins_cst || '', 'COFINS base': fiscNumero(it.cofins_v_bc), 'COFINS alíq. %': fiscNumero(it.cofins_p_cofins), 'COFINS valor': fiscNumero(it.cofins_v_cofins),
+            'Tributos aprox.': fiscNumero(it.v_tot_trib)
+        };
+    });
+    const nItensPorNota = new Map(); itens.forEach(it => nItensPorNota.set(it.estoque_nota_id, (nItensPorNota.get(it.estoque_nota_id) || 0) + 1));
+    const linhasNotas = notas.slice().sort((a, b) => (dBase(a) || '').localeCompare(dBase(b) || '') || a.id - b.id).map(n => {
+        const tem = nItensPorNota.get(n.id) || 0, xml = idsComXml.has(n.id);
+        return {
+            'Empresa (destinatário)': fiscEmpresaDaNota(n).nome, 'CNPJ empresa': fiscCnpjFmt(fiscEmpresaDaNota(n).cnpj),
+            'Data entrada': n.data_entrada ? formatarDataBR(n.data_entrada) : '', 'Data emissão': n.data_emissao ? formatarDataBR(String(n.data_emissao).slice(0, 10)) : '', 'NF': n.numero_nf || '', 'Série': n.serie || '',
+            'Chave de acesso': n.chave_acesso || '', 'Fornecedor': n.nome_fornecedor || '', 'CNPJ': n.cnpj_fornecedor || '', 'Natureza': n.natureza_operacao || '',
+            'Valor produtos': fiscNumero(n.valor_produtos), 'Desconto': fiscNumero(n.valor_desconto), 'Frete': fiscNumero(n.valor_frete), 'ICMS': fiscNumero(n.valor_icms), 'IPI': fiscNumero(n.valor_ipi), 'PIS': fiscNumero(n.valor_pis), 'COFINS': fiscNumero(n.valor_cofins), 'Valor total': fiscNumero(n.valor_total),
+            'Tem XML': xml ? 'Sim' : 'Não', 'Itens fiscais': tem,
+            'Situação': tem ? 'ok' : (xml ? 'XML ainda não processado — use «Dados fiscais das notas antigas»' : 'sem dados fiscais (lançada manualmente / sem XML)')
+        };
+    });
+    const comDados = notas.filter(n => nItensPorNota.get(n.id)).length;
+    const resumo = [
+        { 'Item': 'Empresa (destinatário das notas)', 'Valor': rotuloEmpresa || 'Todas as empresas da unidade (veja a aba «Por empresa»)' },
+        { 'Item': 'Unidade do sistema', 'Valor': meuPerfil.unidadeNome || '' },
+        { 'Item': 'Período', 'Valor': `${formatarDataBR(de)} a ${formatarDataBR(ate)} (pela data de ${base === 'emissao' ? 'emissão' : 'entrada no estoque'})` },
+        { 'Item': 'Gerado em', 'Valor': new Date().toLocaleString('pt-BR') },
+        { 'Item': 'Notas de entrada no período', 'Valor': notas.length },
+        { 'Item': 'Notas com dados fiscais por item', 'Valor': comDados },
+        { 'Item': 'Notas SEM dados fiscais (manuais ou XML não processado)', 'Valor': notas.length - comDados },
+        { 'Item': 'Itens fiscais', 'Valor': itens.length },
+        { 'Item': 'Valor dos produtos (itens fiscais)', 'Valor': fiscSoma(itens, 'v_prod') },
+        { 'Item': 'ICMS destacado (valor)', 'Valor': fiscSoma(itens, 'icms_v_icms') },
+        { 'Item': 'ICMS-ST (valor)', 'Valor': fiscSoma(itens, 'icms_v_icms_st') },
+        { 'Item': 'Crédito ICMS do Simples Nacional (valor)', 'Valor': fiscSoma(itens, 'icms_v_cred_sn') },
+        { 'Item': 'IPI (valor)', 'Valor': fiscSoma(itens, 'ipi_v_ipi') },
+        { 'Item': 'PIS (valor)', 'Valor': fiscSoma(itens, 'pis_v_pis') },
+        { 'Item': 'COFINS (valor)', 'Valor': fiscSoma(itens, 'cofins_v_cofins') },
+        { 'Item': 'Aviso', 'Valor': 'Relatório de apoio ao contador: valores lidos do XML de cada NF-e. Não substitui a escrituração (EFD) nem a conferência fiscal.' }
+    ];
+    const wb = XLSX.utils.book_new();
+    const add = (nome, linhas, largura) => {
+        const ws = XLSX.utils.json_to_sheet(linhas.length ? linhas : [{ 'Sem dados': 'nenhum registro no período' }]);
+        if (linhas.length) ws['!cols'] = Object.keys(linhas[0]).map(k => ({ wch: Math.min(Math.max(k.length + 2, largura && largura[k] ? largura[k] : 12), 60) }));
+        XLSX.utils.book_append_sheet(wb, ws, nome);
+    };
+    add('Resumo', resumo, { Item: 52, Valor: 40 });
+    add('Por empresa', fiscResumoPorEmpresa(notas, itens, idsComXml));
+    add('Itens fiscais', linhasItens, { 'Empresa (destinatário)': 30, 'Chave de acesso': 46, 'Fornecedor': 30, 'Descrição': 40 });
+    add('Por CFOP', fiscAgrupar(itens, it => it.cfop, 'CFOP'));
+    add('Por NCM', fiscAgrupar(itens, it => it.ncm, 'NCM'));
+    add('Por CST-CSOSN', fiscAgrupar(itens, it => (it.icms_csosn ? 'CSOSN ' + it.icms_csosn : (it.icms_cst ? 'CST ' + it.icms_cst : '')), 'ICMS (CST/CSOSN)'));
+    add('Notas', linhasNotas, { 'Empresa (destinatário)': 30, 'Chave de acesso': 46, 'Fornecedor': 30, 'Situação': 50 });
+    return wb;
+}
+async function fiscLerParametros() {
+    const de = document.getElementById('fiscDe').value, ate = document.getElementById('fiscAte').value, base = document.getElementById('fiscBase').value;
+    if (!de || !ate) { fiscStatus('Informe o período (De / Até).', true); return null; }
+    if (de > ate) { fiscStatus('A data inicial é maior que a final.', true); return null; }
+    return { de, ate, base, empresa: document.getElementById('fiscEmpresa').value };
+}
+let fiscOcupado = false;
+function fiscRotuloEmpresa(chave, notas) {
+    if (!chave) return null;
+    const n = notas.find(x => fiscEmpresaDaNota(x).chave === chave), e = n ? fiscEmpresaDaNota(n) : null;
+    return e ? e.nome + (e.cnpj ? ' — CNPJ ' + fiscCnpjFmt(e.cnpj) : '') : null;
+}
+async function fiscExcelEntradas() {
+    if (fiscOcupado) return;
+    const prm = await fiscLerParametros(); if (!prm) return;
+    fiscOcupado = true;
+    try {
+        fiscStatus('Buscando as notas e os itens fiscais...');
+        const dados = await fiscCarregarNotas(prm.de, prm.ate, prm.base, prm.empresa);
+        if (!dados.notas.length) { fiscStatus('Nenhuma nota de entrada nesse período' + (prm.empresa ? ' para essa empresa.' : '.'), true); return; }
+        const wb = fiscMontarWorkbookEntradas(dados, prm.de, prm.ate, prm.base, fiscRotuloEmpresa(prm.empresa, dados.notas));
+        baixarExcel(wb, `entradas-fiscais-${prm.empresa && prm.empresa !== 'SEM' ? prm.empresa + '-' : ''}${prm.de}-a-${prm.ate}.xlsx`);
+        const sem = dados.notas.filter(n => !dados.itens.some(i => i.estoque_nota_id === n.id)).length;
+        const nEmp = new Set(dados.notas.map(n => fiscEmpresaDaNota(n).chave)).size;
+        fiscStatus(`✅ Planilha gerada: ${dados.notas.length} nota(s) de ${nEmp} empresa(s), ${dados.itens.length} item(ns) fiscal(is)` + (sem ? ` — ${sem} nota(s) sem dados fiscais (veja a aba «Notas»).` : '.'));
+    } catch (e) {
+        console.error(e);
+        fiscStatus('Não consegui gerar o relatório: ' + ((e && e.message) || e) + (/estoque_notas_itens_fiscais/i.test((e && e.message) || '') ? ' — rode antes o SQL estoque-notas-itens-fiscais.sql.' : ''), true);
+    } finally { fiscOcupado = false; }
+}
+// ---- inventário fiscal
+async function fiscDadosInventario(dataCorte, almoxId) {
+    if (!saldosAlmoxarifado || !saldosAlmoxarifado.length) await carregarSaldosAlmoxarifado();
+    const hoje = hojeISO();
+    const base = new Map();   // chave produto|almox -> {produtoId, almoxId, qtd, preco}
+    saldosAlmoxarifado.forEach(s => {
+        if (almoxId && String(s.almoxarifadoId) !== String(almoxId)) return;
+        base.set(s.produtoId + '|' + s.almoxarifadoId, { produtoId: s.produtoId, almoxId: s.almoxarifadoId, qtd: Number(s.estoque) || 0, preco: s.precoMedio != null ? Number(s.precoMedio) : null });
+    });
+    let retroativo = false;
+    if (dataCorte && dataCorte < hoje) {
+        retroativo = true;
+        const movs = await lerIdsPaginado(() => sb.from('estoque_movimentacoes').select('produto_id, almoxarifado_id, tipo, qtd').eq('unidade_negocio_id', meuPerfil.unidadeId).gt('data', dataCorte).not('produto_id', 'is', null).order('id'));
+        movs.forEach(m => {
+            if (almoxId && String(m.almoxarifado_id) !== String(almoxId)) return;
+            const k = m.produto_id + '|' + m.almoxarifado_id; const r = base.get(k); if (!r) return;
+            r.qtd += (m.tipo === 'entrada' ? -1 : 1) * (Number(m.qtd) || 0);     // desfaz o que aconteceu depois da data
+        });
+    }
+    // junta almoxarifados do mesmo produto (média ponderada do preço)
+    const porProduto = new Map();
+    base.forEach(r => {
+        const g = porProduto.get(r.produtoId) || { produtoId: r.produtoId, qtd: 0, valor: 0, comPreco: 0, almox: new Set() };
+        g.qtd += r.qtd; if (r.preco != null) { g.valor += r.qtd * r.preco; g.comPreco += r.qtd; } g.almox.add(r.almoxId); porProduto.set(r.produtoId, g);
+    });
+    const nomeAlmox = (id) => ((catalogosBaixa.almoxarifados || []).find(a => String(a.id) === String(id)) || {}).nome || ('#' + id);
+    const nomeGrupo = (id) => ((catalogosBaixa.grupos || []).find(g => g.id === id) || {}).nome || '';
+    const linhas = [...porProduto.values()].map(g => {
+        const p = produtos.find(x => x.id === g.produtoId) || {};
+        const preco = g.comPreco ? g.valor / g.comPreco : (p.precoMedio != null ? p.precoMedio : null);
+        return { p, g, preco };
+    });
+    return { linhas, retroativo, nomeAlmox, nomeGrupo };
+}
+function fiscMontarWorkbookInventario(d, dataCorte, almoxId) {
+    const almoxTxt = almoxId ? d.nomeAlmox(almoxId) : 'Todos os almoxarifados';
+    const positivos = d.linhas.filter(x => x.g.qtd > 0.0000001).sort((a, b) => String(a.p.nome || '').localeCompare(String(b.p.nome || ''), 'pt-BR'));
+    const linhasInv = positivos.map(x => ({
+        'Código': x.p.id, 'Cód. externo': x.p.codigoExterno || '', 'Descrição': x.p.nome || '', 'Grupo': d.nomeGrupo(x.p.grupoId), 'NCM': x.p.ncm || '', 'CEST': x.p.cest || '', 'Un': x.p.un || '',
+        'Quantidade': Math.round(x.g.qtd * 1000) / 1000, 'Valor unitário': x.preco != null ? Math.round(x.preco * 10000) / 10000 : null,
+        'Valor total': x.preco != null ? Math.round(x.g.qtd * x.preco * 100) / 100 : null, 'Atenção': !x.p.ncm ? 'sem NCM' : (x.preco == null ? 'sem preço médio' : '')
+    }));
+    const total = Math.round(linhasInv.reduce((a, l) => a + (l['Valor total'] || 0), 0) * 100) / 100;
+    linhasInv.push({}); linhasInv.push({ 'Descrição': 'TOTAL DO INVENTÁRIO (R$)', 'Valor total': total });
+    const atencao = d.linhas.filter(x => x.g.qtd < -0.0000001).map(x => ({ 'Código': x.p.id, 'Descrição': x.p.nome || '', 'NCM': x.p.ncm || '', 'Quantidade': Math.round(x.g.qtd * 1000) / 1000, 'Motivo': 'saldo NEGATIVO (não entra no inventário — corrigir no estoque)' }));
+    d.linhas.filter(x => x.g.qtd > 0.0000001 && !x.p.ncm).forEach(x => atencao.push({ 'Código': x.p.id, 'Descrição': x.p.nome || '', 'NCM': '', 'Quantidade': Math.round(x.g.qtd * 1000) / 1000, 'Motivo': 'produto com saldo e SEM NCM' }));
+    const resumo = [
+        { 'Item': 'Unidade', 'Valor': meuPerfil.unidadeNome || '' }, { 'Item': 'Escopo', 'Valor': 'Estoque da unidade (almoxarifados) — NÃO separado por empresa/CNPJ' }, { 'Item': 'Posição em', 'Valor': formatarDataBR(dataCorte) }, { 'Item': 'Almoxarifado', 'Valor': almoxTxt },
+        { 'Item': 'Produtos com saldo', 'Valor': positivos.length }, { 'Item': 'Valor total do inventário (R$)', 'Valor': total },
+        { 'Item': 'Produtos com saldo e sem NCM', 'Valor': positivos.filter(x => !x.p.ncm).length }, { 'Item': 'Saldos negativos (fora do inventário)', 'Valor': d.linhas.filter(x => x.g.qtd < -0.0000001).length },
+        { 'Item': 'Valorização', 'Valor': 'Preço médio ATUAL de cada produto' + (d.retroativo ? ' (data passada: a quantidade foi recalculada desfazendo as movimentações posteriores, mas o valor unitário não é o custo médio daquele dia)' : '') },
+        { 'Item': 'Gerado em', 'Valor': new Date().toLocaleString('pt-BR') }
+    ];
+    const wb = XLSX.utils.book_new();
+    const ws1 = XLSX.utils.json_to_sheet(resumo); ws1['!cols'] = [{ wch: 36 }, { wch: 70 }]; XLSX.utils.book_append_sheet(wb, ws1, 'Resumo');
+    const ws2 = XLSX.utils.json_to_sheet(linhasInv.length > 2 ? linhasInv : [{ 'Sem dados': 'nenhum produto com saldo' }]); ws2['!cols'] = [{ wch: 8 }, { wch: 14 }, { wch: 46 }, { wch: 20 }, { wch: 12 }, { wch: 10 }, { wch: 6 }, { wch: 12 }, { wch: 14 }, { wch: 14 }, { wch: 16 }]; XLSX.utils.book_append_sheet(wb, ws2, 'Inventário');
+    const ws3 = XLSX.utils.json_to_sheet(atencao.length ? atencao : [{ 'Atenção': 'nada a corrigir' }]); XLSX.utils.book_append_sheet(wb, ws3, 'Atenção');
+    return { wb, total, qtdProdutos: positivos.length, semNcm: positivos.filter(x => !x.p.ncm).length };
+}
+async function fiscExcelInventario() {
+    if (fiscOcupado) return;
+    const dataCorte = document.getElementById('fiscInvData').value, almoxId = document.getElementById('fiscInvAlmox').value;
+    if (!dataCorte) { fiscStatus('Informe a data do inventário.', true); return; }
+    if (dataCorte > hojeISO()) { fiscStatus('A data do inventário não pode ser futura.', true); return; }
+    fiscOcupado = true;
+    try {
+        fiscStatus('Calculando o inventário...');
+        const d = await fiscDadosInventario(dataCorte, almoxId);
+        const r = fiscMontarWorkbookInventario(d, dataCorte, almoxId);
+        baixarExcel(r.wb, `inventario-fiscal-${dataCorte}.xlsx`);
+        fiscStatus(`✅ Inventário gerado: ${r.qtdProdutos} produto(s), ${formatarMoeda(r.total)}` + (r.semNcm ? ` — ${r.semNcm} sem NCM (veja a aba «Atenção»).` : '.'));
+    } catch (e) { console.error(e); fiscStatus('Não consegui gerar o inventário: ' + ((e && e.message) || e), true); }
+    finally { fiscOcupado = false; }
+}
+// ---- pacote do contador (ZIP): com várias empresas, uma PASTA por empresa (XMLs + planilha + LEIA-ME); com uma só, tudo na raiz
+async function fiscPacoteContador() {
+    if (fiscOcupado) return;
+    const prm = await fiscLerParametros(); if (!prm) return;
+    if (typeof JSZip === 'undefined') { fiscStatus('A biblioteca de ZIP não carregou (sem internet?). Recarregue a página e tente de novo.', true); return; }
+    fiscOcupado = true;
+    try {
+        fiscStatus('Buscando as notas do período...');
+        const dados = await fiscCarregarNotas(prm.de, prm.ate, prm.base, prm.empresa);
+        if (!dados.notas.length) { fiscStatus('Nenhuma nota de entrada nesse período' + (prm.empresa ? ' para essa empresa.' : '.'), true); return; }
+        const zip = new JSZip(), baseTxt = prm.base === 'emissao' ? 'emissão' : 'entrada no estoque';
+        // grupos por empresa
+        const grupos = new Map();
+        dados.notas.forEach(n => { const e = fiscEmpresaDaNota(n); if (!grupos.has(e.chave)) grupos.set(e.chave, { e, notas: [] }); grupos.get(e.chave).notas.push(n); });
+        const varias = grupos.size > 1;
+        const slug = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
+        grupos.forEach(g => { g.pasta = varias ? `${g.e.cnpj || (g.e.chave === 'SEM' ? 'SEM-DESTINATARIO' : g.e.chave)}_${slug(g.e.nome)}/` : ''; });
+        const pastaDaNota = new Map(); grupos.forEach(g => g.notas.forEach(n => pastaDaNota.set(n.id, g.pasta)));
+        const idsXml = dados.notas.filter(n => dados.idsComXml.has(n.id)).map(n => n.id);
+        const usados = new Set(); const xmlPorGrupo = new Map(); let gravados = 0;
+        for (let i = 0; i < idsXml.length; i += 10) {
+            fiscStatus(`Baixando os XMLs... ${Math.min(i + 10, idsXml.length)} de ${idsXml.length}`);
+            const { data, error } = await sb.from('estoque_notas').select('id, numero_nf, chave_acesso, xml_original').in('id', idsXml.slice(i, i + 10));
+            if (error) throw error;
+            (data || []).forEach(n => {
+                const pasta = pastaDaNota.get(n.id) || '';
+                let nome = (n.chave_acesso || ('NF-' + String(n.numero_nf || n.id).replace(/[^\w.-]+/g, '_') + '-' + n.id)).replace(/[^\w.-]+/g, '_');
+                while (usados.has(pasta + nome)) nome += '_' + n.id;
+                usados.add(pasta + nome); zip.file(`${pasta}XML/${nome}.xml`, n.xml_original); gravados++;
+                xmlPorGrupo.set(pasta, (xmlPorGrupo.get(pasta) || 0) + 1);
+            });
+        }
+        fiscStatus('Montando as planilhas...');
+        const linhasEmpresas = [];
+        grupos.forEach(g => {
+            const ids = new Set(g.notas.map(n => n.id)), itensG = dados.itens.filter(i => ids.has(i.estoque_nota_id));
+            const rotulo = g.e.nome + (g.e.cnpj ? ' — CNPJ ' + fiscCnpjFmt(g.e.cnpj) : '');
+            const wb = fiscMontarWorkbookEntradas({ notas: g.notas, idsComXml: dados.idsComXml, itens: itensG }, prm.de, prm.ate, prm.base, rotulo);
+            zip.file(`${g.pasta}entradas-fiscais-${prm.de}-a-${prm.ate}.xlsx`, XLSX.write(wb, { bookType: 'xlsx', type: 'array' }));
+            const semG = g.notas.filter(n => !itensG.some(i => i.estoque_nota_id === n.id)).length;
+            if (varias) zip.file(`${g.pasta}LEIA-ME.txt`, [`EMPRESA: ${rotulo}`, `Período: ${formatarDataBR(prm.de)} a ${formatarDataBR(prm.ate)} (pela data de ${baseTxt})`, `Notas: ${g.notas.length} · XMLs: ${xmlPorGrupo.get(g.pasta) || 0} · sem dados fiscais: ${semG}`, '', 'Pasta XML = um arquivo por NF-e (chave de acesso). Planilha = itens fiscais, totais por CFOP/NCM/CST e lista de notas.'].join('\r\n'));
+            linhasEmpresas.push({ g, rotulo, notas: g.notas.length, xmls: xmlPorGrupo.get(g.pasta) || 0, sem: semG });
+        });
+        if (varias) {
+            const wbRes = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wbRes, XLSX.utils.json_to_sheet(fiscResumoPorEmpresa(dados.notas, dados.itens, dados.idsComXml)), 'Por empresa');
+            zip.file(`resumo-por-empresa-${prm.de}-a-${prm.ate}.xlsx`, XLSX.write(wbRes, { bookType: 'xlsx', type: 'array' }));
+        }
+        let linhaInv = 'Inventário: não incluído (data do inventário em branco).';
+        const dataInv = document.getElementById('fiscInvData').value, almoxInv = document.getElementById('fiscInvAlmox').value;
+        if (dataInv && dataInv <= hojeISO()) {
+            const di = await fiscDadosInventario(dataInv, almoxInv), ri = fiscMontarWorkbookInventario(di, dataInv, almoxInv);
+            zip.file(`inventario-fiscal-${dataInv}.xlsx`, XLSX.write(ri.wb, { bookType: 'xlsx', type: 'array' }));
+            linhaInv = `Inventário fiscal em ${formatarDataBR(dataInv)}: ${ri.qtdProdutos} produto(s), ${formatarMoeda(ri.total)}` + (ri.semNcm ? ` (${ri.semNcm} sem NCM)` : '') + '. ATENÇÃO: é o estoque da unidade (almoxarifados), NÃO separado por empresa/CNPJ.';
+        }
+        const sem = dados.notas.filter(n => !dados.itens.some(i => i.estoque_nota_id === n.id)).length;
+        zip.file('LEIA-ME.txt', [
+            'PACOTE DO CONTADOR — ' + (meuPerfil.unidadeNome || ''), `Período: ${formatarDataBR(prm.de)} a ${formatarDataBR(prm.ate)} (pela data de ${baseTxt})`, 'Gerado em ' + new Date().toLocaleString('pt-BR'), '',
+            varias ? `EMPRESAS (cada uma numa pasta, com os XMLs e a planilha dela):` : `Empresa: ${linhasEmpresas[0].rotulo}`,
+            ...(varias ? linhasEmpresas.map(l => `  • ${l.g.pasta.replace(/\/$/, '')} — ${l.rotulo}: ${l.notas} nota(s), ${l.xmls} XML(s), ${l.sem} sem dados fiscais`) : []), '',
+            `Notas de entrada no período: ${dados.notas.length}`, `XMLs incluídos: ${gravados}`, `Notas sem XML ou sem dados fiscais por item: ${sem}`, linhaInv, '',
+            'O destinatário de cada nota é o CNPJ do XML. Notas lançadas à mão não têm destinatário e ficam em «SEM-DESTINATARIO» (atribua a empresa antes de entregar).',
+            'Observação: valores lidos do XML de cada NF-e; é material de apoio e não substitui a escrituração (EFD).'
+        ].join('\r\n'));
+        const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+        await compartilharOuBaixarArquivo(blob, `pacote-contador-${prm.empresa && prm.empresa !== 'SEM' ? prm.empresa + '-' : ''}${prm.de}-a-${prm.ate}.zip`, 'application/zip', 'Pacote do contador');
+        fiscStatus(`✅ Pacote gerado: ${grupos.size} empresa(s), ${gravados} XML(s)` + (dataInv ? ' + inventário' : '') + '.');
+    } catch (e) {
+        console.error(e);
+        fiscStatus('Não consegui gerar o pacote: ' + ((e && e.message) || e), true);
+    } finally { fiscOcupado = false; }
+}
+document.getElementById('btnFiscalExcel').addEventListener('click', fiscExcelEntradas);
+document.getElementById('btnFiscalPacote').addEventListener('click', fiscPacoteContador);
+document.getElementById('btnFiscalInventario').addEventListener('click', fiscExcelInventario);
+document.querySelector('.aba-btn[data-aba="relatorios"]')?.addEventListener('click', async () => { await fiscPreparar(); fiscAtualizarEmpresas(); });
+['fiscDe', 'fiscAte', 'fiscBase'].forEach(id => document.getElementById(id).addEventListener('change', fiscAgendarEmpresas));
+
 function encontrarProdutoCorrespondenteNFe(itemNfe) {
     // Só cai aqui quando não existe mapeamento salvo (estoque_produtos_fornecedor_codigos)
     // pra esse fornecedor+código. Antes também tentava comparar o código do
@@ -5308,6 +5922,8 @@ function encontrarProdutoCorrespondenteNFe(itemNfe) {
 }
 
 // Protocolo não tem guia própria: abre por aqui (guia Notas destacada) e volta pelo botão "← Voltar para Notas"
+document.getElementById('btnRecuperarFiscal').addEventListener('click', recuperarDadosFiscaisNotasAntigas);
+document.getElementById('btnPreencherNcm').addEventListener('click', preencherNcmDosProdutos);
 document.getElementById('btnAbrirProtocolo').addEventListener('click', () => {
     document.querySelectorAll('.aba-btn').forEach(b => b.classList.remove('ativa'));
     document.querySelectorAll('.conteudo-aba').forEach(c => c.classList.remove('ativa'));
@@ -5360,6 +5976,7 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
         const nfe = parsearXmlNFe(texto);
         nfe.xmlOriginal = texto; // guarda o XML bruto — é o que marca essa nota como "origem: XML" na lista
         nfeDadosNota = nfe;
+        carregarTitulosNfe(nfe);   // vencimentos do XML (editáveis) ou bloco vazio para informar/gerar parcelas aqui mesmo
 
         // soma dos ajustes lançados item a item (não confundir com os do
         // total da nota — esses aqui já vêm identificados por produto)
@@ -5375,7 +5992,7 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
             Valor dos produtos: ${formatarMoeda(nfe.vProd)}${nfe.vDesc ? ' · Desconto (total): ' + formatarMoeda(nfe.vDesc) : ''}${nfe.vFrete ? ' · Frete (total): ' + formatarMoeda(nfe.vFrete) : ''}${nfe.vOutro ? ' · Outras despesas (total): ' + formatarMoeda(nfe.vOutro) : ''}<br>
             ${(somaVDescItens || somaVFreteItens || somaVOutroItens) ? `Lançado item a item: ${somaVDescItens ? 'desconto ' + formatarMoeda(somaVDescItens) + ' ' : ''}${somaVFreteItens ? 'frete ' + formatarMoeda(somaVFreteItens) + ' ' : ''}${somaVOutroItens ? 'outras despesas ' + formatarMoeda(somaVOutroItens) : ''} — já aplicado direto em cada produto abaixo, sem precisar ratear.<br>` : ''}
             Valor total da nota: ${formatarMoeda(nfe.vNF)}<br>
-            ${nfe.dups.length ? nfe.dups.length + ' parcela(s) de pagamento encontrada(s) no XML.<br>' : 'Sem parcelas de pagamento no XML — pode lançar manualmente depois.<br>'}
+            ${nfe.dups.length ? nfe.dups.length + ' parcela(s) de pagamento encontrada(s) no XML.<br>' : 'Sem parcelas de pagamento no XML — informe os vencimentos no bloco <strong>Títulos / vencimentos</strong> abaixo (já entram junto com a nota).<br>'}
             ${nfe.itens.length} item(ns) encontrado(s).
         `;
 
@@ -5461,6 +6078,7 @@ document.getElementById('nfeArquivo').addEventListener('change', async (e) => {
             return {
                 cProd: it.cProd,
                 cEan: it.cEan,
+                ncm: it.fiscal ? it.fiscal.ncm : null, cest: it.fiscal ? it.fiscal.cest : null,
                 xProdOriginal: it.xProd,
                 un: it.uCom,
                 qtd: it.qCom,
@@ -5851,6 +6469,100 @@ document.getElementById('btnCancelarVincularNFe').addEventListener('click', () =
     document.getElementById('modalVincularNFe').classList.remove('aberto');
 });
 
+// =====================================================================
+// TÍTULOS / VENCIMENTOS NA IMPORTAÇÃO DO XML (25/11/2026): se o XML não traz <cobr><dup>, os títulos (contas a pagar) são informados aqui mesmo
+// (parcelas iguais com regra de vencimento, ou linha a linha) e gravados junto com a nota — sem abrir a nota depois só para lançar vencimentos.
+// Com <dup> no XML, as parcelas vêm preenchidas e podem ser ajustadas.
+// =====================================================================
+let nfeTitulos = [];   // { numero, vencimento (AAAA-MM-DD), valor, origem: 'xml' | 'manual' }
+function nfeTotalReferenciaTitulos() {
+    const v = nfeDadosNota ? Number(nfeDadosNota.vNF) || 0 : 0;
+    return v > 0 ? v : arred2((nfeItensParseados || []).reduce((acc, it) => acc + (Number(it.qtd) || 0) * (Number(it.valorUnit) || 0), 0));
+}
+function carregarTitulosNfe(nfe) {
+    nfeTitulos = (nfe.dups || []).map(d => ({ numero: d.nDup || '', vencimento: d.dVenc || '', valor: Number(d.vDup) || 0, origem: 'xml' }));
+    document.getElementById('nfeTitQtd').value = '1';
+    preencherSelectForma('nfeTitForma');
+    document.getElementById('nfeTitPrimeiro').value = '';
+    document.getElementById('nfeTitRegra').value = '30';
+    renderizarTitulosNfe();
+}
+function resumoTitulosNfe() {
+    const el = document.getElementById('nfeTitulosResumo'), orig = document.getElementById('nfeTitulosOrigem'); if (!el) return;
+    const total = nfeTotalReferenciaTitulos(), soma = arred2(nfeTitulos.reduce((a, t) => a + (Number(t.valor) || 0), 0)), dif = arred2(total - soma);
+    el.innerHTML = `Total da nota <strong>${formatarMoeda(total)}</strong> · títulos <strong>${formatarMoeda(soma)}</strong> · ` +
+        (Math.abs(dif) <= 0.05 && nfeTitulos.length ? '<span style="color:#2E7D32; font-weight:600;">✔ fecha</span>' : `<span style="color:#C0392B; font-weight:600;">diferença ${formatarMoeda(dif)}</span>`);
+    orig.innerHTML = !nfeTitulos.length
+        ? '⚠️ Esta nota ainda está <strong>sem títulos / vencimentos</strong>. Use <strong>Gerar parcelas iguais</strong> (ou <strong>+ Adicionar título</strong>) — eles são gravados junto com a nota, sem precisar abri-la depois.'
+        : (nfeTitulos.every(t => t.origem === 'xml') ? 'Vieram do XML (campo de duplicatas) — pode ajustar número, vencimento e valor.' : 'Confira número, vencimento e valor de cada título; eles são gravados junto com a nota.');
+}
+function renderizarTitulosNfe() {
+    const corpo = document.getElementById('corpoTitulosNFe'); if (!corpo) return;
+    corpo.innerHTML = nfeTitulos.map((t, i) => `<tr data-nt="${i}">
+        <td><input type="text" data-ntc="numero" value="${escapeHtml(t.numero || '')}" placeholder="${i + 1}/${nfeTitulos.length}" style="width:110px;"></td>
+        <td><input type="date" data-ntc="vencimento" value="${escapeHtml(t.vencimento || '')}"></td>
+        <td class="num"><input type="number" step="0.01" min="0" data-ntc="valor" value="${t.valor || ''}" style="width:130px; text-align:right;"></td>
+        <td class="center"><button type="button" class="btn btn-cinza btn-pequeno" data-ntremover="${i}" title="Remover este título">✕</button></td></tr>`).join('');
+    resumoTitulosNfe();
+}
+document.getElementById('corpoTitulosNFe').addEventListener('input', (ev) => {
+    const tr = ev.target.closest('tr[data-nt]'), campo = ev.target.dataset.ntc; if (!tr || !campo) return;
+    const t = nfeTitulos[Number(tr.dataset.nt)]; if (!t) return;
+    t[campo] = campo === 'valor' ? (parseFloat(ev.target.value) || 0) : ev.target.value;
+    t.origem = 'manual';
+    resumoTitulosNfe();   // não redesenha a tabela: o foco do campo é mantido
+});
+document.getElementById('corpoTitulosNFe').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-ntremover]'); if (!b) return;
+    nfeTitulos.splice(Number(b.dataset.ntremover), 1); renderizarTitulosNfe();
+});
+document.getElementById('btnNfeTitAdd').addEventListener('click', () => {
+    const total = nfeTotalReferenciaTitulos(), soma = arred2(nfeTitulos.reduce((a, t) => a + (Number(t.valor) || 0), 0));
+    nfeTitulos.push({ numero: '', vencimento: '', valor: Math.max(0, arred2(total - soma)), origem: 'manual' });   // já sugere o que falta para fechar com a nota
+    renderizarTitulosNfe();
+});
+// Nº do título gerado em parcelas iguais: «<nº da nota>/1», «<nº da nota>/2»… (25/11/2026). Sem nº de NF informado, cai no antigo «1/3».
+function numeroTituloParcela(numeroNf, i, qtd) {
+    const nf = String(numeroNf || '').trim();
+    return nf ? `${nf}/${i}` : `${i}/${qtd}`;
+}
+document.getElementById('btnNfeTitGerar').addEventListener('click', () => {
+    const statusEl = document.getElementById('statusImportarNFe');
+    const total = nfeTotalReferenciaTitulos();
+    if (!(total > 0)) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'A nota não tem valor total para parcelar.'; return; }
+    const qtd = parseInt(document.getElementById('nfeTitQtd').value, 10), primeiro = document.getElementById('nfeTitPrimeiro').value, regraSel = document.getElementById('nfeTitRegra').value;
+    if (!qtd || qtd <= 0) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe a quantidade de parcelas.'; document.getElementById('nfeTitQtd').focus(); return; }
+    if (!primeiro) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe a data do 1º vencimento.'; document.getElementById('nfeTitPrimeiro').focus(); return; }
+    if (nfeTitulos.length && !confirm('Substituir os títulos atuais pelas parcelas geradas?')) return;
+    statusEl.textContent = '';
+    const regra = regraSel === 'mesmoDia' ? 'mesmoDia' : 'dias';
+    const venc = calcularVencimentosParcelas(primeiro, qtd, regra, parseInt(regraSel, 10) || 30);
+    const parcela = Math.round((total / qtd) * 100) / 100;
+    let restante = total; nfeTitulos = [];
+    for (let i = 1; i <= qtd; i++) {
+        const valor = i === qtd ? Math.round(restante * 100) / 100 : parcela;
+        restante -= valor;
+        nfeTitulos.push({ numero: numeroTituloParcela(nfeDadosNota && nfeDadosNota.nNF, i, qtd), vencimento: venc[i - 1], valor, origem: 'manual' });
+    }
+    renderizarTitulosNfe();
+});
+// confere os títulos antes de registrar; devolve a lista a gravar ([] = sem títulos, confirmado) ou null (cancelou/erro, já avisou)
+function validarTitulosNfe(statusEl) {
+    const lista = nfeTitulos.filter(t => t.numero || t.vencimento || Number(t.valor));
+    const erro = (msg) => { statusEl.className = 'status-msg erro'; statusEl.textContent = msg; return null; };
+    for (const t of lista) {
+        if (!t.vencimento) return erro('Informe o vencimento de todos os títulos (ou remova a linha).');
+        if (!(Number(t.valor) > 0)) return erro('Informe o valor de todos os títulos (ou remova a linha).');
+    }
+    const total = nfeTotalReferenciaTitulos(), soma = arred2(lista.reduce((a, t) => a + Number(t.valor), 0));
+    if (!lista.length) {
+        return confirm('Esta nota está SEM títulos / vencimentos (contas a pagar).\n\nRegistrar assim mesmo? (Cancele para usar «Gerar parcelas iguais» no bloco Títulos / vencimentos e já incluí-los agora.)') ? [] : null;
+    }
+    if (total > 0 && Math.abs(soma - total) > 0.05 &&
+        !confirm(`A soma dos títulos (${formatarMoeda(soma)}) é diferente do valor total da nota (${formatarMoeda(total)}).\n\nRegistrar mesmo assim?`)) return null;
+    return lista;
+}
+
 async function processarImportacaoNFe(tipo) {
     const statusEl = document.getElementById('statusImportarNFe');
     if (!nfeItensParseados.length) {
@@ -5902,6 +6614,14 @@ async function processarImportacaoNFe(tipo) {
     }
     const planoContasId = planoContasSelecionadoNfe.id;
 
+    const titulosNota = validarTitulosNfe(statusEl);   // vencimentos/títulos da nota (do XML ou informados no bloco da importação)
+    if (titulosNota === null) return;
+    if (nfeDadosNota && !(await confirmarFornecedorNovo(nfeDadosNota.emitNome, nfeDadosNota.emitCnpj))) {
+        statusEl.className = 'status-msg erro';
+        statusEl.textContent = 'Importação cancelada: o fornecedor do XML não está cadastrado. Cadastre-o (ou ajuste o nome/CNPJ) e importe de novo.';
+        return;
+    }
+
     // Baixa Direta (saída imediata): Setor/Evento/Plano de Contas da SAÍDA podem ser diferentes dos da entrada/nota.
     // Por padrão ("mesma classificação" marcado) usa os mesmos; senão usa os campos próprios da saída.
     let setorSaidaId = setorId, planoSaidaId = planoContasId, eventoSaida = evento;
@@ -5940,6 +6660,7 @@ async function processarImportacaoNFe(tipo) {
     statusEl.className = '';
     statusEl.textContent = `Processando ${nfeItensParseados.length} item(ns)... Não feche esta janela.`;
     importacaoNFeEmAndamento = true;
+    let avisoFiscalImportacao = '';
     document.getElementById('btnNfeEntrada').disabled = true;
     document.getElementById('btnNfeBaixa').disabled = true;
     document.getElementById('btnCancelarImportarNFe').disabled = true;
@@ -5971,6 +6692,7 @@ async function processarImportacaoNFe(tipo) {
                     nomeFornecedor: nfeDadosNota.emitNome,
                     cnpjTomador: nfeDadosNota.destCnpj,
                     nomeTomador: nfeDadosNota.destNome,
+                    empresaId: await empresaIdPorCnpj(nfeDadosNota.destCnpj),
                     valorProdutos: nfeDadosNota.vProd,
                     valorDesconto: nfeDadosNota.vDesc,
                     valorFrete: nfeDadosNota.vFrete,
@@ -5989,6 +6711,9 @@ async function processarImportacaoNFe(tipo) {
                 }
             });
             estoqueNotaId = notaCriada.id;
+            // dados fiscais por item (NCM, CFOP, CST, impostos): um problema aqui NÃO impede a importação (avisa no fim)
+            try { await gravarFiscalNota(estoqueNotaId, nfeDadosNota.itens, nfeItensParseados.map(it => (!it.avulso && !it.criarNovo && it.produtoVinculadoId) ? it.produtoVinculadoId : null)); }
+            catch (eFiscal) { console.warn('Dados fiscais da nota não gravados:', eFiscal); avisoFiscalImportacao = ' ⚠️ Os dados fiscais por item não foram gravados' + (/estoque_notas_itens_fiscais/i.test((eFiscal && eFiscal.message) || '') ? ' (rode o SQL estoque-notas-itens-fiscais.sql no Supabase e use «Dados fiscais das notas antigas»).' : ': ' + ((eFiscal && eFiscal.message) || eFiscal)); }
         }
 
         iniciarLoteRateio();   // as saídas da baixa direta geram o rateio uma vez só, no fim
@@ -6062,11 +6787,21 @@ async function processarImportacaoNFe(tipo) {
                         grupo: 1,
                         estoqueInicial: 0,
                         estoque: 0,
-                        almox: 1
+                        almox: 1,
+                        ncm: normalizarNcm(item.ncm) || null, cest: String(item.cest || '').replace(/\D/g, '') || null
                     }
                 });
                 await carregarProdutos();
                 produtoId = criado.id;
+            } else {
+                // produto já cadastrado, ainda sem NCM: aproveita o NCM deste item (nunca sobrescreve um NCM existente)
+                const pr = produtos.find(x => x.id === produtoId), ncmItem = normalizarNcm(item.ncm);
+                if (pr && !pr.ncm && ncmItem) {
+                    try {
+                        const { error: eNcm } = await sb.from('estoque_produtos').update({ ncm: ncmItem, cest: String(item.cest || '').replace(/\D/g, '') || null }).eq('id', produtoId).or('ncm.is.null,ncm.eq.');
+                        if (!eNcm) pr.ncm = ncmItem;
+                    } catch (_) { /* NCM é complementar: não bloqueia a importação */ }
+                }
             }
 
             // grava (ou atualiza) o mapeamento código-do-fornecedor -> nosso
@@ -6152,16 +6887,18 @@ async function processarImportacaoNFe(tipo) {
                 nfePedidosAgregados.map(n => n.numeroNf || ('#' + n.id)).join(', '));
         }
 
-        // 3) títulos de pagamento (duplicatas), só se o XML tinha (senão fica
-        // pra lançar manualmente depois, na tela de notas)
-        if (estoqueNotaId && nfeDadosNota?.dups?.length) {
+        // 3) títulos de pagamento: os do XML (duplicatas) ou os informados/gerados no bloco «Títulos / vencimentos» da importação
+        // (já conferidos antes de registrar) — gravados junto com a nota, sem precisar abri-la depois
+        if (estoqueNotaId && titulosNota.length) {
+            const formaXml = formaEscolhida('nfeTitForma');
             await chamarPost('salvarTitulosNota', {
                 estoqueNotaId,
-                titulos: nfeDadosNota.dups.map(dup => ({
-                    numeroTitulo: dup.nDup,
-                    dataVencimento: dup.dVenc || null,
-                    valor: dup.vDup,
-                    origem: 'xml'
+                titulos: titulosNota.map(t => ({
+                    numeroTitulo: t.numero || null,
+                    dataVencimento: t.vencimento || null,
+                    valor: Number(t.valor) || 0,
+                    formaPagamento: formaXml.nome, formaPagamentoId: formaXml.id,
+                    origem: t.origem === 'xml' ? 'xml' : 'manual'
                 }))
             });
         }
@@ -6174,6 +6911,7 @@ async function processarImportacaoNFe(tipo) {
         statusEl.textContent = agregarInteiras
             ? `✅ Nota registrada e ${nfePedidosAgregados.length} nota(s) de pedido agregada(s) — itens da NF-e ignorados (o estoque já entrou pelas notas de pedido).`
             : `✅ ${nfeItensParseados.length} item(ns) registrado(s) como ${tipo === 'entrada' ? 'entrada em estoque' : 'baixa direta'}.`;
+        if (avisoFiscalImportacao) statusEl.textContent += avisoFiscalImportacao;
         renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value));
         carregarListaNotasEntrada();   // a nota importada já aparece na guia Notas (se o botão foi usado de lá)
 
@@ -6182,6 +6920,7 @@ async function processarImportacaoNFe(tipo) {
         // se alguém clicar outra vez em "Registrar" nesse meio-tempo
         nfeItensParseados = [];
         nfeDadosNota = null;
+        nfeTitulos = []; renderizarTitulosNfe();
         nfePedidosAgregados = [];
         renderizarPedidosAgregadosNFe();
         document.getElementById('nfeArquivo').value = '';
@@ -6321,11 +7060,13 @@ document.getElementById('btnSalvarProduto').addEventListener('click', async () =
         return;
     }
     const codigoExterno = document.getElementById('npCodigoExterno').value.trim();
+    const ncmNovo = normalizarNcm(document.getElementById('npNcm').value);
+    if (ncmNovo === null) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'NCM inválido: informe os 8 dígitos ou deixe em branco.'; document.getElementById('npNcm').focus(); return; }
     const estoqueInicial = parseFloat(document.getElementById('npEstoque').value) || 0;
     const valorDeclarado = parseFloat(document.getElementById('npValor').value) || 0;
     const novo = {
         id: codigo ? Number(codigo) : undefined, // se não informado, o banco gera automaticamente
-        codigoExterno: codigoExterno || null,
+        codigoExterno: codigoExterno || null, ncm: ncmNovo,
         nome: nome.toUpperCase(),
         valor: valorDeclarado,
         un: document.getElementById('npUn').value.trim().toUpperCase() || 'UN',
@@ -11390,6 +12131,30 @@ async function registrarFornecedor(nome, cnpj, notaId) {
         if (pessoaId && notaId) await sb.from('estoque_notas').update({ fornecedor_pessoa_id: pessoaId }).eq('id', notaId);     // sem a coluna (SQL não rodado) só ignora
     } catch (e) { console.warn('Fornecedor não gravado em pessoa (a nota foi salva normalmente):', e && e.message); }
 }
+// AVISO DE FORNECEDOR NOVO (25/11/2026): antes de gravar uma nota de ENTRADA (XML ou manual), confere se o fornecedor já é uma PESSOA cadastrada
+// (mesmo CNPJ ou mesmo nome). Se não for, avisa que o sistema vai CADASTRÁ-LO e mostra cadastros parecidos (mesma raiz de CNPJ ou 1ª palavra do nome),
+// para a pessoa poder cancelar e usar o nome certo. Devolve true = pode seguir. Se o cadastro de pessoas não está acessível, não pergunta nada.
+const semAcentoMin = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+async function confirmarFornecedorNovo(nome, cnpj) {
+    const n = String(nome || '').trim().replace(/\s+/g, ' ');
+    if (!n || !fornecedoresPessoaOk) return true;
+    try {
+        const dig = soDigitosCnpj(cnpj), cadastrados = [...fornecedoresMapa.values()].filter(x => x.pessoaId);
+        if (cadastrados.some(x => normNome(x.nome) === normNome(n) || (dig && soDigitosCnpj(x.cnpj) === dig))) return true;
+        // o mapa pode estar velho (outra aba/usuário cadastrou agora): confere no banco antes de avisar
+        const unidade = meuPerfil.unidadeId;
+        const { data: porNome } = await sb.from('pessoa').select('id,nome,documento').eq('unidade_negocio_id', unidade).ilike('nome', escaparIlike(n)).limit(10);
+        if ((porNome || []).some(p => normNome(p.nome) === normNome(n))) return true;
+        if (cnpj) { const { data: porDoc } = await sb.from('pessoa').select('id').eq('unidade_negocio_id', unidade).eq('documento', String(cnpj).trim()).limit(1); if (porDoc && porDoc.length) return true; }
+        const primeira = semAcentoMin(n).split(' ').find(w => w.length >= 4), raiz = dig.length >= 14 ? dig.slice(0, 8) : '';
+        const parecidos = cadastrados.filter(x => (raiz && soDigitosCnpj(x.cnpj).slice(0, 8) === raiz) || (primeira && semAcentoMin(x.nome).split(' ').includes(primeira))).slice(0, 4);
+        const lista = parecidos.length ? `\n\nCadastros parecidos que já existem:\n${parecidos.map(x => `• ${x.nome}${x.cnpj ? ' — ' + x.cnpj : ''}`).join('\n')}` : '';
+        return confirm(`⚠️ Fornecedor NÃO cadastrado no sistema:\n\n${n}${cnpj ? '\nCNPJ: ' + cnpj : ''}${lista}\n\nSe continuar, ele será CADASTRADO automaticamente (Cadastro de pessoas) ao salvar a nota.\nSe já existe com outro nome, cancele e ajuste o nome/CNPJ antes.\n\nContinuar e cadastrar este fornecedor?`);
+    } catch (e) {
+        console.warn('Não foi possível conferir o fornecedor (segue sem avisar):', e && e.message);
+        return true;
+    }
+}
 // procura nota de ENTRADA do MESMO fornecedor (CNPJ igual ou nome igual) com o mesmo número/pedido (ignora espaços, pontuação e maiúsculas)
 async function buscarNotasMesmoPedido(numeroNf, cnpj, nome, ignorarId) {
     const nucleo = normNumeroNf(numeroNf);
@@ -11999,6 +12764,8 @@ async function limparFormularioNota() {
     document.getElementById('notaValorDesconto').value = 0;
     document.getElementById('notaValorFrete').value = 0;
     document.getElementById('notaValorTotalDica').textContent = '';
+    notaTemTomadorXml = false;
+    await preencherSelectEmpresaNota(null, null);
     document.getElementById('notaDataEntrada').value = hojeISO();
     document.getElementById('statusNotaEntrada').textContent = '';
     document.getElementById('notaItemAvulso').checked = false;   // cada nota começa no modo "produto do catálogo"
@@ -12102,6 +12869,8 @@ async function abrirNotaEntradaExistente(notaId) {
         document.getElementById('notaResponsavel').value = nota.responsavel || '';
         document.getElementById('notaChaveAcesso').value = nota.chave_acesso || '';
         document.getElementById('notaObservacoes').value = nota.observacoes || '';
+        notaTemTomadorXml = !!(nota.xml_original && nota.cnpj_tomador);
+        await preencherSelectEmpresaNota(nota.empresa_id != null ? nota.empresa_id : null, nota);
         document.getElementById('statusNotaEntrada').textContent = '';
         notaItemParciais = { ids: [], qtdCoberta: 0 };
         atualizarResumoParciaisItemNota();
@@ -12309,6 +13078,9 @@ async function carregarItensETitulosDaNota(notaId) {
     titulosNotaAtual = titulos || [];
     renderizarItensNota();
     renderizarTitulosNota();
+    await preencherSelectForma('tituloFormaPagamento', formaPadraoTitulo);
+    await preencherSelectForma('tituloFormaTodos');
+    sugerirNumeroTituloManual();
 }
 
 /* ---------- valor total da nota = valor oficial (NF) ----------
@@ -12464,7 +13236,7 @@ function renderizarTitulosNota() {
             <td>${escapeHtml(t.numero_titulo) || '-'}</td>
             <td>${formatarDataBR(t.data_vencimento)}</td>
             <td class="num">${formatarMoeda(t.valor)}</td>
-            <td>${escapeHtml(t.forma_pagamento) || '-'}</td>
+            <td>${escapeHtml(t.forma_pagamento || (formasPagamento.find(x => x.id === t.forma_pagamento_id) || {}).nome) || '-'}${(() => { const f = t.forma_pagamento_id ? formasPagamento.find(x => x.id === t.forma_pagamento_id) : null, cid = f ? contaIdDaForma(f) : null; return cid != null ? `<br><small style="color:#6b7280;">conta: ${escapeHtml(contasFinanceiras.get(cid) || '#' + cid)}</small>` : ''; })()}</td>
             <td><span class="pill ${t.origem === 'xml' ? 'pill-entrada' : 'pill-saida'}">${t.origem === 'xml' ? 'XML' : 'Manual'}</span></td>
             <td>${mapaStatusLabel[t.status] || t.status}</td>
             <td class="center">
@@ -12513,6 +13285,57 @@ document.getElementById('notaFornecedorCnpj').addEventListener('input', (e) => {
     if (f) nomeEl.value = f.nome;
 });
 
+/* =========================================================================
+   EMPRESA DA NOTA (25/11/2026): a unidade recebe notas de VÁRIAS empresas (CNPJs). Entrada direta: escolhe a empresa (padrão = a última usada neste
+   aparelho, senão a empresa padrão do Financeiro) e a nota guarda empresa_id + cnpj_tomador/nome_tomador da empresa. XML: o CNPJ do destinatário já
+   vem na nota; se estiver no cadastro de Empresas, liga a empresa_id.
+   ========================================================================= */
+let empresasNota = [], empresasNotaCarregadas = false, empresaPadraoFinanceiro = null, notaTemTomadorXml = false;
+async function carregarEmpresasNota(forcar) {
+    if (empresasNotaCarregadas && !forcar) return;
+    try {
+        const [re, rp] = await Promise.all([
+            sb.from('empresas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('nome'),
+            sb.from('financeiro_parametros').select('empresa_padrao_id').eq('unidade_negocio_id', meuPerfil.unidadeId).maybeSingle()
+        ]);
+        if (re.error) throw re.error;
+        empresasNota = (re.data || []).filter(e => e.ativo !== false).map(e => ({ id: e.id, nome: e.nome, razao: e.razao_social || '', cnpj: e.cnpj || '', cnpjDig: soDigitosCnpj(e.cnpj) }));
+        empresaPadraoFinanceiro = rp && !rp.error && rp.data ? rp.data.empresa_padrao_id : null;
+        empresasNotaCarregadas = true;
+    } catch (e) { console.warn('Empresas indisponíveis para a nota:', e && e.message); }
+}
+async function empresaIdPorCnpj(cnpj) {
+    const d = soDigitosCnpj(cnpj); if (!d) return null;
+    await carregarEmpresasNota();
+    const e = empresasNota.find(x => x.cnpjDig && x.cnpjDig === d);
+    return e ? e.id : null;
+}
+async function preencherSelectEmpresaNota(idSalvo, nota) {
+    await carregarEmpresasNota();
+    const sel = document.getElementById('notaEmpresa');
+    let escolhida = idSalvo != null ? idSalvo : null;
+    if (escolhida == null && nota && nota.cnpj_tomador) { const e = empresasNota.find(x => x.cnpjDig && x.cnpjDig === soDigitosCnpj(nota.cnpj_tomador)); if (e) escolhida = e.id; }
+    if (escolhida == null && !nota) {      // nota nova: última empresa usada neste aparelho; senão a padrão do Financeiro
+        let ultima = null; try { ultima = localStorage.getItem('estoque_nota_empresa_' + meuPerfil.unidadeId); } catch (e) { /* sem storage */ }
+        escolhida = ultima && empresasNota.some(e => String(e.id) === String(ultima)) ? Number(ultima) : (empresaPadraoFinanceiro != null ? empresaPadraoFinanceiro : null);
+    }
+    sel.innerHTML = '<option value="">— escolha a empresa —</option>' + empresasNota.map(e => `<option value="${e.id}">${escapeHtml(e.razao || e.nome)}${e.cnpj ? ' — ' + escapeHtml(e.cnpj) : ''}</option>`).join('');
+    if (escolhida != null && empresasNota.some(e => e.id === escolhida)) sel.value = String(escolhida);
+    atualizarDicaEmpresaNota(nota);
+}
+function empresaNotaEscolhida() {
+    const v = document.getElementById('notaEmpresa').value;
+    return v ? (empresasNota.find(e => String(e.id) === v) || null) : null;
+}
+function atualizarDicaEmpresaNota(nota) {
+    const dica = document.getElementById('notaEmpresaDica'), e = empresaNotaEscolhida();
+    if (!empresasNota.length) dica.textContent = 'Nenhuma empresa cadastrada nesta unidade (Financeiro → Cadastros → Empresas).';
+    else if (e && !e.cnpj) dica.textContent = '⚠️ esta empresa está sem CNPJ no cadastro (Financeiro → Cadastros → Empresas): a nota entra no fiscal por empresa, mas sem o CNPJ.';
+    else if (!e && nota && nota.xml_original && nota.cnpj_tomador) dica.textContent = `Destinatário do XML: ${nota.nome_tomador || ''} (${nota.cnpj_tomador}) — não está no cadastro de Empresas.`;
+    else dica.textContent = '';
+}
+document.getElementById('notaEmpresa').addEventListener('change', () => atualizarDicaEmpresaNota());
+
 document.getElementById('btnSalvarCabecalhoNota').addEventListener('click', async () => {
     const btnSalvarCabecalho = document.getElementById('btnSalvarCabecalhoNota');
     if (btnSalvarCabecalho.disabled) return; // já tem um salvamento em andamento -- ignora clique duplicado
@@ -12523,6 +13346,9 @@ document.getElementById('btnSalvarCabecalhoNota').addEventListener('click', asyn
     if (!nome) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe o nome do fornecedor.'; document.getElementById('notaFornecedorNome').focus(); return; }
     if (!dataEntrada) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe a data de entrada.'; document.getElementById('notaDataEntrada').focus(); return; }
     if (!observacoesNota) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Informe a observação.'; document.getElementById('notaObservacoes').focus(); return; }
+    // empresa da nota: obrigatória na entrada (nota importada por XML com destinatário próprio fica dispensada)
+    const empresaNota = empresaNotaEscolhida();
+    if (notaTipoEmEdicao === 'entrada' && !empresaNota && !notaTemTomadorXml) { statusEl.className = 'status-msg erro'; statusEl.textContent = 'Escolha a empresa da nota.'; document.getElementById('notaEmpresa').focus(); return; }
 
     const cnpjFornecedor = document.getElementById('notaFornecedorCnpj').value.trim();
     const numeroNf = document.getElementById('notaNumeroNf').value.trim();
@@ -12559,6 +13385,12 @@ document.getElementById('btnSalvarCabecalhoNota').addEventListener('click', asyn
             }
         }
 
+        if (!(await confirmarFornecedorNovo(nome, cnpjFornecedor))) {
+            statusEl.className = 'status-msg erro';
+            statusEl.textContent = 'Nota não salva: fornecedor não cadastrado. Escolha um da lista ou confirme o cadastro.';
+            document.getElementById('notaFornecedorNome').focus();
+            return;
+        }
         statusEl.className = '';
         statusEl.textContent = 'Salvando...';
         try {
@@ -12576,9 +13408,13 @@ document.getElementById('btnSalvarCabecalhoNota').addEventListener('click', asyn
                     valorFrete: parseFloat(document.getElementById('notaValorFrete').value) || 0,
                     responsavel: document.getElementById('notaResponsavel').value.trim().toUpperCase(),
                     chaveAcesso: document.getElementById('notaChaveAcesso').value.trim(),
-                    observacoes: observacoesNota
+                    observacoes: observacoesNota,
+                    empresaId: empresaNota ? empresaNota.id : undefined,
+                    // nota lançada à mão: o «destinatário» é a empresa escolhida (nota de XML mantém o do próprio XML)
+                    ...(empresaNota && !notaTemTomadorXml ? { cnpjTomador: empresaNota.cnpjDig || null, nomeTomador: empresaNota.razao || empresaNota.nome } : {})
                 }
             });
+            try { if (empresaNota) localStorage.setItem('estoque_nota_empresa_' + meuPerfil.unidadeId, String(empresaNota.id)); } catch (e) { /* sem storage */ }
             notaEmEdicaoId = nota.id;
             valorTotalSalvoNota = Number(nota.valor_total || 0);
             statusEl.className = 'status-msg sucesso';
@@ -12662,12 +13498,14 @@ document.getElementById('btnSalvarNovoProdutoNota').addEventListener('click', as
     const nomeMaiusculo = nome.toUpperCase();
     if (produtos.some(p => String(p.nome || '').toUpperCase() === nomeMaiusculo)) return erro('Já existe um produto com esse nome — busque no campo Produto.', 'npnNome');
     const codigoExterno = document.getElementById('npnCodExt').value.trim();
+    const ncmNota = normalizarNcm(document.getElementById('npnNcm').value);
+    if (ncmNota === null) return erro('NCM inválido: informe os 8 dígitos ou deixe em branco.', 'npnNcm');
     const valor = parseFloat(document.getElementById('npnValor').value) || 0;
     const btn = document.getElementById('btnSalvarNovoProdutoNota'); btn.disabled = true;
     st.className = 'status-msg'; st.textContent = 'Salvando...';
     try {
         const criado = await chamarPost('salvarProduto', { produto: {
-            codigoExterno: codigoExterno || null, nome: nomeMaiusculo, valor,
+            codigoExterno: codigoExterno || null, ncm: ncmNota, nome: nomeMaiusculo, valor,
             un: document.getElementById('npnUn').value.trim().toUpperCase() || 'UN',
             grupoId: grupoSelecionadoNovoProdutoNota.id, estoqueInicial: 0, estoque: 0,
             almoxarifadoPadraoId: almoxSelecionadoNovoProdutoNota.id, valorEstoqueInicial: null, precoMedio: null
@@ -12926,6 +13764,80 @@ document.getElementById('btnRegistrarBaixaDiretaNota').addEventListener('click',
     }
 });
 
+/* =========================================================================
+   FORMA DE PAGAMENTO dos títulos (25/11/2026, pedido do usuário): vem do cadastro de Formas de Pagamento do Financeiro (financeiro_forma_pagamento),
+   que passou a ter a CONTA CORRENTE prevista (id_conta). O título guarda o nome (forma_pagamento) e o id (forma_pagamento_id); ao aceitar o protocolo
+   o título nasce no Financeiro com a conta da forma (previsão de saída daquela conta). Nº do título: sugere «<nº da NF>/<próxima parcela>».
+   ========================================================================= */
+let formasPagamento = [], contasFinanceiras = new Map(), formasCarregadas = false, formaPadraoTitulo = null, formasErro = '';
+const contaIdDaForma = (f) => { for (const k of ['id_conta', 'id_conta_corrente', 'conta_corrente_id', 'conta_id']) { if (f && f[k] != null) return f[k]; } return null; };
+async function carregarFormasPagamento(forcar) {
+    if (formasCarregadas && !forcar) return;
+    try {
+        const [rf, rc] = await Promise.all([
+            sb.from('financeiro_forma_pagamento').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('nome'),
+            sb.from('financeiro_contas_correntes').select('id, nome').eq('unidade_negocio_id', meuPerfil.unidadeId)
+        ]);
+        formasErro = rf.error ? (rf.error.message || String(rf.error)) : '';
+        formasPagamento = rf.error ? [] : (rf.data || []).filter(f => f.ativo !== false);
+        contasFinanceiras = new Map((rc.error ? [] : (rc.data || [])).map(c => [c.id, c.nome]));
+        formasCarregadas = !rf.error;
+    } catch (e) { console.warn('Formas de pagamento indisponíveis:', e && e.message); }
+}
+// monta a lista de formas no <select>; «atual» = {id, nome} do título (texto antigo sem id continua aparecendo para não perder o dado)
+async function preencherSelectForma(selId, atual) {
+    await carregarFormasPagamento();
+    const sel = document.getElementById(selId); if (!sel) return;
+    const guardado = sel.value;
+    let achada = atual && atual.id ? formasPagamento.find(f => String(f.id) === String(atual.id)) : null;
+    if (!achada && atual && atual.nome) achada = formasPagamento.find(f => normNome(f.nome) === normNome(atual.nome)) || null;
+    const legado = atual && atual.nome && !achada ? atual.nome : null;
+    sel.innerHTML = '<option value="">— sem forma de pagamento —</option>' + formasPagamento.map(f => `<option value="${f.id}">${escapeHtml(f.nome)}</option>`).join('')
+        + (legado ? `<option value="txt:${escapeHtml(legado)}">${escapeHtml(legado)} (texto antigo)</option>` : '');
+    if (achada) sel.value = String(achada.id); else if (legado) sel.value = 'txt:' + legado; else if (guardado && sel.querySelector(`option[value="${guardado}"]`)) sel.value = guardado;
+    atualizarHintForma(selId);
+}
+function formaEscolhida(selId) {
+    const sel = document.getElementById(selId); const v = sel ? sel.value : '';
+    if (!v) return { id: null, nome: null };
+    if (v.startsWith('txt:')) return { id: null, nome: v.slice(4) };
+    const f = formasPagamento.find(x => String(x.id) === v);
+    return f ? { id: f.id, nome: f.nome } : { id: null, nome: null };
+}
+function atualizarHintForma(selId) {
+    const hint = document.getElementById(selId + 'Hint'); if (!hint) return;
+    if (!formasPagamento.length) { hint.textContent = formasErro ? 'Não consegui carregar as formas de pagamento: ' + formasErro : 'Nenhuma forma de pagamento cadastrada nesta unidade (Financeiro → Cadastros → Formas de Pagamento).'; return; }
+    const e = formaEscolhida(selId);
+    if (!e.id) { hint.textContent = ''; return; }
+    const f = formasPagamento.find(x => x.id === e.id), cid = contaIdDaForma(f);
+    hint.textContent = cid != null ? `→ conta prevista: ${contasFinanceiras.get(cid) || '#' + cid}` : '→ esta forma não tem conta vinculada (Financeiro → Cadastros → Formas de Pagamento): o título entra sem conta';
+}
+['tituloFormaPagamento', 'editTituloFormaPagamento', 'parcelasIguaisForma', 'nfeTitForma'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('change', () => { atualizarHintForma(id); if (id === 'tituloFormaPagamento') formaPadraoTitulo = formaEscolhida(id); });
+});
+// nº do título sugerido na inclusão manual: «<nº da NF>/<próximo>» (só enquanto o campo estiver vazio ou com a sugestão anterior)
+function sugerirNumeroTituloManual() {
+    const el = document.getElementById('tituloNumero'); if (!el) return;
+    const nf = document.getElementById('notaNumeroNf').value.trim();
+    if (!nf) return;
+    if (!el.value || el.dataset.auto === '1') { el.value = `${nf}/${titulosNotaAtual.length + 1}`; el.dataset.auto = '1'; }
+}
+document.getElementById('btnAplicarFormaTodos').addEventListener('click', async () => {
+    if (!notaEmEdicaoId || !titulosNotaAtual.length) { alert('Esta nota ainda não tem títulos.'); return; }
+    const f = formaEscolhida('tituloFormaTodos');
+    if (!f.id && !f.nome && !confirm('Limpar a forma de pagamento de todos os títulos da nota?')) return;
+    try {
+        const campos = { forma_pagamento: f.nome || null, forma_pagamento_id: f.id || null };
+        let { error } = await sb.from('estoque_titulos_notas').update(campos).eq('estoque_nota_id', notaEmEdicaoId);
+        if (error && /forma_pagamento_id/i.test(error.message || '')) ({ error } = await sb.from('estoque_titulos_notas').update({ forma_pagamento: campos.forma_pagamento }).eq('estoque_nota_id', notaEmEdicaoId));
+        if (error) throw error;
+        await carregarItensETitulosDaNota(notaEmEdicaoId);
+    } catch (err) { alert('Erro ao aplicar a forma de pagamento: ' + ((err && err.message) || err)); }
+});
+document.getElementById('tituloNumero').addEventListener('input', () => { document.getElementById('tituloNumero').dataset.auto = ''; });
+document.getElementById('notaNumeroNf').addEventListener('change', sugerirNumeroTituloManual);
+
 /* ---------- títulos ---------- */
 document.getElementById('btnAdicionarTituloNota').addEventListener('click', async () => {
     if (!notaEmEdicaoId) { alert('Salve o cabeçalho da nota primeiro.'); return; }
@@ -12939,14 +13851,13 @@ document.getElementById('btnAdicionarTituloNota').addEventListener('click', asyn
                 numeroTitulo: document.getElementById('tituloNumero').value.trim(),
                 dataVencimento: document.getElementById('tituloVencimento').value || null,
                 valor,
-                formaPagamento: document.getElementById('tituloFormaPagamento').value.trim(),
+                formaPagamento: formaEscolhida('tituloFormaPagamento').nome, formaPagamentoId: formaEscolhida('tituloFormaPagamento').id,
                 origem: 'manual'
             }]
         });
-        document.getElementById('tituloNumero').value = '';
+        document.getElementById('tituloNumero').value = ''; document.getElementById('tituloNumero').dataset.auto = '';
         document.getElementById('tituloVencimento').value = '';
-        document.getElementById('tituloValor').value = '';
-        document.getElementById('tituloFormaPagamento').value = '';
+        document.getElementById('tituloValor').value = '';      // a forma de pagamento fica: vários títulos seguidos costumam ter a mesma
         await carregarItensETitulosDaNota(notaEmEdicaoId);
     } catch (err) {
         alert('Erro ao adicionar título: ' + err.message);
@@ -13008,6 +13919,7 @@ document.getElementById('btnGerarParcelasIguais').addEventListener('click', () =
         ? `Total a parcelar: ${formatarMoeda(totalItens)} (valor total da nota)`
         : `Total a parcelar: ${formatarMoeda(totalItens)} (soma dos itens — informe o valor total da nota para usar o valor da NF)`;
     document.getElementById('parcelasIguaisQtd').value = '1';
+    preencherSelectForma('parcelasIguaisForma');
     document.getElementById('parcelasIguaisPrimeiroVencimento').value = '';
     document.getElementById('parcelasIguaisDiasCustom').value = '';
     document.getElementById('parcelasIguaisRegraDias').checked = true;
@@ -13063,10 +13975,10 @@ document.getElementById('btnConfirmarParcelasIguais').addEventListener('click', 
         const valor = i === qtdParcelas ? Math.round(restante * 100) / 100 : valorParcela;
         restante -= valor;
         titulos.push({
-            numeroTitulo: `${i}/${qtdParcelas}`,
+            numeroTitulo: numeroTituloParcela(document.getElementById('notaNumeroNf').value, i, qtdParcelas),
             dataVencimento: vencimentos[i - 1],
             valor,
-            formaPagamento: '',
+            formaPagamento: formaEscolhida('parcelasIguaisForma').nome, formaPagamentoId: formaEscolhida('parcelasIguaisForma').id,
             origem: 'manual'
         });
     }
@@ -13080,14 +13992,14 @@ document.getElementById('btnConfirmarParcelasIguais').addEventListener('click', 
     }
 });
 
-function abrirModalEditarTitulo(tituloId) {
+async function abrirModalEditarTitulo(tituloId) {
     const t = titulosNotaAtual.find(x => x.id === tituloId);
     if (!t) return;
     tituloEmEdicaoId = tituloId;
+    await preencherSelectForma('editTituloFormaPagamento', { id: t.forma_pagamento_id, nome: t.forma_pagamento });
     document.getElementById('editTituloNumero').value = t.numero_titulo || '';
     document.getElementById('editTituloVencimento').value = t.data_vencimento || '';
     document.getElementById('editTituloValor').value = t.valor;
-    document.getElementById('editTituloFormaPagamento').value = t.forma_pagamento || '';
     document.getElementById('editTituloStatus').value = t.status || 'pendente';
     document.getElementById('statusEditarTitulo').textContent = '';
     document.getElementById('modalEditarTitulo').classList.add('aberto');
@@ -13111,7 +14023,7 @@ document.getElementById('btnSalvarEditarTitulo').addEventListener('click', async
             numeroTitulo: document.getElementById('editTituloNumero').value.trim(),
             dataVencimento: document.getElementById('editTituloVencimento').value || null,
             valor,
-            formaPagamento: document.getElementById('editTituloFormaPagamento').value.trim(),
+            formaPagamento: formaEscolhida('editTituloFormaPagamento').nome, formaPagamentoId: formaEscolhida('editTituloFormaPagamento').id,
             status: document.getElementById('editTituloStatus').value
         });
         document.getElementById('modalEditarTitulo').classList.remove('aberto');
@@ -13432,6 +14344,368 @@ document.getElementById('inventarioSalvar').addEventListener('click', () => {
     const r = gerarPdfInventario();
     if (r) executarAcaoPdf('salvar', r.doc, `inventario-${slugArquivo(r.nomeAlmox)}.pdf`);
 });
+
+/* =========================================================================
+   ORDEM / RECIBO DE PAGAMENTO por título (25/11/2026, pedido do usuário) — modelo «Recibo de pagamento» do SICOM.
+   Botão na nota de entrada: imprime UM recibo por título, em BOBINA térmica 80 mm (1 título por página: a impressora corta a cada título)
+   ou em folha A4 (2 recibos por folha). Traz: empresa emitente (razão social, CNPJ, endereço, telefone — cadastro de Empresas), fornecedor com
+   documento e dados bancários (PIX/conta de pessoa_dados_bancarios), evento/setor, vencimento, forma e data de pagamento, observação da nota
+   («REFERENTE A»), valor por extenso, OP (= nº da nota) e REG (= id do título). Saída pelo mesmo «Visualizar / Baixar / Compartilhar» dos relatórios.
+   ========================================================================= */
+const OP_AZUL = [26, 35, 126];
+function opExtenso(valor) {
+    const UN = ['zero', 'um', 'dois', 'três', 'quatro', 'cinco', 'seis', 'sete', 'oito', 'nove'];
+    const DEZ19 = ['dez', 'onze', 'doze', 'treze', 'quatorze', 'quinze', 'dezesseis', 'dezessete', 'dezoito', 'dezenove'];
+    const DEZ = ['', '', 'vinte', 'trinta', 'quarenta', 'cinquenta', 'sessenta', 'setenta', 'oitenta', 'noventa'];
+    const CEM = ['', 'cento', 'duzentos', 'trezentos', 'quatrocentos', 'quinhentos', 'seiscentos', 'setecentos', 'oitocentos', 'novecentos'];
+    const ate999 = (n) => {
+        if (n === 0) return ''; if (n === 100) return 'cem';
+        const c = Math.floor(n / 100), resto = n % 100, partes = [];
+        if (c) partes.push(CEM[c]);
+        if (resto) { if (resto < 10) partes.push(UN[resto]); else if (resto < 20) partes.push(DEZ19[resto - 10]); else { const d = Math.floor(resto / 10), u = resto % 10; partes.push(DEZ[d] + (u ? ' e ' + UN[u] : '')); } }
+        return partes.join(' e ');
+    };
+    const inteiroExtenso = (n) => {
+        if (n === 0) return 'zero';
+        const milhoes = Math.floor(n / 1000000), milhares = Math.floor((n % 1000000) / 1000), resto = n % 1000, partes = [];
+        if (milhoes) partes.push(milhoes === 1 ? 'um milhão' : ate999(milhoes) + ' milhões');
+        if (milhares) partes.push(milhares === 1 ? 'mil' : ate999(milhares) + ' mil');
+        if (resto) partes.push(ate999(resto));
+        return partes.join(' e ');
+    };
+    const v = Math.round((Number(valor) || 0) * 100) / 100, inteiro = Math.floor(v), centavos = Math.round((v - inteiro) * 100);
+    let t = '';
+    if (inteiro > 0 || centavos === 0) t = `${inteiroExtenso(inteiro)} ${inteiro === 1 ? 'real' : (inteiro >= 1000000 && inteiro % 1000000 === 0 ? 'de reais' : 'reais')}`;
+    if (centavos > 0) t += `${t ? ' e ' : ''}${inteiroExtenso(centavos)} ${centavos === 1 ? 'centavo' : 'centavos'}`;
+    return t.toUpperCase();
+}
+const opNum2 = (v) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// logo da unidade -> PNG (data URL) + tamanho; null se não houver ou não puder ser lida (o recibo sai sem logo)
+function opImagemDataUrl(url) {
+    return new Promise((resolve) => {
+        if (!url) return resolve(null);
+        fetch(url, { mode: 'cors' }).then(r => r.ok ? r.blob() : Promise.reject(new Error('http'))).then(blob => {
+            const fr = new FileReader();
+            fr.onload = () => {
+                const img = new Image();
+                img.onload = () => {
+                    try {
+                        const k = Math.min(1, 300 / Math.max(img.naturalWidth, img.naturalHeight)), cv = document.createElement('canvas');
+                        cv.width = Math.max(1, Math.round(img.naturalWidth * k)); cv.height = Math.max(1, Math.round(img.naturalHeight * k));
+                        cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+                        resolve({ dataUrl: cv.toDataURL('image/png'), w: cv.width, h: cv.height });
+                    } catch (e) { resolve(null); }
+                };
+                img.onerror = () => resolve(null); img.src = fr.result;
+            };
+            fr.onerror = () => resolve(null); fr.readAsDataURL(blob);
+        }).catch(() => resolve(null));
+    });
+}
+const OP_PIX_ROTULO = { cpf: 'CPF', cnpj: 'CNPJ', celular: 'CELULAR', email: 'E-MAIL', aleatoria: 'ALEATÓRIA', nao_informado: '' };
+// linhas dos dados bancários do fornecedor (forma principal primeiro; até 3); mostra o titular quando for outra pessoa
+function opLinhasBanco(dados, nomeFornecedor) {
+    const linhas = [];
+    (dados || []).slice(0, 3).forEach(d => {
+        let l;
+        if (d.forma === 'pix') { const r = OP_PIX_ROTULO[d.pix_tipo] || ''; l = `PIX${r ? ' ' + r : ''}: ${d.chave_pix || String(d.texto_original || '-').replace(/\s+/g, ' ')}`; }
+        else {
+            const partes = [d.banco, d.agencia ? 'AG ' + d.agencia : '', d.conta].filter(Boolean).map(x => String(x).replace(/\s+/g, ' '));
+            l = `CONTA${d.tipo_conta ? ' ' + String(d.tipo_conta).toUpperCase() : ''}: ${partes.join(' · ') || String(d.texto_original || '-').replace(/\s+/g, ' ')}`;
+        }
+        linhas.push(l);
+        if (d.titular) linhas.push(`Titular: ${String(d.titular).replace(/\s+/g, ' ').trim()}`);     // o titular da conta/PIX sempre aparece (pode ser outra pessoa)
+    });
+    return linhas;
+}
+function opDadosRecibo(ctx, emp, t) {
+    const nota = ctx.nota, uni = ctx.unidade || {};
+    const setor = ((catalogosBaixa && catalogosBaixa.setores) || []).find(s => String(s.id) === String(nota.setor_id));
+    const ev = nota.evento ? (eventos.find(e => e.codigo === nota.evento) || { codigo: nota.evento, descricao: '' }) : null;
+    const nomeForn = ((ctx.pessoa && ctx.pessoa.nome) || nota.nome_fornecedor || '').trim();
+    const docPessoa = ctx.pessoa && ctx.pessoa.documento && !/informar/i.test(ctx.pessoa.documento) ? ctx.pessoa.documento : '';
+    return {
+        op: ctx.opCodigo || null, reg: (ctx.regs && ctx.regs[t.id]) || null, numero: t.numero_titulo || '', valor: Number(t.valor) || 0,
+        recebemosDe: (emp && emp.nome) || uni.nome || '',
+        referente: String(nota.observacoes || t.observacoes || (nota.numero_nf ? 'NF ' + nota.numero_nf : '')).replace(/\s+/g, ' ').trim(),
+        fornecedor: nomeForn, documento: docPessoa || nota.cnpj_fornecedor || '',
+        evento: ev ? (ev.descricao || ev.codigo) : '', setor: setor ? setor.nome : '',
+        vencimento: t.data_vencimento ? formatarDataBR(t.data_vencimento) : '', forma: t.forma_pagamento || '',
+        pagoEm: t.data_pagamento ? formatarDataBR(t.data_pagamento) : '',
+        bancos: opLinhasBanco(ctx.bancos, nomeForn),
+        emitente: {
+            razao: (emp && (emp.razao_social || emp.nome)) || uni.nome || '', cnpj: (emp && emp.cnpj) || '',
+            endereco: (emp && emp.endereco) || uni.endereco || '', telefone: (emp && emp.telefone) || uni.telefone || ''
+        },
+        emissao: `${String(meuPerfil.nomeOperador || '').toUpperCase()} ${new Date().toLocaleString('pt-BR')}`.trim(),
+        logo: ctx.logo
+    };
+}
+// ajusta o tamanho da fonte para o texto caber na largura (caixas de número/valor)
+function opFonteCabe(doc, txt, larg, tamMax) {
+    let tam = tamMax; doc.setFontSize(tam);
+    while (tam > 5 && doc.getTextWidth(String(txt)) > larg) { tam -= 0.5; doc.setFontSize(tam); }
+}
+// ---- BOBINA 80 mm: devolve o y final (usado para medir a altura da página e para desenhar)
+function opDesenharBobina(doc, d, margem) {
+    const M = margem == null ? 6 : margem, X2 = 80 - M, W = X2 - M; let y = 2;     // margem lateral (padrão 6 mm: a térmica de 80 mm imprime ~72 mm no meio) e superior curta (2 mm)
+    const linha = () => { doc.setDrawColor(...OP_AZUL); doc.setLineWidth(0.3); doc.line(M, y, X2, y); };
+    const bloco = (t, tam, estilo, passo, x0) => {
+        doc.setFont('helvetica', estilo || 'normal'); doc.setFontSize(tam);
+        doc.splitTextToSize(String(t), X2 - (x0 || M)).forEach(l => { doc.text(l, x0 || M, y); y += passo; });
+    };
+    doc.setTextColor(0); doc.setLineDashPattern([], 0);
+    linha(); y += 2;
+    const hl = d.logo ? 14 : 0, xt = d.logo ? M + 17 : M;
+    if (d.logo) { const k = Math.min(14 / d.logo.w, 14 / d.logo.h); doc.addImage(d.logo.dataUrl, 'PNG', M, y, d.logo.w * k, d.logo.h * k); }
+    doc.setTextColor(...OP_AZUL); doc.setFont('times', 'bolditalic'); doc.setFontSize(10.5); doc.text('RECIBO DE PAGAMENTO', xt, y + 5);
+    doc.setTextColor(0); doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.text([d.op ? `OP: ${d.op}` : 'OP: -', d.reg ? `REG: ${d.reg}` : ''].filter(Boolean).join('   '), xt, y + 10.5);
+    y += Math.max(hl, 12) + 2; linha(); y += 6;
+    doc.setTextColor(...OP_AZUL); doc.setFont('times', 'bolditalic'); doc.setFontSize(8.5); doc.text('NUMERO', M, y);
+    doc.setTextColor(0); doc.setDrawColor(0); doc.setLineWidth(0.2);
+    const bx1 = M + 17, bx2 = X2 - 25, bw1 = bx2 - 2 - bx1;
+    doc.rect(bx1, y - 4.3, bw1, 6.2); doc.rect(bx2, y - 4.3, 25, 6.2);
+    doc.setFont('helvetica', 'normal'); opFonteCabe(doc, d.numero, bw1 - 3, 9); doc.text(String(d.numero), bx1 + 1.5, y);
+    opFonteCabe(doc, opNum2(d.valor), 22, 9); doc.text(opNum2(d.valor), X2 - 1.2, y, { align: 'right' });
+    y += 8;
+    bloco(`RECEBEMOS DE  ${d.recebemosDe}`, 8, 'normal', 3.7); y += 0.8;
+    bloco(`A QUANTIA DE:  ${opExtenso(d.valor)}`, 8, 'normal', 3.7); y += 0.8;
+    bloco(`REFERENTE A:  ${d.referente || '-'}`, 8, 'normal', 3.7);
+    y += 2.5; doc.setDrawColor(...OP_AZUL); linha(); y += 4.5;
+    bloco(d.fornecedor || '-', 8.5, 'bold', 3.9);
+    if (d.documento) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.text(String(d.documento), M + W / 2, y, { align: 'center' }); y += 4; }
+    y += 0.5; doc.setDrawColor(...OP_AZUL); linha(); y += 4.5;
+    if (d.evento) bloco(`EVENTO: ${d.evento}`, 8, 'normal', 3.8);
+    if (d.setor) { doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(String(d.setor), X2, y, { align: 'right', maxWidth: W }); y += 4.3; }
+    y += 1;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.text(`VENCIMENTO : ${d.vencimento || '-'}`, M, y);
+    if (d.forma) doc.text(String(d.forma).toUpperCase(), X2, y, { align: 'right', maxWidth: 30 });
+    y += 4.8;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+    doc.text(d.pagoEm ? `PAGO EM : ${d.pagoEm}` : 'PAGO EM :  ____/____/________', M, y); y += 4.2;
+    if (d.bancos.length) {
+        y += 1;
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(8); doc.text('DADOS BANCÁRIOS DO FORNECEDOR', M, y); y += 3.8;
+        d.bancos.forEach(b => bloco(b, 8, b.startsWith('Titular:') ? 'bold' : 'normal', 3.6));
+    }
+    y += 3;
+    const em = d.emitente;
+    bloco(`EMITENTE :${em.razao}`, 7.5, 'normal', 3.3);
+    if (em.cnpj) bloco(`CNPJ :${em.cnpj}`, 7.5, 'normal', 3.3);
+    if (em.endereco) bloco(`ENDEREÇO :${em.endereco}`, 7.5, 'normal', 3.3);
+    if (em.telefone) bloco(`TEL. COMERCIAL :${em.telefone}`, 7.5, 'normal', 3.3);
+    bloco(d.emissao, 7.5, 'normal', 3.5);
+    y += 0.5; linha();
+    return y + 2;     // margem inferior curta (2 mm): é a altura da página; a impressora corta logo depois
+}
+// ---- A4: um recibo por «slot» (2 por folha); devolve o y final
+function opDesenharA4(doc, d, y0) {
+    const M = 14, X2 = 196, W = X2 - M, XV = M + 44; let y = y0;
+    const linha = (yy, x1, x2) => { doc.setDrawColor(...OP_AZUL); doc.setLineWidth(0.3); doc.line(x1 == null ? M : x1, yy, x2 == null ? X2 : x2, yy); };
+    const rotulo = (t, yy) => { doc.setTextColor(...OP_AZUL); doc.setFont('times', 'bolditalic'); doc.setFontSize(11); doc.text(t, M, yy); doc.setTextColor(0); };
+    const paragrafo = (t, x0, tam, passo, maxLinhas, estilo) => {
+        doc.setFont('helvetica', estilo || 'normal'); doc.setFontSize(tam);
+        let ls = doc.splitTextToSize(String(t), X2 - x0);
+        if (maxLinhas && ls.length > maxLinhas) { ls = ls.slice(0, maxLinhas); ls[maxLinhas - 1] = ls[maxLinhas - 1].replace(/\s*\S{0,3}$/, '') + '…'; }
+        ls.forEach(l => { doc.text(l, x0, y); y += passo; });
+    };
+    doc.setTextColor(0); doc.setLineDashPattern([], 0);
+    if (d.logo) { const k = Math.min(24 / d.logo.w, 24 / d.logo.h); doc.addImage(d.logo.dataUrl, 'PNG', M + 2, y, d.logo.w * k, d.logo.h * k); }
+    doc.setTextColor(...OP_AZUL); doc.setFont('times', 'bolditalic'); doc.setFontSize(24); doc.text('RECIBO DE PAGAMENTO', 118, y + 13, { align: 'center' });
+    doc.setTextColor(0);
+    y += 26; linha(y); y += 9;
+    rotulo('NUMERO', y);
+    doc.setDrawColor(0); doc.setLineWidth(0.2); doc.rect(XV, y - 5.2, 40, 7);
+    doc.setFont('helvetica', 'normal'); opFonteCabe(doc, d.reg || d.numero, 38, 11); doc.text(String(d.reg || d.numero), XV + 20, y, { align: 'center' });
+    doc.setTextColor(...OP_AZUL); doc.setFont('times', 'bolditalic'); doc.setFontSize(11); doc.text('R$:', 124, y); doc.setTextColor(0);
+    doc.rect(138, y - 5.2, X2 - 138, 7); doc.setFont('helvetica', 'normal'); opFonteCabe(doc, 'R$ ' + opNum2(d.valor), X2 - 140, 11); doc.text('R$ ' + opNum2(d.valor), X2 - 1.5, y, { align: 'right' });
+    y += 10; rotulo('RECEBEMOS DE', y); doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.text(String(d.recebemosDe), XV + 14, y);
+    y += 9; rotulo('A QUANTIA DE', y); { const y1 = y; paragrafo(opExtenso(d.valor), XV + 14, 11, 5, 3); y = Math.max(y, y1 + 5); }
+    y += 4; rotulo('REFERENTE A', y); paragrafo(d.referente || '-', XV + 14, 11, 5, 3);
+    y += 8;
+    const xc = M + 56;
+    linha(y, M + 8, M + 104); y += 5;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(11); doc.text(String(d.fornecedor || '-'), xc, y, { align: 'center', maxWidth: 96 });
+    doc.setFontSize(8); doc.text(d.op ? `OP: ${d.op}` : 'OP: -', X2, y - 1, { align: 'right' }); y += 6;
+    if (d.documento) { doc.setFontSize(11); doc.text(String(d.documento), xc, y, { align: 'center' }); }
+    if (d.setor) { doc.setFontSize(10); doc.text(String(d.setor), X2, y, { align: 'right', maxWidth: 85 }); }
+    y += 6;
+    if (d.evento) { doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.text(`EVENTO: ${d.evento}`, M, y, { maxWidth: 100 }); }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(`VENCIMENTO :${d.vencimento || '-'}${d.forma ? '   ' + String(d.forma).toUpperCase() : ''}`, X2, y, { align: 'right' }); y += 6;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.text(d.pagoEm ? `PAGO EM: ${d.pagoEm}` : 'PAGO EM:  ____/____/________', X2, y, { align: 'right' }); y += 5;
+    if (d.bancos.length) {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.text('DADOS BANCÁRIOS DO FORNECEDOR', M, y); y += 4.6;
+        d.bancos.forEach(b => paragrafo(b, M, 9.5, 4.4, 2, b.startsWith('Titular:') ? 'bold' : 'normal'));
+    }
+    y += 2;
+    const em = d.emitente;
+    [['EMITENTE', em.razao], ['CNPJ', em.cnpj], ['ENDEREÇO', em.endereco], ['TEL. COMERCIAL', em.telefone]].forEach(([r, v]) => {
+        if (!v) return;
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.text(r, M, y); doc.text(String(v), M + 32, y, { maxWidth: W - 32 }); y += 3.8;
+    });
+    doc.setFontSize(7); doc.setTextColor(110); doc.text(d.emissao, X2, y, { align: 'right' }); doc.setTextColor(0); y += 1.5;
+    linha(y);
+    return y + 2;
+}
+function construirPdfOrdemPagamento(ctx, emp, titulos, formato, opcoes) {
+    const margem = opcoes && opcoes.margem != null ? opcoes.margem : null;
+    const { jsPDF } = window.jspdf;
+    const dados = titulos.map(t => opDadosRecibo(ctx, emp, t));
+    if (formato === 'a4') {
+        const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+        dados.forEach((d, i) => {
+            if (i > 0 && i % 2 === 0) doc.addPage();
+            opDesenharA4(doc, d, 10 + (i % 2) * 144);
+            if (i % 2 === 0 && i < dados.length - 1) { doc.setDrawColor(170); doc.setLineWidth(0.2); doc.setLineDashPattern([2, 2], 0); doc.line(8, 150, 202, 150); doc.setLineDashPattern([], 0); }
+        });
+        return doc;
+    }
+    // bobina: cada título é uma página com a altura exata do conteúdo (a impressora térmica corta no fim de cada página)
+    let doc = null;
+    dados.forEach(d => {
+        const h = Math.ceil(opDesenharBobina(new jsPDF({ unit: 'mm', format: [80, 600] }), d, margem));
+        if (!doc) doc = new jsPDF({ unit: 'mm', format: [80, h] }); else doc.addPage([80, h]);
+        opDesenharBobina(doc, d, margem);
+    });
+    try { doc.viewerPreferences({ PrintScaling: 'None', PickTrayByPDFSize: true }, true); } catch (e) { /* versão do jsPDF sem o recurso */ }
+    return doc;
+}
+let opCtx = null;
+function opAtualizarAviso() {
+    const emp = opCtx && opCtx.empresas.find(e => String(e.id) === document.getElementById('opEmpresa').value), av = document.getElementById('opAvisoEmpresa');
+    const falta = [];
+    if (emp) { if (!emp.razao_social) falta.push('razão social'); if (!emp.cnpj) falta.push('CNPJ'); if (!emp.endereco && !(opCtx.unidade && opCtx.unidade.endereco)) falta.push('endereço'); }
+    if (!opCtx.empresas.length) { av.style.display = ''; av.textContent = 'Nenhuma empresa cadastrada: o recibo sai com o nome da unidade. Cadastre em Financeiro → Cadastros → Empresas.'; return; }
+    av.style.display = falta.length ? '' : 'none';
+    av.textContent = falta.length ? `A empresa «${emp.nome}» está sem ${falta.join(', ')} no cadastro (Financeiro → Cadastros → Empresas); o recibo sai sem esses dados.` : '';
+}
+async function opAbrir() {
+    if (!notaEmEdicaoId) return;
+    if (!titulosNotaAtual.length) { alert('Esta nota ainda não tem títulos. Informe os vencimentos (títulos) antes de imprimir a ordem de pagamento.'); return; }
+    const st = document.getElementById('statusOP');
+    st.className = 'status-msg'; st.textContent = 'Carregando dados...';
+    document.getElementById('modalOrdemPagamento').classList.add('aberto');
+    try {
+        const [rNota, rEmp, rUni] = await Promise.all([
+            sb.from('estoque_notas').select('*').eq('id', notaEmEdicaoId).single(),
+            sb.from('empresas').select('*').eq('unidade_negocio_id', meuPerfil.unidadeId).order('nome'),
+            sb.from('servir_unidades_negocio').select('nome,endereco,telefone,logo_url').eq('id', meuPerfil.unidadeId).single()
+        ]);
+        if (rNota.error) throw rNota.error;
+        const nota = rNota.data, empresas = (rEmp.data || []).filter(e => e.ativo !== false), unidade = rUni.data || {};
+        // fornecedor: pela pessoa ligada à nota; notas antigas -> procura pelo mesmo CNPJ/nome entre as pessoas já carregadas
+        let pessoaId = nota.fornecedor_pessoa_id;
+        if (!pessoaId) {
+            const dig = soDigitosCnpj(nota.cnpj_fornecedor);
+            const f = [...fornecedoresMapa.values()].find(x => x.pessoaId && ((dig && soDigitosCnpj(x.cnpj) === dig) || normNome(x.nome) === normNome(nota.nome_fornecedor)));
+            pessoaId = f ? f.pessoaId : null;
+        }
+        let pessoa = null, bancos = [];
+        if (pessoaId) {
+            const { data: p } = await sb.from('pessoa').select('id,nome,razao_social,documento').eq('id', pessoaId).maybeSingle();
+            pessoa = p || null;
+            const rb = await sb.from('pessoa_dados_bancarios').select('*').eq('pessoa_id', pessoaId).eq('ativo', true).order('principal', { ascending: false }).order('id');
+            if (!rb.error) bancos = rb.data || [];     // tabela ainda não criada -> sem dados bancários no recibo
+        }
+        const logo = await opImagemDataUrl(unidade.logo_url);
+        // OP = código da operação da COMPRA (unidade_operacao.codigo): é o número que o Financeiro usa para juntar todos os títulos da mesma nota.
+        // Se a nota ainda não tem operação (nada lançado/rateado), tenta gerá-la agora pelo mesmo caminho dos lançamentos; sem ela, sai «OP: -».
+        let opCodigo = null;
+        try {
+            let op = await operacaoRateioDaNota(nota.id, TIPO_RATEIO_COMPRA);
+            if (!op) { await sincronizarRateioNotaAgora(nota.id); op = await operacaoRateioDaNota(nota.id, TIPO_RATEIO_COMPRA); }
+            opCodigo = op ? op.codigo : null;
+        } catch (e) { console.warn('Operação da nota indisponível para a ordem de pagamento:', e && e.message); }
+        // REG = código do título no Financeiro (existe depois que o protocolo é aceito lá); antes disso não há REG
+        const regs = {};
+        try {
+            const chaves = titulosNotaAtual.filter(t => t.nr_protocolo != null).map(t => 'prot' + t.nr_protocolo + ':t' + t.id);
+            if (chaves.length) {
+                const { data: ft } = await sb.from('financeiro_titulos').select('codigo, id_registro_na_origem').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('origem', 'estoque').in('id_registro_na_origem', chaves);
+                (ft || []).forEach(f => { const m = /:t(\d+)$/.exec(f.id_registro_na_origem || ''); if (m && f.codigo != null) regs[m[1]] = f.codigo; });
+            }
+        } catch (e) { console.warn('Códigos dos títulos no Financeiro indisponíveis:', e && e.message); }
+        opCtx = { nota, empresas, unidade, pessoa, bancos, logo, opCodigo, regs, titulos: titulosNotaAtual.slice() };
+        document.getElementById('opSubtitulo').textContent = `NF ${nota.numero_nf || '#' + nota.id} — ${(pessoa && pessoa.nome) || nota.nome_fornecedor || 'fornecedor não informado'} — ${opCodigo ? 'OP nº ' + opCodigo : 'sem nº de OP (a nota ainda não tem operação)'}${bancos.length ? '' : ' — sem dados bancários cadastrados'}`;
+        // empresa: a do CNPJ do destinatário da NF (XML) -> a última usada neste aparelho -> a primeira
+        const chave = 'estoque_op_empresa_' + meuPerfil.unidadeId; let ultima = null; try { ultima = localStorage.getItem(chave); } catch (e) { /* sem storage */ }
+        const dTom = soDigitosCnpj(nota.cnpj_tomador);
+        const padrao = empresas.find(e => nota.empresa_id != null && e.id === nota.empresa_id) || empresas.find(e => dTom && soDigitosCnpj(e.cnpj) === dTom) || empresas.find(e => String(e.id) === String(ultima)) || empresas[0] || null;
+        document.getElementById('opEmpresa').innerHTML = empresas.map(e => `<option value="${e.id}" ${padrao && padrao.id === e.id ? 'selected' : ''}>${escapeHtml(e.nome)}</option>`).join('') || '<option value="">(usar o nome da unidade)</option>';
+        document.getElementById('opListaTitulos').innerHTML = opCtx.titulos.map(t => `<div style="display:flex; gap:8px; align-items:center; padding:3px 0;"><label style="display:flex; gap:8px; align-items:center; flex:1;"><input type="checkbox" data-op-t="${t.id}" checked>
+            <span><strong>${escapeHtml(t.numero_titulo || '#' + t.id)}</strong> · venc. ${t.data_vencimento ? formatarDataBR(t.data_vencimento) : '—'} · ${formatarMoeda(t.valor)}${t.forma_pagamento ? ' · ' + escapeHtml(t.forma_pagamento) : ''}${t.data_pagamento ? ' · pago em ' + formatarDataBR(t.data_pagamento) : ''}</span></label>
+            <button type="button" class="btn btn-cinza btn-pequeno" data-op-imprimir="${t.id}" title="Imprime só este título, como um trabalho de impressão separado (a impressora corta ao final)">🖨️</button></div>`).join('');
+        let mg = null; try { mg = localStorage.getItem('estoque_op_margem'); } catch (e) { /* sem storage */ }
+        if (mg && Number(mg) >= 2 && Number(mg) <= 14) document.getElementById('opMargem').value = mg;
+        opAtualizarFormato();
+        opAtualizarAviso();
+        st.textContent = '';
+    } catch (e) {
+        st.className = 'status-msg erro'; st.textContent = 'Não consegui carregar os dados da ordem de pagamento: ' + ((e && e.message) || e);
+    }
+}
+// margem lateral da bobina escolhida no popup (guardada neste aparelho)
+function opMargemEscolhida() {
+    const v = Number(String(document.getElementById('opMargem').value).replace(',', '.'));
+    const m = v >= 2 && v <= 14 ? v : 6;
+    try { localStorage.setItem('estoque_op_margem', String(m)); } catch (e) { /* sem storage */ }
+    return m;
+}
+function opAtualizarFormato() {
+    const bobina = document.getElementById('opFormato').value === 'bobina';
+    document.getElementById('opCampoMargem').style.display = bobina ? '' : 'none';
+    document.getElementById('opDicaCorte').style.display = bobina ? '' : 'none';
+    document.querySelectorAll('#opListaTitulos [data-op-imprimir]').forEach(b => { b.style.display = bobina ? '' : 'none'; });
+}
+// imprime UM título como um trabalho de impressão próprio (PDF numa moldura invisível + print): a impressora corta ao fim de cada trabalho
+function opImprimirUm(tituloId) {
+    const st = document.getElementById('statusOP');
+    if (!opCtx) return;
+    const t = opCtx.titulos.find(x => String(x.id) === String(tituloId)); if (!t) return;
+    const emp = opCtx.empresas.find(e => String(e.id) === document.getElementById('opEmpresa').value) || null;
+    try {
+        const doc = construirPdfOrdemPagamento(opCtx, emp, [t], 'bobina', { margem: opMargemEscolhida() });
+        const url = URL.createObjectURL(doc.output('blob'));
+        const ifr = document.createElement('iframe');
+        ifr.style.cssText = 'position:fixed; right:0; bottom:0; width:1px; height:1px; border:0; opacity:0; pointer-events:none;';
+        ifr.onload = () => setTimeout(() => {
+            try { ifr.contentWindow.focus(); ifr.contentWindow.print(); }
+            catch (e) { window.open(url, '_blank'); st.className = 'status-msg'; st.textContent = 'O navegador não deixou imprimir direto; abri o PDF numa aba (imprima com Ctrl+P).'; }
+        }, 500);
+        ifr.src = url; document.body.appendChild(ifr);
+        setTimeout(() => { ifr.remove(); URL.revokeObjectURL(url); }, 180000);
+        st.className = 'status-msg'; st.textContent = `Enviando o título ${t.numero_titulo || '#' + t.id} para impressão...`;
+    } catch (e) { console.error(e); st.className = 'status-msg erro'; st.textContent = 'Erro ao gerar o PDF: ' + ((e && e.message) || e); }
+}
+async function opGerar(acao) {
+    const st = document.getElementById('statusOP');
+    if (!opCtx) return;
+    const marcados = [...document.querySelectorAll('#opListaTitulos [data-op-t]:checked')].map(c => String(c.dataset.opT));
+    const titulos = opCtx.titulos.filter(t => marcados.includes(String(t.id)));
+    if (!titulos.length) { st.className = 'status-msg erro'; st.textContent = 'Marque ao menos um título.'; return; }
+    const empId = document.getElementById('opEmpresa').value, emp = opCtx.empresas.find(e => String(e.id) === empId) || null;
+    const formato = document.getElementById('opFormato').value;
+    try { if (emp) localStorage.setItem('estoque_op_empresa_' + meuPerfil.unidadeId, String(emp.id)); } catch (e) { /* sem storage */ }
+    try {
+        st.className = 'status-msg'; st.textContent = '';
+        const doc = construirPdfOrdemPagamento(opCtx, emp, titulos, formato, { margem: opMargemEscolhida() });
+        executarAcaoPdf(acao, doc, `ordem-pagamento-${slugArquivo(opCtx.nota.numero_nf || 'nota-' + opCtx.nota.id)}-${formato}.pdf`);
+    } catch (e) {
+        console.error(e); st.className = 'status-msg erro'; st.textContent = 'Erro ao gerar o PDF: ' + ((e && e.message) || e);
+    }
+}
+document.getElementById('btnImprimirOP').addEventListener('click', opAbrir);
+document.getElementById('opFechar').addEventListener('click', () => document.getElementById('modalOrdemPagamento').classList.remove('aberto'));
+document.getElementById('opEmpresa').addEventListener('change', () => { if (opCtx) opAtualizarAviso(); });
+document.getElementById('opFormato').addEventListener('change', opAtualizarFormato);
+document.getElementById('opListaTitulos').addEventListener('click', (ev) => { const b = ev.target.closest('[data-op-imprimir]'); if (b) opImprimirUm(b.dataset.opImprimir); });
+document.getElementById('opMarcarTodos').addEventListener('click', () => {
+    const cks = [...document.querySelectorAll('#opListaTitulos [data-op-t]')], tudo = cks.every(c => c.checked);
+    cks.forEach(c => { c.checked = !tudo; });
+});
+document.getElementById('opVer').addEventListener('click', () => opGerar('ver'));
+document.getElementById('opSalvar').addEventListener('click', () => opGerar('salvar'));
+document.getElementById('opCompartilhar').addEventListener('click', () => opGerar('compartilhar'));
 
 async function abrirModalBaixaItensNota() {
     if (!notaEmEdicaoId) return;
