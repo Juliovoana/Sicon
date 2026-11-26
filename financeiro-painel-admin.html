@@ -256,6 +256,9 @@
   .ext-tabs{ display:flex; gap:6px; margin:6px 0 16px; border-bottom:1px solid var(--border); flex-wrap:wrap; }
   .ext-tab{ background:none; border:none; padding:10px 14px; font-size:.85rem; font-family:inherit; cursor:pointer; color:var(--muted); border-bottom:2px solid transparent; margin-bottom:-1px; }
   .ext-tab.ativo{ color:var(--brand); border-bottom-color:var(--brand); font-weight:600; }
+  .ext-saldo-box{ border:1px solid var(--border); border-radius:10px; padding:10px 12px; margin:10px 0; background:var(--surface); }
+  .ext-saldo-box h4{ margin:0 0 6px; font-size:.9rem; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+  .ext-ok{ color:#2E7D32; font-weight:600; } .ext-falta{ color:#B5651D; font-weight:600; }
   .ext-selo{ font-size:.7rem; background:var(--brand-soft); color:var(--brand-2); border-radius:10px; padding:2px 8px; margin-left:8px; font-weight:600; }
   .ext-cod{ font-size:.72rem; color:var(--muted-2); margin-left:8px; }
   .ext-nota{ font-size:.78rem; color:var(--muted); margin-top:10px; }
@@ -644,6 +647,7 @@
               <button class="ext-chip" data-conc-atalho="mes_ant">Mês anterior</button>
               <button class="ext-chip" data-conc-atalho="tudo">Tudo</button>
             </div>
+            <div id="concAvisoEmpresa" style="display:none; margin:0 0 10px; padding:9px 12px; border-radius:8px; background:#FFF3E0; color:#8A5E12; font-size:.84rem; border:1px solid #F0C98A;"></div>
             <div class="ext-tabs">
               <button class="ext-tab ativo" data-conc-aba="importar">1 · Importar extrato</button>
               <button class="ext-tab" data-conc-aba="conciliar">2 · Conciliar</button>
@@ -1123,6 +1127,28 @@
       <div class="modal-lista-add">
         <button class="btn-danger-outline" id="btnExcluirCadastro" style="display:none;">Excluir</button>
         <button class="btn-novo" id="btnSalvarCadastro" style="flex:1;">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: LANÇAR SALDO DA CONTA (ponto de partida do extrato) ================= -->
+  <div class="modal-lista-overlay" id="modalSaldoConta">
+    <div class="modal-lista" style="max-width:520px;">
+      <div class="modal-lista-head">
+        <h3 id="saldoContaTitulo">Lançar saldo da conta</h3>
+        <button class="drawer-close" id="btnFecharSaldoConta">✕</button>
+      </div>
+      <div class="modal-lista-body">
+        <p style="font-size:.82rem; color:var(--muted); margin:0 0 10px;">Define o <strong>ponto de partida</strong> do saldo desta conta: dali em diante o extrato soma só os lançamentos seguintes. Lançamentos de datas anteriores continuam podendo ser conciliados — e você confere depois se o histórico bate com este saldo. Conta sem saldo lançado soma tudo desde o começo.</p>
+        <div class="field-group"><label>Data</label><input type="date" id="saldoContaData"></div>
+        <div class="field-group"><label>O saldo informado é o saldo…</label>
+          <select id="saldoContaMomento"><option value="fim">no FIM do dia (os lançamentos desta data já estão no saldo)</option><option value="inicio">no INÍCIO do dia (os lançamentos desta data ainda vão somar)</option></select></div>
+        <div class="field-group"><label>Saldo (R$)</label><input type="text" id="saldoContaValor" inputmode="decimal" placeholder="ex.: 12.345,67 (negativo: -1.500,00)"></div>
+        <div class="field-group"><label>Observação (opcional)</label><input type="text" id="saldoContaObs" placeholder="ex.: saldo do extrato do banco em 30/11"></div>
+        <p id="saldoContaResumo" style="font-size:.82rem; margin:8px 0 0;"></p>
+      </div>
+      <div class="modal-lista-add">
+        <button class="btn-novo" id="btnSalvarSaldoConta" style="flex:1;">Lançar saldo</button>
       </div>
     </div>
   </div>
@@ -1948,6 +1974,7 @@
       return;
     }
     extEstado.resumo = data || [];
+    await extCarregarSaldos();
     if(extEstado.contaId) await extAbrirConta(extEstado.contaId, true); else extRenderLista();
   }
 
@@ -1990,7 +2017,7 @@
         <thead><tr><th>Conta</th><th class="num">Saldo anterior</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Saldo atual</th><th class="num">Lançamentos</th></tr></thead>
         <tbody>${linhas.map(l => `
           <tr class="ext-linha" data-ext-conta="${l.id_conta}">
-            <td><strong>${escapeHtml(l.nome)}</strong>${l.passagem ? '<span class="ext-selo">não acompanha saldo</span>' : ''}${l.codigo != null ? `<span class="ext-cod">cód. ${l.codigo}</span>` : ''}</td>
+            <td><strong>${escapeHtml(l.nome)}</strong>${l.passagem ? '<span class="ext-selo">não acompanha saldo</span>' : ''}${l.codigo != null ? `<span class="ext-cod">cód. ${l.codigo}</span>` : ''}${extSeloSaldo(l.id_conta)}</td>
             <td class="num ${extClasseValor(l.saldo_anterior)}">${extNum(l.saldo_anterior)}</td>
             <td class="num">${extNum(l.entradas)}</td>
             <td class="num">${extNum(l.saidas)}</td>
@@ -2025,6 +2052,7 @@
         <div class="stat-card"><span class="label">Saídas</span><span class="value">${extNum(r.saidas)}</span></div>
         <div class="stat-card"><span class="label">Saldo atual</span><span class="value ${extClasseValor(r.saldo_atual)}">${extNum(r.saldo_atual)}</span></div>
       </div>
+      <div id="extSaldoBloco"></div>
       <div class="ext-tabs">
         ${[['dia', 'Dia a dia'], ['det', 'Detalhado'], ['conc', 'Detalhado conciliado'], ['graf', 'Gráficos']].map(([k, t]) => `<button class="ext-tab ${extEstado.aba === k ? 'ativo' : ''}" data-ext-aba="${k}">${t}</button>`).join('')}
       </div>
@@ -2033,7 +2061,104 @@
     const bt = document.getElementById('extTogglePassagem');
     if(bt) bt.addEventListener('click', () => extAlternarPassagem(id));
     document.querySelectorAll('[data-ext-aba]').forEach(b => b.addEventListener('click', () => { extEstado.aba = b.dataset.extAba; extEstado.diaFiltro = null; extAbrirConta(id, true); }));
+    extRenderSaldoBloco(id);
     await extRenderAba();
+  }
+
+  // =================================================================
+  // SALDO LANÇADO (ponto de partida do saldo de uma conta) — financeiro_saldo_conta; regra no banco (financeiro-extrato.sql):
+  // sem saldo lançado a conta soma TUDO desde o começo; com saldo lançado, o saldo vale dali em diante e os lançamentos anteriores só ficam para conferência.
+  // =================================================================
+  extEstado.saldos = new Map(); extEstado.saldosOk = true;
+  async function extCarregarSaldos(){
+    try{
+      const { data, error } = await sb.from('financeiro_saldo_conta').select('id, id_conta, data_inicio, valor, observacao').eq('unidade_negocio_id', agenciaId).order('data_inicio');
+      if(error) throw error;
+      extEstado.saldos = new Map(); extEstado.saldosOk = true;
+      (data || []).forEach(s => { if(!extEstado.saldos.has(s.id_conta)) extEstado.saldos.set(s.id_conta, []); extEstado.saldos.get(s.id_conta).push(s); });
+    } catch(e){ extEstado.saldos = new Map(); extEstado.saldosOk = false; }      // SQL ainda não rodado: a tela segue como antes
+  }
+  function extSeloSaldo(idConta){
+    const l = extEstado.saldos && extEstado.saldos.get(idConta); if(!l || !l.length) return '';
+    const u = l[l.length - 1];
+    return `<span class="ext-selo" title="Saldo lançado: ${extNum(u.valor)} antes de ${formatarData(u.data_inicio)}. O saldo desta conta é acompanhado a partir dessa data.">📌 saldo lançado — vale desde ${formatarData(u.data_inicio)}</span>`;
+  }
+  function extLerValor(txt){
+    let s = String(txt || '').replace(/R\$|\s/g, '');
+    if(!s) return null;
+    if(s.includes(',')) s = s.replace(/\./g, '').replace(',', '.');
+    const n = Number(s);
+    return Number.isFinite(n) ? Math.round(n * 100) / 100 : null;
+  }
+  function extMaisUmDia(iso){ const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() + 1); return extDataISO(d); }
+  async function extRenderSaldoBloco(id){
+    const el = document.getElementById('extSaldoBloco'); if(!el) return;
+    if(extEstado.saldosOk === false){ el.innerHTML = ''; return; }
+    const { data, error } = await sb.rpc('financeiro_saldo_conferencia', { p_unidade: agenciaId, p_conta: id });
+    if(error){ el.innerHTML = ''; return; }
+    if(extEstado.contaId !== id) return;
+    const L = data || [];
+    const linhas = L.map(s => {
+      const dif = Number(s.diferenca), bateu = Math.abs(dif) < 0.005;
+      const msg = bateu ? '<span class="ext-ok">✔ o histórico bateu com o saldo lançado</span>'
+        : `<span class="ext-falta">${dif > 0 ? 'faltam ' + extNum(dif) + ' de ENTRADAS (ou há saída lançada a mais)' : 'faltam ' + extNum(-dif) + ' de SAÍDAS (ou há entrada lançada a mais)'} nos lançamentos até essa data</span>`;
+      return `<tr><td>${formatarData(s.data_inicio)}${s.observacao ? `<br><small style="color:var(--muted);">${escapeHtml(s.observacao)}</small>` : ''}</td>
+        <td class="num"><strong>${extNum(s.valor)}</strong></td><td class="num">${extNum(s.esperado)}<br><small style="color:var(--muted);">${Number(s.qtd_lancamentos).toLocaleString('pt-BR')} lanç.</small></td>
+        <td class="num ${extClasseValor(s.diferenca)}">${extNum(s.diferenca)}</td><td>${msg}</td>
+        <td>${ehPrincipalAtual ? `<button class="ext-chip" data-ext-saldo-del="${s.id}" title="Excluir este saldo lançado">🗑</button>` : ''}</td></tr>`;
+    }).join('');
+    el.innerHTML = `<div class="ext-saldo-box"><h4><span>📌 Saldo lançado — ponto de partida do saldo desta conta</span>
+        ${ehPrincipalAtual ? '<button class="ext-chip" id="extLancarSaldo">➕ Lançar saldo</button>' : ''}</h4>
+      ${L.length ? `<div class="ext-tabela-wrap"><table class="ext-tabela"><thead><tr><th>Vale a partir de</th><th class="num">Saldo lançado</th><th class="num">Pelos lançamentos</th><th class="num">Diferença</th><th>Conferência</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>
+        <p class="ext-nota">«Pelos lançamentos» = o que os lançamentos desta conta somam até a data (saldo lançado anterior + lançamentos entre os dois). Diferença zero = a conciliação do histórico fechou. Lançamentos de datas anteriores ao saldo não mexem no saldo dali em diante.</p>`
+        : '<p class="ext-nota" style="margin:0;">Nenhum saldo lançado: esta conta soma <strong>todos</strong> os lançamentos desde o começo (como sempre foi).</p>'}</div>`;
+    const bt = document.getElementById('extLancarSaldo'); if(bt) bt.addEventListener('click', () => extAbrirModalSaldo(id));
+    el.querySelectorAll('[data-ext-saldo-del]').forEach(b => b.addEventListener('click', () => extExcluirSaldo(Number(b.dataset.extSaldoDel), id)));
+  }
+  function extAbrirModalSaldo(idConta){
+    document.getElementById('saldoContaTitulo').textContent = 'Lançar saldo — ' + extNomeConta(idConta);
+    document.getElementById('saldoContaData').value = extEstado.de || extDataISO(new Date());
+    document.getElementById('saldoContaMomento').value = 'inicio';
+    document.getElementById('saldoContaValor').value = '';
+    document.getElementById('saldoContaObs').value = '';
+    document.getElementById('saldoContaResumo').textContent = '';
+    document.getElementById('btnSalvarSaldoConta').dataset.conta = String(idConta);
+    document.getElementById('modalSaldoConta').classList.add('show');
+  }
+  document.getElementById('btnFecharSaldoConta').addEventListener('click', () => document.getElementById('modalSaldoConta').classList.remove('show'));
+  ['saldoContaData', 'saldoContaMomento', 'saldoContaValor'].forEach(i => document.getElementById(i).addEventListener('input', () => {
+    const d = document.getElementById('saldoContaData').value, v = extLerValor(document.getElementById('saldoContaValor').value), fim = document.getElementById('saldoContaMomento').value === 'fim';
+    document.getElementById('saldoContaResumo').textContent = d && v !== null ? `O saldo de ${extNum(v)} vale antes de ${formatarData(fim ? extMaisUmDia(d) : d)}: o extrato passa a somar os lançamentos a partir de ${formatarData(fim ? extMaisUmDia(d) : d)}.` : '';
+  }));
+  document.getElementById('btnSalvarSaldoConta').addEventListener('click', async () => {
+    const idConta = Number(document.getElementById('btnSalvarSaldoConta').dataset.conta);
+    const dataSel = document.getElementById('saldoContaData').value, valor = extLerValor(document.getElementById('saldoContaValor').value), fim = document.getElementById('saldoContaMomento').value === 'fim';
+    if(!dataSel){ alert('Informe a data.'); return; }
+    if(valor === null){ alert('Informe o saldo (R$). Ex.: 12.345,67'); return; }
+    const dataInicio = fim ? extMaisUmDia(dataSel) : dataSel;
+    const btn = document.getElementById('btnSalvarSaldoConta'); btn.disabled = true;
+    try{
+      const { error } = await sb.from('financeiro_saldo_conta').insert({ unidade_negocio_id: agenciaId, id_conta: idConta, data_inicio: dataInicio, valor, observacao: document.getElementById('saldoContaObs').value.trim() || null, criado_por: meuEmail });
+      if(error){
+        if(/duplicate|unique|23505/i.test(error.code + ' ' + error.message)) alert('Já existe um saldo lançado para esta conta que vale a partir de ' + formatarData(dataInicio) + '. Exclua o anterior (🗑) ou escolha outra data.');
+        else if(/row-level security|permission/i.test(error.message)) alert('Só o usuário principal da unidade pode lançar saldo.');
+        else if(/financeiro_saldo_conta|schema cache/i.test(error.message)) alert('Rode antes o arquivo financeiro-extrato.sql no Supabase (cria a tabela de saldos lançados).');
+        else alert('Não consegui lançar o saldo: ' + error.message);
+        return;
+      }
+      await registrarSentinela('financeiro_saldo_conta_lancado', `Lançou o saldo da conta "${extNomeConta(idConta)}": ${extNum(valor)} antes de ${formatarData(dataInicio)} (ponto de partida do saldo)`);
+      document.getElementById('modalSaldoConta').classList.remove('show');
+      await extRecarregar();
+    } finally { btn.disabled = false; }
+  });
+  async function extExcluirSaldo(idSaldo, idConta){
+    const s = (extEstado.saldos.get(idConta) || []).find(x => x.id === idSaldo);
+    if(!confirm(`Excluir o saldo lançado${s ? ' de ' + extNum(s.valor) + ' (vale a partir de ' + formatarData(s.data_inicio) + ')' : ''}?\n\nSe não restar outro saldo lançado, a conta volta a somar TODOS os lançamentos desde o começo. Os lançamentos não são alterados.`)) return;
+    const { data, error } = await sb.from('financeiro_saldo_conta').delete().eq('id', idSaldo).select();
+    if(error){ alert('Não consegui excluir: ' + error.message); return; }
+    if(!data || !data.length){ alert('Não foi possível excluir (só o usuário principal da unidade pode).'); return; }
+    await registrarSentinela('financeiro_saldo_conta_excluido', `Excluiu o saldo lançado da conta "${extNomeConta(idConta)}"${s ? ': ' + extNum(s.valor) + ' (valia a partir de ' + formatarData(s.data_inicio) + ')' : ''}`);
+    await extRecarregar();
   }
 
   async function extAlternarPassagem(id){
@@ -2271,6 +2396,31 @@
     });
     return linhas;
   }
+  // CABEÇALHO DO OFX (25/11/2026): <BANKACCTFROM> (ou <CCACCTFROM>) traz BANKID, BRANCHID (agência) e ACCTID (conta). Devolve null se o arquivo não identifica a conta.
+  function concOfxConta(texto){
+    const cab = String(texto).split(/<STMTTRN>/i)[0];
+    const tag = (t) => { const r = new RegExp('<' + t + '>\\s*([^<\\r\\n]*)', 'i').exec(cab); return r ? r[1].trim() : ''; };
+    const o = { banco: tag('BANKID'), agencia: tag('BRANCHID'), conta: tag('ACCTID') };
+    return (o.agencia || o.conta) ? o : null;
+  }
+  // confronto agência/conta do cadastro × arquivo: ignora pontuação e zeros à esquerda; aceita dígito verificador a mais/a menos (um número contido no outro:
+  // começo ou fim, com folga curta). Devolve true/false, ou null quando não dá para comparar (um dos lados vazio).
+  const concDigitos = (s) => String(s || '').replace(/\D/g, '').replace(/^0+/, '');
+  function concNumCombina(a, b, minimo, folga){
+    a = concDigitos(a); b = concDigitos(b); if(!a || !b) return null;
+    if(a === b) return true;
+    const [c, d] = a.length <= b.length ? [a, b] : [b, a];
+    return c.length >= minimo && (d.length - c.length) <= folga && (d.startsWith(c) || d.endsWith(c));
+  }
+  // {avaliado, ok}: avaliado = deu para comparar pelo menos um dos dois (agência/conta); ok = nenhum dos comparados divergiu
+  function concConfereContaArquivo(conta, arq){
+    const r = { avaliado: false, ok: true };
+    if(!conta || !arq) return r;
+    const ag = conta.agencia ? concNumCombina(conta.agencia, arq.agencia, 3, 2) : null, nc = conta.numero_conta ? concNumCombina(conta.numero_conta, arq.conta, 4, 6) : null;
+    r.avaliado = ag !== null || nc !== null; r.ok = ag !== false && nc !== false;
+    return r;
+  }
+  const concRotuloAgConta = (ag, nc) => [ag ? 'agência ' + ag : '', nc ? 'conta ' + nc : ''].filter(Boolean).join(' · ') || '—';
   function concParseOfx(texto){
     const linhas = [];
     const re = /<STMTTRN>([\s\S]*?)(?=<\/STMTTRN>|<STMTTRN>|<\/BANKTRANLIST>|$)/gi; let m;
@@ -2314,7 +2464,7 @@
     const buffer = await arquivo.arrayBuffer();
     if(layout === 'sicoob' || (layout === 'auto' && /\.xlsx?$/.test(nome))) return { formato: 'Sicoob (planilha)', linhas: await concParseXlsx(buffer) };
     const texto = concDecodificar(buffer);
-    if(layout === 'ofx' || (layout === 'auto' && (/\.(ofx|ofc)$/.test(nome) || /<STMTTRN>/i.test(texto)))) return { formato: 'OFX', linhas: concParseOfx(texto) };
+    if(layout === 'ofx' || (layout === 'auto' && (/\.(ofx|ofc)$/.test(nome) || /<STMTTRN>/i.test(texto)))) return { formato: 'OFX', linhas: concParseOfx(texto), contaArquivo: concOfxConta(texto) };
     if(layout === 'bradesco' || (layout === 'auto' && /(Lan.amento;Dcto|Extrato de:|Cr.dito \(R\$\))/i.test(texto))) return { formato: 'Bradesco (CSV)', linhas: concParseBradesco(texto) };
     return { formato: 'Itaú (TXT)', linhas: concParseItau(texto) };
   }
@@ -2340,6 +2490,20 @@
     concLerFiltros();
     await concRender();
   }
+  // CAMPO DE DATA (25/11/2026): o <input type="date"> dispara «change» a cada dígito digitado (20/11/2 → 20/11/20 → ...), o que refazia o filtro e recarregava as listas no meio da digitação.
+  // Agora, digitando, o filtro só é aplicado quando a pessoa SAI do campo (Tab/clique fora) ou aperta ENTER; escolher a data no calendário (sem digitar) aplica na hora.
+  function aoConfirmarData(el, fn){
+    if(!el) return;
+    let digitando = false, sujo = false;
+    const aplicar = () => { digitando = false; if(!sujo) return; sujo = false; fn(); };
+    el.addEventListener('keydown', (ev) => {
+      if(ev.key === 'Enter'){ ev.preventDefault(); aplicar(); }
+      else if(ev.key.length === 1 || ev.key === 'Backspace' || ev.key === 'Delete' || ev.key === 'ArrowUp' || ev.key === 'ArrowDown') digitando = true;
+    });
+    el.addEventListener('pointerdown', () => { digitando = false; });   // clicou (calendário/ícone): o próximo «change» é uma escolha, não digitação
+    el.addEventListener('change', () => { if(digitando){ sujo = true; return; } sujo = true; aplicar(); });
+    el.addEventListener('blur', aplicar);
+  }
   function concLerFiltros(){
     concEstado.contaId = document.getElementById('concConta').value;
     concEstado.de = document.getElementById('concDe').value; concEstado.ate = document.getElementById('concAte').value;
@@ -2352,7 +2516,27 @@
     document.getElementById('concDe').value = de; document.getElementById('concAte').value = ate;
     concLerFiltros(); concRender();
   }
+  // AVISO (25/11/2026): conta corrente SEM EMPRESA PADRÃO cadastrada — a empresa das regras e dos lançamentos gerados vem da conta (Cadastros → Contas Correntes).
+  // Mostra uma faixa fixa sobre as abas e, uma vez por conta (por sessão da página), um alerta.
+  const concAvisouEmpresa = new Set();
+  function concAvisoEmpresaConta(){
+    const box = document.getElementById('concAvisoEmpresa'); if(!box) return;
+    const conta = concEstado.contaId ? todasContas.find(x => String(x.id) === String(concEstado.contaId)) : null;
+    if(!conta || conta.empresa_id){ box.style.display = 'none'; box.innerHTML = ''; return; }
+    const pad = parametrosGerais && parametrosGerais.empresa_padrao_id ? todasEmpresas.find(e => String(e.id) === String(parametrosGerais.empresa_padrao_id)) : null;
+    const depois = pad ? `Enquanto isso, as regras e os lançamentos gerados usam a empresa padrão da unidade (<strong>${escapeHtml(pad.nome)}</strong>), o que pode não ser a empresa desta conta.`
+                       : 'Sem ela, a empresa precisa ser escolhida em cada lançamento gerado e as regras sem empresa não se completam sozinhas.';
+    box.innerHTML = `⚠️ A conta <strong>${escapeHtml(conta.nome)}</strong> não tem <strong>empresa padrão</strong> cadastrada. Cadastre em <em>Cadastros → Contas Correntes</em> (campo «Empresa titular da conta»). ${depois}`;
+    box.style.display = '';
+    if(!concAvisouEmpresa.has(String(conta.id))){
+      concAvisouEmpresa.add(String(conta.id));
+      alert(`A conta "${conta.nome}" não tem empresa padrão cadastrada.
+
+Cadastre em Cadastros → Contas Correntes (campo «Empresa titular da conta»). ` + (pad ? `Enquanto isso, será usada a empresa padrão da unidade (${pad.nome}), que pode não ser a empresa desta conta.` : 'Sem ela, a empresa precisa ser escolhida em cada lançamento gerado.'));
+    }
+  }
   async function concRender(){
+    concAvisoEmpresaConta();
     document.querySelectorAll('[data-conc-aba]').forEach(b => b.classList.toggle('ativo', b.dataset.concAba === concEstado.aba));
     if(concEstado.aba === 'regras') return concRenderRegras();
     if(!concEstado.contaId && concEstado.aba !== 'feitas'){ concMsg('Escolha a conta do banco acima para começar.'); return; }
@@ -2386,7 +2570,18 @@
     const arq = document.getElementById('concArquivo').files[0]; if(!arq){ alert('Escolha o arquivo do extrato.'); return; }
     const alvo = document.getElementById('concPrevia'); alvo.innerHTML = '<div class="vazio">Lendo o arquivo...</div>';
     try{
-      const { formato, linhas } = await concLerArquivo(arq, document.getElementById('concLayout').value);
+      const { formato, linhas, contaArquivo } = await concLerArquivo(arq, document.getElementById('concLayout').value);
+      // CONFRONTO COM A CONTA ESCOLHIDA: se o cadastro da conta tem agência/nº e o arquivo (OFX) identifica a sua conta, arquivo de OUTRA conta é BLOQUEADO
+      const contaSel = todasContas.find(c => String(c.id) === String(concEstado.contaId));
+      const conf = concConfereContaArquivo(contaSel, contaArquivo);
+      if(conf.avaliado && !conf.ok){
+        const outra = todasContas.find(c => String(c.id) !== String(concEstado.contaId) && (() => { const x = concConfereContaArquivo(c, contaArquivo); return x.avaliado && x.ok; })());
+        alvo.innerHTML = `<div style="background:#FDECEA; color:#8B1A10; border:1px solid #F1B0A8; border-radius:8px; padding:12px 14px; font-size:.88rem;">⛔ <strong>Importação bloqueada: este arquivo é de outra conta.</strong><br>
+          Arquivo: <strong>${escapeHtml(concRotuloAgConta(contaArquivo.agencia, contaArquivo.conta))}</strong><br>
+          Conta escolhida (<strong>${escapeHtml(contaSel.nome)}</strong>): <strong>${escapeHtml(concRotuloAgConta(contaSel.agencia, contaSel.numero_conta))}</strong><br>
+          ${outra ? `Esse arquivo bate com a conta <strong>${escapeHtml(outra.nome)}</strong> — escolha-a na lista acima e importe de novo.` : 'Escolha a conta correta na lista acima. Se o cadastro desta conta é que está errado, corrija a agência/nº em <em>Cadastros → Contas Correntes</em>.'}</div>`;
+        concEstado.previa = null; return;
+      }
       if(!linhas.length){ alvo.innerHTML = '<div class="vazio">Não encontrei lançamentos nesse arquivo. Confira o formato escolhido.</div>'; concEstado.previa = null; return; }
       // chave de duplicidade: data|histórico|documento|valores + nº da ocorrência igual dentro do arquivo
       const vistos = {};
@@ -2411,7 +2606,7 @@
         linhas.filter(l => l._ja).forEach(l => { const k = chave(l.data, l.credito, l.debito); if(sobra.get(k) > 0) sobra.set(k, sobra.get(k) - 1); });   // as que já casaram pelo hash consomem a sua
         linhas.filter(l => !l._ja).forEach(l => { const k = chave(l.data, l.credito, l.debito); if(sobra.get(k) > 0){ sobra.set(k, sobra.get(k) - 1); l._ja = true; l._outroFormato = true; reconhecidas++; } });
       }
-      concEstado.previa = { arquivo: arq.name, formato, linhas, reconhecidas };
+      concEstado.previa = { arquivo: arq.name, formato, linhas, reconhecidas, contaArquivo, conferencia: conf, contaIdPrevia: concEstado.contaId };
       concDesenharPrevia();
     } catch(e){ alvo.innerHTML = '<div class="vazio">Não consegui ler: ' + escapeHtml(e.message) + '</div>'; concEstado.previa = null; }
   }
@@ -2419,7 +2614,11 @@
     const p = concEstado.previa; const alvo = document.getElementById('concPrevia'); if(!p || !alvo) return;
     const novas = p.linhas.filter(l => !l._ja), cred = novas.reduce((a, l) => a + l.credito, 0), deb = novas.reduce((a, l) => a + l.debito, 0);
     const datas = p.linhas.map(l => l.data).sort();
-    alvo.innerHTML = `
+    const cf = p.conferencia, ca = p.contaArquivo, contaPrev = todasContas.find(c => String(c.id) === String(concEstado.contaId));
+    const notaConta = !ca ? '' : (cf && cf.avaliado)
+      ? `<p class="ext-nota" style="margin:10px 0 0; color:#2E7D32;">✔ Conta conferida: o arquivo é da ${escapeHtml(concRotuloAgConta(ca.agencia, ca.conta))}, igual ao cadastro de <strong>${escapeHtml(contaPrev ? contaPrev.nome : '')}</strong>.</p>`
+      : `<p class="ext-nota" style="margin:10px 0 0; padding:8px 10px; background:#FFF3E0; border-radius:8px; color:#8A5E12;">⚠️ Este arquivo é da <strong>${escapeHtml(concRotuloAgConta(ca.agencia, ca.conta))}</strong>, mas a conta escolhida <strong>não tem agência / nº da conta cadastrados</strong>, então não deu para conferir. Cadastre em <em>Cadastros → Contas Correntes</em> para o sistema bloquear arquivo de outra conta.</p>`;
+    alvo.innerHTML = `${notaConta}
       <p class="ext-nota" style="margin:10px 0;">Arquivo <strong>${escapeHtml(p.arquivo)}</strong> · formato ${escapeHtml(p.formato)} · ${p.linhas.length} lançamento(s) de ${formatarData(datas[0])} a ${formatarData(datas[datas.length - 1])} ·
         <strong>${novas.length} nova(s)</strong> (créditos ${concNum(cred)} · débitos ${concNum(deb)}) · ${p.linhas.length - novas.length} já importada(s)${p.reconhecidas ? ` (${p.reconhecidas} reconhecida(s) de outro formato, por mesmo dia e valor)` : ''}.</p>
       <div class="ext-tabela-wrap" style="max-height:50vh; overflow:auto;"><table class="ext-tabela">
@@ -2436,6 +2635,9 @@
     const novas = p.linhas.filter(l => !l._ja); if(!novas.length) return;
     const btn = document.getElementById('concImportar'), st = document.getElementById('concImportStatus'); btn.disabled = true;
     try{
+      // trava final: reconfere a conta no momento de gravar (a conta escolhida pode ter mudado desde a leitura do arquivo)
+      const cfFinal = concConfereContaArquivo(todasContas.find(c => String(c.id) === String(concEstado.contaId)), p.contaArquivo);
+      if(String(p.contaIdPrevia) !== String(concEstado.contaId) || (cfFinal.avaliado && !cfFinal.ok)) throw new Error('este arquivo não é da conta escolhida. Leia o arquivo de novo com a conta certa selecionada.');
       const lote = crypto.randomUUID ? crypto.randomUUID() : null;
       const registros = novas.map(l => ({ unidade_negocio_id: agenciaId, id_conta: Number(concEstado.contaId), data: l.data, historico: l.historico, documento: l.documento || null,
         credito: l.credito, debito: l.debito, saldo: l.saldo, arquivo: p.arquivo, lote_importacao: lote, hash: l.hash, situacao: 'pendente' }));
@@ -2663,7 +2865,8 @@
       concRenderConciliar();
     };
     document.getElementById('concJanModo').value = concEstado.jan.modo;
-    ['concJanModo', 'concJanDia', 'concJanDe', 'concJanAte', 'concJanTol'].forEach(i => document.getElementById(i).addEventListener('change', concJanMudou));
+    ['concJanModo', 'concJanTol'].forEach(i => document.getElementById(i).addEventListener('change', concJanMudou));
+    ['concJanDia', 'concJanDe', 'concJanAte'].forEach(i => aoConfirmarData(document.getElementById(i), concJanMudou));   // datas da janela: só ao sair do campo ou Enter
     document.getElementById('concJanLinha').addEventListener('click', () => {
       const ds = concEstado.extratos.filter(e => concEstado.selE.has(e.id)).map(e => e.data).sort();
       if(!ds.length){ alert('Marque antes uma ou mais linhas do extrato.'); return; }
@@ -2823,9 +3026,14 @@
 
   // ---------------- 3) gerar lançamentos (tarifa, cesta, juros, IOF...) ----------------
   function concRegraDaLinha(l){
-    const tipo = concLiquido(l) >= 0 ? 'C' : 'D', h = concNorm(l.historico);
-    return concEstado.regras.find(r => r.ativo && (!r.tipo_movimento || r.tipo_movimento === tipo) && h.includes(concNorm(r.palavra))) || null;
+    const tipo = concLiquido(l) >= 0 ? 'C' : 'D', h = concNorm(l.historico), conta = String(concEstado.contaId || '');
+    // REGRA POR CONTA: a regra pode valer para todas as contas (id_conta vazio) ou só para uma; regra de OUTRA conta nunca vale aqui.
+    // Entre as que reconhecem a linha, a da conta específica vence a geral; dentro de cada grupo, a de menor ordem (a lista já vem ordenada).
+    const casam = concEstado.regras.filter(r => r.ativo && (!r.tipo_movimento || r.tipo_movimento === tipo) && h.includes(concNorm(r.palavra)) && (!r.id_conta || String(r.id_conta) === conta));
+    return casam.find(r => r.id_conta) || casam[0] || null;
   }
+  const concTemColunaConta = () => concEstado.regras.some(x => 'id_conta' in x);   // false se o SQL novo ainda não foi rodado (ou se não há regra nenhuma)
+  const concEscopoRegra = (r) => (r.id_conta === undefined || r.id_conta === null) ? null : Number(r.id_conta);
   // padrões: a empresa vem da CONTA (empresa titular) ou, na falta, da empresa padrão da unidade; setor/plano/evento vêm dos "Padrões por empresa" (Parâmetros)
   function concEmpresaDaConta(){
     const c = todasContas.find(x => String(x.id) === String(concEstado.contaId));
@@ -2936,7 +3144,8 @@
     document.getElementById('tituloModalConcGerar').textContent = unica ? 'Classificar e conciliar esta linha' : `Gerar ${alvo.length} lançamento(s) e conciliar`;
     const info = unica ? `<div class="ext-nota" style="margin:0 0 10px; padding:8px 10px; background:var(--brand-soft); border-radius:8px;"><strong>${formatarData(primeira.data)}</strong> · ${escapeHtml(primeira.historico || '')} · <strong class="${concLiquido(primeira) < 0 ? 'ext-neg' : ''}">${concNum(concLiquido(primeira))}</strong>${r ? `<br>Regra reconhecida: <strong>${escapeHtml(r.palavra)}</strong> (completei o que faltava com a conta/padrões da empresa)` : ''}</div>` : '';
     const regra = unica ? `<label style="display:flex; align-items:center; gap:6px; font-size:.85rem; margin-top:6px;"><input type="checkbox" id="cg_regra" ${r ? '' : 'checked'}> Lembrar como regra para os próximos extratos</label>
-      <div class="field-group" id="cg_regra_box"><label>Quando o histórico tiver a palavra</label><input type="text" id="cg_regra_palavra" value="${escapeHtml(r ? r.palavra : concSugerirPalavra(primeira.historico))}"></div>` : '';
+      <div class="field-group" id="cg_regra_box"><label>Quando o histórico tiver a palavra</label><input type="text" id="cg_regra_palavra" value="${escapeHtml(r ? r.palavra : concSugerirPalavra(primeira.historico))}">
+        <label style="display:flex; align-items:center; gap:6px; font-size:.82rem; margin-top:6px;" title="Marcado, a regra vale só para esta conta corrente; desmarcado, vale para todas as contas da unidade"><input type="checkbox" id="cg_regra_conta" ${r && r.id_conta ? 'checked' : ''}> Valer só para esta conta (${escapeHtml(extNomeConta(Number(concEstado.contaId)) || '')})</label></div>` : '';
     document.getElementById('concGerarForm').innerHTML = info + concBlocoClassificacao('cg', concCompletar(r || {})) + '<div class="field-group"><label>Histórico (opcional — vazio = o do extrato)</label><input type="text" id="cg_hist"></div>' + regra;
     concLigarClassificacao('cg', concCompletar(r || {}));
     if(unica){
@@ -2952,6 +3161,7 @@
     const chk = document.getElementById('cg_regra'); const querRegra = alvo.length === 1 && chk && chk.checked;
     const linha = alvo.length === 1 ? concEstado.extratos.find(e => e.id === alvo[0]) : null;
     const palavra = querRegra ? document.getElementById('cg_regra_palavra').value.trim() : '';
+    const soContaG = !!(querRegra && document.getElementById('cg_regra_conta') && document.getElementById('cg_regra_conta').checked);
     if(querRegra){
       if(!palavra){ alert('Informe a palavra da regra (ou desmarque "Lembrar como regra").'); return; }
       if(!concNorm(linha.historico).includes(concNorm(palavra)) && !confirm('Essa palavra não aparece no histórico desta linha, então a regra não a reconheceria. Salvar mesmo assim?')) return;
@@ -2963,7 +3173,7 @@
       document.getElementById('modalConcGerar').classList.remove('show'); concEstado.selE.clear();
       let extra = '';
       if(querRegra){
-        try{ extra = await concSalvarRegraDaLinha(palavra, linha, c, document.getElementById('cg_hist').value.trim()); }
+        try{ extra = await concSalvarRegraDaLinha(palavra, linha, c, document.getElementById('cg_hist').value.trim(), soContaG); }
         catch(e){ alert('O lançamento foi gerado, mas não consegui salvar a regra: ' + e.message); }
       }
       await concRenderGerar();
@@ -2972,17 +3182,17 @@
     finally { btn.disabled = false; }
   }
   // grava (ou atualiza, se a mesma palavra e tipo já existem) a regra a partir da classificação escolhida; devolve o id da regra
-  async function concSalvarRegraDaLinha(palavra, linha, c, historico){
-    const tipo = concLiquido(linha) >= 0 ? 'C' : 'D';
+  async function concSalvarRegraDaLinha(palavra, linha, c, historico, soConta){
+    const tipo = concLiquido(linha) >= 0 ? 'C' : 'D', escopo = soConta ? Number(concEstado.contaId) : null;
     const reg = { unidade_negocio_id: agenciaId, palavra, tipo_movimento: tipo,
       empresa_id: c.empresa_id === concEmpresaDaConta() ? null : c.empresa_id,   // empresa igual à da conta fica em branco: a regra serve para qualquer conta
-      setor_id: c.setor_id, plano_de_contas_id: c.plano_de_contas_id, evento: c.evento, pessoa_id: c.pessoa_id, descricao: historico || null, ativo: true, acao: 'lancamento', conta_outra_id: null, plano_outra_id: null };
-    const igual = concEstado.regras.find(r => (r.acao || 'lancamento') === 'lancamento' && concNorm(r.palavra) === concNorm(palavra) && (r.tipo_movimento || '') === tipo);
+      setor_id: c.setor_id, plano_de_contas_id: c.plano_de_contas_id, evento: c.evento, pessoa_id: c.pessoa_id, descricao: historico || null, ativo: true, acao: 'lancamento', conta_outra_id: null, plano_outra_id: null, ...(soConta ? { id_conta: escopo } : {}) };
+    const igual = concEstado.regras.find(r => (r.acao || 'lancamento') === 'lancamento' && concNorm(r.palavra) === concNorm(palavra) && (r.tipo_movimento || '') === tipo && concEscopoRegra(r) === escopo);   // a regra geral e a da conta são regras diferentes
     const { data, error } = igual ? await sb.from('financeiro_conciliacao_regras').update(reg).eq('id', igual.id).select('id').single()
                                   : await sb.from('financeiro_conciliacao_regras').insert({ ...reg, ordem: 100 }).select('id').single();
-    if(error) throw new Error(/pessoa_id/.test(error.message) ? 'rode de novo o financeiro-conciliacao.sql no Supabase (falta a coluna do fornecedor).' : error.message);
+    if(error) throw new Error(/id_conta/.test(error.message) ? 'rode de novo o financeiro-conciliacao.sql no Supabase (falta a coluna da conta na regra).' : /pessoa_id/.test(error.message) ? 'rode de novo o financeiro-conciliacao.sql no Supabase (falta a coluna do fornecedor).' : error.message);
     await concRecarregarRegras();
-    await registrarSentinela('financeiro_conciliacao_regra', `${igual ? 'Atualizou' : 'Criou'} a regra "${palavra}" a partir do extrato`);
+    await registrarSentinela('financeiro_conciliacao_regra', `${igual ? 'Atualizou' : 'Criou'} a regra "${palavra}" a partir do extrato${soConta ? ' (só para a conta "' + extNomeConta(escopo) + '")' : ' (todas as contas)'}`);
     return data.id;
   }
   // depois de salvar uma regra: oferece gerar já as outras linhas pendentes que ela reconhece
@@ -3065,6 +3275,7 @@
       <div class="field-group"><label>Histórico na outra conta <span style="font-weight:400; color:var(--muted);">(vazio = o do extrato)</span></label><input type="text" id="ct_hist_o" placeholder="${escapeHtml(l0.historico || '')}"></div>
       <label style="display:flex; align-items:center; gap:6px; font-size:.85rem; margin-top:6px;"><input type="checkbox" id="ct_regra" ${rt ? '' : 'checked'}> Lembrar como regra de transferência para os próximos extratos</label>
       <div class="field-group" id="ct_regra_box"><label>Quando o histórico tiver a palavra</label><input type="text" id="ct_regra_palavra" value="${escapeHtml(rt ? rt.palavra : concSugerirPalavra(l0.historico))}">
+        <label style="display:flex; align-items:center; gap:6px; font-size:.82rem; margin-top:6px;" title="Marcado, a regra vale só para esta conta corrente; desmarcado, vale para todas as contas da unidade"><input type="checkbox" id="ct_regra_conta" ${rt && rt.id_conta ? 'checked' : ''}> Valer só para esta conta (${escapeHtml(extNomeConta(Number(concEstado.contaId)) || '')})</label>
         <div class="ext-nota">Um pagador com classificação diferente (ex.: uma agência, que não é venda direta) ganha a sua própria regra com <strong>ordem menor</strong> que a regra geral: a de menor ordem vence.</div></div>` : ''}`;
     concLigarPlano('ct_pb', rt ? rt.plano_de_contas_id : null);
     concLigarPlano('ct_po', (rt && rt.plano_outra_id) || ult.plano_outra || null);
@@ -3086,6 +3297,7 @@
     const alvo = concTransfAlvo.slice(); const unica = alvo.length === 1; const linha = unica ? concEstado.extratos.find(e => e.id === alvo[0]) : null;
     const chk = document.getElementById('ct_regra'); const querRegra = unica && chk && chk.checked;
     const palavra = querRegra ? document.getElementById('ct_regra_palavra').value.trim() : '';
+    const soContaT = !!(querRegra && document.getElementById('ct_regra_conta') && document.getElementById('ct_regra_conta').checked);
     if(querRegra){
       if(!palavra){ alert('Informe a palavra da regra (ou desmarque "Lembrar como regra").'); return; }
       if(!concNorm(linha.historico).includes(concNorm(palavra)) && !confirm('Essa palavra não aparece no histórico desta linha, então a regra não a reconheceria. Salvar mesmo assim?')) return;
@@ -3106,7 +3318,7 @@
       document.getElementById('modalConcTransf').classList.remove('show'); concEstado.selE.clear();
       let extra = '';
       if(querRegra){
-        try{ extra = await concSalvarRegraTransf(palavra, linha, t); }
+        try{ extra = await concSalvarRegraTransf(palavra, linha, t, soContaT); }
         catch(e){ alert('A transferência foi gerada, mas não consegui salvar a regra: ' + e.message); }
       }
       await concRenderGerar();
@@ -3114,16 +3326,16 @@
     } catch(e){ alert('Não consegui gerar a transferência: ' + e.message); }
     finally { btn.disabled = false; }
   }
-  async function concSalvarRegraTransf(palavra, linha, t){
-    const tipo = concLiquido(linha) >= 0 ? 'C' : 'D';
+  async function concSalvarRegraTransf(palavra, linha, t, soConta){
+    const tipo = concLiquido(linha) >= 0 ? 'C' : 'D', escopo = soConta ? Number(concEstado.contaId) : null;
     const reg = { unidade_negocio_id: agenciaId, palavra, tipo_movimento: tipo, acao: 'transferencia', conta_outra_id: t.conta_outra_id, plano_outra_id: t.plano_outra, plano_de_contas_id: t.plano_banco,
-      empresa_id: t.empresa_id === concEmpresaDaConta() ? null : t.empresa_id, setor_id: t.setor_id || null, evento: t.evento || null, pessoa_id: null, descricao: null, ativo: true };
-    const igual = concEstado.regras.find(r => r.acao === 'transferencia' && concNorm(r.palavra) === concNorm(palavra) && (r.tipo_movimento || '') === tipo);
+      empresa_id: t.empresa_id === concEmpresaDaConta() ? null : t.empresa_id, setor_id: t.setor_id || null, evento: t.evento || null, pessoa_id: null, descricao: null, ativo: true, ...(soConta ? { id_conta: escopo } : {}) };
+    const igual = concEstado.regras.find(r => r.acao === 'transferencia' && concNorm(r.palavra) === concNorm(palavra) && (r.tipo_movimento || '') === tipo && concEscopoRegra(r) === escopo);
     const { data, error } = igual ? await sb.from('financeiro_conciliacao_regras').update(reg).eq('id', igual.id).select('id').single()
                                   : await sb.from('financeiro_conciliacao_regras').insert({ ...reg, ordem: 100 }).select('id').single();
-    if(error) throw new Error(/acao|conta_outra_id|plano_outra_id/.test(error.message) ? 'rode de novo o financeiro-conciliacao.sql no Supabase (faltam as colunas da regra de transferência).' : error.message);
+    if(error) throw new Error(/id_conta/.test(error.message) ? 'rode de novo o financeiro-conciliacao.sql no Supabase (falta a coluna da conta na regra).' : /acao|conta_outra_id|plano_outra_id/.test(error.message) ? 'rode de novo o financeiro-conciliacao.sql no Supabase (faltam as colunas da regra de transferência).' : error.message);
     await concRecarregarRegras();
-    await registrarSentinela('financeiro_conciliacao_regra', `${igual ? 'Atualizou' : 'Criou'} a regra de transferência "${palavra}" a partir do extrato`);
+    await registrarSentinela('financeiro_conciliacao_regra', `${igual ? 'Atualizou' : 'Criou'} a regra de transferência "${palavra}" a partir do extrato${soConta ? ' (só para a conta "' + extNomeConta(escopo) + '")' : ' (todas as contas)'}`);
     return data.id;
   }
   async function concAplicarTransfNasOutras(r, outras){
@@ -3187,9 +3399,9 @@
     await concRecarregarRegras();
     const nomeDe = (lista, id, f) => { const x = lista.find(y => String(y.id) === String(id)); return x ? f(x) : ''; };
     document.getElementById('concCorpo').innerHTML = `
-      <div class="filtros"><button class="btn-novo" id="concNovaRegra">+ Nova regra</button><span class="ext-nota">Quando o histórico do extrato contém a palavra, a regra sugere (ou aplica, em "Gerar") a classificação. Vale para qualquer banco da unidade; a de menor ordem vence.</span></div>
-      ${concEstado.regras.length ? `<div class="ext-tabela-wrap"><table class="ext-tabela"><thead><tr><th>Ordem</th><th>Palavra</th><th>Tipo</th><th>Ação</th><th>Fornecedor</th><th>Empresa</th><th>Setor</th><th>Plano de contas</th><th>Evento</th><th>Ativa</th><th></th></tr></thead><tbody>
-        ${concEstado.regras.map(r => `<tr><td>${r.ordem}</td><td><strong>${escapeHtml(r.palavra)}</strong></td><td>${r.tipo_movimento === 'D' ? 'Débito' : r.tipo_movimento === 'C' ? 'Crédito' : 'Ambos'}</td><td>${r.acao === 'transferencia' ? '⇄ Transferência ' + (r.tipo_movimento === 'D' ? 'para ' : 'de ') + escapeHtml(nomeDe(todasContas, r.conta_outra_id, x => x.nome) || '?') + (r.plano_outra_id ? '<br><span class="ext-nota">baixa: ' + escapeHtml(nomeDe(todosPlanosContas, r.plano_outra_id, x => x.codigo)) + '</span>' : '') : 'Lançamento'}</td><td>${escapeHtml(concEstado.pessoaNomes[r.pessoa_id] || '')}</td><td>${escapeHtml(r.empresa_id ? nomeDe(todasEmpresas, r.empresa_id, x => x.nome) : '(da conta)')}</td><td>${escapeHtml(nomeDe(todosSetores, r.setor_id, x => x.nome))}</td><td>${escapeHtml(nomeDe(todosPlanosContas, r.plano_de_contas_id, x => x.codigo + ' · ' + x.descricao))}</td><td>${escapeHtml(r.evento || '')}</td><td>${r.ativo ? 'Sim' : 'Não'}</td>
+      <div class="filtros"><button class="btn-novo" id="concNovaRegra">+ Nova regra</button><span class="ext-nota">Quando o histórico do extrato contém a palavra, a regra sugere (ou aplica, em "Gerar") a classificação. Cada regra vale para <strong>todas as contas</strong> (campo Conta em branco) ou <strong>só para uma conta corrente</strong>. Entre as que reconhecem a linha, a regra da <strong>conta específica vence a geral</strong>; dentro de cada grupo, a de menor ordem vence.</span></div>
+      ${concEstado.regras.length ? `<div class="ext-tabela-wrap"><table class="ext-tabela"><thead><tr><th>Ordem</th><th>Palavra</th><th>Tipo</th><th>Conta</th><th>Ação</th><th>Fornecedor</th><th>Empresa</th><th>Setor</th><th>Plano de contas</th><th>Evento</th><th>Ativa</th><th></th></tr></thead><tbody>
+        ${concEstado.regras.map(r => `<tr><td>${r.ordem}</td><td><strong>${escapeHtml(r.palavra)}</strong></td><td>${r.tipo_movimento === 'D' ? 'Débito' : r.tipo_movimento === 'C' ? 'Crédito' : 'Ambos'}</td><td>${r.id_conta ? '<strong>' + escapeHtml(nomeDe(todasContas, r.id_conta, x => x.nome) || '?') + '</strong>' : '<span class="ext-nota">Todas as contas</span>'}</td><td>${r.acao === 'transferencia' ? '⇄ Transferência ' + (r.tipo_movimento === 'D' ? 'para ' : 'de ') + escapeHtml(nomeDe(todasContas, r.conta_outra_id, x => x.nome) || '?') + (r.plano_outra_id ? '<br><span class="ext-nota">baixa: ' + escapeHtml(nomeDe(todosPlanosContas, r.plano_outra_id, x => x.codigo)) + '</span>' : '') : 'Lançamento'}</td><td>${escapeHtml(concEstado.pessoaNomes[r.pessoa_id] || '')}</td><td>${escapeHtml(r.empresa_id ? nomeDe(todasEmpresas, r.empresa_id, x => x.nome) : '(da conta)')}</td><td>${escapeHtml(nomeDe(todosSetores, r.setor_id, x => x.nome))}</td><td>${escapeHtml(nomeDe(todosPlanosContas, r.plano_de_contas_id, x => x.codigo + ' · ' + x.descricao))}</td><td>${escapeHtml(r.evento || '')}</td><td>${r.ativo ? 'Sim' : 'Não'}</td>
           <td style="white-space:nowrap;"><button class="ext-chip" data-conc-edit="${r.id}">Editar</button> <button class="ext-chip" data-conc-del="${r.id}" style="color:var(--danger);">Excluir</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="vazio">Nenhuma regra cadastrada. Exemplos: TARIFA, CESTA, JUROS, IOF, RENDIMENTO.</div>'}`;
     document.getElementById('concNovaRegra').addEventListener('click', () => concAbrirRegra(null));
     document.querySelectorAll('[data-conc-edit]').forEach(b => b.addEventListener('click', () => concAbrirRegra(Number(b.dataset.concEdit))));
@@ -3204,6 +3416,7 @@
     document.getElementById('tituloModalConcRegra').textContent = id ? 'Editar regra' : 'Nova regra';
     document.getElementById('concRegraForm').innerHTML = `
       <div class="field-group"><label>Palavra no histórico do extrato *</label><input type="text" id="cr_palavra" value="${escapeHtml(r.palavra || '')}" placeholder="Ex.: TARIFA"></div>
+      <div class="field-group"><label>Conta corrente <span style="font-weight:400; color:var(--muted);">(opcional — em branco = vale para TODAS as contas)</span></label><select id="cr_conta"><option value="">Todas as contas</option>${todasContas.filter(c => c.ativo !== false || String(r.id_conta) === String(c.id)).map(c => `<option value="${c.id}" ${String(r.id_conta) === String(c.id) ? 'selected' : ''}>${escapeHtml((c.codigo != null ? c.codigo + ' — ' : '') + c.nome)}</option>`).join('')}</select></div>
       <div class="field-group"><label>Vale para</label><select id="cr_tipo"><option value="">Crédito e débito</option><option value="D" ${r.tipo_movimento === 'D' ? 'selected' : ''}>Só débito (saída)</option><option value="C" ${r.tipo_movimento === 'C' ? 'selected' : ''}>Só crédito (entrada)</option></select></div>
       <div class="field-group"><label>O que a regra faz</label><select id="cr_acao"><option value="lancamento">Gerar um lançamento (tarifa, juros, rendimento...)</option><option value="transferencia" ${r.acao === 'transferencia' ? 'selected' : ''}>Transferência de/para outra conta (PIX, cartões, outro banco)</option></select></div>
       <div id="cr_transf_box" style="display:none; padding:8px 10px; background:var(--brand-soft); border-radius:8px; margin-bottom:10px;">
@@ -3231,14 +3444,16 @@
     }
     const reg = { unidade_negocio_id: agenciaId, acao, conta_outra_id: acao === 'transferencia' ? contaOutra : null, plano_outra_id: acao === 'transferencia' ? planoOutra : null, palavra, tipo_movimento: document.getElementById('cr_tipo').value || null, empresa_id: c.empresa_id, setor_id: c.setor_id, plano_de_contas_id: c.plano_de_contas_id, evento: c.evento, pessoa_id: c.pessoa_id,
                   descricao: document.getElementById('cr_desc').value.trim() || null, ordem: parseInt(document.getElementById('cr_ordem').value, 10) || 100, ativo: document.getElementById('cr_ativo').checked };
+    const idContaRegra = Number(document.getElementById('cr_conta').value) || null;
+    if(idContaRegra || concTemColunaConta()) reg.id_conta = idContaRegra;   // sem o SQL novo, só envia a coluna quando a conta foi escolhida (aí o erro explica)
     const { error } = concRegraEditandoId ? await sb.from('financeiro_conciliacao_regras').update(reg).eq('id', concRegraEditandoId) : await sb.from('financeiro_conciliacao_regras').insert(reg);
-    if(error){ alert('Não consegui salvar: ' + (/acao|conta_outra_id|plano_outra_id/.test(error.message) ? 'rode de novo o financeiro-conciliacao.sql no Supabase (faltam as colunas da regra de transferência).' : error.message)); return; }
+    if(error){ alert('Não consegui salvar: ' + (/id_conta/.test(error.message) ? 'rode de novo o financeiro-conciliacao.sql no Supabase (falta a coluna da conta na regra).' : /acao|conta_outra_id|plano_outra_id/.test(error.message) ? 'rode de novo o financeiro-conciliacao.sql no Supabase (faltam as colunas da regra de transferência).' : error.message)); return; }
     document.getElementById('modalConcRegra').classList.remove('show'); concRenderRegras();
   }
 
   document.getElementById('concConta').addEventListener('change', () => { concEstado.selE.clear(); concEstado.selM.clear(); concEstado.selT.clear(); concEstado.previa = null; concLerFiltros(); concRender(); });
-  document.getElementById('concDe').addEventListener('change', () => { concLerFiltros(); concRender(); });
-  document.getElementById('concAte').addEventListener('change', () => { concLerFiltros(); concRender(); });
+  aoConfirmarData(document.getElementById('concDe'), () => { concLerFiltros(); concRender(); });
+  aoConfirmarData(document.getElementById('concAte'), () => { concLerFiltros(); concRender(); });
   document.querySelectorAll('[data-conc-atalho]').forEach(b => b.addEventListener('click', () => concAtalho(b.dataset.concAtalho)));
   document.querySelectorAll('[data-conc-aba]').forEach(b => b.addEventListener('click', () => { concEstado.aba = b.dataset.concAba; concEstado.selE.clear(); concEstado.selM.clear(); concEstado.selT.clear(); concRender(); }));
   document.getElementById('btnConcSugAplicar').addEventListener('click', concAplicarSugestoes);
@@ -3262,7 +3477,7 @@
   // =================================================================
   const AJUDA_FINANCEIRO = {
     titulo: 'Financeiro — Títulos, Contas e Rateio',
-    ultimaRevisao: '24/11/2026',   // aceite de ordem com empresa/plano por item (24/11/2026)
+    ultimaRevisao: '25/11/2026',   // datas da conciliação aplicam ao sair do campo/Enter (25/11/2026); regras de conciliação por conta (25/11/2026); aceite de ordem com empresa/plano por item (24/11/2026)
     secoes: [
       { id: 'dashboard', titulo: 'Dashboard', corpo: `
         <p>Visão geral do contas a pagar e a receber da unidade, no mesmo estilo do painel do
@@ -3387,6 +3602,10 @@
         <p>Visão por conta corrente, calculada no banco (aguenta dezenas de milhares de lançamentos). Escolha o
         período em <strong>De / Até</strong> (ou os atalhos Mês, Mês anterior, Ano e Tudo — o padrão é o mês do último lançamento).</p>
         <ul>
+          <li><strong>📌 Saldo lançado (ponto de partida)</strong>: na tela de uma conta, o usuário principal pode <strong>lançar o saldo da conta numa data</strong> (ex.: saldo de 30/11 = o saldo que vale a partir de 01/12, informado no fim ou no início do dia).
+          Dali em diante o extrato soma <strong>só os lançamentos seguintes</strong> — quem acompanha o saldo a partir de 01/12 vê um número estável. Os lançamentos de datas <em>anteriores</em> continuam aparecendo e podem continuar sendo conciliados, mas <strong>não mexem</strong> no saldo de 01/12 em diante.
+          O quadro «Conferência» mostra, para cada saldo lançado, o que os lançamentos dão até aquela data («Pelos lançamentos») e a <strong>diferença</strong>: zero = a conciliação do histórico fechou. Dá para lançar vários saldos (cada um vira um novo ponto de partida) e excluir um (🗑).
+          <strong>Conta sem saldo lançado</strong> continua somando todos os lançamentos desde o começo, como sempre foi.</li>
           <li><strong>Lista de contas</strong>: saldo anterior (tudo antes da data inicial), entradas, saídas, saldo atual e nº de lançamentos de cada conta,
           com o total no rodapé. Entrada = crédito; saída = débito. Transferência entre contas da própria unidade aparece como saída de uma e entrada da outra.</li>
           <li><strong>Acompanha saldo</strong>: toda conta corrente tem esse campo (Cadastros → Contas Correntes, padrão <strong>Sim</strong>). Conta marcada <strong>Não</strong>
@@ -3417,10 +3636,13 @@
           Para uma linha só, use o botão <strong>Classificar…</strong> dela: escolha <strong>fornecedor, plano de contas</strong> e confira empresa/setor/evento (a <strong>empresa já vem da conta</strong> — veja "Empresa titular" em Cadastros → Contas correntes — e setor/evento padrão vêm de Parâmetros → Padrões por empresa; o plano de contas não tem padrão e é escolhido na hora).
           Marcando <strong>Lembrar como regra</strong>, a palavra do histórico (sugerida, editável) vira uma regra com o fornecedor e a classificação escolhidos; em seguida o sistema avisa se a regra reconhece <strong>outras linhas pendentes</strong> e oferece gerar todas de uma vez.</li>
           <li><strong>⇄ Transferência</strong>: use quando o dinheiro da linha <strong>veio de outra conta</strong> (PIX, cartões, outro banco) — ou foi para ela. É o botão «Transferência» do Sicon: em vez de um lançamento só, cria <strong>as duas pernas</strong>: no banco, já conciliada com a linha do extrato (entrada se o banco recebeu, saída se enviou), e na outra conta o lançamento contrário (a «baixa»). Você escolhe a <strong>outra conta</strong>, o <strong>plano do lado do banco</strong> (a receita, na entrada) e o <strong>plano da baixa</strong> na outra conta; a empresa vem da conta do banco; setor e evento são opcionais. A data é a do extrato nas duas contas (a da outra conta pode ser trocada numa linha só). Vale também para várias linhas marcadas (<strong>⇄ Transferência das marcadas…</strong>, todas entradas ou todas saídas) e <strong>sem loop</strong>: as 400 linhas «PIX RECEBIDO» viram transferências de uma vez pela regra. As duas pernas carregam o <strong>mesmo código de conciliação</strong>, então <strong>Desfazer</strong> apaga as duas juntas. O que é fixo (a outra conta e o plano da baixa) fica lembrado para a próxima; o plano da receita não, porque muda de recebimento para recebimento.</li>
-          <li><strong>Regras</strong>: cadastre palavras do histórico (TARIFA, CESTA, JUROS, IOF, RENDIMENTO...) com fornecedor e classificação padrão; valem para todos os bancos da unidade e a de menor ordem vence. A regra pode ser <strong>parcial</strong>: o que faltar (empresa, setor, plano, evento) é completado pela conta e pelos padrões da empresa; se ainda faltar algo, a linha fica de fora do "gerar por regra".
+          <li><strong>Regras</strong>: cadastre palavras do histórico (TARIFA, CESTA, JUROS, IOF, RENDIMENTO...) com fornecedor e classificação padrão; cada regra vale para <strong>todas as contas</strong> (campo <em>Conta</em> em branco) ou <strong>só para uma conta corrente</strong> (campo preenchido) — útil quando empresa e plano de contas variam por conta. Entre as que reconhecem a linha, a da <strong>conta específica vence a geral</strong>; dentro de cada grupo, a de menor ordem vence. Ao classificar uma linha com «Lembrar como regra», a caixa <strong>Valer só para esta conta</strong> grava a regra só para a conta que está sendo conciliada (desmarcada, vale para todas; a regra geral e a da conta com a mesma palavra são regras separadas). A regra pode ser <strong>parcial</strong>: o que faltar (empresa, setor, plano, evento) é completado pela conta e pelos padrões da empresa; se ainda faltar algo, a linha fica de fora do "gerar por regra".
           A regra tem uma <strong>ação</strong>: <em>Gerar um lançamento</em> (tarifa, juros, rendimento...) ou <em>Transferência de/para outra conta</em> (palavra como «PIX RECEBIDO» ou «RECEBIMENTO REDE» → a outra conta, o plano da baixa nela e, no campo «Plano de contas», o plano do lado do banco; o sentido crédito/débito é obrigatório). Um pagador com classificação diferente (por exemplo uma agência, cujo recebimento não é venda direta) ganha <strong>a sua própria regra com ordem menor</strong> que a regra geral — a de menor ordem vence.</li>
           <li><strong>Data do lançamento = data do extrato</strong>: ao conciliar um lançamento que já estava no caixa com a linha do banco, o lançamento <strong>passa a ter a data do extrato</strong> (se forem várias linhas, a mais recente), pois é quando o banco realmente movimentou. O sistema avisa antes («alterar a data de N lançamento(s)»), <strong>guarda a data anterior</strong> (aparece como «data original» em <strong>Conciliações feitas → Ver</strong> e na auditoria) e <strong>Desfazer</strong> devolve a data anterior. Se o lançamento veio da <strong>baixa de um título</strong>, a <strong>data de pagamento do título</strong> também passa para a do extrato (só quando o sistema identifica um único título naquele pagamento; em caso de dúvida, o título não é alterado). A <strong>data de competência</strong> e o <strong>vencimento</strong> não mudam.</li>
           <li><strong>Conciliações feitas</strong>: lista os códigos (com as linhas e lançamentos de cada um). <strong>Desfazer</strong> devolve as linhas ao pendente e solta os lançamentos; se a conciliação foi gerada a partir do extrato, o lançamento gerado também é apagado.</li>
+          <li><strong>Conta sem empresa padrão</strong>: se a conta escolhida não tem a <em>Empresa titular</em> cadastrada (Cadastros → Contas Correntes), aparece uma faixa de aviso sobre as abas (e um alerta uma vez por conta). A empresa das regras e dos lançamentos gerados vem desse cadastro; sem ela, usa-se a empresa padrão da unidade ou é preciso escolher a empresa em cada lançamento.</li>
+          <li><strong>Conferência da conta no OFX</strong>: o arquivo OFX traz, no cabeçalho, a <strong>agência</strong> e o <strong>número da conta</strong>. Cadastre a <strong>Agência</strong> e o <strong>Nº da conta</strong> em Cadastros → Contas Correntes: ao ler um OFX, o sistema compara (ignora pontuação, zeros à esquerda e dígito verificador). Se divergir, a importação é <strong>bloqueada</strong> e o aviso mostra a agência/conta do arquivo e, quando existir, a conta cadastrada que bate com ele. Se a conta escolhida ainda não tem esses dados, aparece só um aviso (não bloqueia). Vale para OFX; os demais formatos (Bradesco CSV, Itaú TXT, Sicoob) ainda não identificam a conta no arquivo.</li>
+          <li><strong>Campos de data</strong> (De/Até do topo e as datas da janela dos lançamentos/títulos): ao <strong>digitar</strong> a data, o filtro só é aplicado quando você <strong>sai do campo</strong> (Tab ou clique fora) ou aperta <strong>Enter</strong> — não a cada dígito. Escolher a data no calendário aplica na hora.</li>
           <li><strong>Ordenar</strong>: clique no cabeçalho de uma coluna (Data, Histórico, Valor, Regra, Venc....) para ordenar — 1º clique crescente ▲, 2º decrescente ▼, 3º volta à ordem original. Vale para o extrato, os lançamentos, os títulos e as conciliações feitas; as linhas marcadas continuam marcadas.</li>
           <li>Precisa do arquivo <code>financeiro-conciliacao.sql</code> rodado no Supabase.</li>
         </ul>
@@ -3447,7 +3669,9 @@
           lançamento (também obrigatórios no rateio).</li>
           <li><strong>Contas Correntes</strong> — as contas bancárias/caixa da unidade, usadas como conta
           de pagamento e na Movimentação.</li>
-          <li><strong>Formas de Pagamento</strong> e <strong>Sub Contas</strong> — detalhamento adicional
+          <li><strong>CPF/CNPJ nos cadastros (Pessoas e Empresas)</strong> — o campo tem máscara automática e valida o dígito verificador. Aceita o <strong>CNPJ alfanumérico</strong> (letras nas 12 primeiras posições, em vigor desde julho/2026): digite normalmente, as letras viram maiúsculas e a máscara é aplicada (ex.: <em>12.ABC.345/01DE-35</em>). CPF continua só numérico.</li>
+          <li><strong>Formas de Pagamento</strong> — cada forma pode ter a <strong>conta corrente prevista</strong>: títulos que o <em>Estoque</em> manda para cá (aceite do protocolo) com essa forma já nascem com a conta e entram na <strong>previsão</strong> dela; forma sem conta = título «sem conta». As formas também alimentam a lista «Forma de pagamento» dos títulos do Estoque.</li>
+          <li><strong>Sub Contas</strong> — detalhamento adicional
           do lançamento.</li>
           <li><strong>Feriados Regionais</strong> — feriados específicos da praça da unidade, usados junto
           com os feriados nacionais pra avisar quando um vencimento cai em dia sem expediente bancário.</li>
@@ -5775,15 +5999,20 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
         { campo: 'documento', label: 'Documento (CPF/CNPJ)', tipo: 'documento' },
       ]
     },
-    empresas: { campos: [{ campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true }] },
+    empresas: { campos: [{ campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
+        { campo: 'razao_social', label: 'Razão social (sai como «Emitente» no recibo de pagamento)', tipo: 'text', exigeColuna: true },
+        { campo: 'cnpj', label: 'CNPJ (aceita o novo CNPJ com letras)', tipo: 'documento', exigeColuna: true },
+        { campo: 'endereco', label: 'Endereço', tipo: 'text', exigeColuna: true },
+        { campo: 'telefone', label: 'Telefone comercial', tipo: 'text', exigeColuna: true }] },
     unidade_setores: {
       campos: [{ campo: 'codigo', label: 'Código', tipo: 'text' }, { campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true }]
     },
     unidade_plano_de_contas: {
       campos: [{ campo: 'codigo', label: 'Código', tipo: 'text', obrigatorio: true }, { campo: 'descricao', label: 'Descrição', tipo: 'text', obrigatorio: true }]
     },
-    financeiro_contas_correntes: { campos: [{ campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true }, { campo: 'acompanha_saldo', label: 'Acompanha saldo (aparece no Extrato de contas)', tipo: 'booleano', exigeColuna: true }, { campo: 'empresa_id', label: 'Empresa titular da conta (padrão nos lançamentos gerados pela Conciliação bancária)', tipo: 'empresa', exigeColuna: true }] },
-    financeiro_forma_pagamento: { campos: [{ campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true }] },
+    financeiro_contas_correntes: { campos: [{ campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true }, { campo: 'acompanha_saldo', label: 'Acompanha saldo (aparece no Extrato de contas)', tipo: 'booleano', exigeColuna: true }, { campo: 'empresa_id', label: 'Empresa titular da conta (padrão nos lançamentos gerados pela Conciliação bancária)', tipo: 'empresa', exigeColuna: true }, { campo: 'agencia', label: 'Agência (ex.: 1234 — usada para conferir o OFX na Conciliação)', tipo: 'text', exigeColuna: true }, { campo: 'numero_conta', label: 'Nº da conta (ex.: 12345-6 — usado para conferir o OFX na Conciliação)', tipo: 'text', exigeColuna: true }] },
+    financeiro_forma_pagamento: { campos: [{ campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true },
+        { campo: 'id_conta', label: 'Conta corrente prevista (os títulos desta forma entram na PREVISÃO desta conta)', tipo: 'conta', exigeColuna: true }] },
     financeiro_sub_contas: {
       campos: [{ campo: 'nome', label: 'Nome', tipo: 'text', obrigatorio: true }, { campo: 'limite_valor', label: 'Limite (R$)', tipo: 'number' }]
     },
@@ -5814,12 +6043,16 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
     }
     return true;
   }
+  // CNPJ ALFANUMÉRICO (IN RFB 2.229/2024, em vigor desde julho/2026): 12 primeiras posições letras (A-Z) ou números + 2 dígitos verificadores NUMÉRICOS.
+  // O dígito verificador continua módulo 11, com cada caractere valendo (código ASCII − 48): 0-9 = 0-9, A = 17, B = 18 ... Z = 42. CNPJ só de números dá o mesmo resultado de antes.
+  const normDoc = (v) => String(v || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
   function validarCnpj(cnpj){
-    cnpj = cnpj.replace(/\D/g, '');
-    if(cnpj.length !== 14 || /^(\d)\1{13}$/.test(cnpj)) return false;
+    cnpj = normDoc(cnpj);
+    if(!/^[0-9A-Z]{12}[0-9]{2}$/.test(cnpj) || /^(.)\1{13}$/.test(cnpj)) return false;
+    const valor = (ch) => ch.charCodeAt(0) - 48;
     const calcularDigito = (base, pesos) => {
       let soma = 0;
-      for(let i = 0; i < base.length; i++) soma += parseInt(base[i]) * pesos[i];
+      for(let i = 0; i < base.length; i++) soma += valor(base[i]) * pesos[i];
       const resto = soma % 11;
       return resto < 2 ? 0 : 11 - resto;
     };
@@ -5829,18 +6062,22 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
     return d2 === parseInt(cnpj[13]);
   }
   function validarCpfCnpj(documento){
-    const numeros = (documento || '').replace(/\D/g, '');
-    if(!numeros) return true; // documento é opcional -- vazio é válido
-    if(numeros.length === 11) return validarCpf(numeros);
-    if(numeros.length === 14) return validarCnpj(numeros);
+    const n = normDoc(documento);
+    if(!n) return true; // documento é opcional -- vazio é válido
+    if(n.length === 11 && /^\d+$/.test(n)) return validarCpf(n);   // CPF é sempre numérico
+    if(n.length === 14) return validarCnpj(n);
     return false; // tamanho que não bate com nenhum dos dois
   }
+  // máscara enquanto digita: só números até 11 = CPF (000.000.000-00); com letra, ou acima de 11 caracteres = CNPJ (00.AAA.000/0AAA-00; letras viram maiúsculas)
   function aplicarMascaraCpfCnpj(valor){
-    const numeros = valor.replace(/\D/g, '').slice(0, 14);
-    if(numeros.length <= 11){
-      return numeros.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    const s = normDoc(valor).slice(0, 14);
+    if(/^\d*$/.test(s) && s.length <= 11){
+      return s.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d{1,2})$/, '$1-$2');
     }
-    return numeros.replace(/(\d{2})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1/$2').replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+    return s.replace(/^([0-9A-Z]{2})(?=[0-9A-Z])/, '$1.')
+            .replace(/^([0-9A-Z]{2}\.[0-9A-Z]{3})(?=[0-9A-Z])/, '$1.')
+            .replace(/^([0-9A-Z]{2}\.[0-9A-Z]{3}\.[0-9A-Z]{3})(?=[0-9A-Z])/, '$1/')
+            .replace(/^([0-9A-Z]{2}\.[0-9A-Z]{3}\.[0-9A-Z]{3}\/[0-9A-Z]{4})(?=[0-9A-Z])/, '$1-');
   }
   const CAMPO_PRINCIPAL_POR_ENTIDADE = { pessoa: 'nome', empresas: 'nome', unidade_setores: 'nome', unidade_plano_de_contas: 'descricao', financeiro_contas_correntes: 'nome', financeiro_forma_pagamento: 'nome', financeiro_sub_contas: 'nome', servir_feriados_regionais: 'nome' };
   let dadosCadastroAtual = [];
@@ -6012,6 +6249,9 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
       if(c.tipo === 'empresa'){
         return `<div class="field-group"><label>${c.label}</label><select data-campo-cadastro="${c.campo}"><option value="">— nenhuma —</option>${todasEmpresas.map(e => `<option value="${e.id}" ${String(valor) === String(e.id) ? 'selected' : ''}>${escapeHtml(e.nome)}</option>`).join('')}</select></div>`;
       }
+      if(c.tipo === 'conta'){
+        return `<div class="field-group"><label>${c.label}</label><select data-campo-cadastro="${c.campo}"><option value="">— nenhuma —</option>${todasContas.filter(x => x.ativo !== false || String(x.id) === String(valor)).map(x => `<option value="${x.id}" ${String(valor) === String(x.id) ? 'selected' : ''}>${escapeHtml((x.codigo != null ? x.codigo + ' — ' : '') + x.nome)}</option>`).join('')}</select></div>`;
+      }
       if(c.tipo === 'select'){
         return `<div class="field-group"><label>${c.label}</label><select data-campo-cadastro="${c.campo}">${c.opcoes.map(([v, l]) => `<option value="${v}" ${valor === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>`;
       }
@@ -6036,7 +6276,7 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
       if(c.tipo === 'booleano'){ payload[c.campo] = el.value === 'true'; continue; }
       const valor = el.value.trim();
       if(c.obrigatorio && !valor){ alert(`Preencha o campo "${c.label}".`); return; }
-      if(c.tipo === 'documento' && valor && !validarCpfCnpj(valor)){ alert('CPF ou CNPJ inválido -- confira os números digitados.'); return; }
+      if(c.tipo === 'documento' && valor && !validarCpfCnpj(valor)){ alert('CPF ou CNPJ inválido -- confira os caracteres e os dígitos verificadores (o CNPJ pode ter letras nas 12 primeiras posições).'); return; }
       payload[c.campo] = valor || null;
     }
     const btn = document.getElementById('btnSalvarCadastro');

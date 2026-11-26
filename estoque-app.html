@@ -902,6 +902,13 @@
 
     <!-- histórico: um protocolo por linha, já gerado, com PDF -->
     <div id="protocoloBlocoHistorico" style="display:none; max-height:65vh; overflow:auto;">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:0 0 8px;">
+            <label for="protocoloFormato" style="font-weight:600; margin:0;">Formato do PDF:</label>
+            <select id="protocoloFormato" style="min-width:260px;" title="Vale para Visualizar, Baixar e Compartilhar">
+                <option value="resumido">Resumido — uma tabela compacta (para o financeiro)</option>
+                <option value="completo">Completo — um bloco por nota</option>
+            </select>
+        </div>
         <table class="tabela" id="tabelaHistoricoProtocolo">
             <thead>
                 <tr>
@@ -4115,6 +4122,8 @@ const AJUDA_ESTOQUE = {
                 (pode rodar de novo: só trata as que faltam). Nota lançada <em>à mão</em> não tem esses dados — só quem vem de XML.</li>
                 <li><strong>Empresa da nota</strong>: a unidade recebe notas de <strong>várias empresas</strong>. Na <strong>entrada direta</strong> o cabeçalho tem o campo <strong>Empresa</strong> (obrigatório; já vem a última usada neste aparelho ou a empresa padrão do Financeiro) — a nota guarda a empresa e o CNPJ dela como destinatário.
                 Na <strong>importação de XML</strong> o destinatário vem do próprio XML e é ligado à empresa quando o CNPJ estiver cadastrado em Financeiro → Cadastros → Empresas. É o que separa as empresas no relatório fiscal e no pacote do contador. Salvar o cabeçalho de uma nota existente <strong>não apaga mais</strong> o XML original, o destinatário e os totais fiscais.</li>
+                <li><strong>📮 Protocolo — PDF resumido</strong>: no histórico de protocolos, o seletor <strong>Formato do PDF</strong> escolhe entre <em>Resumido</em> (uma tabela compacta com todas as notas e todos os vencimentos — NF, fornecedor, entrada, vencimento, forma, valor do título e total da NF —, letra pequena e margens curtas, para encaminhar ao financeiro) e <em>Completo</em> (um bloco por nota). Vale para Visualizar, Baixar e Compartilhar; o sistema lembra a escolha.
+                A coluna <em>Empresa</em> só aparece quando o protocolo tem notas de mais de uma empresa.</li>
                 <li><strong>📑 Fiscal — guia Relatórios</strong>: <strong>As notas de uma unidade podem ser de várias empresas</strong>: o seletor <strong>Empresa</strong> filtra pelo CNPJ do destinatário do XML (notas lançadas à mão ficam em «Sem destinatário»); com «Todas», o pacote traz uma pasta por empresa. (1) <strong>Excel das entradas fiscais</strong> do período (pela data de entrada ou de emissão): abas Resumo, Por empresa, Itens fiscais (NCM, CFOP, CST/CSOSN, bases, alíquotas e valores de ICMS/ST/IPI/PIS/COFINS), Por CFOP, Por NCM, Por CST-CSOSN e <em>Notas</em> (inclusive as <strong>sem</strong> dados fiscais — manuais ou XML ainda não processado);
                 (2) <strong>Pacote do contador (ZIP)</strong>: os XMLs das notas do período (nomeados pela chave de acesso) + a planilha fiscal + o inventário (se a data estiver preenchida) + um LEIA-ME; (3) <strong>Inventário fiscal</strong>: produto, NCM, CEST, unidade, quantidade e valor unitário numa data, com aba «Atenção» (saldo negativo e produto com saldo sem NCM).
                 <em>Em data passada</em> a quantidade é recalculada desfazendo as movimentações posteriores, mas o <strong>valor unitário é o preço médio atual</strong> — para o inventário de fechamento, gere na própria data. É material de apoio ao contador; não substitui a EFD.</li>
@@ -5574,7 +5583,7 @@ async function fiscPreparar() {
 function fiscStatus(msg, erro) { const el = document.getElementById('statusFiscal'); el.className = 'status-msg' + (erro ? ' erro' : ''); el.textContent = msg || ''; }
 // empresa (destinatário) de uma nota: CNPJ/CPF do <dest> do XML; nota manual = «Sem destinatário». Nome: cadastro de Empresas (se o CNPJ estiver lá) ou o do XML.
 let fiscEmpresasCadastro = [];
-const fiscCnpjFmt = (d) => d.length === 14 ? d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : (d.length === 11 ? d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') : d);
+const fiscCnpjFmt = (d) => d.length === 14 ? d.replace(/^([0-9A-Z]{2})([0-9A-Z]{3})([0-9A-Z]{3})([0-9A-Z]{4})([0-9]{2})$/, '$1.$2.$3/$4-$5') : (d.length === 11 ? d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4') : d);
 function fiscEmpresaDaNota(n) {
     const dig = soDigitosCnpj(n.cnpj_tomador);
     if (dig) {
@@ -12018,7 +12027,9 @@ let notaEmEdicaoId = null;
 // Fornecedores (nome + CNPJ) lembrados pela nota manual. Vêm da tabela PESSOA (compartilhada com o Financeiro), carregada ao abrir o app,
 // MAIS o que as notas listadas já mostram -- o mapa só cresce, nunca encolhe com o filtro da tela de Notas (era o que «apagava» o CNPJ lembrado).
 const normNome = (s) => String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
-const soDigitosCnpj = (s) => String(s || '').replace(/\D/g, '');
+// documento (CNPJ/CPF) normalizado para comparar: sem pontuação, MAIÚSCULO e MANTENDO AS LETRAS — o CNPJ alfanumérico (IN RFB 2.229/2024, em vigor desde julho/2026) tem letras nas 12 primeiras posições.
+// (o nome é antigo: antes só ficavam os dígitos)
+const soDigitosCnpj = (s) => String(s || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
 const normNumeroNf = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');     // «PEDIDO 655044=» = «pedido 655044»
 let fornecedoresMapa = new Map();                 // nome normalizado -> { nome, cnpj, pessoaId, docPessoa }
 let fornecedoresPessoaOk = false;
@@ -12310,6 +12321,7 @@ document.getElementById('btnGerarProtocolo').addEventListener('click', async () 
 
 /* ---------- histórico de protocolos gerados, com PDF ---------- */
 async function carregarHistoricoProtocolo(tipo) {
+    try { const f = localStorage.getItem('estoque_protocolo_formato'); if (f === 'completo' || f === 'resumido') document.getElementById('protocoloFormato').value = f; } catch (e) { /* sem storage */ }
     const corpo = document.getElementById('corpoHistoricoProtocolo');
     const vazio = document.getElementById('vazioProtocolo');
     corpo.innerHTML = '<tr><td colspan="7" class="vazio">Carregando...</td></tr>';
@@ -12378,12 +12390,73 @@ async function desfazerUltimoProtocolo(nrProtocolo, qtdNotas) {
     await carregarNotasParaProtocolo();
 }
 
-async function construirPdfProtocolo(nrProtocolo) {
+// PDF RESUMIDO do protocolo (26/11/2026): UMA tabela compacta com todas as notas e todos os vencimentos (nota + títulos em linhas coladas, letra pequena,
+// margens de 10 mm) — o completo gastava um bloco inteiro por nota. Coluna Empresa só aparece quando o protocolo tem notas de mais de uma empresa.
+async function construirPdfProtocoloResumido(nrProtocolo, notas, titulos) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const M = 10, LARGURA = 190;
+    await carregarEmpresasNota();
+    const empresaDe = (n) => { const e = n.empresa_id != null ? empresasNota.find(x => x.id === n.empresa_id) : null; return String((e && e.nome) || n.nome_tomador || '').trim(); };
+    const empresas = new Set(notas.map(empresaDe).filter(Boolean));
+    const mostrarEmpresa = empresas.size > 1;
+    const num2 = (v) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const porNota = {}; titulos.forEach(t => (porNota[t.estoque_nota_id] = porNota[t.estoque_nota_id] || []).push(t));
+    const dataVenc = (t) => t.data_vencimento || t.vencimento || '';
+    const ordem = (a, b) => String(dataVenc(a) || '9999').localeCompare(String(dataVenc(b) || '9999')) || a.id - b.id;
+    const body = []; let somaTitulos = 0, qtdTitulos = 0;
+    notas.forEach(n => {
+        const ts = (porNota[n.id] || []).slice().sort(ordem), span = Math.max(ts.length, 1);
+        const cabecaNota = () => [{ content: n.numero_nf || '-', rowSpan: span }, { content: n.nome_fornecedor || '-', rowSpan: span },
+            ...(mostrarEmpresa ? [{ content: empresaDe(n), rowSpan: span }] : []), { content: formatarDataBR(n.data_entrada), rowSpan: span }];
+        const totalNota = () => ({ content: num2(n.valor_total), rowSpan: span, styles: { halign: 'right', fontStyle: 'bold' } });
+        if (!ts.length) { body.push([...cabecaNota(), { content: 'sem títulos', colSpan: 3, styles: { fontStyle: 'italic', textColor: [120, 120, 120] } }, totalNota()]); return; }
+        ts.forEach((t, i) => {
+            somaTitulos += Number(t.valor) || 0; qtdTitulos++;
+            const linha = i === 0 ? cabecaNota() : [];
+            linha.push(formatarDataBR(dataVenc(t)), t.forma_pagamento || '', { content: num2(t.valor), styles: { halign: 'right' } });
+            if (i === 0) linha.push(totalNota());
+            body.push(linha);
+        });
+    });
+    const valorTotal = notas.reduce((a, n) => a + Number(n.valor_total || 0), 0);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text(`PROTOCOLO Nº ${nrProtocolo} — RESUMO`, M, M + 3);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(90);
+    doc.text(`${meuPerfil.unidadeNome || ''}${empresas.size === 1 ? '  ·  ' + [...empresas][0] : ''}  ·  gerado em ${formatarDataBR(notas[0].updated_at || hojeISO())}  ·  ${notas.length} nota(s), ${qtdTitulos} título(s)`, M, M + 7.5);
+    doc.setTextColor(0);
+    const cabecalho = ['NF', 'Fornecedor', ...(mostrarEmpresa ? ['Empresa'] : []), 'Entrada', 'Vencimento', 'Forma', 'Valor título', 'Total NF'];
+    const largFixas = mostrarEmpresa ? [25, 0, 27, 16, 17, 15, 19, 19] : [25, 0, 17, 18, 18, 20, 20];
+    const colunas = {}; const soma = largFixas.reduce((a, b) => a + b, 0);
+    largFixas.forEach((w, i) => { colunas[i] = { cellWidth: w || (LARGURA - soma) }; });
+    colunas[cabecalho.length - 2] = { ...colunas[cabecalho.length - 2], halign: 'right' }; colunas[cabecalho.length - 1] = { ...colunas[cabecalho.length - 1], halign: 'right' };
+    doc.autoTable({
+        startY: M + 11, margin: { left: M, right: M, top: M, bottom: 12 },
+        head: [cabecalho], body, theme: 'grid',
+        styles: { fontSize: 7, cellPadding: { top: 0.8, bottom: 0.8, left: 1.2, right: 1.2 }, lineWidth: 0.1, lineColor: [200, 200, 200], valign: 'middle', overflow: 'linebreak' },
+        headStyles: { fillColor: [236, 239, 237], textColor: [30, 30, 30], fontStyle: 'bold', lineWidth: 0.1 },
+        columnStyles: colunas, rowPageBreak: 'avoid'
+    });
+    let y = doc.lastAutoTable.finalY + 5;
+    if (y > 280) { doc.addPage(); y = M + 4; }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+    doc.text(`Total do protocolo: ${formatarMoeda(valorTotal)}`, M + LARGURA, y, { align: 'right' });
+    if (Math.abs(somaTitulos - valorTotal) > 0.05) {
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(150, 80, 0);
+        doc.text(`Soma dos títulos: ${formatarMoeda(somaTitulos)} (difere do total das notas)`, M + LARGURA, y + 4.5, { align: 'right' }); doc.setTextColor(0);
+    }
+    const paginas = doc.getNumberOfPages();
+    for (let i = 1; i <= paginas; i++) { doc.setPage(i); doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(130); doc.text(`pág. ${i}/${paginas}`, M + LARGURA, 292, { align: 'right' }); }
+    doc.setTextColor(0);
+    return { blob: doc.output('blob'), nomeArquivo: `protocolo-${nrProtocolo}-resumido.pdf` };
+}
+
+async function construirPdfProtocolo(nrProtocolo, formato) {
     const { notas, titulos } = await chamarGet('buscarDadosProtocolo', { nrProtocolo });
     if (!notas || notas.length === 0) {
         alert('Não foi possível localizar os dados desse protocolo.');
         return null;
     }
+    if (formato === 'resumido') return construirPdfProtocoloResumido(nrProtocolo, notas, titulos);
     const titulosPorNota = {};
     titulos.forEach(t => {
         (titulosPorNota[t.estoque_nota_id] = titulosPorNota[t.estoque_nota_id] || []).push(t);
@@ -12461,7 +12534,10 @@ async function construirPdfProtocolo(nrProtocolo) {
 }
 
 async function acaoPdfProtocolo(nrProtocolo, tipoAcao) {
-    const resultado = await construirPdfProtocolo(nrProtocolo);
+    const seletorFormato = document.getElementById('protocoloFormato');
+    const formato = seletorFormato ? seletorFormato.value : 'completo';
+    try { localStorage.setItem('estoque_protocolo_formato', formato); } catch (e) { /* sem storage */ }
+    const resultado = await construirPdfProtocolo(nrProtocolo, formato);
     if (!resultado) return;
     const { blob, nomeArquivo } = resultado;
     if (tipoAcao === 'ver') {
