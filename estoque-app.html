@@ -555,6 +555,8 @@
         <button class="btn btn-cinza" id="btnImportarNFe" style="margin-top:8px;">📄 Importar NF-e (XML)</button>
         <button class="btn btn-cinza" id="btnPreencherNcm" style="margin-top:8px;" title="Preenche o NCM dos produtos sem NCM a partir dos dados fiscais das notas já importadas">🏷️ Preencher NCM (das notas)</button>
         <button class="btn btn-cinza" id="btnAtalhoRateioAlmox" style="margin-top:8px;" title="Cruzada plano de contas × setor do consumo do almoxarifado, com os percentuais e o rateio do valor real pago">📊 Rateio do almoxarifado</button>
+        <button class="btn btn-azul" id="btnNovaTransferencia" style="margin-top:8px;" title="Transfere produtos entre almoxarifados ou cede em comodato (com evento, setor e data prevista de devolução)">🔁 Transferência / Comodato</button>
+        <button class="btn btn-cinza" id="btnListaTransferencias" style="margin-top:8px;" title="Comodatos em aberto (com devolução), histórico de transferências e relatórios">📋 Comodatos e transferências</button>
     </div>
 
     <div class="caixa" id="painelNovoProduto" style="display:none;">
@@ -1591,6 +1593,134 @@
             <button class="btn btn-verde" id="btnConfirmarBaixaDireta">Registrar baixa</button>
         </div>
         <span class="status-msg" id="statusBaixaDireta"></span>
+    </div>
+</div>
+
+<!-- ===================== MODAL: Transferência / Comodato entre almoxarifados (26/11/2026) ===================== -->
+<div class="modal-overlay" id="modalTransferenciaEstoque">
+    <div class="modal-caixa" style="max-width:860px;">
+        <h4 style="margin-top:0;">🔁 Transferência / Comodato entre almoxarifados</h4>
+        <p class="subtitulo" style="margin-bottom:10px;">Monte a lista de produtos: tudo vai num <strong>mesmo número</strong> e gera um <strong>relatório em PDF</strong>. O estoque total não muda — a quantidade sai de um almoxarifado e entra no outro. No <strong>comodato</strong> você informa evento, setor e a <strong>data prevista de devolução</strong>; ele fica «em aberto» até voltar.</p>
+
+        <div style="display:flex; gap:22px; flex-wrap:wrap; margin:6px 0 10px 0;">
+            <label style="display:flex; gap:6px; align-items:center; cursor:pointer;"><input type="radio" name="trTipo" value="transferencia" checked> <strong>Transferência</strong></label>
+            <label style="display:flex; gap:6px; align-items:center; cursor:pointer;"><input type="radio" name="trTipo" value="comodato"> <strong>Comodato</strong> <span class="subtitulo">(volta numa data prevista)</span></label>
+        </div>
+
+        <div class="grade col3">
+            <div class="campo"><label>Data</label><input type="date" id="trData"></div>
+            <div class="campo" style="position:relative;">
+                <label>Origem (sai de)</label>
+                <input type="text" id="trOrigemBusca" placeholder="Buscar almoxarifado..." autocomplete="off">
+                <div id="trOrigemResultados" class="dropdown-busca-evento"></div>
+                <p class="subtitulo" id="trOrigemSelecionado" style="margin-top:4px;"></p>
+            </div>
+            <div class="campo" style="position:relative;">
+                <label>Destino (vai para)</label>
+                <input type="text" id="trDestinoBusca" placeholder="Buscar almoxarifado..." autocomplete="off">
+                <div id="trDestinoResultados" class="dropdown-busca-evento"></div>
+                <p class="subtitulo" id="trDestinoSelecionado" style="margin-top:4px;"></p>
+            </div>
+        </div>
+
+        <div id="trBlocoComodato" style="display:none; background:#FFF8E6; border:1px solid #F0D79A; border-radius:8px; padding:10px 14px; margin-top:10px;">
+            <p class="subtitulo" style="margin:0 0 8px 0;"><strong>📌 Comodato</strong> — para onde o material vai e quando deve voltar.</p>
+            <div class="grade col3">
+                <div class="campo" style="position:relative;">
+                    <label>Evento *</label>
+                    <input type="text" id="trEventoBusca" placeholder="Buscar evento..." autocomplete="off">
+                    <div id="trEventoResultados" class="dropdown-busca-evento"></div>
+                    <p class="subtitulo" id="trEventoSelecionado" style="margin-top:4px;"></p>
+                </div>
+                <div class="campo" style="position:relative;">
+                    <label>Setor *</label>
+                    <input type="text" id="trSetorBusca" placeholder="Buscar setor..." autocomplete="off">
+                    <div id="trSetorResultados" class="dropdown-busca-evento"></div>
+                    <p class="subtitulo" id="trSetorSelecionado" style="margin-top:4px;"></p>
+                </div>
+                <div class="campo"><label>Devolução prevista *</label><input type="date" id="trPrevDevolucao"></div>
+            </div>
+        </div>
+
+        <hr style="margin:12px 0; border:none; border-top:1px solid #e5e7eb;">
+        <div class="linha-busca">
+            <input type="text" id="trBuscaProduto" placeholder="Digite código ou descrição do produto...">
+            <button class="btn btn-azul" id="trBtnBuscarProduto" type="button">Buscar</button>
+        </div>
+        <div id="trResultadosProduto"></div>
+        <div id="trProdutoSelecionado" style="margin:6px 0; font-size:0.9em;"></div>
+        <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+            <div class="campo" style="width:130px;"><label>Quantidade</label><input type="number" step="0.01" min="0" id="trQtd" value="1"></div>
+            <button class="btn btn-verde" id="trBtnAdicionar" type="button">+ Adicionar à lista</button>
+        </div>
+        <div id="trCarrinho" style="margin-top:10px; border:1px solid #e5e7eb; border-radius:8px; max-height:240px; overflow:auto;"></div>
+
+        <div id="trBlocoDevolucao" style="display:none; background:#EFF6FF; border:1px solid #BFD7FF; border-radius:8px; padding:10px 14px; margin-top:10px;"></div>
+
+        <div class="grade col2" style="margin-top:10px;">
+            <div class="campo"><label>Responsável</label><input type="text" id="trResponsavel"></div>
+            <div class="campo"><label>Observação (opcional)</label><input type="text" id="trObservacao"></div>
+        </div>
+        <div style="margin-top:14px; text-align:right;">
+            <button class="btn btn-cinza" id="btnCancelarTransferencia" type="button">Sair</button>
+            <button class="btn btn-verde" id="btnConfirmarTransferencia" type="button">Registrar e gerar relatório</button>
+        </div>
+        <span class="status-msg" id="statusTransferencia"></span>
+    </div>
+</div>
+
+<!-- ===================== MODAL: Comodatos e transferências (lista) ===================== -->
+<div class="modal-overlay" id="modalListaTransferencias">
+    <div class="modal-caixa" style="max-width:1100px;">
+        <h4 style="margin-top:0;">📋 Comodatos e transferências</h4>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
+            <button class="btn btn-azul btn-pequeno" id="trAbaComodatos" type="button">Comodatos</button>
+            <button class="btn btn-cinza btn-pequeno" id="trAbaHistorico" type="button">Histórico de transferências</button>
+            <span style="flex:1;"></span>
+            <select id="trFiltroComodato" style="width:auto;">
+                <option value="aberto">Em aberto (a devolver)</option>
+                <option value="atrasado">Atrasados</option>
+                <option value="devolvido">Já devolvidos</option>
+                <option value="todos">Todos</option>
+            </select>
+            <input type="text" id="trFiltroBusca" placeholder="Buscar por número, produto, evento, setor..." style="min-width:240px;">
+        </div>
+        <div id="trListaConteudo"></div>
+        <div style="margin-top:12px; text-align:right;"><button class="btn btn-cinza" id="btnFecharListaTransferencias" type="button">Sair</button></div>
+        <span class="status-msg" id="statusListaTransferencias"></span>
+    </div>
+</div>
+
+<!-- ===================== MODAL: Devolver comodato ===================== -->
+<div class="modal-overlay" id="modalDevolverComodato" style="z-index:1100;">
+    <div class="modal-caixa" style="max-width:640px;">
+        <h4 style="margin-top:0;" id="trDevTitulo">Devolver comodato</h4>
+        <p class="subtitulo" id="trDevResumo" style="margin-bottom:8px;"></p>
+        <div id="trDevItens" style="border:1px solid #e5e7eb; border-radius:8px; max-height:300px; overflow:auto;"></div>
+        <div class="grade col2" style="margin-top:10px;">
+            <div class="campo"><label>Data da devolução</label><input type="date" id="trDevData"></div>
+            <div class="campo"><label>Responsável</label><input type="text" id="trDevResponsavel"></div>
+        </div>
+        <div class="campo" style="margin-top:8px;"><label>Observação (opcional)</label><input type="text" id="trDevObs"></div>
+        <div style="margin-top:14px; text-align:right;">
+            <button class="btn btn-cinza" id="btnCancelarDevolucao" type="button">Sair</button>
+            <button class="btn btn-verde" id="btnConfirmarDevolucao" type="button">Registrar devolução</button>
+        </div>
+        <span class="status-msg" id="statusDevolucao"></span>
+    </div>
+</div>
+
+<!-- ===================== POPUP: PDF da transferência (Visualizar / Baixar / Compartilhar) ===================== -->
+<div class="modal-overlay" id="modalPdfTransferencia" style="z-index:1200;">
+    <div class="modal-caixa" style="max-width:420px;">
+        <h4 style="margin-top:0;" id="trPdfTitulo">Relatório</h4>
+        <p class="subtitulo" id="trPdfSub" style="margin-bottom:10px;"></p>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button class="btn btn-azul" id="trPdfVer" type="button">👁️ Visualizar</button>
+            <button class="btn btn-verde" id="trPdfBaixar" type="button">⬇️ Baixar</button>
+            <button class="btn btn-cinza" id="trPdfCompartilhar" type="button">📤 Compartilhar</button>
+        </div>
+        <div style="margin-top:12px; text-align:right;"><button class="btn btn-cinza" id="trPdfFechar" type="button">Fechar</button></div>
     </div>
 </div>
 
@@ -3972,7 +4102,7 @@ document.querySelectorAll('.aba-btn').forEach(btn => {
    ============================================================ */
 const AJUDA_ESTOQUE = {
     titulo: 'Estoque — Controle de Estoque & Projetos',
-    ultimaRevisao: '25/11/2026',   // títulos/vencimentos no XML; nº dos títulos = nº da nota/parcela; aviso de fornecedor não cadastrado; ordem de pagamento em bobina/A4 (25/11/2026)
+    ultimaRevisao: '26/11/2026',   // transferência/comodato entre almoxarifados (26/11/2026); títulos/vencimentos no XML; nº dos títulos = nº da nota/parcela; aviso de fornecedor não cadastrado; ordem de pagamento em bobina/A4 (25/11/2026)
     secoes: [
         { id: 'geral', titulo: 'Visão geral', corpo: `
             <p>O Estoque controla o material físico da unidade (contêiner/esquadria): o que entra
@@ -4006,6 +4136,16 @@ const AJUDA_ESTOQUE = {
             por projeto nem requisição — use só pra ajuste pontual, não pro consumo normal de obra. Dá pra
             informar o <strong>Setor</strong> e, dentro dele, o <strong>Subsetor</strong> (opcional — a lista de
             subsetores mostra só os do setor escolhido; trocar o setor limpa o subsetor).</p>
+            <p><strong>🔁 Transferência / Comodato</strong> (botão no topo da aba Estoque e o 🔁 de cada produto) move produtos <strong>entre almoxarifados</strong>:
+            a quantidade sai da <strong>origem</strong> e entra no <strong>destino</strong> (o estoque total não muda). Você monta uma lista com vários produtos, e tudo vai num
+            <strong>mesmo número</strong> (1, 2, 3... por unidade) com <strong>relatório em PDF</strong> (declaração, lista de produtos e duas linhas de assinatura; Visualizar/Baixar/Compartilhar).
+            Há dois tipos: <strong>Transferência</strong> (definitiva) e <strong>Comodato</strong>, em que você informa <strong>evento</strong>, <strong>setor</strong> e a
+            <strong>data prevista de devolução</strong> — o comodato fica «em aberto» até o material voltar.</p>
+            <p><strong>↩ Devolução do comodato</strong>, total ou parcial, de duas formas: (1) <strong>📋 Comodatos e transferências</strong> → localize o comodato (atrasados aparecem em vermelho, com os dias de atraso) →
+            <strong>↩ Devolver</strong> e informe quanto voltou de cada item; ou (2) faça uma <strong>transferência reversa</strong> (do destino de volta para a origem do comodato): a tela reconhece
+            e pergunta se ela é a devolução do comodato nº X — se confirmar, ela é lançada como devolução e baixa o pendente. Nos dois casos o comodato passa a «devolvido parcial» e, quando tudo volta, a «devolvido».
+            As movimentações geradas levam a observação «Transferência nº N ...», <strong>não contam como consumo</strong> no rateio do almoxarifado e a ação vai para a auditoria. Saldo negativo na origem
+            pede confirmação. Se algo for lançado errado, corrija com um lançamento contrário (o registro numerado não é apagado). Precisa do SQL <strong>estoque-transferencias.sql</strong> rodado no Supabase.</p>
             <p>No cadastro de produto (novo ou edição), o campo <strong>Grupo</strong> é obrigatório —
             o botão <strong>"+"</strong> ao lado abre um cadastro rápido pra criar um grupo novo na hora,
             sem precisar sair da tela.</p>
@@ -4526,6 +4666,7 @@ function renderizarTabelaEstoque(lista) {
             <td class="center">
                 ${podeEditar ? `<button class="btn btn-cinza btn-pequeno" data-editar="${p.id}">Editar</button>` : ''}
                 ${podeVerMovimentos ? `<button class="btn-icone" data-info="${p.id}" title="Ver movimentos">ℹ️</button>` : ''}
+                ${temPermissaoEstoque('ver_movimentacoes') ? `<button class="btn-icone" data-transferir="${p.id}" title="Transferir / comodato deste produto">🔁</button>` : ''}
             </td>
         `;
         corpo.appendChild(tr);
@@ -7984,6 +8125,7 @@ function aplicarPermissoesNaInterface() {
 
     const btnBaixaDireta = document.getElementById('btnBaixaDireta');
     if (btnBaixaDireta) btnBaixaDireta.style.display = temPermissaoEstoque('ver_movimentacoes') ? '' : 'none';
+    ['btnNovaTransferencia', 'btnListaTransferencias'].forEach(id => { const bt = document.getElementById(id); if (bt) bt.style.display = temPermissaoEstoque('ver_movimentacoes') ? '' : 'none'; });
 
     const btnImportarNFe = document.getElementById('btnImportarNFe');
     if (btnImportarNFe) btnImportarNFe.style.display = temPermissaoEstoque('notas_entrada') ? '' : 'none';
@@ -8002,6 +8144,411 @@ function aplicarPermissoesNaInterface() {
 
     if (podeGerenciarPermissoes) carregarUsuariosPapeisEstoque();
 }
+
+/* =========================================================================
+   TRANSFERÊNCIA / COMODATO ENTRE ALMOXARIFADOS (26/11/2026) — SQL: estoque-transferencias.sql
+   * Transferência: sai de um almoxarifado e entra no outro (o estoque total não muda).
+   * Comodato: igual, mas com EVENTO, SETOR e DATA PREVISTA DE DEVOLUÇÃO; fica «em aberto» até voltar.
+   * Devolução: parcial ou total, de duas formas: (1) pelo botão «Devolver» do comodato; (2) fazendo uma transferência REVERSA
+     (destino → origem do comodato): a tela reconhece e oferece vincular ao comodato.
+   Tudo é gravado pela função fn_estoque_transferir (uma transação: grava tudo ou nada). Cada registro tem número por unidade e relatório em PDF.
+   As movimentações levam a observação «Transferência nº N ...» (não contam como consumo no rateio do almoxarifado).
+   ========================================================================= */
+let trCarrinho = [];            // [{produtoId, qtd}]
+let trProdutoSel = null, trOrigem = null, trDestino = null, trEventoSel = null, trSetorSel = null;
+let trComodatosAbertos = [];    // comodatos com algo a devolver (para reconhecer a transferência reversa)
+let trLista = { aba: 'comodatos', comodatos: [], historico: [], devolucoes: {} };
+let trPdfAtual = null, trDevolvendo = null;
+const trNum = (v) => Number(v) || 0;
+const trFmtQtd = (v) => trNum(v).toLocaleString('pt-BR', { maximumFractionDigits: 3 });
+const trPode = () => temPermissaoEstoque('ver_movimentacoes');
+const trTipoAtual = () => { const r = document.querySelector('input[name="trTipo"]:checked'); return r ? r.value : 'transferencia'; };
+const TR_ROTULO_TIPO = { transferencia: 'Transferência', comodato: 'Comodato', devolucao: 'Devolução de comodato' };
+function trErroTabela(e) {
+    const m = String((e && e.message) || e || '');
+    return /(estoque_transferencias|fn_estoque_transferir)/.test(m) && /(does not exist|schema cache|Could not find|não existe)/i.test(m)
+        ? 'Falta rodar o SQL estoque-transferencias.sql no Supabase (nada foi alterado).' : null;
+}
+async function trGarantirCatalogos() {
+    if (!catalogosBaixa.almoxarifados || !catalogosBaixa.almoxarifados.length || !catalogosBaixa.setores || !catalogosBaixa.setores.length) catalogosBaixa = await chamarGet('listarCatalogosBaixa');
+}
+const trProduto = (id) => produtos.find(p => p.id === id) || null;
+function trSaldoNaOrigem(produtoId) {
+    if (!trOrigem) return null;
+    const s = saldoDoProdutoNoAlmoxarifado(produtoId, Number(trOrigem.id));
+    return s ? trNum(s.estoque) : 0;
+}
+
+// ---- buscas (mesmo padrão das demais telas)
+const trBuscaOrigem = configurarBuscaListaGenerica('trOrigemBusca', 'trOrigemResultados', 'trOrigemSelecionado', () => catalogosBaixa.almoxarifados || [], (it) => { trOrigem = it; trAtualizarTudo(); });
+const trBuscaDestino = configurarBuscaListaGenerica('trDestinoBusca', 'trDestinoResultados', 'trDestinoSelecionado', () => catalogosBaixa.almoxarifados || [], (it) => { trDestino = it; trAtualizarTudo(); });
+const trBuscaSetor = configurarBuscaListaGenerica('trSetorBusca', 'trSetorResultados', 'trSetorSelecionado', () => catalogosBaixa.setores || [], (it) => { trSetorSel = it; });
+configurarBuscaEvento('trEventoBusca', 'trEventoResultados', 'trEventoSelecionado', (ev) => { trEventoSel = ev; });
+
+function trTipoMudou() {
+    document.getElementById('trBlocoComodato').style.display = trTipoAtual() === 'comodato' ? '' : 'none';
+    trAtualizarTudo();
+}
+function trAtualizarTudo() { trRenderCarrinho(); trAtualizarDevolucao(); }
+
+async function trCarregarComodatosAbertos() {
+    const { data, error } = await sb.from('estoque_transferencias').select('*, estoque_transferencias_itens(*)')
+        .eq('unidade_negocio_id', meuPerfil.unidadeId).eq('tipo', 'comodato').neq('status', 'devolvido').order('numero', { ascending: false });
+    if (error) { trComodatosAbertos = []; if (!trErroTabela(error)) console.warn('comodatos em aberto:', error.message); return; }
+    trComodatosAbertos = data || [];
+}
+
+async function trAbrirModal(produtoIdPre) {
+    if (!trPode()) { alert('Você não tem permissão para registrar transferências.'); return; }
+    try { await trGarantirCatalogos(); } catch (e) { alert('Não consegui carregar os cadastros: ' + (e.message || e)); return; }
+    if ((catalogosBaixa.almoxarifados || []).length < 2) { alert('Só existe um almoxarifado nesta unidade. Cadastre outro em Cadastros Gerais → Almoxarifados para poder transferir.'); return; }
+    document.querySelector('input[name="trTipo"][value="transferencia"]').checked = true;
+    document.getElementById('trBlocoComodato').style.display = 'none';
+    document.getElementById('trData').value = hojeISO();
+    document.getElementById('trPrevDevolucao').value = '';
+    document.getElementById('trResponsavel').value = meuPerfil.nomeOperador || '';
+    document.getElementById('trObservacao').value = '';
+    document.getElementById('trBuscaProduto').value = ''; document.getElementById('trProdutoSelecionado').innerHTML = '';
+    document.getElementById('trResultadosProduto').innerHTML = ''; document.getElementById('trResultadosProduto').classList.remove('aberto');
+    document.getElementById('trQtd').value = 1;
+    trProdutoSel = null; trDestino = null; trEventoSel = null; trSetorSel = null;
+    ['trDestinoBusca', 'trEventoBusca', 'trSetorBusca', 'trOrigemBusca'].forEach(id => { document.getElementById(id).value = ''; });
+    trBuscaDestino.selecionar(null); trBuscaSetor.selecionar(null);
+    document.getElementById('trEventoSelecionado').innerHTML = '';
+    trOrigem = almoxarifadoTrabalho ? ((catalogosBaixa.almoxarifados || []).find(a => String(a.id) === String(almoxarifadoTrabalho)) || null) : null;
+    trBuscaOrigem.selecionar(trOrigem);
+    trCarrinho = produtoIdPre ? [{ produtoId: produtoIdPre, qtd: 1 }] : [];
+    const st = document.getElementById('statusTransferencia'); st.className = 'status-msg'; st.textContent = '';
+    trAtualizarTudo();
+    document.getElementById('modalTransferenciaEstoque').classList.add('aberto');
+    trCarregarComodatosAbertos().then(trAtualizarDevolucao).catch(() => { /* sem a tabela ainda: a transferência comum não depende disso */ });
+}
+
+function trRenderCarrinho() {
+    const box = document.getElementById('trCarrinho');
+    if (!trCarrinho.length) { box.innerHTML = '<div class="vazio" style="padding:12px;">Nenhum produto na lista ainda — busque o produto, informe a quantidade e clique em "+ Adicionar".</div>'; return; }
+    let total = 0;
+    box.innerHTML = trCarrinho.map((x, i) => {
+        const p = trProduto(x.produtoId), saldo = trSaldoNaOrigem(x.produtoId), falta = saldo != null && x.qtd > saldo;
+        total += trNum(x.qtd);
+        return `<div style="display:flex; align-items:center; gap:8px; padding:6px 8px; border-bottom:1px solid #e5e7eb; ${i % 2 === 0 ? 'background:#f8fafc;' : ''}">
+            <input type="number" step="0.01" min="0" value="${x.qtd}" data-tr-qtd="${i}" style="width:90px;">
+            <span style="flex:1;"><span class="cod">#${x.produtoId}</span> — ${escapeHtml(p ? p.nome : 'produto')} <span class="subtitulo">(${escapeHtml(p ? (p.un || 'UN') : '')})</span></span>
+            <span style="font-size:.8rem; ${falta ? 'color:#b00020; font-weight:700;' : 'color:#6b7280;'}">${saldo == null ? 'escolha a origem' : 'saldo na origem: ' + trFmtQtd(saldo) + (falta ? ' ⚠' : '')}</span>
+            <button type="button" class="btn btn-cinza btn-pequeno" data-tr-remover="${i}" title="Remover">×</button></div>`;
+    }).join('') + `<div style="text-align:right; padding:6px 8px; font-weight:700;">${trCarrinho.length} ${trCarrinho.length > 1 ? 'itens' : 'item'} · ${trFmtQtd(total)} un no total</div>`;
+}
+
+// transferência REVERSA: destino → origem de um comodato em aberto, com produto(s) dele na lista => oferece vincular como devolução
+function trComodatosCorrespondentes() {
+    if (trTipoAtual() !== 'transferencia' || !trOrigem || !trDestino || !trCarrinho.length) return [];
+    return trComodatosAbertos.filter(c => String(c.para_almoxarifado_id) === String(trOrigem.id) && String(c.de_almoxarifado_id) === String(trDestino.id)
+        && (c.estoque_transferencias_itens || []).some(i => trNum(i.qtd) - trNum(i.qtd_devolvida) > 0 && trCarrinho.some(x => x.produtoId === i.produto_id)));
+}
+function trAtualizarDevolucao() {
+    const box = document.getElementById('trBlocoDevolucao');
+    const cs = trComodatosCorrespondentes();
+    if (!cs.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    const atual = (document.querySelector('input[name="trVinculo"]:checked') || {}).value || '';
+    box.style.display = '';
+    box.innerHTML = `<p class="subtitulo" style="margin:0 0 6px 0;"><strong>↩ Esta transferência volta no sentido contrário de um comodato em aberto.</strong> Ela é a devolução dele?</p>
+        <label style="display:flex; gap:6px; align-items:flex-start; cursor:pointer; margin-bottom:4px;"><input type="radio" name="trVinculo" value="" ${atual === '' || !cs.some(c => c.id === atual) ? 'checked' : ''}> <span>Não, é só uma transferência comum</span></label>
+        ${cs.map(c => `<label style="display:flex; gap:6px; align-items:flex-start; cursor:pointer; margin-bottom:4px;"><input type="radio" name="trVinculo" value="${c.id}" ${atual === c.id ? 'checked' : ''}>
+            <span><strong>Sim — devolução do comodato nº ${c.numero}</strong> (${formatarDataBR(c.data)}, evento ${escapeHtml(c.evento || '')}, setor ${escapeHtml(c.setor_nome || '')}, previsto ${formatarDataBR(c.data_prevista_devolucao)}) — pendente: ${
+                (c.estoque_transferencias_itens || []).filter(i => trNum(i.qtd) - trNum(i.qtd_devolvida) > 0).map(i => trFmtQtd(trNum(i.qtd) - trNum(i.qtd_devolvida)) + ' × ' + escapeHtml(i.nome)).join('; ')}</span></label>`).join('')}`;
+}
+
+document.querySelectorAll('input[name="trTipo"]').forEach(r => r.addEventListener('change', trTipoMudou));
+document.getElementById('btnNovaTransferencia').addEventListener('click', () => trAbrirModal(null));
+document.getElementById('btnCancelarTransferencia').addEventListener('click', () => document.getElementById('modalTransferenciaEstoque').classList.remove('aberto'));
+document.getElementById('trBtnBuscarProduto').addEventListener('click', () => renderizarResultadosBusca('trResultadosProduto', document.getElementById('trBuscaProduto').value, (p) => {
+    trProdutoSel = p;
+    document.getElementById('trProdutoSelecionado').innerHTML = `Selecionado: <strong>#${p.id} — ${escapeHtml(p.nome)}</strong> (estoque total: ${trFmtQtd(p.estoque)} ${escapeHtml(p.un || '')})`;
+    document.getElementById('trResultadosProduto').classList.remove('aberto'); document.getElementById('trBuscaProduto').value = '';
+}));
+document.getElementById('trBuscaProduto').addEventListener('input', () => {
+    const t = document.getElementById('trBuscaProduto').value;
+    if (t.trim()) document.getElementById('trBtnBuscarProduto').click(); else document.getElementById('trResultadosProduto').classList.remove('aberto');
+});
+document.getElementById('trBuscaProduto').addEventListener('keydown', e => { if (e.key === 'Enter') document.getElementById('trBtnBuscarProduto').click(); });
+document.getElementById('trBtnAdicionar').addEventListener('click', () => {
+    const st = document.getElementById('statusTransferencia'); st.className = 'status-msg erro'; st.textContent = '';
+    if (!trProdutoSel) { st.textContent = 'Busque e selecione o produto.'; return; }
+    const qtd = parseFloat(document.getElementById('trQtd').value);
+    if (!qtd || qtd <= 0) { st.textContent = 'Informe uma quantidade maior que zero.'; return; }
+    const ja = trCarrinho.find(x => x.produtoId === trProdutoSel.id);
+    if (ja) ja.qtd = Math.round((ja.qtd + qtd) * 1000) / 1000; else trCarrinho.push({ produtoId: trProdutoSel.id, qtd });
+    trProdutoSel = null; document.getElementById('trProdutoSelecionado').innerHTML = ''; document.getElementById('trQtd').value = 1;
+    st.textContent = ''; trAtualizarTudo();
+});
+document.getElementById('trCarrinho').addEventListener('click', (e) => { const b = e.target.closest('[data-tr-remover]'); if (b) { trCarrinho.splice(Number(b.dataset.trRemover), 1); trAtualizarTudo(); } });
+document.getElementById('trCarrinho').addEventListener('change', (e) => {
+    const i = e.target.closest('[data-tr-qtd]'); if (!i) return;
+    const v = parseFloat(i.value); if (!v || v <= 0) { i.value = trCarrinho[Number(i.dataset.trQtd)].qtd; return; }
+    trCarrinho[Number(i.dataset.trQtd)].qtd = v; trAtualizarTudo();
+});
+
+// ---- chamada da função do banco
+async function trRegistrar(args) {
+    const { data, error } = await sb.rpc('fn_estoque_transferir', { p_unidade: meuPerfil.unidadeId, ...args });
+    if (error) throw new Error(trErroTabela(error) || error.message);
+    return data;
+}
+async function trAtualizarTelasEstoque() {
+    await Promise.all([carregarProdutos(), carregarMovimentacoes(), carregarSaldosAlmoxarifado()]);
+    try { renderizarTabelaEstoque(buscarProdutos(document.getElementById('buscaEstoque').value)); } catch (e) { /* tela fora de foco */ }
+}
+async function trBuscarRegistro(id) {
+    const { data, error } = await sb.from('estoque_transferencias').select('*, estoque_transferencias_itens(*)').eq('id', id).single();
+    if (error) throw error;
+    if (data.comodato_id) {
+        const c = trComodatosAbertos.find(x => x.id === data.comodato_id) || trLista.comodatos.find(x => x.id === data.comodato_id);
+        if (c) data.comodato_numero = c.numero;
+        else { const { data: cc } = await sb.from('estoque_transferencias').select('numero').eq('id', data.comodato_id).maybeSingle(); if (cc) data.comodato_numero = cc.numero; }
+    }
+    return data;
+}
+
+document.getElementById('btnConfirmarTransferencia').addEventListener('click', async () => {
+    const st = document.getElementById('statusTransferencia'); st.className = 'status-msg erro'; st.textContent = '';
+    if (!trPode()) { st.textContent = 'Você não tem permissão para registrar transferências.'; return; }
+    const tipo = trTipoAtual();
+    if (!trOrigem || !trDestino) { st.textContent = 'Escolha o almoxarifado de origem e o de destino.'; return; }
+    if (String(trOrigem.id) === String(trDestino.id)) { st.textContent = 'A origem e o destino precisam ser diferentes.'; return; }
+    if (!trCarrinho.length) { st.textContent = 'Adicione pelo menos um produto à lista.'; return; }
+    const data = document.getElementById('trData').value || hojeISO();
+    const prev = document.getElementById('trPrevDevolucao').value;
+    if (tipo === 'comodato') {
+        if (!trEventoSel) { st.textContent = 'Comodato: escolha o evento.'; return; }
+        if (!trSetorSel) { st.textContent = 'Comodato: escolha o setor.'; return; }
+        if (!prev) { st.textContent = 'Comodato: informe a data prevista de devolução.'; return; }
+        if (prev < data) { st.textContent = 'A data prevista de devolução não pode ser anterior à data do comodato.'; return; }
+    }
+    const vinculoId = (document.querySelector('input[name="trVinculo"]:checked') || {}).value || '';
+    const comodato = vinculoId ? trComodatosAbertos.find(c => c.id === vinculoId) : null;
+    let args;
+    if (comodato) {   // transferência reversa vinculada ao comodato = devolução
+        const itens = [];
+        for (const x of trCarrinho) {
+            const ci = (comodato.estoque_transferencias_itens || []).find(i => i.produto_id === x.produtoId && trNum(i.qtd) - trNum(i.qtd_devolvida) > 0);
+            const p = trProduto(x.produtoId);
+            if (!ci) { st.textContent = `O produto «${p ? p.nome : x.produtoId}» não está pendente no comodato nº ${comodato.numero}. Tire-o da lista ou escolha «transferência comum».`; return; }
+            const pend = trNum(ci.qtd) - trNum(ci.qtd_devolvida);
+            if (x.qtd > pend + 1e-9) { st.textContent = `«${ci.nome}»: você está devolvendo ${trFmtQtd(x.qtd)}, mas só ${trFmtQtd(pend)} estão pendentes no comodato nº ${comodato.numero}.`; return; }
+            itens.push({ comodato_item_id: ci.id, qtd: x.qtd });
+        }
+        args = { p_tipo: 'devolucao', p_data: data, p_de: null, p_para: null, p_itens: itens, p_comodato: comodato.id };
+    } else {
+        args = { p_tipo: tipo, p_data: data, p_de: Number(trOrigem.id), p_para: Number(trDestino.id), p_itens: trCarrinho.map(x => ({ produto_id: x.produtoId, qtd: x.qtd })), p_comodato: null };
+        if (tipo === 'comodato') Object.assign(args, { p_evento: String(trEventoSel.codigo), p_evento_nome: trEventoSel.descricao || null, p_setor: Number(trSetorSel.id), p_prev_devolucao: prev });
+        const falta = trCarrinho.filter(x => x.qtd > (trSaldoNaOrigem(x.produtoId) || 0));
+        if (falta.length && !confirm(`Em «${trOrigem.nome}», estes produtos ficarão negativos:\n\n` + falta.map(x => `• ${(trProduto(x.produtoId) || {}).nome}: saldo ${trFmtQtd(trSaldoNaOrigem(x.produtoId))}, transferindo ${trFmtQtd(x.qtd)}`).join('\n') + '\n\nContinuar?')) return;
+    }
+    args.p_observacao = document.getElementById('trObservacao').value.trim() || null;
+    args.p_responsavel = document.getElementById('trResponsavel').value.trim() || meuPerfil.nomeOperador || null;
+    const btn = document.getElementById('btnConfirmarTransferencia'); btn.disabled = true; btn.textContent = 'Registrando...';
+    try {
+        const r = await trRegistrar(args);
+        const reg = await trBuscarRegistro(r.id);
+        const resumo = (reg.estoque_transferencias_itens || []).map(i => `${trFmtQtd(i.qtd)}x ${i.nome}`).join('; ');
+        try { await registrarSentinela('transferencia_estoque', `${TR_ROTULO_TIPO[reg.tipo]} nº ${reg.numero}: ${reg.de_nome} → ${reg.para_nome}${reg.tipo === 'comodato' ? ' (evento ' + reg.evento + ', setor ' + reg.setor_nome + ', devolver até ' + formatarDataBR(reg.data_prevista_devolucao) + ')' : ''}${reg.tipo === 'devolucao' ? ' (devolução do comodato nº ' + (reg.comodato_numero || '?') + ')' : ''} — ${resumo}`); } catch (_) { /* auditoria não bloqueia */ }
+        document.getElementById('modalTransferenciaEstoque').classList.remove('aberto');
+        await trAtualizarTelasEstoque();
+        trMostrarPdf(reg);
+    } catch (e) {
+        st.className = 'status-msg erro'; st.textContent = 'Erro (nada foi alterado): ' + (e.message || e);
+    } finally { btn.disabled = false; btn.textContent = 'Registrar e gerar relatório'; }
+});
+
+// ---- relatório em PDF (declaração + lista + assinaturas); abre o popup Visualizar / Baixar / Compartilhar
+function trConstruirPdf(reg) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const M = 15, W = 210 - 2 * M;
+    const itens = reg.estoque_transferencias_itens || [];
+    let y = M + 2;
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(String(meuPerfil.unidadeNome || '').toUpperCase(), M, y);
+    y += 8; doc.setFontSize(15);
+    doc.text(reg.tipo === 'comodato' ? `TERMO DE COMODATO Nº ${reg.numero}` : reg.tipo === 'devolucao' ? `DEVOLUÇÃO DE COMODATO Nº ${reg.numero}` : `TRANSFERÊNCIA ENTRE ALMOXARIFADOS Nº ${reg.numero}`, M, y);
+    y += 7; doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+    const linhas = [['Data', formatarDataBR(reg.data)], ['Origem', reg.de_nome], ['Destino', reg.para_nome]];
+    if (reg.tipo === 'comodato') linhas.push(['Evento', `${reg.evento || ''}${reg.evento_nome ? ' — ' + reg.evento_nome : ''}`], ['Setor', reg.setor_nome || ''], ['Devolução prevista', formatarDataBR(reg.data_prevista_devolucao)]);
+    if (reg.tipo === 'devolucao') linhas.push(['Referente ao comodato', 'nº ' + (reg.comodato_numero || '?')]);
+    if (reg.responsavel) linhas.push(['Responsável', reg.responsavel]);
+    if (reg.observacao) linhas.push(['Observação', reg.observacao]);
+    linhas.forEach(([k, v]) => {
+        doc.setFont('helvetica', 'bold'); doc.text(k + ':', M, y);
+        doc.setFont('helvetica', 'normal'); const partes = doc.splitTextToSize(String(v), W - 42); doc.text(partes, M + 42, y); y += 5.2 * partes.length;
+    });
+    y += 3;
+    const total = itens.reduce((s, i) => s + trNum(i.qtd) * trNum(i.valor_unit), 0), pecas = itens.reduce((s, i) => s + trNum(i.qtd), 0);
+    doc.autoTable({
+        startY: y, margin: { left: M, right: M },
+        head: [['Cód.', 'Produto', 'Un', 'Qtd', 'Valor unit.', 'Valor total']],
+        body: itens.map(i => [i.produto_id, i.nome, i.un || '', trFmtQtd(i.qtd), formatarMoeda(i.valor_unit), formatarMoeda(trNum(i.qtd) * trNum(i.valor_unit))]),
+        foot: [['', 'TOTAL', '', trFmtQtd(pecas), '', formatarMoeda(total)]],
+        theme: 'grid', styles: { fontSize: 9, cellPadding: 1.8 }, headStyles: { fillColor: [236, 239, 237], textColor: [30, 30, 30] }, footStyles: { fillColor: [245, 245, 245], textColor: [30, 30, 30], fontStyle: 'bold' },
+        columnStyles: { 0: { cellWidth: 16 }, 2: { cellWidth: 14 }, 3: { halign: 'right', cellWidth: 20 }, 4: { halign: 'right', cellWidth: 26 }, 5: { halign: 'right', cellWidth: 28 } }
+    });
+    y = doc.lastAutoTable.finalY + 8;
+    const declaracao = reg.tipo === 'comodato'
+        ? `Declaro ter recebido em comodato os materiais acima, para uso no evento ${reg.evento || ''}${reg.evento_nome ? ' (' + reg.evento_nome + ')' : ''}, setor ${reg.setor_nome || ''}, comprometendo-me a devolvê-los até ${formatarDataBR(reg.data_prevista_devolucao)}, nas mesmas condições em que foram entregues.`
+        : reg.tipo === 'devolucao'
+            ? `Declaro que os materiais acima foram devolvidos, referentes ao comodato nº ${reg.comodato_numero || '?'}, e recebidos de volta no almoxarifado ${reg.para_nome}.`
+            : `Declaro que os materiais acima foram transferidos do almoxarifado ${reg.de_nome} para o almoxarifado ${reg.para_nome}.`;
+    const dec = doc.splitTextToSize(declaracao, W);
+    if (y + dec.length * 5 + 40 > 285) { doc.addPage(); y = M + 5; }
+    doc.setFontSize(10); doc.text(dec, M, y); y += dec.length * 5 + 22;
+    doc.setDrawColor(60); doc.line(M, y, M + 78, y); doc.line(M + W - 78, y, M + W, y);
+    doc.setFontSize(9);
+    doc.text(reg.tipo === 'devolucao' ? 'Quem devolveu' : 'Quem entregou', M, y + 4.5); doc.text(reg.tipo === 'devolucao' ? 'Quem recebeu' : 'Quem recebeu', M + W - 78, y + 4.5);
+    doc.setFontSize(8); doc.setTextColor(120); doc.text(`Gerado em ${new Date().toLocaleString('pt-BR')}`, M, 290);
+    return doc.output('blob');
+}
+function trMostrarPdf(reg) {
+    try {
+        const blob = trConstruirPdf(reg);
+        trPdfAtual = { blob, nome: `${reg.tipo === 'comodato' ? 'comodato' : reg.tipo === 'devolucao' ? 'devolucao-comodato' : 'transferencia'}-${reg.numero}.pdf` };
+        document.getElementById('trPdfTitulo').textContent = `✅ ${TR_ROTULO_TIPO[reg.tipo]} nº ${reg.numero}`;
+        document.getElementById('trPdfSub').textContent = `${reg.de_nome} → ${reg.para_nome}. O relatório está pronto:`;
+        document.getElementById('modalPdfTransferencia').classList.add('aberto');
+    } catch (e) { console.error(e); alert('O registro foi gravado, mas não consegui gerar o PDF: ' + (e.message || e) + '\nAbra a lista (📋 Comodatos e transferências) e use o botão do relatório.'); }
+}
+document.getElementById('trPdfFechar').addEventListener('click', () => document.getElementById('modalPdfTransferencia').classList.remove('aberto'));
+document.getElementById('trPdfVer').addEventListener('click', () => { if (trPdfAtual) window.open(URL.createObjectURL(trPdfAtual.blob), '_blank'); });
+document.getElementById('trPdfBaixar').addEventListener('click', () => {
+    if (!trPdfAtual) return;
+    const url = URL.createObjectURL(trPdfAtual.blob), a = document.createElement('a'); a.href = url; a.download = trPdfAtual.nome;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 4000);
+});
+document.getElementById('trPdfCompartilhar').addEventListener('click', async () => {
+    if (!trPdfAtual) return;
+    try {
+        const arquivo = new File([trPdfAtual.blob], trPdfAtual.nome, { type: 'application/pdf' });
+        if (navigator.canShare && navigator.canShare({ files: [arquivo] })) await navigator.share({ files: [arquivo], title: trPdfAtual.nome });
+        else alert('Esse navegador não suporta compartilhar arquivo diretamente. Use "Baixar" e envie por WhatsApp/e-mail manualmente.');
+    } catch (e) { if (e.name !== 'AbortError') alert('Não foi possível compartilhar: ' + e.message); }
+});
+
+// ---- lista: comodatos (com devolução) e histórico
+const trDiasAtraso = (c) => { if (!c.data_prevista_devolucao || c.status === 'devolvido') return null; return Math.round((new Date(hojeISO() + 'T00:00:00') - new Date(c.data_prevista_devolucao + 'T00:00:00')) / 86400000); };
+async function trAbrirLista(aba) {
+    if (!trPode()) { alert('Você não tem permissão para ver as transferências.'); return; }
+    trLista.aba = aba || 'comodatos';
+    document.getElementById('modalListaTransferencias').classList.add('aberto');
+    await trCarregarLista();
+}
+async function trCarregarLista() {
+    const cont = document.getElementById('trListaConteudo'), st = document.getElementById('statusListaTransferencias');
+    st.textContent = ''; cont.innerHTML = '<div class="vazio">Carregando...</div>';
+    const [rc, rh] = await Promise.all([
+        sb.from('estoque_transferencias').select('*, estoque_transferencias_itens(*)').eq('unidade_negocio_id', meuPerfil.unidadeId).eq('tipo', 'comodato').order('data_prevista_devolucao', { ascending: true }).limit(1000),
+        sb.from('estoque_transferencias').select('*, estoque_transferencias_itens(*)').eq('unidade_negocio_id', meuPerfil.unidadeId).order('numero', { ascending: false }).limit(300)]);
+    const erro = rc.error || rh.error;
+    if (erro) { cont.innerHTML = ''; st.className = 'status-msg erro'; st.textContent = trErroTabela(erro) || ('Não consegui carregar: ' + erro.message); return; }
+    trLista.comodatos = rc.data || []; trLista.historico = rh.data || [];
+    trComodatosAbertos = trLista.comodatos.filter(c => c.status !== 'devolvido');
+    trLista.devolucoes = {};
+    trLista.historico.filter(h => h.tipo === 'devolucao' && h.comodato_id).forEach(h => { (trLista.devolucoes[h.comodato_id] = trLista.devolucoes[h.comodato_id] || []).push(h); });
+    trRenderLista();
+}
+function trRenderLista() {
+    const cont = document.getElementById('trListaConteudo'), aba = trLista.aba;
+    document.getElementById('trAbaComodatos').className = 'btn btn-pequeno ' + (aba === 'comodatos' ? 'btn-azul' : 'btn-cinza');
+    document.getElementById('trAbaHistorico').className = 'btn btn-pequeno ' + (aba === 'historico' ? 'btn-azul' : 'btn-cinza');
+    document.getElementById('trFiltroComodato').style.display = aba === 'comodatos' ? '' : 'none';
+    const termo = document.getElementById('trFiltroBusca').value.trim();
+    const texto = (r) => [r.numero, r.de_nome, r.para_nome, r.evento, r.evento_nome, r.setor_nome, r.observacao, r.responsavel, ...(r.estoque_transferencias_itens || []).map(i => i.nome)].filter(x => x != null && x !== '').join(' ');
+    const itensTxt = (r, pend) => (r.estoque_transferencias_itens || []).map(i => {
+        const q = pend ? trNum(i.qtd) - trNum(i.qtd_devolvida) : trNum(i.qtd);
+        return `<div>${trFmtQtd(q)}${pend && trNum(i.qtd_devolvida) > 0 ? ' <span class="subtitulo">de ' + trFmtQtd(i.qtd) + '</span>' : ''} × ${escapeHtml(i.nome)}</div>`;
+    }).join('');
+    if (aba === 'comodatos') {
+        const f = document.getElementById('trFiltroComodato').value;
+        let lista = trLista.comodatos.filter(c => f === 'todos' ? true : f === 'devolvido' ? c.status === 'devolvido' : f === 'atrasado' ? (trDiasAtraso(c) || 0) > 0 : c.status !== 'devolvido');
+        if (termo) lista = lista.filter(c => casaBusca(texto(c), termo));
+        if (!lista.length) { cont.innerHTML = '<div class="vazio">Nenhum comodato encontrado.</div>'; return; }
+        cont.innerHTML = `<table class="tabela"><thead><tr><th>Nº</th><th>Data</th><th>Origem → Destino</th><th>Evento / Setor</th><th>Devolver até</th><th>Itens (pendentes)</th><th>Devoluções</th><th class="center">Ações</th></tr></thead><tbody>${lista.map(c => {
+            const d = trDiasAtraso(c);
+            const badge = c.status === 'devolvido' ? '<span style="color:#1B4332; font-weight:700;">✅ devolvido</span>' : d > 0 ? `<span style="color:#b00020; font-weight:700;">⚠ ${d} dia(s) de atraso</span>` : d === 0 ? '<span style="color:#8A5E12; font-weight:700;">vence hoje</span>' : `<span class="subtitulo">faltam ${-d} dia(s)</span>`;
+            const devs = (trLista.devolucoes[c.id] || []).slice().sort((a, b) => a.numero - b.numero).map(x => `nº ${x.numero} (${formatarDataBR(x.data)})`).join(', ');
+            return `<tr><td><strong>${c.numero}</strong></td><td>${formatarDataBR(c.data)}</td><td>${escapeHtml(c.de_nome)} → ${escapeHtml(c.para_nome)}</td>
+                <td>${escapeHtml(c.evento || '')}${c.evento_nome ? ' — ' + escapeHtml(c.evento_nome) : ''}<br><span class="subtitulo">${escapeHtml(c.setor_nome || '')}</span></td>
+                <td>${formatarDataBR(c.data_prevista_devolucao)}<br>${badge}</td><td>${itensTxt(c, c.status !== 'devolvido')}</td><td>${devs || '<span class="subtitulo">—</span>'}</td>
+                <td class="center" style="white-space:nowrap;">${c.status !== 'devolvido' ? `<button class="btn btn-verde btn-pequeno" data-tr-devolver="${c.id}">↩ Devolver</button> ` : ''}<button class="btn btn-cinza btn-pequeno" data-tr-pdf="${c.id}">🧾</button></td></tr>`;
+        }).join('')}</tbody></table>`;
+    } else {
+        let lista = trLista.historico.slice();
+        if (termo) lista = lista.filter(r => casaBusca(texto(r), termo));
+        if (!lista.length) { cont.innerHTML = '<div class="vazio">Nenhuma transferência registrada.</div>'; return; }
+        cont.innerHTML = `<table class="tabela"><thead><tr><th>Nº</th><th>Tipo</th><th>Data</th><th>Origem → Destino</th><th>Itens</th><th>Observação</th><th class="center">Relatório</th></tr></thead><tbody>${lista.map(r => {
+            const ref = r.tipo === 'comodato' ? `<br><span class="subtitulo">evento ${escapeHtml(r.evento || '')} · ${escapeHtml(r.setor_nome || '')} · devolver até ${formatarDataBR(r.data_prevista_devolucao)}</span>`
+                : r.tipo === 'devolucao' ? `<br><span class="subtitulo">comodato nº ${((trLista.comodatos.find(c => c.id === r.comodato_id) || {}).numero) || '?'}</span>` : '';
+            return `<tr><td><strong>${r.numero}</strong></td><td>${TR_ROTULO_TIPO[r.tipo] || r.tipo}${ref}</td><td>${formatarDataBR(r.data)}</td><td>${escapeHtml(r.de_nome)} → ${escapeHtml(r.para_nome)}</td><td>${itensTxt(r, false)}</td>
+                <td>${escapeHtml(r.observacao || '')}</td><td class="center"><button class="btn btn-cinza btn-pequeno" data-tr-pdf="${r.id}">🧾 Relatório</button></td></tr>`;
+        }).join('')}</tbody></table>`;
+    }
+}
+document.getElementById('btnListaTransferencias').addEventListener('click', () => trAbrirLista('comodatos'));
+document.getElementById('btnFecharListaTransferencias').addEventListener('click', () => document.getElementById('modalListaTransferencias').classList.remove('aberto'));
+document.getElementById('trAbaComodatos').addEventListener('click', () => { trLista.aba = 'comodatos'; trRenderLista(); });
+document.getElementById('trAbaHistorico').addEventListener('click', () => { trLista.aba = 'historico'; trRenderLista(); });
+document.getElementById('trFiltroComodato').addEventListener('change', trRenderLista);
+document.getElementById('trFiltroBusca').addEventListener('input', trRenderLista);
+document.getElementById('trListaConteudo').addEventListener('click', async (e) => {
+    const bp = e.target.closest('[data-tr-pdf]');
+    if (bp) {
+        const reg = trLista.historico.find(r => r.id === bp.dataset.trPdf) || trLista.comodatos.find(r => r.id === bp.dataset.trPdf); if (!reg) return;
+        if (reg.comodato_id && !reg.comodato_numero) { const c = trLista.comodatos.find(x => x.id === reg.comodato_id); if (c) reg.comodato_numero = c.numero; }
+        trMostrarPdf(reg); return;
+    }
+    const bd = e.target.closest('[data-tr-devolver]'); if (bd) trAbrirDevolucao(bd.dataset.trDevolver);
+});
+
+// ---- devolver um comodato pela lista (total ou parcial)
+function trAbrirDevolucao(comodatoId) {
+    const c = trLista.comodatos.find(x => x.id === comodatoId); if (!c) return;
+    trDevolvendo = c;
+    document.getElementById('trDevTitulo').textContent = `Devolver comodato nº ${c.numero}`;
+    document.getElementById('trDevResumo').innerHTML = `${escapeHtml(c.de_nome)} → ${escapeHtml(c.para_nome)} · evento ${escapeHtml(c.evento || '')} · setor ${escapeHtml(c.setor_nome || '')} · previsto ${formatarDataBR(c.data_prevista_devolucao)}.<br>A devolução volta o material de <strong>${escapeHtml(c.para_nome)}</strong> para <strong>${escapeHtml(c.de_nome)}</strong>. Informe quanto está voltando de cada item (pode ser parcial).`;
+    document.getElementById('trDevItens').innerHTML = (c.estoque_transferencias_itens || []).filter(i => trNum(i.qtd) - trNum(i.qtd_devolvida) > 0).map(i => {
+        const pend = trNum(i.qtd) - trNum(i.qtd_devolvida);
+        return `<div style="display:flex; align-items:center; gap:8px; padding:6px 8px; border-bottom:1px solid #e5e7eb;">
+            <input type="number" step="0.01" min="0" max="${pend}" value="${pend}" data-tr-dev-item="${i.id}" data-pend="${pend}" style="width:100px;">
+            <span style="flex:1;">${escapeHtml(i.nome)} <span class="subtitulo">(${escapeHtml(i.un || '')})</span></span>
+            <span class="subtitulo">pendente: ${trFmtQtd(pend)} de ${trFmtQtd(i.qtd)}</span></div>`;
+    }).join('');
+    document.getElementById('trDevData').value = hojeISO();
+    document.getElementById('trDevResponsavel').value = meuPerfil.nomeOperador || '';
+    document.getElementById('trDevObs').value = '';
+    const st = document.getElementById('statusDevolucao'); st.className = 'status-msg'; st.textContent = '';
+    document.getElementById('modalDevolverComodato').classList.add('aberto');
+}
+document.getElementById('btnCancelarDevolucao').addEventListener('click', () => document.getElementById('modalDevolverComodato').classList.remove('aberto'));
+document.getElementById('btnConfirmarDevolucao').addEventListener('click', async () => {
+    const st = document.getElementById('statusDevolucao'); st.className = 'status-msg erro'; st.textContent = '';
+    const c = trDevolvendo; if (!c) return;
+    const itens = [];
+    for (const inp of document.querySelectorAll('#trDevItens [data-tr-dev-item]')) {
+        const q = parseFloat(inp.value) || 0, pend = parseFloat(inp.dataset.pend);
+        if (q < 0 || q > pend + 1e-9) { st.textContent = `A quantidade devolvida não pode passar do pendente (${trFmtQtd(pend)}).`; return; }
+        if (q > 0) itens.push({ comodato_item_id: inp.dataset.trDevItem, qtd: q });
+    }
+    if (!itens.length) { st.textContent = 'Informe a quantidade devolvida de pelo menos um item.'; return; }
+    const btn = document.getElementById('btnConfirmarDevolucao'); btn.disabled = true; btn.textContent = 'Registrando...';
+    try {
+        const r = await trRegistrar({ p_tipo: 'devolucao', p_data: document.getElementById('trDevData').value || hojeISO(), p_de: null, p_para: null, p_itens: itens, p_comodato: c.id,
+            p_observacao: document.getElementById('trDevObs').value.trim() || null, p_responsavel: document.getElementById('trDevResponsavel').value.trim() || meuPerfil.nomeOperador || null });
+        const reg = await trBuscarRegistro(r.id); reg.comodato_numero = c.numero;
+        try { await registrarSentinela('transferencia_estoque', `Devolução nº ${reg.numero} do comodato nº ${c.numero}: ${reg.de_nome} → ${reg.para_nome} — ` + (reg.estoque_transferencias_itens || []).map(i => `${trFmtQtd(i.qtd)}x ${i.nome}`).join('; ')); } catch (_) { /* auditoria não bloqueia */ }
+        document.getElementById('modalDevolverComodato').classList.remove('aberto');
+        await trAtualizarTelasEstoque(); await trCarregarLista();
+        trMostrarPdf(reg);
+    } catch (e) { st.textContent = 'Erro (nada foi alterado): ' + (e.message || e); }
+    finally { btn.disabled = false; btn.textContent = 'Registrar devolução'; }
+});
+// botão 🔁 da linha do produto (tabela da aba Estoque)
+document.getElementById('corpoTabelaEstoque').addEventListener('click', (e) => { const b = e.target.closest('[data-transferir]'); if (b) trAbrirModal(Number(b.dataset.transferir)); });
 
 // =====================================================================
 // PERMISSÕES: atribuir papel de Estoque a cada usuário da unidade
@@ -10708,7 +11255,7 @@ async function movimentacoesPorTag(tag) {
 async function movimentacoesPorResponsavel(responsavel, dataInicio, dataFim) {
     const dados = await chamarGet('listarMovimentacoesFiltradas', { responsavel, dataInicio, dataFim });
     return (dados || [])
-        .filter(m => m.tipo === 'saida')
+        .filter(m => m.tipo === 'saida' && !/^transfer[eê]ncia/i.test(String(m.observacao || '')))   // transferência/comodato entre almoxarifados não é retirada (26/11/2026)
         .map(mapearMovimentacaoFiltrada)
         .sort((a, b) => (a.data || '').localeCompare(b.data || ''));
 }
