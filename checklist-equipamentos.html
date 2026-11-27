@@ -188,7 +188,7 @@ button,.ddi,.tab,.stab,.fi-btn{cursor:pointer;touch-action:manipulation;-webkit-
 .stab.on{color:var(--nv);border-bottom-color:var(--nv);background:var(--sf)}
 .subscreen{display:none}.subscreen.on{display:block}
 .fiic{width:36px;height:36px;border-radius:8px;background:var(--nvl);display:flex;align-items:center;justify-content:center;color:var(--nv);font-size:17px;flex-shrink:0}
-.fipl{font-size:14px;font-weight:600;color:var(--tx)}.fisb{font-size:12px;color:var(--tx2);margin-top:1px}
+.fipl{font-size:14px;font-weight:600;color:var(--tx)}.eq-modelo{display:inline-block;margin-left:6px;padding:1px 9px;border-radius:999px;background:#dbeafe;color:#1e3a8a;font-size:13px;font-weight:700;vertical-align:baseline}.fisb{font-size:12px;color:var(--tx2);margin-top:1px}
 .fi-mini-alert{display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;color:#991b1b;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:1px 7px;margin-top:4px}
 .sbar{padding:10px 16px;background:var(--sf);border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between}
 .sbtn{background:none;border:none;font-size:12px;color:var(--nv);cursor:pointer;font-weight:600;font-family:var(--fn);display:flex;align-items:center;gap:4px}
@@ -3197,10 +3197,11 @@ async function carregarSolicitacoes(tipo, aba, statusFiltro){
     const item = (req.estoque_requisicoes_rapidas_itens || [])[0] || {};
     const equipamento = frota.find(v => v.id === item.equipamento_veiculo_id);
     const nomeEquip = equipamento ? equipamento.nome + (equipamento.placa || equipamento.identificador ? ' — ' + (equipamento.placa || equipamento.identificador) : '') : '—';
+    const modeloEquip = equipamento && equipamento.modelo ? String(equipamento.modelo) : '';   // modelo destacado ao lado do nome/placa (card e popup Atender)
     const descricao = tipo === 'servico_abastecimento'
       ? (item.qtd_solicitada ? Number(item.qtd_solicitada).toLocaleString('pt-BR') + ' ' + (item.unidade_medida || 'L') : '—') + (item.fornecedor_recomendado ? ' · ' + escapeHtml(item.fornecedor_recomendado) : '')
       : escapeHtml(item.servico_descricao || item.descricao_livre || '—');
-    solicitacoesInfoCache[item.id] = { nomeEquip, fornecedor: item.fornecedor_recomendado || '', descricaoServico: item.servico_descricao || item.descricao_livre || '', observacao: item.observacao || '', fotos: item.fotos_evidencia || [] };
+    solicitacoesInfoCache[item.id] = { nomeEquip, modeloEquip, fornecedor: item.fornecedor_recomendado || '', descricaoServico: item.servico_descricao || item.descricao_livre || '', observacao: item.observacao || '', fotos: item.fotos_evidencia || [] };
     const botoesAdmin = souAdmin() && statusFiltro === 'pendente' ? `
       <div style="display:flex;gap:6px;margin-top:8px">
         <button class="btn-buscar" style="flex:1;justify-content:center;padding:8px" data-atender="${item.id}" data-req="${req.id}">Atender</button>
@@ -3242,7 +3243,7 @@ async function carregarSolicitacoes(tipo, aba, statusFiltro){
         <div style="display:flex;width:100%;gap:10px">
           <div class="fiic"><i class="ti ${tipo === 'servico_abastecimento' ? 'ti-gas-station' : 'ti-alert-triangle'}"></i></div>
           <div style="flex:1">
-            <div class="fipl">${escapeHtml(nomeEquip)}</div>
+            <div class="fipl">${escapeHtml(nomeEquip)}${modeloEquip ? ' <span class="eq-modelo">' + escapeHtml(modeloEquip) + '</span>' : ''}</div>
             <div class="fisb">${descricao}</div>
             <div class="fisb" style="margin-top:2px">Solicitado por ${escapeHtml(req.solicitante)} · ${new Date(req.created_at).toLocaleDateString('pt-BR')}</div>
             ${infoObservacao}
@@ -3496,7 +3497,7 @@ function gerarPdfSolicitacao(req, item, equipamento, solicitante, almoxarifadoId
   const almoxarifado = (almoxarifadosCache || []).find(a => a.id === almoxarifadoId);
   const almoxarifadoTexto = almoxarifado ? (almoxarifado.nome || almoxarifado.descricao || ('#' + almoxarifado.id)) : '—';
   const ehAbastecimento = req.tipo === 'servico_abastecimento';
-  const nomeEquip = equipamento ? (equipamento.nome + (equipamento.placa || equipamento.identificador ? ' ' + (equipamento.placa || equipamento.identificador) : '')) : '—';
+  const nomeEquip = equipamento ? (equipamento.nome + (equipamento.placa || equipamento.identificador ? ' ' + (equipamento.placa || equipamento.identificador) : '') + (equipamento.modelo ? ' — ' + equipamento.modelo : '')) : '—';
   const servicoTexto = ehAbastecimento ? 'ABASTECIMENTO' : 'MANUTENÇÃO CORRETIVA';
   const fornecedorTexto = item.fornecedor_recomendado || '—';
   const qtdTexto = ehAbastecimento ? (item.qtd_solicitada || '—') + ' L' : '1';
@@ -3637,7 +3638,7 @@ function abrirFormAtender(itemId, requisicaoId, tipo){
   form.innerHTML = `
     <div class="lbl">Atender solicitação</div>
     <div style="background:var(--bg);border-radius:var(--rs);padding:10px 12px;margin-top:8px;font-size:13px">
-      <div><strong>Equipamento:</strong> ${escapeHtml(info.nomeEquip || '—')}</div>
+      <div><strong>Equipamento:</strong> ${escapeHtml(info.nomeEquip || '—')}${info.modeloEquip ? ' <span class="eq-modelo">' + escapeHtml(info.modeloEquip) + '</span>' : ''}</div>
       <div style="margin-top:3px"><strong>${ehAbastecimento ? 'Posto' : 'Prestador de serviço'}:</strong> ${escapeHtml(info.fornecedor || '—')}</div>
       ${!ehAbastecimento && info.descricaoServico ? `<div style="margin-top:3px"><strong>Problema:</strong> ${escapeHtml(info.descricaoServico)}</div>` : ''}
       ${info.observacao ? `<div style="margin-top:3px"><strong>Observação:</strong> ${escapeHtml(info.observacao)}</div>` : ''}

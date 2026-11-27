@@ -1749,7 +1749,11 @@
       // ENVIO PARCIAL (24/11/2026): o Staff define empresa e plano de contas em CADA lançamento (e a conta no envio): nesse caso só o setor e a conta vêm do protocolo
       const itensClass = itens.length > 0 && itens.every(i => i.empresa_id != null && i.plano_de_contas_id != null), algumItemClass = itens.some(i => i.empresa_id != null || i.plano_de_contas_id != null);
       ordsEstado.itensClass = itensClass;
-      const definida = o.setor_id != null && o.id_conta_pagamento != null && (itensClass || (o.empresa_id != null && o.plano_de_contas_id != null));
+      // SETOR por lançamento (26/11/2026): quando todos os itens já trazem o setor do Staff, o aceite não pede um setor único
+      const itensSetor = itens.length > 0 && itens.every(i => i.setor_id != null), algumItemSetor = itens.some(i => i.setor_id != null);
+      ordsEstado.itensSetor = itensSetor;
+      const nomeSetItem = (id) => { const s = (todosSetores || []).find(x => String(x.id) === String(id)); return s ? (s.codigo != null ? s.codigo + ' — ' : '') + s.nome : '—'; };
+      const definida = (o.setor_id != null || itensSetor) && o.id_conta_pagamento != null && (itensClass || (o.empresa_id != null && o.plano_de_contas_id != null));
       const nomeEmpItem = (id) => { const e = (todasEmpresas || []).find(x => String(x.id) === String(id)); return e ? e.nome : '—'; };
       const nomePlItem = (id) => { const pl = (todosPlanosContas || []).find(x => String(x.id) === String(id)); return pl ? (pl.codigo ?? pl.id) + ' — ' + pl.descricao : '—'; };
       // a classificação definida no RECIBO do Staff tem prioridade sobre os padrões lembrados
@@ -1765,17 +1769,17 @@
       document.getElementById('ordsDetalhe').innerHTML = `
         <p class="ext-nota" style="margin:0 0 10px;">Pagar em <strong>${formatarData(o.vencimento)}</strong>${o.competencia ? ' · competência ' + String(o.competencia).slice(5, 7) + '/' + String(o.competencia).slice(0, 4) : ''}${o.evento_padrao ? ' · evento padrão <strong>' + escapeHtml(o.evento_padrao) + '</strong>' : ''}${o.status === 'aceita' ? ` · <strong>${pagos}</strong> de ${itens.length} título(s) já pago(s)` : ''}</p>
         ${o.status === 'enviada' && semEvento ? `<div style="background:#FFF3E0; color:#8A5E12; border-radius:8px; padding:8px 12px; margin-bottom:10px; font-size:.8rem;">⚠️ ${semEvento} item(ns) sem evento do Financeiro. Devolva a ordem ao Staff (ou peça para informar o evento padrão) antes de aceitar.</div>` : ''}
-        <div class="ext-tabela-wrap" style="max-height:34vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th>Favorecido</th><th>Detalhe</th><th>Evento</th>${algumItemClass ? '<th>Empresa</th><th>Plano de contas</th>' : ''}<th class="num">Valor</th>${o.status === 'aceita' ? '<th>Título</th>' : ''}</tr></thead><tbody>
-          ${itens.map(i => { const t = titulos.get(i.titulo_id); return `<tr><td>${escapeHtml(i.pessoa ? (i.pessoa.codigo != null ? i.pessoa.codigo + ' — ' : '') + i.pessoa.nome : '#' + i.pessoa_id)}</td><td>${escapeHtml(i.descricao || '')}</td><td>${escapeHtml(i.evento_codigo || o.evento_padrao || '—')}</td>${algumItemClass ? `<td>${escapeHtml(i.empresa_id != null ? nomeEmpItem(i.empresa_id) : '—')}</td><td>${escapeHtml(i.plano_de_contas_id != null ? nomePlItem(i.plano_de_contas_id) : '—')}</td>` : ''}<td class="num">${formatarMoeda(i.valor)}</td>${o.status === 'aceita' ? `<td>${t ? '#' + escapeHtml(t.codigo ?? t.id) + (t.data_pagamento ? ' · pago ' + formatarData(t.data_pagamento) : ' · em aberto') : '—'}</td>` : ''}</tr>`; }).join('')}
+        <div class="ext-tabela-wrap" style="max-height:34vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th>Favorecido</th><th>Detalhe</th><th>Evento</th>${algumItemClass ? '<th>Empresa</th><th>Plano de contas</th>' : ''}${algumItemSetor ? '<th>Setor</th>' : ''}<th class="num">Valor</th>${o.status === 'aceita' ? '<th>Título</th>' : ''}</tr></thead><tbody>
+          ${itens.map(i => { const t = titulos.get(i.titulo_id); return `<tr><td>${escapeHtml(i.pessoa ? (i.pessoa.codigo != null ? i.pessoa.codigo + ' — ' : '') + i.pessoa.nome : '#' + i.pessoa_id)}</td><td>${escapeHtml(i.descricao || '')}</td><td>${escapeHtml(i.evento_codigo || o.evento_padrao || '—')}</td>${algumItemClass ? `<td>${escapeHtml(i.empresa_id != null ? nomeEmpItem(i.empresa_id) : '—')}</td><td>${escapeHtml(i.plano_de_contas_id != null ? nomePlItem(i.plano_de_contas_id) : '—')}</td>` : ''}${algumItemSetor ? `<td>${escapeHtml(i.setor_id != null ? nomeSetItem(i.setor_id) : '—')}</td>` : ''}<td class="num">${formatarMoeda(i.valor)}</td>${o.status === 'aceita' ? `<td>${t ? '#' + escapeHtml(t.codigo ?? t.id) + (t.data_pagamento ? ' · pago ' + formatarData(t.data_pagamento) : ' · em aberto') : '—'}</td>` : ''}</tr>`; }).join('')}
         </tbody></table></div>
         ${o.status === 'enviada' ? `<h4 style="font-size:.88rem; margin:14px 0 6px;">Classificação dos títulos (rateio 100%)${definida ? ' <span style="font-weight:400; color:var(--muted);">— definida no recibo do Staff; é só conferir e aceitar</span>' : ''}</h4>
         <div class="filtros" style="align-items:flex-end;">
           ${itensClass ? '' : `<label style="font-size:.78rem;">Empresa<br><select id="ords_empresa">${opt(todasEmpresas, par.empresa_id, e => e.nome)}</select></label>`}
-          <label style="font-size:.78rem;">Setor<br><select id="ords_setor">${opt(todosSetores, par.setor_id, s => (s.codigo != null ? s.codigo + ' — ' : '') + s.nome)}</select></label>
+          ${itensSetor ? '' : `<label style="font-size:.78rem;">Setor${algumItemSetor ? ' <span style="font-weight:400; color:var(--muted);">(dos itens sem setor)</span>' : ''}<br><select id="ords_setor">${opt(todosSetores, par.setor_id, s => (s.codigo != null ? s.codigo + ' — ' : '') + s.nome)}</select></label>`}
           ${itensClass ? '' : `<label style="font-size:.78rem;">Plano de contas<br><select id="ords_plano">${opt(todosPlanosContas, par.plano_de_contas_id, pl => (pl.codigo ?? pl.id) + ' — ' + pl.descricao)}</select></label>`}
           <label style="font-size:.78rem;">Conta de pagamento<br><select id="ords_conta">${opt(todasContas, par.id_conta_pagamento, c => c.nome)}</select></label>
         </div>
-        ${itensClass ? '<p class="ext-nota" style="margin-top:6px;">A <strong>empresa</strong> e o <strong>plano de contas</strong> de cada título já vêm definidos pelo Staff em cada lançamento (veja a tabela acima); aqui só confira o setor e a conta de pagamento.</p>' : '<p class="ext-nota" style="margin-top:6px;">As escolhas ficam lembradas para as próximas ordens deste tipo.</p>'}` : ''}`;
+        ${itensClass ? '<p class="ext-nota" style="margin-top:6px;">A <strong>empresa</strong> e o <strong>plano de contas</strong> de cada título já vêm definidos pelo Staff em cada lançamento (veja a tabela acima); aqui só confira ' + (itensSetor ? 'a conta de pagamento (o <strong>setor</strong> também já vem em cada item)' : 'o setor e a conta de pagamento') + '.</p>' : '<p class="ext-nota" style="margin-top:6px;">As escolhas ficam lembradas para as próximas ordens deste tipo.</p>'}` : ''}`;
       const acoes = document.getElementById('ordsAcoes');
       acoes.innerHTML = o.status === 'enviada' ? `<button class="btn-novo" id="ordsAceitar" ${semEvento ? 'disabled' : ''}>Aceitar e gerar ${itens.length} título(s)</button>`
         : o.status === 'aceita' ? '<button class="ext-chip" id="ordsDesfazer" style="color:var(--danger);">Desfazer aceite</button>' : '';
@@ -1785,13 +1789,13 @@
   }
 
   async function ordsAceitar(o, qtd){
-    const ic = !!ordsEstado.itensClass, val = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+    const ic = !!ordsEstado.itensClass, isetor = !!ordsEstado.itensSetor, val = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
     const emp = val('ords_empresa'), set = val('ords_setor'), pla = val('ords_plano'), con = val('ords_conta');
-    if(!set || !con || (!ic && (!emp || !pla))){ alert(ic ? 'Escolha o setor e a conta de pagamento.' : 'Escolha empresa, setor, plano de contas e a conta de pagamento.'); return; }
+    if((!set && !isetor) || !con || (!ic && (!emp || !pla))){ alert(ic ? (isetor ? 'Escolha a conta de pagamento.' : 'Escolha o setor e a conta de pagamento.') : 'Escolha empresa, setor, plano de contas e a conta de pagamento.'); return; }
     if(!confirm(`Aceitar a ordem #${o.numero} e gerar ${qtd} título(s) a pagar (${formatarMoeda(o.total)}), vencendo em ${formatarData(o.vencimento)}?`)) return;
     const btn = document.getElementById('ordsAceitar'); btn.disabled = true; btn.textContent = 'Gerando…';
     try{
-      const { data, error } = await sb.rpc('financeiro_aceitar_ordem_staff', { p_unidade: agenciaId, p_ordem: o.id, p_empresa: emp ? Number(emp) : null, p_setor: Number(set), p_plano: pla ? Number(pla) : null, p_conta: Number(con) });
+      const { data, error } = await sb.rpc('financeiro_aceitar_ordem_staff', { p_unidade: agenciaId, p_ordem: o.id, p_empresa: emp ? Number(emp) : null, p_setor: set ? Number(set) : null, p_plano: pla ? Number(pla) : null, p_conta: Number(con) });
       if(error) throw new Error(error.message);
       await registrarSentinela('financeiro_ordem_staff_aceita', `Aceitou a ordem de pagamento do Staff Nº ${o.numero} (${ORDS_TIPOS[o.tipo] || o.tipo}): ${data.titulos} título(s) a pagar, ${formatarMoeda(data.valor)}`);
       alert(`Ordem #${o.numero} aceita: ${data.titulos} título(s) a pagar criado(s) (${formatarMoeda(data.valor)}). Eles já estão na aba Títulos.`);
@@ -3477,7 +3481,7 @@ Cadastre em Cadastros → Contas Correntes (campo «Empresa titular da conta»).
   // =================================================================
   const AJUDA_FINANCEIRO = {
     titulo: 'Financeiro — Títulos, Contas e Rateio',
-    ultimaRevisao: '25/11/2026',   // datas da conciliação aplicam ao sair do campo/Enter (25/11/2026); regras de conciliação por conta (25/11/2026); aceite de ordem com empresa/plano por item (24/11/2026)
+    ultimaRevisao: '26/11/2026',   // datas da conciliação aplicam ao sair do campo/Enter (25/11/2026); regras de conciliação por conta (25/11/2026); aceite de ordem com empresa/plano por item (24/11/2026)
     secoes: [
       { id: 'dashboard', titulo: 'Dashboard', corpo: `
         <p>Visão geral do contas a pagar e a receber da unidade, no mesmo estilo do painel do
@@ -3590,7 +3594,7 @@ Cadastre em Cadastros → Contas Correntes (campo «Empresa titular da conta»).
         <p>O módulo <strong>Staff</strong> monta <strong>ordens de pagamento</strong> (extras/RPA, vale transporte, vale alimentação e <strong>folha de pagamento</strong>) a partir de recibos fechados e as <strong>envia</strong> para cá. Cada ordem é de <strong>um tipo de recibo</strong> (= uma empresa: «Folha Porto Azul», «Folha CRM»...) e a classificação escolhida no aceite fica lembrada por tipo de recibo.
         Esta aba lista as ordens <em>pendentes de aceite</em> (ou todas, no filtro).</p>
         <ul>
-          <li><strong>Ver e aceitar</strong>: mostra os itens (favorecido, detalhe, evento e valor). Um protocolo vindo de <strong>recibo</strong> já traz o <strong>setor, a conta de pagamento e o evento</strong> e, <strong>em cada item, a empresa e o plano de contas do lançamento</strong> (o Staff envia só os lançamentos marcados, cada envio com a sua conta — um recibo pode gerar vários protocolos). Os itens aparecem com as colunas <em>Empresa</em> e <em>Plano de contas</em>; cada título sai com a empresa e o plano do próprio item. É só conferir e confirmar.
+          <li><strong>Ver e aceitar</strong>: mostra os itens (favorecido, detalhe, evento e valor). Um protocolo vindo de <strong>recibo</strong> já traz o <strong>setor, a conta de pagamento e o evento</strong> e, <strong>em cada item, a empresa e o plano de contas do lançamento</strong> (o Staff envia só os lançamentos marcados, cada envio com a sua conta — um recibo pode gerar vários protocolos). Os itens aparecem com as colunas <em>Empresa</em> e <em>Plano de contas</em>; cada título sai com a empresa e o plano do próprio item. Quando o Staff define o <strong>setor</strong> em cada lançamento (um mesmo recibo com pessoas de setores diferentes), aparece também a coluna <em>Setor</em>, cada título sai com o setor do próprio item e o aceite não pede um setor único. É só conferir e confirmar.
           Nas ordens montadas à mão, escolha esses dados (ficam lembrados para as próximas do mesmo tipo) e confirme. O sistema cria <strong>um título a pagar por profissional</strong> (origem «staff»), com o rateio 100% já preenchido, vencimento na data de pagamento da ordem e a <strong>conta de pagamento já definida</strong>
           — assim a baixa em lote usa a conta de cada título e a conciliação pode quitar vários títulos contra uma linha do extrato (ex.: CISPAG).</li>
           <li>O <strong>evento</strong> do rateio é o do item (associado pelo Staff) ou o <em>evento padrão</em> da ordem; se faltar, o aceite fica bloqueado e a ordem precisa voltar ao Staff.</li>
