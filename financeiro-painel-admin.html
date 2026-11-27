@@ -456,6 +456,8 @@
         <div class="content-header">
           <h1 id="tituloConteudo">Dashboard</h1>
           <div style="display:flex; gap:8px; align-items:center;">
+            <span id="sincronizarInfo" style="font-size:.72rem; color:var(--muted);"></span>
+            <button type="button" class="btn-ajuda-modulo" id="btnSincronizar" title="Busca de novo no servidor os cadastros, títulos, movimentações e a tela aberta, sem recarregar a página. Shift + clique: também refaz a lista de títulos já pagos.">🔄 Sincronizar dados</button>
             <button type="button" class="btn-ajuda-modulo" id="btnAjudaModulo">❓ Ajuda</button>
             <span class="operador-pill" id="operadorPill">—</span>
             <span class="agencia-pill" id="agenciaPill">—</span>
@@ -3036,6 +3038,10 @@ Cadastre em Cadastros → Contas Correntes (campo «Empresa titular da conta»).
     const casam = concEstado.regras.filter(r => r.ativo && (!r.tipo_movimento || r.tipo_movimento === tipo) && h.includes(concNorm(r.palavra)) && (!r.id_conta || String(r.id_conta) === conta));
     return casam.find(r => r.id_conta) || casam[0] || null;
   }
+  // (27/11/2026) o que a regra da linha manda fazer: 'transferencia' | 'lancamento' (classificação) | null (sem regra: as duas opções ficam livres).
+  // Linha com regra de transferência não pode ser classificada; linha com regra de classificação não pode virar transferência.
+  const concAcaoDaRegra = (r) => !r ? null : (r.acao === 'transferencia' ? 'transferencia' : 'lancamento');
+  const concAcaoDaLinhaId = (id) => { const e = concEstado.extratos.find(x => x.id === id); return e ? concAcaoDaRegra(concRegraDaLinha(e)) : null; };
   const concTemColunaConta = () => concEstado.regras.some(x => 'id_conta' in x);   // false se o SQL novo ainda não foi rodado (ou se não há regra nenhuma)
   const concEscopoRegra = (r) => (r.id_conta === undefined || r.id_conta === null) ? null : Number(r.id_conta);
   // padrões: a empresa vem da CONTA (empresa titular) ou, na falta, da empresa padrão da unidade; setor/plano/evento vêm dos "Padrões por empresa" (Parâmetros)
@@ -3088,7 +3094,7 @@ Cadastre em Cadastros → Contas Correntes (campo «Empresa titular da conta»).
       try{ await concCarregarListas(); } catch(e){ concMsg(escapeHtml(e.message)); return; } }
     const L = concOrdenar(concEstado.extratos, 'ger', CONC_ACC_G);
     document.getElementById('concCorpo').innerHTML = `
-      <p class="ext-nota" style="margin:0 0 10px;">Linhas do banco que <strong>não existem no contas a pagar</strong> (tarifa, cesta, juros, IOF, rendimento...). Marque as linhas e gere o lançamento: ele é criado na Movimentação com rateio e já fica conciliado (um código por linha). Se o dinheiro <strong>veio de outra conta</strong> (PIX, cartões, outro banco), use <strong>Transferência</strong>: ela cria as duas pernas (entrada no banco e baixa na outra conta).</p>
+      <p class="ext-nota" style="margin:0 0 10px;">Linhas do banco que <strong>não existem no contas a pagar</strong> (tarifa, cesta, juros, IOF, rendimento...). Marque as linhas e gere o lançamento: ele é criado na Movimentação com rateio, <strong>junto com um título já quitado (a pagar/receber)</strong>, e já fica conciliado (um código por linha). Se o dinheiro <strong>veio de outra conta</strong> (PIX, cartões, outro banco), use <strong>Transferência</strong>: ela cria as duas pernas (entrada no banco e baixa na outra conta).</p>
       <div class="filtros">
         <button class="btn-novo" id="concGerarRegras">⚡ Gerar com a regra de cada linha</button>
         <button class="btn-novo" id="concGerarManual" style="background:var(--brand-2);">Gerar com a classificação que eu escolher…</button>
@@ -3098,7 +3104,9 @@ Cadastre em Cadastros → Contas Correntes (campo «Empresa titular da conta»).
       </div>
       <div class="ext-tabela-wrap" style="max-height:62vh; overflow:auto;"><table class="ext-tabela"><thead><tr><th></th>${concThOrd('ger', 'data', 'Data')}${concThOrd('ger', 'historico', 'Histórico')}${concThOrd('ger', 'valor', 'Valor', 'num')}${concThOrd('ger', 'regra', 'Regra')}<th></th></tr></thead>
         <tbody>${L.map(e => { const r = concRegraDaLinha(e); const c = r ? concCompletar(r) : null; const pl = c && c.plano_de_contas_id ? todosPlanosContas.find(x => x.id === c.plano_de_contas_id) : null; const pn = r && r.pessoa_id ? concEstado.pessoaNomes[r.pessoa_id] : '';
-          return `<tr><td><input type="checkbox" data-conc-g="${e.id}" ${concEstado.selE.has(e.id) ? 'checked' : ''}></td><td style="white-space:nowrap;">${formatarData(e.data)}</td><td>${escapeHtml(e.historico || '')}</td><td class="num ${concLiquido(e) < 0 ? 'ext-neg' : ''}">${concNum(concLiquido(e))}</td><td>${concRotuloRegra(r)}</td><td style="white-space:nowrap;"><button class="ext-chip" data-conc-cls="${e.id}">Classificar…</button> <button class="ext-chip" data-conc-transf="${e.id}" title="Veio de (ou foi para) outra conta">⇄ Transferência…</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="vazio">Nenhuma linha pendente neste período.</td></tr>'}</tbody></table></div>`;
+          const acao = concAcaoDaRegra(r), semCls = acao === 'transferencia', semTransf = acao === 'lancamento';
+          const estiloOff = 'opacity:.4; cursor:not-allowed;';
+          return `<tr><td><input type="checkbox" data-conc-g="${e.id}" ${concEstado.selE.has(e.id) ? 'checked' : ''}></td><td style="white-space:nowrap;">${formatarData(e.data)}</td><td>${escapeHtml(e.historico || '')}</td><td class="num ${concLiquido(e) < 0 ? 'ext-neg' : ''}">${concNum(concLiquido(e))}</td><td>${concRotuloRegra(r)}</td><td style="white-space:nowrap;"><button class="ext-chip" data-conc-cls="${e.id}" ${semCls ? `disabled style="${estiloOff}" title="Esta linha tem regra de TRANSFERÊNCIA: use o botão ⇄ Transferência"` : 'title="Gera o lançamento e também o título já quitado no contas a pagar/receber"'}>Classificar…</button> <button class="ext-chip" data-conc-transf="${e.id}" ${semTransf ? `disabled style="${estiloOff}" title="Esta linha tem regra de CLASSIFICAÇÃO: use o botão Classificar"` : 'title="Veio de (ou foi para) outra conta (não gera título)"'}>⇄ Transferência…</button></td></tr>`; }).join('') || '<tr><td colspan="6" class="vazio">Nenhuma linha pendente neste período.</td></tr>'}</tbody></table></div>`;
     const atualizar = () => { const s = L.filter(e => concEstado.selE.has(e.id)).reduce((a, e) => a + concLiquido(e), 0); document.getElementById('concGerarTotal').textContent = `${concEstado.selE.size} marcada(s) · ${concNum(s)}`; };
     document.querySelectorAll('[data-conc-g]').forEach(c => c.addEventListener('change', () => { const id = Number(c.dataset.concG); c.checked ? concEstado.selE.add(id) : concEstado.selE.delete(id); atualizar(); }));
     document.getElementById('concGerarTodas').addEventListener('click', () => { L.forEach(e => { if(concRegraDaLinha(e)) concEstado.selE.add(e.id); }); concRenderGerar(); });
@@ -3113,6 +3121,7 @@ Cadastre em Cadastros → Contas Correntes (campo «Empresa titular da conta»).
   async function concGerar(ids, c, historico){
     const { data, error } = await sb.rpc('financeiro_gerar_e_conciliar', { p_unidade: agenciaId, p_extratos: ids, p_empresa: c.empresa_id, p_setor: c.setor_id, p_plano: c.plano_de_contas_id, p_evento: c.evento, p_pessoa: c.pessoa_id || null, p_historico: historico || null });
     if(error) throw new Error(error.message);
+    concAtualizarAposQuitar();   // (27/11/2026) o lançamento gerado traz também um título já quitado: atualiza Títulos/Movimentação em segundo plano
     return (data || []).length;
   }
   async function concGerarPorRegras(){
@@ -3140,8 +3149,15 @@ Cadastre em Cadastros → Contas Correntes (campo «Empresa titular da conta»).
   // idUnico = botão "Classificar…" de uma linha (mostra também "lembrar como regra"); null = linhas marcadas
   let concGerarAlvo = [];
   function concAbrirGerarManual(idUnico){
-    const alvo = idUnico ? [idUnico] : [...concEstado.selE];
+    let alvo = idUnico ? [idUnico] : [...concEstado.selE];
     if(!alvo.length){ alert('Marque ao menos uma linha do extrato.'); return; }
+    // linha com regra de TRANSFERÊNCIA não é classificada (transferência não gera título): fica de fora
+    const deTransf = alvo.filter(id => concAcaoDaLinhaId(id) === 'transferencia');
+    if(deTransf.length){
+      alvo = alvo.filter(id => !deTransf.includes(id));
+      if(!alvo.length){ alert('A linha tem regra de TRANSFERÊNCIA: use o botão ⇄ Transferência.'); return; }
+      alert(`${deTransf.length} linha(s) marcada(s) têm regra de TRANSFERÊNCIA e ficam de fora desta classificação (use ⇄ Transferência para elas).`);
+    }
     concGerarAlvo = alvo;
     const primeira = concEstado.extratos.find(e => e.id === alvo[0]); let r = primeira ? concRegraDaLinha(primeira) : null; if(r && r.acao === 'transferencia') r = null;   // regra de transferência: use o botão Transferência
     const unica = alvo.length === 1 && primeira;
@@ -3249,8 +3265,15 @@ Cadastre em Cadastros → Contas Correntes (campo «Empresa titular da conta»).
   }
   let concTransfAlvo = [];
   function concAbrirTransferencia(idUnico){
-    const alvo = idUnico ? [idUnico] : [...concEstado.selE];
+    let alvo = idUnico ? [idUnico] : [...concEstado.selE];
     if(!alvo.length){ alert('Marque ao menos uma linha do extrato.'); return; }
+    // linha com regra de CLASSIFICAÇÃO não vira transferência: fica de fora
+    const deCls = alvo.filter(id => concAcaoDaLinhaId(id) === 'lancamento');
+    if(deCls.length){
+      alvo = alvo.filter(id => !deCls.includes(id));
+      if(!alvo.length){ alert('A linha tem regra de CLASSIFICAÇÃO: use o botão Classificar.'); return; }
+      alert(`${deCls.length} linha(s) marcada(s) têm regra de CLASSIFICAÇÃO e ficam de fora desta transferência (use Classificar para elas).`);
+    }
     const linhas = alvo.map(id => concEstado.extratos.find(e => e.id === id)).filter(Boolean);
     const sinais = new Set(linhas.map(l => concLiquido(l) >= 0 ? 'C' : 'D'));
     if(sinais.size > 1){ alert('Marque só entradas ou só saídas: a transferência é num sentido só.'); return; }
@@ -3387,6 +3410,7 @@ Cadastre em Cadastros → Contas Correntes (campo «Empresa titular da conta»).
     const { error } = await sb.rpc('financeiro_desconciliar', { p_unidade: agenciaId, p_codigo: cod });
     if(error){ alert('Não consegui desfazer: ' + error.message); return; }
     await registrarSentinela('financeiro_conciliacao_desfeita', `Desfez a conciliação #${cod}`);
+    concAtualizarAposQuitar();   // o título gerado junto (ou o quitado pela conciliação) mudou
     await concRenderFeitas();
   }
 
@@ -3481,7 +3505,7 @@ Cadastre em Cadastros → Contas Correntes (campo «Empresa titular da conta»).
   // =================================================================
   const AJUDA_FINANCEIRO = {
     titulo: 'Financeiro — Títulos, Contas e Rateio',
-    ultimaRevisao: '26/11/2026',   // datas da conciliação aplicam ao sair do campo/Enter (25/11/2026); regras de conciliação por conta (25/11/2026); aceite de ordem com empresa/plano por item (24/11/2026)
+    ultimaRevisao: '27/11/2026',   // botão Sincronizar dados (27/11/2026);   // datas da conciliação aplicam ao sair do campo/Enter (25/11/2026); regras de conciliação por conta (25/11/2026); aceite de ordem com empresa/plano por item (24/11/2026)
     secoes: [
       { id: 'dashboard', titulo: 'Dashboard', corpo: `
         <p>Visão geral do contas a pagar e a receber da unidade, no mesmo estilo do painel do
@@ -3502,6 +3526,9 @@ Cadastre em Cadastros → Contas Correntes (campo «Empresa titular da conta»).
         </ul>
       ` },
       { id: 'geral', titulo: 'Visão geral', corpo: `
+        <p><strong>🔄 Sincronizar dados</strong> (no topo, ao lado de Ajuda): busca de novo no servidor o que outros usuários ou telas mudaram — cadastros, parâmetros, títulos (abertos e baixados recentes), movimentações e os dados da aba que está aberta —
+        <strong>sem recarregar a página</strong> (você não perde a aba, os filtros nem a conta do Extrato). Mostra «atualizado às HH:MM». <strong>Shift + clique</strong> também refaz a lista de títulos já pagos (mais demorado).
+        Em Cadastros/Parâmetros pede confirmação, porque a tela é refeita e o que não foi salvo se perde.</p>
         <p>O Financeiro controla o <strong>contas a pagar/receber</strong> da unidade e o
         <strong>livro caixa</strong> das contas correntes, sempre exigindo que todo lançamento diga
         <strong>de onde</strong> (empresa), <strong>pra quê</strong> (evento/setor/plano de contas) o
@@ -3636,7 +3663,8 @@ Cadastre em Cadastros → Contas Correntes (campo «Empresa titular da conta»).
           <strong>Sugestões automáticas</strong> procura pares de mesmo valor com data até 3 dias de diferença (as exatas já vêm marcadas; as prováveis e as em lote pedem conferência). <strong>Ignorar</strong> tira linhas da conciliação.</li>
           <li><strong>Baixou na conta errada?</strong> Acima da lista da direita, em <strong>Conta dos lançamentos</strong>, troque a conta da conciliação por <strong>outra conta</strong> (ou «Todas as contas») e use a busca para achar o lançamento. Marque-o com a linha do extrato e concilie: o sistema pede confirmação e o lançamento <strong>passa para a conta do extrato</strong> — o título que ele pagou (quando é um só) também. O saldo das duas contas é corrigido, a data acompanha o extrato e o <strong>Desfazer</strong> da conciliação devolve a conta anterior. A conta que o lançamento tinha antes fica registrada na Sentinela. As <strong>sugestões automáticas</strong> usam só lançamentos da própria conta.</li>
           <li><strong>3 · Gerar lançamentos</strong>: tarifas, cesta, juros, IOF, rendimentos etc. que o banco lançou e <strong>não estão no contas a pagar</strong>. Marque as linhas e escolha <strong>Gerar com a regra de cada linha</strong> ou
-          <strong>Gerar com a classificação que eu escolher</strong> (empresa, setor, plano de contas e evento são obrigatórios). Cada linha vira um lançamento na Movimentação, com rateio de 100%, já conciliado (um código por linha).
+          <strong>Gerar com a classificação que eu escolher</strong> (empresa, setor, plano de contas e evento são obrigatórios). Cada linha vira um lançamento na Movimentação, com rateio de 100%, já conciliado (um código por linha) <strong>e também um título já quitado</strong> no contas a pagar (se o banco debitou) ou a receber (se creditou), com vencimento e pagamento na data do extrato — assim a informação aparece no lugar certo. A <strong>transferência não gera título</strong>. «Desfazer» a conciliação apaga o lançamento e o título gerados.
+          <strong>Os botões da linha respeitam a regra dela</strong>: linha com regra de <em>transferência</em> só pode usar ⇄ Transferência (Classificar fica desabilitado); linha com regra de <em>classificação</em> só pode usar Classificar (⇄ Transferência fica desabilitado); sem regra, as duas ficam livres.
           Para uma linha só, use o botão <strong>Classificar…</strong> dela: escolha <strong>fornecedor, plano de contas</strong> e confira empresa/setor/evento (a <strong>empresa já vem da conta</strong> — veja "Empresa titular" em Cadastros → Contas correntes — e setor/evento padrão vêm de Parâmetros → Padrões por empresa; o plano de contas não tem padrão e é escolhido na hora).
           Marcando <strong>Lembrar como regra</strong>, a palavra do histórico (sugerida, editável) vira uma regra com o fornecedor e a classificação escolhidos; em seguida o sistema avisa se a regra reconhece <strong>outras linhas pendentes</strong> e oferece gerar todas de uma vez.</li>
           <li><strong>⇄ Transferência</strong>: use quando o dinheiro da linha <strong>veio de outra conta</strong> (PIX, cartões, outro banco) — ou foi para ela. É o botão «Transferência» do Sicon: em vez de um lançamento só, cria <strong>as duas pernas</strong>: no banco, já conciliada com a linha do extrato (entrada se o banco recebeu, saída se enviou), e na outra conta o lançamento contrário (a «baixa»). Você escolhe a <strong>outra conta</strong>, o <strong>plano do lado do banco</strong> (a receita, na entrada) e o <strong>plano da baixa</strong> na outra conta; a empresa vem da conta do banco; setor e evento são opcionais. A data é a do extrato nas duas contas (a da outra conta pode ser trocada numa linha só). Vale também para várias linhas marcadas (<strong>⇄ Transferência das marcadas…</strong>, todas entradas ou todas saídas) e <strong>sem loop</strong>: as 400 linhas «PIX RECEBIDO» viram transferências de uma vez pela regra. As duas pernas carregam o <strong>mesmo código de conciliação</strong>, então <strong>Desfazer</strong> apaga as duas juntas. O que é fixo (a outra conta e o plano da baixa) fica lembrado para a próxima; o plano da receita não, porque muda de recebimento para recebimento.</li>
@@ -3860,15 +3888,53 @@ Cadastre em Cadastros → Contas Correntes (campo «Empresa titular da conta»).
     renderizarParametrosEmpresas();
   }
 
+  // =================================================================
+  // SINCRONIZAR DADOS (27/11/2026) -- busca de novo no servidor o que outros usuários/telas mudaram, SEM recarregar a página
+  // (não perde filtros, a aba aberta, a conta do extrato nem a conciliação em andamento). Faz a mesma carga da abertura da tela
+  // (cadastros, parâmetros, títulos em aberto + baixados recentes, movimentações) e depois atualiza os dados da aba que está aberta.
+  // =================================================================
+  let sincronizando = false;
+  async function sincronizarDados(ev){
+    if(sincronizando) return;
+    const ativa = ((document.querySelector('.tab-app-btn.active') || {}).dataset || {}).appTab || '';
+    if((ativa === 'parametros' || ativa === 'cadastros') && !confirm('Sincronizar vai recarregar esta tela do servidor e descartar o que você digitou e ainda não salvou aqui. Continuar?')) return;
+    const completo = !!(ev && ev.shiftKey), btn = document.getElementById('btnSincronizar'), info = document.getElementById('sincronizarInfo');
+    sincronizando = true; btn.disabled = true; btn.textContent = '⏳ Sincronizando…'; info.style.color = ''; info.textContent = '';
+    try{
+      const tinhaPagos = !!titulosPagosCache;
+      if(completo) invalidarTitulosPagos();
+      await carregarTudo();                                  // cadastros, parâmetros, títulos e movimentações
+      if(completo && tinhaPagos) garantirTitulosPagos();     // refaz os baixados em segundo plano (são milhares)
+      // dados da aba aberta (as que guardam uma cópia própria)
+      if(ativa === 'dashboard') renderizarDashboardFinanceiro();
+      else if(ativa === 'extrato' && extEstado.iniciado) await extRecarregar();
+      else if(ativa === 'conciliacao' && concEstado.iniciado && ['conciliar', 'gerar', 'feitas'].includes(concEstado.aba)) await concRender();
+      else if(ativa === 'protocolos') await iniciarProtocolos();
+      else if(ativa === 'ordens_staff') await ordsIniciar();
+      else if(ativa === 'diario') await diaCarregar();
+      const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      info.textContent = '✓ atualizado às ' + hora + (completo ? ' (completo)' : '');
+    }catch(e){
+      console.error(e); info.style.color = 'var(--danger)'; info.textContent = '⚠ não consegui sincronizar: ' + ((e && e.message) || e);
+    }finally{ sincronizando = false; btn.disabled = false; btn.textContent = '🔄 Sincronizar dados'; }
+  }
+  document.getElementById('btnSincronizar').addEventListener('click', sincronizarDados);
+
   function preencherSelectsFixos(){
+    const valorAtual = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+    const antes = { t_origem: valorAtual('t_origem'), m_origem: valorAtual('m_origem'), filtroContaMov: valorAtual('filtroContaMov') };   // a sincronização repete esta carga: mantém o que já estava escolhido
     const optionsModulos = todosModulos.map(m => `<option value="${m.chave}">${escapeHtml(m.nome)}</option>`).join('');
     document.getElementById('t_origem').innerHTML = optionsModulos;
     document.getElementById('m_origem').innerHTML = optionsModulos;
-    document.getElementById('t_origem').value = 'manual';
-    document.getElementById('m_origem').value = 'manual';
+    const escolher = (id, valor) => { const el = document.getElementById(id); el.value = valor; if(el.value !== valor) el.value = ''; };
+    escolher('t_origem', antes.t_origem || 'manual');
+    escolher('m_origem', antes.m_origem || 'manual');
+    if(!document.getElementById('t_origem').value) document.getElementById('t_origem').value = 'manual';
+    if(!document.getElementById('m_origem').value) document.getElementById('m_origem').value = 'manual';
 
     const optionsContas = todasContas.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
     document.getElementById('filtroContaMov').innerHTML = '<option value="">Todas as contas</option>' + optionsContas;
+    if(antes.filtroContaMov) escolher('filtroContaMov', antes.filtroContaMov);
   }
 
   // -----------------------------------------------------------------
@@ -5872,6 +5938,16 @@ const MSG_SEM_PERMISSAO_SETOR = 'Somente administradores ou o usuário principal
     const btn = document.getElementById('btnDesfazerBaixaDaMovimentacao');
     const loteId = btn.dataset.loteId;
     const tituloId = Number(btn.dataset.tituloId);
+
+    // (27/11/2026) lançamento CONCILIADO com o extrato não pode ser apagado por aqui (deixaria a linha do extrato «conciliada» sem lançamento):
+    // vale também para o lançamento gerado pela conciliação, que agora tem título. Primeiro desfaz-se a conciliação.
+    const movAtualDesf = todasMovimentacoes.find(x => x.id === movimentacaoIdAtual);
+    let codConc = movAtualDesf && movAtualDesf.cod_conciliacao != null ? movAtualDesf.cod_conciliacao : null;
+    if(codConc == null && loteId){
+      const { data: concLote } = await sb.from('financeiro_movimentacao_contas').select('cod_conciliacao').eq('lote_baixa_id', loteId).not('cod_conciliacao', 'is', null).limit(1);
+      if(concLote && concLote.length) codConc = concLote[0].cod_conciliacao;
+    }
+    if(codConc != null){ alert(`Este lançamento está CONCILIADO com o extrato bancário (código #${codConc}), então a baixa não pode ser desfeita por aqui.\n\nPara desfazer, use Conciliação bancária → Conciliações feitas → Desfazer (a conciliação #${codConc}).`); return; }
 
     if(loteId){
       // faz parte de um lote -- reaproveita a mesma lógica de desfazer o lote inteiro
