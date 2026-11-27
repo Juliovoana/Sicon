@@ -1942,7 +1942,7 @@
   const extNum = v => extFmt.format(Number(v) || 0);
   const extClasseValor = v => Number(v) < -0.004 ? 'ext-neg' : '';
   const EXT_PAGINA = 500;
-  const extEstado = { iniciado: false, de: '', ate: '', fimDados: '', resumo: [], contaId: null, aba: 'dia', dias: [], linhas: [], total: 0, busca: '', diaFiltro: null, grafLib: null, carregando: false };
+  const extEstado = { iniciado: false, de: '', ate: '', fimDados: '', resumo: [], contaId: null, aba: 'mes', dias: [], linhas: [], total: 0, busca: '', diaFiltro: null, grafLib: null, carregando: false };
   function extLerPref(){ try { return localStorage.getItem('fin_extrato_passagem_v1') === '1'; } catch(e){ return false; } }
   function extGravarPref(v){ try { localStorage.setItem('fin_extrato_passagem_v1', v ? '1' : '0'); } catch(e){ /* sem localStorage */ } }
   function extMsg(html){ document.getElementById('extConteudo').innerHTML = '<div class="vazio">' + html + '</div>'; }
@@ -2036,13 +2036,13 @@
           <td class="num"><strong>${extNum(soma('saldo_atual'))}</strong></td><td class="num">${soma('qtd').toLocaleString('pt-BR')}</td></tr></tfoot>
       </table></div>
       <p class="ext-nota">Clique numa conta para ver o dia a dia, o extrato detalhado e os gráficos. Transferências entre contas da própria unidade aparecem como saída de uma e entrada de outra.</p>`;
-    document.querySelectorAll('[data-ext-conta]').forEach(tr => tr.addEventListener('click', () => { extEstado.aba = 'dia'; extEstado.busca = ''; extEstado.diaFiltro = null; extAbrirConta(Number(tr.dataset.extConta)); }));
+    document.querySelectorAll('[data-ext-conta]').forEach(tr => tr.addEventListener('click', () => { extEstado.aba = 'mes'; extEstado.busca = ''; extEstado.diaFiltro = null; extEstado.mesFiltro = null; extAbrirConta(Number(tr.dataset.extConta)); }));
   }
 
   // ---------------- uma conta ----------------
   async function extAbrirConta(id, manterAba){
     extEstado.contaId = id;
-    if(!manterAba){ extEstado.aba = extEstado.aba || 'dia'; }
+    if(!manterAba){ extEstado.aba = extEstado.aba || 'mes'; }
     const r = extEstado.resumo.find(x => x.id_conta === id) || { saldo_anterior: 0, entradas: 0, saidas: 0, qtd: 0, saldo_atual: 0 };
     const c = extConta(id);
     const podeMarcar = !!c && Object.prototype.hasOwnProperty.call(c, 'acompanha_saldo');
@@ -2060,13 +2060,13 @@
       </div>
       <div id="extSaldoBloco"></div>
       <div class="ext-tabs">
-        ${[['dia', 'Dia a dia'], ['det', 'Detalhado'], ['conc', 'Detalhado conciliado'], ['graf', 'Gráficos']].map(([k, t]) => `<button class="ext-tab ${extEstado.aba === k ? 'ativo' : ''}" data-ext-aba="${k}">${t}</button>`).join('')}
+        ${[['mes', 'Mês a mês'], ['dia', 'Dia a dia'], ['det', 'Detalhado'], ['conc', 'Detalhado conciliado'], ['graf', 'Gráficos']].map(([k, t]) => `<button class="ext-tab ${extEstado.aba === k ? 'ativo' : ''}" data-ext-aba="${k}">${t}</button>`).join('')}
       </div>
       <div id="extCorpo"></div>`;
     document.getElementById('extVoltar').addEventListener('click', () => { extEstado.contaId = null; extRenderLista(); });
     const bt = document.getElementById('extTogglePassagem');
     if(bt) bt.addEventListener('click', () => extAlternarPassagem(id));
-    document.querySelectorAll('[data-ext-aba]').forEach(b => b.addEventListener('click', () => { extEstado.aba = b.dataset.extAba; extEstado.diaFiltro = null; extAbrirConta(id, true); }));
+    document.querySelectorAll('[data-ext-aba]').forEach(b => b.addEventListener('click', () => { extEstado.aba = b.dataset.extAba; extEstado.diaFiltro = null; extEstado.mesFiltro = null; extAbrirConta(id, true); }));
     extRenderSaldoBloco(id);
     await extRenderAba();
   }
@@ -2179,21 +2179,22 @@
 
   async function extRenderAba(){
     const corpo = document.getElementById('extCorpo'); if(!corpo) return;
-    if(extEstado.aba === 'dia' || extEstado.aba === 'graf'){
+    if(extEstado.aba === 'dia' || extEstado.aba === 'mes' || extEstado.aba === 'graf'){
       corpo.innerHTML = '<div class="vazio">Carregando...</div>';
       const { data, error } = await sb.rpc('financeiro_extrato_diario', { p_unidade: agenciaId, p_conta: extEstado.contaId, p_de: extEstado.de || null, p_ate: extEstado.ate || null });
       if(error){ corpo.innerHTML = '<div class="vazio">Não consegui carregar: ' + escapeHtml(error.message) + '</div>'; return; }
       extEstado.dias = data || [];
-      if(extEstado.aba === 'dia') extRenderDia(corpo); else await extRenderGraficos(corpo);
+      if(extEstado.aba === 'dia') extRenderDia(corpo); else if(extEstado.aba === 'mes') extRenderMes(corpo); else await extRenderGraficos(corpo);
     } else {
       extEstado.linhas = []; extEstado.total = 0;
       corpo.innerHTML = `
         <div class="filtros"><input type="text" id="extBusca" placeholder="Buscar por histórico ou pessoa..." value="${escapeHtml(extEstado.busca)}" style="min-width:260px;">
-          ${extEstado.diaFiltro ? `<span class="ext-selo">Somente ${formatarData(extEstado.diaFiltro)} <a href="#" id="extLimparDia">(ver o período todo)</a></span>` : ''}</div>
+          ${extEstado.diaFiltro ? `<span class="ext-selo">Somente ${formatarData(extEstado.diaFiltro)} <a href="#" id="extLimparDia">(ver o período todo)</a></span>` : ''}
+          ${extEstado.mesFiltro ? `<span class="ext-selo">Somente ${escapeHtml(extEstado.mesFiltro.rotulo)} <a href="#" id="extLimparDia">(ver o período todo)</a></span>` : ''}</div>
         <div id="extTabelaDet"></div>`;
       let t = null;
       document.getElementById('extBusca').addEventListener('input', e => { clearTimeout(t); t = setTimeout(() => { extEstado.busca = e.target.value.trim(); extCarregarLinhas(true); }, 400); });
-      const lim = document.getElementById('extLimparDia'); if(lim) lim.addEventListener('click', e => { e.preventDefault(); extEstado.diaFiltro = null; extRenderAba(); });
+      const lim = document.getElementById('extLimparDia'); if(lim) lim.addEventListener('click', e => { e.preventDefault(); extEstado.diaFiltro = null; extEstado.mesFiltro = null; extRenderAba(); });
       await extCarregarLinhas(true);
     }
   }
@@ -2210,13 +2211,50 @@
     corpo.querySelectorAll('[data-ext-dia]').forEach(tr => tr.addEventListener('click', () => { extEstado.diaFiltro = tr.dataset.extDia; extEstado.aba = 'det'; extAbrirConta(extEstado.contaId, true); }));
   }
 
+  // (27/11/2026) MÊS A MÊS: sai da mesma consulta do «Dia a dia» (sem SQL novo). Saldo anterior do mês = saldo ANTES do 1º dia com lançamento dele
+  // (saldo do fim do dia − entradas + saídas daquele dia; respeita o «saldo lançado»); saldo atual = saldo do fim do último dia com lançamento do mês.
+  const EXT_MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+  function extMesesDe(dias){
+    const por = new Map();
+    (dias || []).forEach(d => {
+      const k = String(d.dia).slice(0, 7);
+      let m = por.get(k);
+      if(!m){ m = { k, ant: Number(d.saldo_fim) - Number(d.entradas) + Number(d.saidas), ent: 0, sai: 0, qtd: 0, atual: 0 }; por.set(k, m); }
+      m.ent += Number(d.entradas); m.sai += Number(d.saidas); m.qtd += Number(d.qtd); m.atual = Number(d.saldo_fim);
+    });
+    return [...por.values()].sort((a, b) => a.k.localeCompare(b.k)).map(m => {
+      const [a, mm] = m.k.split('-').map(Number), ult = new Date(a, mm, 0).getDate();
+      return { ...m, rotulo: EXT_MESES_ABREV[mm - 1] + '/' + a, de: `${m.k}-01`, ate: `${m.k}-${String(ult).padStart(2, '0')}` };
+    });
+  }
+  function extRenderMes(corpo){
+    const asc = extMesesDe(extEstado.dias);
+    if(!asc.length){ corpo.innerHTML = '<div class="vazio">Nenhum lançamento nesta conta no período.</div>'; return; }
+    const desc = extEstado.mesOrdem !== 'asc';                       // padrão: mês mais recente em cima (como no Extratos das contas)
+    const L = desc ? asc.slice().reverse() : asc;
+    const te = asc.reduce((a, m) => a + m.ent, 0), ts = asc.reduce((a, m) => a + m.sai, 0), tq = asc.reduce((a, m) => a + m.qtd, 0);
+    corpo.innerHTML = `<div class="filtros"><button class="ext-chip" id="extMesOrdem" title="Inverte a ordem dos meses">⇅ Ordem: ${desc ? 'mais recente primeiro' : 'mais antigo primeiro'}</button></div>
+      <div class="ext-tabela-wrap"><table class="ext-tabela">
+      <thead><tr><th>Mês</th><th class="num">Saldo anterior</th><th class="num">Entradas</th><th class="num">Saídas</th><th class="num">Saldo atual</th><th class="num">Lanç.</th></tr></thead>
+      <tbody>${L.map(m => `<tr class="ext-linha" data-ext-mes="${m.k}"><td><strong>${m.rotulo}</strong></td><td class="num ${extClasseValor(m.ant)}">${extNum(m.ant)}</td><td class="num">${m.ent ? extNum(m.ent) : ''}</td><td class="num">${m.sai ? extNum(m.sai) : ''}</td><td class="num ${extClasseValor(m.atual)}"><strong>${extNum(m.atual)}</strong></td><td class="num">${m.qtd.toLocaleString('pt-BR')}</td></tr>`).join('')}</tbody>
+      <tfoot><tr><td><strong>${asc.length > 1 ? asc.length + ' meses' : '1 mês'} com lançamento</strong></td><td class="num">${extNum(asc[0].ant)}</td><td class="num">${extNum(te)}</td><td class="num">${extNum(ts)}</td><td class="num"><strong>${extNum(asc[asc.length - 1].atual)}</strong></td><td class="num">${tq.toLocaleString('pt-BR')}</td></tr></tfoot>
+    </table></div><p class="ext-nota">Clique num mês para ver os lançamentos dele. Meses sem nenhum lançamento não aparecem (o saldo se mantém).</p>`;
+    document.getElementById('extMesOrdem').addEventListener('click', () => { extEstado.mesOrdem = desc ? 'asc' : 'desc'; extRenderMes(corpo); });
+    corpo.querySelectorAll('[data-ext-mes]').forEach(tr => tr.addEventListener('click', () => {
+      const m = asc.find(x => x.k === tr.dataset.extMes); if(!m) return;
+      // o detalhado do mês respeita o período escolhido no topo (não passa dele)
+      const de = extEstado.de && extEstado.de > m.de ? extEstado.de : m.de, ate = extEstado.ate && extEstado.ate < m.ate ? extEstado.ate : m.ate;
+      extEstado.mesFiltro = { de, ate, rotulo: m.rotulo }; extEstado.diaFiltro = null; extEstado.aba = 'det'; extAbrirConta(extEstado.contaId, true);
+    }));
+  }
+
   async function extBuscarLinhas(de, ate, busca, limite, desloc){
     return sb.rpc('financeiro_extrato_conta', { p_unidade: agenciaId, p_conta: extEstado.contaId, p_de: de || null, p_ate: ate || null, p_busca: busca || null, p_limite: limite, p_deslocamento: desloc });
   }
   async function extCarregarLinhas(reiniciar){
     const alvo = document.getElementById('extTabelaDet'); if(!alvo) return;
     if(reiniciar){ extEstado.linhas = []; extEstado.total = 0; alvo.innerHTML = '<div class="vazio">Carregando...</div>'; }
-    const de = extEstado.diaFiltro || extEstado.de, ate = extEstado.diaFiltro || extEstado.ate;
+    const de = extEstado.diaFiltro || (extEstado.mesFiltro && extEstado.mesFiltro.de) || extEstado.de, ate = extEstado.diaFiltro || (extEstado.mesFiltro && extEstado.mesFiltro.ate) || extEstado.ate;
     const { data, error } = await extBuscarLinhas(de, ate, extEstado.busca, EXT_PAGINA, extEstado.linhas.length);
     if(error){ alert('Não consegui carregar o extrato: ' + error.message); return; }
     extEstado.linhas = extEstado.linhas.concat(data || []);
@@ -2256,7 +2294,7 @@
 
   // ---------------- exportar (Excel e PDF) ----------------
   async function extTodasLinhas(){
-    const de = extEstado.diaFiltro || extEstado.de, ate = extEstado.diaFiltro || extEstado.ate;
+    const de = extEstado.diaFiltro || (extEstado.mesFiltro && extEstado.mesFiltro.de) || extEstado.de, ate = extEstado.diaFiltro || (extEstado.mesFiltro && extEstado.mesFiltro.ate) || extEstado.ate;
     let tudo = [];
     for(;;){
       const { data, error } = await extBuscarLinhas(de, ate, extEstado.busca, 1000, tudo.length);
@@ -2285,6 +2323,7 @@
         if(eD) throw new Error(eD.message);
         const linhas = await extTodasLinhas();
         add('Dia a dia', (dias || []).map(d => ({ Dia: formatarData(d.dia), Lançamentos: Number(d.qtd), Entradas: Number(d.entradas), Saídas: Number(d.saidas), 'Saldo no fim do dia': Number(d.saldo_fim) })), [12, 12, 16, 16, 20]);
+        add('Mês a mês', extMesesDe(dias).reverse().map(m => ({ Mês: m.rotulo, 'Saldo anterior': Number(m.ant.toFixed(2)), Entradas: Number(m.ent.toFixed(2)), Saídas: Number(m.sai.toFixed(2)), 'Saldo atual': Number(m.atual.toFixed(2)), Lançamentos: m.qtd })), [12, 16, 16, 16, 16, 12]);
         add('Lançamentos', linhas.map(l => ({ Data: formatarData(l.data), Histórico: l.historico || '', Pessoa: l.pessoa || '', 'Plano de contas': l.plano || '', Evento: l.evento || '', Setor: l.setor || '', Entrada: l.entrada != null ? Number(l.entrada) : '', Saída: l.saida != null ? Number(l.saida) : '', Saldo: Number(l.saldo) })), [12, 50, 30, 34, 12, 20, 14, 14, 16]);
         nomeArq = 'extrato_' + extNomeConta(extEstado.contaId).replace(/[^\w]+/g, '_').toLowerCase();
       }
@@ -2311,6 +2350,14 @@
           foot: [['Total', extNum(ls.reduce((a, l) => a + Number(l.saldo_anterior), 0)), extNum(ls.reduce((a, l) => a + Number(l.entradas), 0)), extNum(ls.reduce((a, l) => a + Number(l.saidas), 0)), extNum(ls.reduce((a, l) => a + Number(l.saldo_atual), 0)), String(ls.reduce((a, l) => a + Number(l.qtd), 0))]],
           footStyles: { fillColor: [234, 242, 238], textColor: 0 }, columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } } });
         nomeArq = 'extrato_contas';
+      } else if(extEstado.aba === 'mes'){
+        const { data: dias, error } = await sb.rpc('financeiro_extrato_diario', { p_unidade: agenciaId, p_conta: extEstado.contaId, p_de: extEstado.de || null, p_ate: extEstado.ate || null });
+        if(error) throw new Error(error.message);
+        const ms = extMesesDe(dias).reverse();
+        doc.autoTable({ ...estilo, startY: y, head: [['Mês', 'Saldo anterior', 'Entradas', 'Saídas', 'Saldo atual', 'Lanç.']],
+          body: ms.map(m => [m.rotulo, extNum(m.ant), m.ent ? extNum(m.ent) : '', m.sai ? extNum(m.sai) : '', extNum(m.atual), String(m.qtd)]),
+          columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' } } });
+        nomeArq = 'extrato_mes_a_mes';
       } else if(extEstado.aba === 'dia' || extEstado.aba === 'graf'){
         const { data: dias, error } = await sb.rpc('financeiro_extrato_diario', { p_unidade: agenciaId, p_conta: extEstado.contaId, p_de: extEstado.de || null, p_ate: extEstado.ate || null });
         if(error) throw new Error(error.message);
@@ -2337,8 +2384,8 @@
   }
 
   document.querySelectorAll('[data-ext-atalho]').forEach(b => b.addEventListener('click', () => extAtalho(b.dataset.extAtalho)));
-  document.getElementById('extDe').addEventListener('change', () => { extEstado.diaFiltro = null; extRecarregar(); });
-  document.getElementById('extAte').addEventListener('change', () => { extEstado.diaFiltro = null; extRecarregar(); });
+  document.getElementById('extDe').addEventListener('change', () => { extEstado.diaFiltro = null; extEstado.mesFiltro = null; extRecarregar(); });
+  document.getElementById('extAte').addEventListener('change', () => { extEstado.diaFiltro = null; extEstado.mesFiltro = null; extRecarregar(); });
   document.getElementById('extMostrarPassagem').addEventListener('change', e => { extGravarPref(e.target.checked); if(!extEstado.contaId) extRenderLista(); });
   document.getElementById('extPdf').addEventListener('click', extExportarPdf);
   document.getElementById('extExcel').addEventListener('click', extExportarExcel);
@@ -3642,7 +3689,8 @@ Cadastre em Cadastros → Contas Correntes (campo «Empresa titular da conta»).
           <li><strong>Acompanha saldo</strong>: toda conta corrente tem esse campo (Cadastros → Contas Correntes, padrão <strong>Sim</strong>). Conta marcada <strong>Não</strong>
           (PIX, cartões de crédito, carteira — contas de passagem) fica <strong>fora do extrato</strong>; marque "Mostrar contas que não acompanham saldo" para vê-las. Dentro de uma conta,
           o botão <strong>Deixar de acompanhar o saldo</strong> / <strong>Voltar a acompanhar o saldo</strong> faz o mesmo sem sair do extrato (precisa da coluna criada por <code>financeiro-extrato.sql</code>).</li>
-          <li>Clique numa conta: <strong>Dia a dia</strong> (resumo por dia, com o saldo no fim do dia; clique num dia para ver os lançamentos dele),
+          <li>Clique numa conta (ela abre na guia <strong>Mês a mês</strong>): <strong>Dia a dia</strong> (resumo por dia, com o saldo no fim do dia; clique num dia para ver os lançamentos dele),
+          <strong>Mês a mês</strong> (por mês: saldo anterior, entradas, saídas, saldo atual e quantidade de lançamentos; o saldo atual de um mês é o saldo anterior do seguinte; o mês mais recente vem primeiro e o botão «⇅ Ordem» inverte; clique num mês para ver os lançamentos dele; sai também no PDF e no Excel),
           <strong>Detalhado</strong> (data, histórico, pessoa, entrada, saída e <strong>saldo corrido</strong>, com busca por histórico/pessoa),
           <strong>Detalhado conciliado</strong> (acrescenta plano de contas, evento e setor do rateio) e <strong>Gráficos</strong> (evolução do saldo e entradas × saídas por mês).</li>
           <li>O saldo corrido é sempre calculado sobre <strong>todos</strong> os lançamentos do período; a busca só filtra o que aparece.</li>
